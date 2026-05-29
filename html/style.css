@@ -1,0 +1,465 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #333;
+    background-color: #f3f3f3;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* 顶部菜单栏 VS Code 风格 */
+.top-bar {
+    display: flex;
+    align-items: center;
+    height: 35px;
+    background-color: #f3f3f3;
+    padding: 0 12px;
+    font-size: 13px;
+    border-bottom: 1px solid #e1e1e1;
+}
+
+.logo {
+    margin-right: 16px;
+    color: #4CAF50;
+    font-size: 16px;
+}
+
+.menu {
+    display: flex;
+    gap: 16px;
+}
+
+.menu span {
+    cursor: pointer;
+    color: #333;
+}
+
+.menu span:hover {
+    color: #000;
+}
+
+.window-controls {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.search-bar {
+    background-color: #e8e8e8;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 2px 120px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #555;
+    font-size: 12px;
+}
+
+.window-buttons {
+    display: flex;
+    gap: 12px;
+    color: #666;
+    font-size: 14px;
+}
+
+.window-buttons i {
+    cursor: pointer;
+}
+
+/* 主体内容区 */
+.main-area {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧资源管理器 */
+.sidebar-left {
+    width: 220px;
+    background-color: #f3f3f3;
+    border-right: 1px solid #e1e1e1;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.explorer-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #555;
+    background-color: #e8e8e8;
+    cursor: pointer;
+    gap: 4px;
+}
+
+.tree-view {
+    padding: 4px 0;
+    overflow-y: auto;
+}
+
+.tree-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px 4px 24px;
+    font-size: 13px;
+    cursor: pointer;
+    gap: 6px;
+    color: #333;
+}
+
+.tree-item:hover {
+    background-color: #e8e8e8;
+}
+
+.tree-item.active {
+    background-color: #d7efd8;
+    color: #2E7D32;
+}
+
+.tree-item i.fa-chevron-right {
+    font-size: 10px;
+    color: #888;
+    width: 12px;
+}
+
+.tree-item i.fa-folder, .tree-item i.fa-markdown {
+    font-size: 14px;
+    margin-right: 4px;
+}
+
+/* 右侧内容区 */
+.right-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background-color: #ffffff;
+}
+
+.editor-header {
+    display: flex;
+    flex-direction: column;
+    background-color: #f3f3f3;
+}
+
+.tabs {
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: #ffffff;
+    border-right: 1px solid #e1e1e1;
+    border-top: 1px solid #4CAF50;
+    font-size: 13px;
+    color: #333;
+}
+
+.tab .close-tab {
+    font-size: 12px;
+    color: #999;
+    margin-left: 8px;
+    cursor: pointer;
+}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    padding: 4px 16px;
+    background-color: #ffffff;
+    font-size: 12px;
+    color: #666;
+    border-bottom: 1px solid #e1e1e1;
+    gap: 6px;
+}
+
+.breadcrumbs i {
+    font-size: 10px;
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    gap: 14px;
+    font-size: 14px;
+    color: #666;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e1e1e1;
+    overflow-x: auto;
+}
+
+.toolbar .divider {
+    width: 1px;
+    height: 16px;
+    background-color: #ddd;
+    margin: 0 4px;
+}
+
+.toolbar .spacer {
+    flex: 1;
+}
+
+.toolbar i, .toolbar span {
+    cursor: pointer;
+}
+
+.toolbar i:hover {
+    color: #000;
+}
+
+.font-size, .line-height {
+    font-size: 12px;
+    color: #999;
+}
+
+.slider-container {
+    display: flex;
+    align-items: center;
+    width: 50px;
+}
+
+.slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: #4CAF50;
+    outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+}
+
+.view-modes {
+    display: flex;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.view-modes button {
+    border: none;
+    background: #fff;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+}
+
+.view-modes button.active {
+    background: #e8e8e8;
+    color: #333;
+}
+
+/* 编辑器主体（正文绝对居中，大纲悬浮在右） */
+.editor-body {
+    flex: 1;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    background-color: #ffffff;
+    overflow-y: auto;
+}
+
+.editor-content-wrapper {
+    width: 100%;
+    max-width: 800px;
+    padding: 40px 20px;
+}
+
+.front-matter {
+    color: #888;
+    font-family: monospace;
+    margin-bottom: 24px;
+    font-size: 13px;
+}
+
+h1 {
+    font-size: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+h2 {
+    font-size: 18px;
+    color: #2E7D32;
+    margin-top: 32px;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+p {
+    margin-bottom: 16px;
+    color: #444;
+    line-height: 1.8;
+}
+
+.task-list {
+    list-style: none;
+    margin-bottom: 16px;
+}
+
+.task-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    color: #444;
+}
+
+.task-list input[type="checkbox"] {
+    accent-color: #2E7D32;
+    width: 14px;
+    height: 14px;
+}
+
+.code-block {
+    margin-top: 16px;
+    position: relative;
+    background-color: #f8f8f8;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.code-block .lang {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 8px;
+    font-family: monospace;
+}
+
+.code-block code {
+    display: block;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.5;
+}
+
+/* 内嵌轻量大纲 */
+.outline-embedded {
+    position: absolute;
+    top: 40px;
+    right: 20px;
+    width: 200px;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(4px);
+    border-left: 2px solid #f0f0f0;
+    font-size: 12px;
+    color: #666;
+}
+
+.outline-title {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.outline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.outline-node {
+    cursor: pointer;
+}
+
+.outline-node:hover {
+    color: #2E7D32;
+}
+
+.outline-node.h1 {
+    font-weight: 500;
+    color: #444;
+}
+
+.outline-node.h2 {
+    padding-left: 12px;
+    color: #777;
+}
+
+/* 底部状态栏 VS Code 风格 */
+.status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 22px;
+    background-color: #f3f3f3;
+    border-top: 1px solid #e1e1e1;
+    padding: 0 8px;
+    font-size: 12px;
+    color: #555;
+}
+
+.status-left, .status-right {
+    display: flex;
+    align-items: center;
+}
+
+.status-item {
+    padding: 0 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.status-item:hover {
+    background-color: #e8e8e8;
+    color: #333;
+}
+
+.status-item i {
+    font-size: 12px;
+}

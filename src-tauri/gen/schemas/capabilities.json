@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default desktop capability for the NewMd shell.","local":true,"windows":["main"],"permissions":["core:default","dialog:default","core:window:allow-set-title"]}}

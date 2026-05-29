@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light;
+  --md-editor-bg: #f6f7f9;
+  --md-editor-surface: #ffffff;
+  --md-editor-rail: #f3f4f6;
+  --md-editor-chrome: #f8f9fb;
+  --md-editor-document-bg: #ffffff;
+  --md-editor-sidebar-active: #e7f0ee;
+  --md-editor-fg: #202428;
+  --md-editor-muted-fg: #68707a;
+  --md-editor-border: #dfe3e8;
+  --md-editor-selection-bg: rgba(47, 125, 111, 0.18);
+  --md-editor-heading-fg: #171a1f;
+  --md-editor-link-fg: #116d8f;
+  --md-editor-accent: #2f7d6f;
+  --md-editor-accent-strong: #174e45;
+  --md-editor-warning: #9a6700;
+  --md-editor-danger: #b42318;
+  --md-editor-blockquote-border: #9ab7b0;
+  --md-editor-blockquote-fg: #4a5b58;
+  --md-editor-code-bg: #1f242b;
+  --md-editor-code-fg: #f3f6f8;
+  --md-editor-code-border: #343b45;
+  --md-editor-table-border: #dfe3e8;
+  --md-editor-table-header-bg: #f0f2f4;
+  --md-editor-shadow: 0 14px 34px rgba(22, 32, 44, 0.08);
+  --md-editor-radius-sm: 4px;
+  --md-editor-radius-md: 8px;
+  --md-editor-font-body: "Segoe UI", "Microsoft YaHei", sans-serif;
+  --md-editor-font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --md-editor-font-size: 16px;
+  --md-editor-line-height: 1.7;
+
+  /* 顶栏与菜单变量（亮色） */
+  --md-titlebar-bg: #fcfcfc;
+  --md-titlebar-border: #e5e5e5;
+  --md-titlebar-fg: #333333;
+  --md-dropdown-bg: rgba(255, 255, 255, 0.96);
+  --md-dropdown-border: #d8d8d8;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --md-editor-bg: #15181d;
+  --md-editor-surface: #1d2229;
+  --md-editor-rail: #181d23;
+  --md-editor-chrome: #20262e;
+  --md-editor-document-bg: #1d2229;
+  --md-editor-sidebar-active: #203530;
+  --md-editor-fg: #eef2f5;
+  --md-editor-muted-fg: #9aa4af;
+  --md-editor-border: #333b46;
+  --md-editor-selection-bg: rgba(103, 183, 165, 0.28);
+  --md-editor-heading-fg: #ffffff;
+  --md-editor-link-fg: #79c9d8;
+  --md-editor-accent: #67b7a5;
+  --md-editor-accent-strong: #9fd8c7;
+  --md-editor-warning: #d4a72c;
+  --md-editor-danger: #ff8a7a;
+  --md-editor-blockquote-border: #597d75;
+  --md-editor-blockquote-fg: #c4d4d0;
+  --md-editor-code-bg: #11151a;
+  --md-editor-code-fg: #edf3f6;
+  --md-editor-code-border: #2b333d;
+  --md-editor-table-border: #333b46;
+  --md-editor-table-header-bg: #252c35;
+  --md-editor-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+
+  /* 顶栏与菜单变量（暗色） */
+  --md-titlebar-bg: #1a1a1a;
+  --md-titlebar-border: #2e2e2e;
+  --md-titlebar-fg: #cccccc;
+  --md-dropdown-bg: rgba(30, 30, 30, 0.96);
+  --md-dropdown-border: #3a3a3a;
+}

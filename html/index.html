@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewMd 编辑器 (VS Code 风格)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部菜单栏 -->
+        <header class="top-bar">
+            <div class="logo">
+                <i class="fa-solid fa-square-m"></i>
+            </div>
+            <nav class="menu">
+                <span>文件</span>
+                <span>编辑</span>
+                <span>选择</span>
+                <span>查看</span>
+                <span>转到</span>
+                <span>运行</span>
+                <span>终端</span>
+                <span>帮助</span>
+            </nav>
+            <div class="window-controls">
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <span>NewMd 阶段4</span>
+                </div>
+            </div>
+            <div class="window-buttons">
+                <i class="fa-solid fa-minus"></i>
+                <i class="fa-regular fa-square"></i>
+                <i class="fa-solid fa-xmark"></i>
+            </div>
+        </header>
+
+        <!-- 主体内容区 -->
+        <div class="main-area">
+
+
+            <!-- 左侧资源管理器 -->
+            <aside class="sidebar-left">
+                <div class="sidebar-header">
+                    <span>资源管理器</span>
+                    <i class="fa-solid fa-ellipsis"></i>
+                </div>
+                <div class="explorer-section">
+                    <div class="section-header">
+                        <i class="fa-solid fa-chevron-down"></i>
+                        <span>NEWMD 阶段4</span>
+                    </div>
+                    <div class="tree-view">
+                        <div class="tree-item active">
+                            <i class="fa-brands fa-markdown" style="color: #4CAF50;"></i>
+                            <span style="color: #4CAF50;">阶段3样例.md</span>
+                        </div>
+                        <div class="tree-item">
+                            <i class="fa-solid fa-chevron-right"></i>
+                            <i class="fa-solid fa-folder" style="color: #666;"></i>
+                            <span>Desktop</span>
+                        </div>
+                        <div class="tree-item">
+                            <i class="fa-solid fa-chevron-right"></i>
+                            <i class="fa-solid fa-folder" style="color: #666;"></i>
+                            <span>Mermaid</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 右侧完整内容区 -->
+            <main class="right-area">
+                <!-- 标签页和工具栏 -->
+                <div class="editor-header">
+                    <div class="tabs">
+                        <div class="tab active">
+                            <i class="fa-brands fa-markdown" style="color: #4CAF50;"></i>
+                            <span>阶段3样例.md</span>
+                            <i class="fa-solid fa-xmark close-tab"></i>
+                        </div>
+                    </div>
+                    <div class="breadcrumbs">
+                        <span>NewMd 阶段4</span>
+                        <i class="fa-solid fa-chevron-right"></i>
+                        <span>阶段3样例.md</span>
+                    </div>
+                    <div class="toolbar">
+                        <i class="fa-regular fa-folder-open"></i>
+                        <i class="fa-regular fa-floppy-disk"></i>
+                        <div class="divider"></div>
+                        <span style="font-weight: bold; font-family: serif;">H1</span>
+                        <i class="fa-solid fa-bold"></i>
+                        <i class="fa-solid fa-italic"></i>
+                        <i class="fa-solid fa-list-ul"></i>
+                        <i class="fa-solid fa-table"></i>
+                        <i class="fa-solid fa-code"></i>
+                        <i class="fa-regular fa-image"></i>
+                        <div class="divider"></div>
+                        <span class="font-size">16px</span>
+                        <div class="slider-container">
+                            <input type="range" min="1" max="100" value="50" class="slider">
+                        </div>
+                        <span class="line-height">1.75</span>
+                        <div class="spacer"></div>
+                        <div class="view-modes">
+                            <button class="active">语义</button>
+                            <button>源码</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 编辑器主体（居中加内嵌大纲） -->
+                <div class="editor-body">
+                    <div class="editor-content-wrapper">
+                        <div class="front-matter">
+                            ---<br>
+                            title: NewMd 阶段4<br>
+                            ---
+                        </div>
+                        
+                        <h1>NewMd 阶段4</h1>
+                        <p>现在开始补齐桌面体验与稳定性。菜单快捷键、拖放打开、窗口状态、外部修改检查和保存失败恢复策略会进入桌面基线。</p>
+                        
+                        <h2>Desktop</h2>
+                        <ul class="task-list">
+                            <li><input type="checkbox" checked disabled> Tauri 原生文件打开保存</li>
+                            <li><input type="checkbox" checked disabled> 最近文件和设置跨启动保留</li>
+                            <li><input type="checkbox" disabled> 文件被外部修改时提示</li>
+                            <li><input type="checkbox" disabled> 保存失败时保留恢复副本</li>
+                        </ul>
+
+                        <h2>Mermaid</h2>
+                        <div class="code-block">
+                            <div class="lang">mermaid</div>
+                            <code>
+flowchart LR<br>
+Open[Open] --> Edit[Edit]<br>
+Edit --> Save[Save]<br>
+Save --> Snapshot[Snapshot]
+                            </code>
+                        </div>
+                    </div>
+
+                    <!-- 轻量内嵌大纲 -->
+                    <div class="outline-embedded">
+                        <div class="outline-title">文档大纲</div>
+                        <div class="outline-list">
+                            <div class="outline-node h1">阶段4</div>
+                            <div class="outline-node h2">Desktop</div>
+                            <div class="outline-node h2">Mermaid</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- 底部状态栏 -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <div class="status-item"><i class="fa-solid fa-arrows-rotate"></i> 已同步</div>
+                <div class="status-item"><i class="fa-regular fa-circle-xmark"></i> 0 <i class="fa-solid fa-triangle-exclamation" style="margin-left: 4px;"></i> 0</div>
+            </div>
+            <div class="status-right">
+                <div class="status-item">阶段4：桌面体验与稳定性打磨</div>
+                <div class="status-item">version 0.302</div>
+                <div class="status-item">utf-8</div>
+                <div class="status-item">LF</div>
+                <div class="status-item"><i class="fa-brands fa-markdown"></i> Markdown</div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
