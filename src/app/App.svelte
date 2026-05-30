@@ -5,6 +5,7 @@
     CheckSquare,
     ChevronDown,
     Code2,
+    Copy,
     FilePlus,
     FileText,
     FolderPlus,
@@ -46,14 +47,18 @@
     type SnapshotRecord
   } from '../lib/desktop/tauriStorage';
   import { createEditorCore, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
+  import { createRichMarkdownSample, ensureEditableTrailingBlankLine, parseRichMarkdown, type RichMarkdownBlock } from '../lib/markdown/richMarkdown';
   import { extractTechnicalBlocks, type TechnicalBlocks } from '../lib/markdown/technicalBlocks';
   import { calculateDocumentStats, extractOutline, type DocumentStats, type OutlineItem } from '../lib/outline/outlineService';
+  import katex from 'katex';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
+  import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
+  import type { CodeTokenLine } from '../lib/services/render';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
-  const initialMarkdown = `---\ntitle: NewMd 阶段4\n---\n# NewMd 阶段4\n\n现在开始补齐桌面体验与稳定性。菜单快捷键、拖放打开、窗口状态、外部修改检查和保存失败恢复策略会进入桌面基线。\n\n## Desktop\n\n- [x] Tauri 原生文件打开保存\n- [x] 最近文件和设置跨启动保留\n- [ ] 文件被外部修改时提示\n- [ ] 保存失败时保留恢复副本\n\n## Mermaid\n\n\`\`\`mermaid\nflowchart LR\n  Open[Open] --> Edit[Edit]\n  Edit --> Save[Save]\n  Save --> Snapshot[Snapshot]\n\`\`\`\n`;
+  const initialMarkdown = createRichMarkdownSample();
 
   let markdown = initialMarkdown;
   let mode: EditorMode = 'semantic';
@@ -70,13 +75,19 @@
   let outline: OutlineItem[] = extractOutline(initialMarkdown);
   let outlineVisible = true;
   let activeOutlineId = outline[0]?.id ?? '';
+  let collapsedOutlineIds = new Set<string>();
+  let suppressOutlineScrollUntil = 0;
   let stats: DocumentStats = calculateDocumentStats(initialMarkdown);
   let technicalBlocks: TechnicalBlocks = extractTechnicalBlocks(initialMarkdown);
+  let richBlocks: RichMarkdownBlock[] = parseRichMarkdown(initialMarkdown);
   let mathHtml: string[] = [];
   let mermaidSvg: string[] = [];
+  let codeTokenMap = new Map<string, CodeTokenLine[]>();
+  let wrappedCodeBlocks = new Set<string>();
   let renderErrors: string[] = [];
   let fontSize = 16;
   let lineHeight = 1.75;
+  let contentWidthPercent = 68;
   let focusMode = false;
   let editorHost: HTMLDivElement;
   let fileInput: HTMLInputElement;
@@ -170,6 +181,7 @@
 
     outline = extractOutline(markdown);
     activeOutlineId = outline[0]?.id ?? '';
+    pruneCollapsedOutlineIds();
     stats = calculateDocumentStats(markdown);
     technicalBlocks = extractTechnicalBlocks(markdown);
     updateTechnicalPreviews(markdown);
@@ -343,6 +355,7 @@
 
   const mathRenderer = createKatexMathRenderer();
   const diagramRenderer = createMermaidDiagramRenderer();
+  const codeTokenizer = createShikiCodeTokenizer();
 
   const editor = createEditorCore({
     markdown,
@@ -364,6 +377,7 @@
       checkExternalFileChange();
     }, 5000);
     updateTechnicalPreviews(markdown);
+    updateCodePreviews(markdown);
     await tick();
     syncSourceTextareaHeight();
     await updateWindowTitle().catch(() => undefined);
@@ -380,6 +394,7 @@
     const savedTheme = parseSetting<string>(settings, 'theme') ?? localStorage.getItem('new-md-theme');
     const savedFontSize = Number(parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('new-md-font-size'));
     const savedLineHeight = Number(parseSetting<number>(settings, 'lineHeight') ?? localStorage.getItem('new-md-line-height'));
+    const savedContentWidthPercent = Number(parseSetting<number>(settings, 'contentWidthPercent') ?? localStorage.getItem('new-md-content-width-percent'));
 
     if (savedTheme === 'dark' || savedTheme === 'light') {
       theme = savedTheme;
@@ -393,6 +408,10 @@
     if (Number.isFinite(savedLineHeight) && savedLineHeight >= 1.4 && savedLineHeight <= 2.1) {
       lineHeight = savedLineHeight;
       applyTypographySettings();
+    }
+    if (Number.isFinite(savedContentWidthPercent) && savedContentWidthPercent >= 45 && savedContentWidthPercent <= 90) {
+      contentWidthPercent = savedContentWidthPercent;
+      applyEditorLayoutSettings();
     }
   }
 
@@ -417,8 +436,10 @@
     if (!outline.some((item) => item.id === activeOutlineId)) {
       activeOutlineId = outline[0]?.id ?? '';
     }
+    pruneCollapsedOutlineIds();
     stats = calculateDocumentStats(event.markdown);
     technicalBlocks = extractTechnicalBlocks(event.markdown);
+    richBlocks = parseRichMarkdown(event.markdown);
 
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (activeTab) {
@@ -432,11 +453,13 @@
       mathHtml = [];
       mermaidSvg = [];
       renderErrors = [];
+      codeTokenMap = new Map();
       syncSourceTextareaHeight();
       return;
     }
     syncSourceTextareaHeight();
     updateTechnicalPreviews(event.markdown);
+    updateCodePreviews(event.markdown);
   }
 
   function setMode(nextMode: EditorMode) {
@@ -449,7 +472,7 @@
   }
 
   function updateMarkdown(event: Event) {
-    editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);
+    editor.setMarkdown(ensureEditableTrailingBlankLine((event.currentTarget as HTMLTextAreaElement).value));
     syncSourceTextareaHeight();
   }
 
@@ -465,6 +488,7 @@
     persistSetting('theme', theme);
     editor.updateTheme({ name: theme });
     updateTechnicalPreviews(markdown);
+    updateCodePreviews(markdown);
   }
 
   function updateFontSize(event: Event) {
@@ -481,9 +505,20 @@
     applyTypographySettings();
   }
 
+  function updateContentWidth(event: Event) {
+    contentWidthPercent = Number((event.currentTarget as HTMLInputElement).value);
+    localStorage.setItem('new-md-content-width-percent', String(contentWidthPercent));
+    persistSetting('contentWidthPercent', contentWidthPercent);
+    applyEditorLayoutSettings();
+  }
+
   function applyTypographySettings() {
     document.documentElement.style.setProperty('--md-editor-font-size', `${fontSize}px`);
     document.documentElement.style.setProperty('--md-editor-line-height', String(lineHeight));
+  }
+
+  function applyEditorLayoutSettings() {
+    document.documentElement.style.setProperty('--md-editor-content-width-percent', String(contentWidthPercent));
   }
 
   function toggleFocusMode() {
@@ -492,6 +527,54 @@
 
   function toggleOutlineVisible() {
     outlineVisible = !outlineVisible;
+  }
+
+  function isOutlineItemExpandable(index: number) {
+    const item = outline[index];
+    const next = outline[index + 1];
+    return Boolean(item && next && next.level > item.level);
+  }
+
+  function isOutlineItemExpanded(item: OutlineItem) {
+    return !collapsedOutlineIds.has(item.id);
+  }
+
+  function isOutlineItemVisible(index: number) {
+    const item = outline[index];
+    if (!item) {
+      return false;
+    }
+
+    let parentLevel = item.level;
+    for (let previousIndex = index - 1; previousIndex >= 0; previousIndex -= 1) {
+      const candidate = outline[previousIndex];
+      if (candidate.level >= parentLevel) {
+        continue;
+      }
+      if (collapsedOutlineIds.has(candidate.id)) {
+        return false;
+      }
+      parentLevel = candidate.level;
+    }
+    return true;
+  }
+
+  function toggleOutlineItemExpanded(item: OutlineItem) {
+    const nextCollapsedIds = new Set(collapsedOutlineIds);
+    if (nextCollapsedIds.has(item.id)) {
+      nextCollapsedIds.delete(item.id);
+    } else {
+      nextCollapsedIds.add(item.id);
+    }
+    collapsedOutlineIds = nextCollapsedIds;
+  }
+
+  function pruneCollapsedOutlineIds() {
+    if (collapsedOutlineIds.size === 0) {
+      return;
+    }
+    const visibleIds = new Set(outline.map((item) => item.id));
+    collapsedOutlineIds = new Set(Array.from(collapsedOutlineIds).filter((id) => visibleIds.has(id)));
   }
 
   function syncSourceTextareaHeight() {
@@ -685,11 +768,12 @@
 
     if (desktopEnabled) {
       const path = saveAs ? null : nativePath;
+      const markdownToSave = ensureEditableTrailingBlankLine(editor.getMarkdown());
       writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
       if (nativePath) {
-        await createDocumentSnapshot(nativePath, editor.getMarkdown(), 'before-save').catch(() => undefined);
+        await createDocumentSnapshot(nativePath, markdownToSave, 'before-save').catch(() => undefined);
       }
-      const document = await saveMarkdownNative(path, editor.getMarkdown(), fileName).catch((error) => {
+      const document = await saveMarkdownNative(path, markdownToSave, fileName).catch((error) => {
         statusMessage = error instanceof Error ? error.message : '保存文件失败';
         return null;
       });
@@ -700,7 +784,8 @@
       return;
     }
 
-    const blob = new Blob([editor.getMarkdown()], { type: 'text/markdown;charset=utf-8' });
+    const markdownToSave = ensureEditableTrailingBlankLine(editor.getMarkdown());
+    const blob = new Blob([markdownToSave], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -708,7 +793,7 @@
     anchor.click();
     URL.revokeObjectURL(url);
     statusMessage = '已导出 Markdown 文件';
-    editor.setMarkdown(editor.getMarkdown(), { reason: 'save-file' });
+    editor.setMarkdown(markdownToSave, { reason: 'save-file' });
   }
 
   async function openRecentFile(path: string) {
@@ -925,19 +1010,34 @@
   }
 
   function jumpToOutlineItem(item: OutlineItem) {
-    setMode('source');
+    activeOutlineId = item.id;
+    suppressOutlineScrollUntil = Date.now() + 800;
+
     requestAnimationFrame(() => {
+      if (mode === 'semantic') {
+        const index = outline.findIndex((outlineItem) => outlineItem.id === item.id);
+        const heading = semanticPane?.querySelectorAll('.rich-markdown h1, .rich-markdown h2, .rich-markdown h3, .rich-markdown h4, .rich-markdown h5, .rich-markdown h6')[index];
+        if (heading && semanticPane) {
+          const paneTop = semanticPane.getBoundingClientRect().top;
+          const targetTop = heading.getBoundingClientRect().top - paneTop + semanticPane.scrollTop - 48;
+          semanticPane.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+        }
+        return;
+      }
+
       const lines = markdown.split(/\r?\n/);
       const start = lines.slice(0, item.line - 1).join('\n').length + (item.line > 1 ? 1 : 0);
       sourceTextarea.focus();
       sourceTextarea.setSelectionRange(start, start + lines[item.line - 1].length);
       const lineHeightPx = getSourceLineHeight();
       sourcePane?.scrollTo({ top: Math.max(0, (item.line - 1) * lineHeightPx - 40), behavior: 'smooth' });
-      activeOutlineId = item.id;
     });
   }
 
   function updateActiveOutlineFromSourceScroll() {
+    if (Date.now() < suppressOutlineScrollUntil) {
+      return;
+    }
     if (!outline.length || !sourcePane) {
       activeOutlineId = '';
       return;
@@ -947,12 +1047,15 @@
   }
 
   function updateActiveOutlineFromSemanticScroll() {
-    if (!outline.length || !semanticPane || !editorHost) {
+    if (Date.now() < suppressOutlineScrollUntil) {
+      return;
+    }
+    if (!outline.length || !semanticPane) {
       activeOutlineId = '';
       return;
     }
 
-    const headings = Array.from(editorHost.querySelectorAll('h1, h2, h3, h4, h5, h6'));
+    const headings = Array.from(semanticPane.querySelectorAll('.rich-markdown h1, .rich-markdown h2, .rich-markdown h3, .rich-markdown h4, .rich-markdown h5, .rich-markdown h6'));
     if (headings.length === 0) {
       activeOutlineId = outline[0]?.id ?? '';
       return;
@@ -1060,6 +1163,101 @@
     renderErrors = [...mathResults, ...mermaidResults].flatMap((result) => (result.error ? [result.error] : []));
   }
 
+  async function updateCodePreviews(nextMarkdown: string) {
+    const blocks = parseRichMarkdown(nextMarkdown).filter((block): block is Extract<RichMarkdownBlock, { type: 'code' }> => block.type === 'code');
+    const themeName = theme === 'dark' ? 'github-dark' : 'github-light';
+    const entries = await Promise.all(
+      blocks.map(async (block) => {
+        const result = await codeTokenizer.tokenize({
+          code: block.code,
+          language: block.language,
+          theme: themeName
+        });
+        return [getCodeBlockKey(block), result.tokens] as const;
+      })
+    );
+    codeTokenMap = new Map(entries);
+  }
+
+  function getCodeBlockKey(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
+    return `${block.line}:${block.language}:${block.title}:${block.code}`;
+  }
+
+  function getRenderedCodeLines(block: Extract<RichMarkdownBlock, { type: 'code' }>): CodeTokenLine[] {
+    const key = getCodeBlockKey(block);
+    return codeTokenMap.get(key) ?? block.code.split('\n').map((line) => ({ tokens: [{ content: line || ' ', color: undefined }] }));
+  }
+
+  function toggleTaskAtLine(lineNumber: number) {
+    const lines = markdown.split(/\r?\n/);
+    const index = lineNumber - 1;
+    const line = lines[index];
+    const match = /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(line ?? '');
+    if (!match) {
+      return;
+    }
+
+    lines[index] = `${match[1]}${match[2].toLowerCase() === 'x' ? ' ' : 'x'}${match[3]}`;
+    editor.setMarkdown(ensureEditableTrailingBlankLine(lines.join('\n')), { reason: 'programmatic-update' });
+  }
+
+  function toggleCodeWrap(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
+    const key = getCodeBlockKey(block);
+    if (wrappedCodeBlocks.has(key)) {
+      wrappedCodeBlocks.delete(key);
+    } else {
+      wrappedCodeBlocks.add(key);
+    }
+    wrappedCodeBlocks = new Set(wrappedCodeBlocks);
+  }
+
+  function isCodeWrapped(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
+    return wrappedCodeBlocks.has(getCodeBlockKey(block));
+  }
+
+  async function copyCode(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
+    await navigator.clipboard?.writeText(block.code);
+    statusMessage = `已复制 ${block.title || block.language || '代码块'}`;
+  }
+
+  function getCodeLineClass(block: Extract<RichMarkdownBlock, { type: 'code' }>, line: CodeTokenLine) {
+    if (!block.isDiff) {
+      return '';
+    }
+    const text = line.tokens.map((token) => token.content).join('');
+    if (text.startsWith('+')) {
+      return 'diff-added';
+    }
+    if (text.startsWith('-')) {
+      return 'diff-removed';
+    }
+    return '';
+  }
+
+  function formatInline(text: string) {
+    return escapeHtml(text)
+      .replace(/\$([^$\n]+)\$/g, (_match, tex: string) =>
+        katex.renderToString(tex, {
+          displayMode: false,
+          throwOnError: false,
+          strict: false
+        })
+      )
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  }
+
+  function escapeHtml(text: string) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function persistSetting(key: string, value: unknown) {
     if (!desktopEnabled) {
       return;
@@ -1099,7 +1297,7 @@
   <title>NewMd 阶段4</title>
 </svelte:head>
 
-<div class="app-layout" class:focus-mode={focusMode} class:resizing={isResizing}>
+<div class="app-layout" class:focus-mode={focusMode} class:resizing={isResizing} style={`--md-editor-content-width-percent: ${contentWidthPercent}`}>
   <input bind:this={fileInput} class="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" on:change={openMarkdownFile} />
 
   <header class="titlebar" data-tauri-drag-region>
@@ -1295,9 +1493,6 @@
             {#if rootFolderExpanded}
               <div class="recent-tree recursive-tree-container">
                 {@render renderTree(folderTree, 1)}
-                {#if folderTree.length === 0}
-                  <p class="empty-note">目录下暂无 Markdown 文件</p>
-                {/if}
               </div>
             {/if}
           {:else}
@@ -1358,20 +1553,6 @@
           {/each}
         </div>
         <div class="tab-actions" aria-label="标签页操作">
-          <button
-            type="button"
-            class="tab-action"
-            title={outlineVisible ? '隐藏文档大纲' : '显示文档大纲'}
-            aria-label={outlineVisible ? '隐藏文档大纲' : '显示文档大纲'}
-            aria-pressed={outlineVisible}
-            on:click={toggleOutlineVisible}
-          >
-            {#if outlineVisible}
-              <PanelRightClose size={16} />
-            {:else}
-              <PanelRightOpen size={16} />
-            {/if}
-          </button>
           <button type="button" class="tab-add" title="新建文件" aria-label="新建文件" on:click={createNewFile}>+</button>
         </div>
       </header>
@@ -1426,6 +1607,10 @@
         <span>{lineHeight.toFixed(2)}</span>
         <input type="range" min="1.4" max="2.1" step="0.05" value={lineHeight} on:input={updateLineHeight} />
       </label>
+      <label class="range-control width-control" title="内容宽度">
+        <span>{contentWidthPercent}%</span>
+        <input type="range" min="45" max="90" step="1" value={contentWidthPercent} on:input={updateContentWidth} />
+      </label>
       <span class="toolbar-spacer"></span>
       <div class="mode-switch" aria-label="编辑模式">
         <button class:active={mode === 'semantic'} on:click={() => setMode('semantic')}>语义</button>
@@ -1474,56 +1659,135 @@
             on:drop={handleEditorDrop}
             spellcheck="false"
           ></textarea>
-          {#if outlineVisible}
-            <aside class="content-outline" aria-label="文档大纲">
-              <strong>文档大纲</strong>
-              {#if outline.length > 0}
-                <div class="content-outline-list">
-                  {#each outline as item}
-                    <button type="button" class:active={activeOutlineId === item.id} style={`padding-left: ${(item.level - 1) * 16}px`} title={item.title} on:click={() => jumpToOutlineItem(item)}>
-                      {#if item.level === 1}
-                        <ChevronDown size={13} />
-                      {:else}
-                        <span></span>
-                      {/if}
-                      <span>{item.title}</span>
-                    </button>
-                  {/each}
-                </div>
-              {:else}
-                <p>当前文档还没有标题</p>
-              {/if}
-            </aside>
-          {/if}
         </div>
       </section>
 
       <section bind:this={semanticPane} class="semantic-pane" aria-label="语义编辑区" on:scroll={updateActiveOutlineFromSemanticScroll} on:paste={handleEditorPaste} on:drop={handleEditorDrop} on:dragover|preventDefault>
         <div class="document-layout">
-          <div bind:this={editorHost} class="prosemirror-host"></div>
-          {#if outlineVisible}
-            <aside class="content-outline" aria-label="文档大纲">
-              <strong>文档大纲</strong>
-              {#if outline.length > 0}
-                <div class="content-outline-list">
-                  {#each outline as item}
-                    <button type="button" class:active={activeOutlineId === item.id} style={`padding-left: ${(item.level - 1) * 16}px`} title={item.title} on:click={() => jumpToOutlineItem(item)}>
-                      {#if item.level === 1}
-                        <ChevronDown size={13} />
-                      {:else}
-                        <span></span>
-                      {/if}
-                      <span>{item.title}</span>
-                    </button>
-                  {/each}
+          <article class="rich-markdown" aria-label="Markdown 语义渲染">
+            {#each richBlocks as block}
+              {#if block.type === 'heading'}
+                <svelte:element this={`h${block.level}`} data-line={block.line}>{block.text}</svelte:element>
+              {:else if block.type === 'paragraph'}
+                <p data-line={block.line}>{@html formatInline(block.text)}</p>
+              {:else if block.type === 'task'}
+                <label class="task-row" data-line={block.line}>
+                  <input type="checkbox" checked={block.checked} on:change={() => toggleTaskAtLine(block.line)} />
+                  <span>{@html formatInline(block.text)}</span>
+                </label>
+              {:else if block.type === 'list'}
+                {#if block.ordered}
+                  <ol data-line={block.line}>
+                    {#each block.items as item}
+                      <li>{@html formatInline(item)}</li>
+                    {/each}
+                  </ol>
+                {:else}
+                  <ul data-line={block.line}>
+                    {#each block.items as item}
+                      <li>{@html formatInline(item)}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              {:else if block.type === 'blockquote'}
+                <blockquote data-line={block.line}>{@html formatInline(block.text).replace(/\n/g, '<br>')}</blockquote>
+              {:else if block.type === 'table'}
+                <div class="table-scroll" data-line={block.line}>
+                  <table>
+                    <thead>
+                      <tr>
+                        {#each block.headers as header}
+                          <th>{@html formatInline(header)}</th>
+                        {/each}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each block.rows as row}
+                        <tr>
+                          {#each row as cell}
+                            <td>{@html formatInline(cell)}</td>
+                          {/each}
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
                 </div>
-              {:else}
-                <p>当前文档还没有标题</p>
+              {:else if block.type === 'code'}
+                <section class="code-card" class:wrapped={isCodeWrapped(block)} data-line={block.line}>
+                  <header>
+                    <span>{block.title || block.language || 'code'}</span>
+                    <div>
+                      <button type="button" title={isCodeWrapped(block) ? '横向滚动' : '自动换行'} on:click={() => toggleCodeWrap(block)}>
+                        {isCodeWrapped(block) ? '滚动' : '换行'}
+                      </button>
+                      <button type="button" title="复制代码" on:click={() => copyCode(block)}>
+                        <Copy size={14} />
+                      </button>
+                    </div>
+                  </header>
+                  <pre><code>
+                    {#each getRenderedCodeLines(block) as line, lineIndex}
+                      <span class="code-line {getCodeLineClass(block, line)}">
+                        <span class="line-number">{lineIndex + 1}</span>
+                        <span class="line-content">{#each line.tokens as token}<span style:color={token.color}>{token.content}</span>{/each}</span>
+                      </span>
+                    {/each}
+                  </code></pre>
+                </section>
+              {:else if block.type === 'math'}
+                <div class="math-block" data-line={block.line}>
+                  {@html mathHtml[block.renderIndex] ?? escapeHtml(block.tex)}
+                </div>
+              {:else if block.type === 'mermaid'}
+                <div class="mermaid-block" data-line={block.line}>
+                  {@html mermaidSvg[block.renderIndex] ?? `<pre>${escapeHtml(block.code)}</pre>`}
+                </div>
+              {:else if block.type === 'html'}
+                <div class="html-block" data-line={block.line}>{@html block.html}</div>
+              {:else if block.type === 'horizontalRule'}
+                <hr data-line={block.line} />
               {/if}
-            </aside>
-          {/if}
+            {/each}
+          </article>
+          <div bind:this={editorHost} class="prosemirror-host semantic-source-host"></div>
         </div>
       </section>
+
+      {#if outlineVisible}
+        <aside class="content-outline" aria-label="文档大纲">
+          <strong>文档大纲</strong>
+          {#if outline.length > 0}
+            <div class="content-outline-list">
+              {#each outline as item, index}
+                {#if isOutlineItemVisible(index)}
+                  <div class:active={activeOutlineId === item.id} class="content-outline-row" style={`padding-left: ${(item.level - 1) * 16}px`}>
+                    {#if isOutlineItemExpandable(index)}
+                      <button
+                        type="button"
+                        class:collapsed={!isOutlineItemExpanded(item)}
+                        class="outline-toggle"
+                        title={isOutlineItemExpanded(item) ? '折叠标题' : '展开标题'}
+                        aria-label={isOutlineItemExpanded(item) ? `折叠 ${item.title}` : `展开 ${item.title}`}
+                        aria-expanded={isOutlineItemExpanded(item)}
+                        on:click={() => toggleOutlineItemExpanded(item)}
+                      >
+                        <ChevronDown size={13} />
+                      </button>
+                    {:else}
+                      <span class="outline-toggle-placeholder"></span>
+                    {/if}
+                    <button type="button" class="outline-link" title={item.title} on:click={() => jumpToOutlineItem(item)}>
+                      <span>{item.title}</span>
+                    </button>
+                  </div>
+                {/if}
+              {/each}
+            </div>
+          {:else}
+            <p>当前文档还没有标题</p>
+          {/if}
+        </aside>
+      {/if}
     </div>
 
     <footer class="statusbar">
@@ -1543,6 +1807,7 @@
 
 <style>
   .app-layout {
+    --md-editor-content-width-percent: 68;
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -1643,7 +1908,6 @@
   .menu-bar button:focus-visible,
   .mode-switch button:focus-visible,
   .icon-button:focus-visible,
-  .tab-action:focus-visible,
   .tab-add:focus-visible,
   .toolbar button:focus-visible,
   .tree-file:focus-visible,
@@ -1744,16 +2008,8 @@
     background: var(--md-editor-chrome);
   }
 
-  .empty-note {
-    color: var(--md-editor-muted-fg);
-    font-size: 11px;
-  }
-
-  .empty-note {
-    margin: 10px 8px 0;
-  }
-
   .editor-shell {
+    container-type: inline-size;
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     min-width: 0;
@@ -1836,25 +2092,6 @@
     flex-shrink: 0;
     min-height: 40px;
     margin-left: 4px;
-  }
-
-  .tab-action {
-    display: inline-grid;
-    place-items: center;
-    min-width: 32px;
-    min-height: 32px;
-    border: 0;
-    border-radius: var(--md-editor-radius-sm);
-    background: transparent;
-    color: var(--md-editor-muted-fg);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-  }
-
-  .tab-action:hover,
-  .tab-action[aria-pressed='true'] {
-    background: var(--md-editor-surface);
-    color: var(--md-editor-accent-strong);
   }
 
   .tabs-container {
@@ -2036,7 +2273,7 @@
 
   .range-control {
     display: inline-grid;
-    grid-template-columns: 46px 96px;
+    grid-template-columns: 40px 72px;
     align-items: center;
     gap: 6px;
     min-height: 34px;
@@ -2046,8 +2283,16 @@
   }
 
   .range-control input {
-    width: 96px;
+    width: 72px;
     accent-color: var(--md-editor-accent);
+  }
+
+  .width-control {
+    grid-template-columns: 52px 88px;
+  }
+
+  .width-control input {
+    width: 88px;
   }
 
   .editor-grid {
@@ -2122,8 +2367,10 @@
 
   .document-layout {
     position: relative;
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, calc(var(--md-editor-content-width-percent) * 1cqw));
     justify-content: center;
+    align-items: start;
     min-height: 100%;
     padding: 44px 20px 64px;
     background:
@@ -2132,12 +2379,284 @@
   }
 
   .prosemirror-host {
+    grid-column: 1;
     min-height: 100%;
     width: 100%;
-    max-width: 800px;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
     margin: 0 auto;
     padding: 0;
     background: transparent;
+  }
+
+  .semantic-source-host {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 1px;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rich-markdown {
+    grid-column: 1;
+    width: 100%;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
+    min-height: calc(100vh - 235px);
+    margin: 0 auto;
+    color: var(--md-editor-fg);
+    font-size: var(--md-editor-font-size);
+    line-height: var(--md-editor-line-height);
+    overflow-wrap: anywhere;
+  }
+
+  .rich-markdown h1,
+  .rich-markdown h2,
+  .rich-markdown h3,
+  .rich-markdown h4,
+  .rich-markdown h5,
+  .rich-markdown h6 {
+    color: var(--md-editor-heading-fg);
+    line-height: 1.2;
+    letter-spacing: 0;
+  }
+
+  .rich-markdown h1 {
+    margin: 0 0 22px;
+    font-size: 32px;
+  }
+
+  .rich-markdown h2 {
+    margin: 32px 0 14px;
+    font-size: 26px;
+  }
+
+  .rich-markdown h3 {
+    margin: 24px 0 12px;
+    font-size: 21px;
+  }
+
+  .rich-markdown h4,
+  .rich-markdown h5,
+  .rich-markdown h6 {
+    margin: 20px 0 10px;
+    font-size: 17px;
+  }
+
+  .rich-markdown p,
+  .rich-markdown ul,
+  .rich-markdown ol {
+    margin: 12px 0;
+  }
+
+  .rich-markdown a {
+    color: var(--md-editor-link-fg);
+  }
+
+  .rich-markdown :global(code) {
+    padding: 2px 5px;
+    border-radius: var(--md-editor-radius-sm);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+    font-family: var(--md-editor-font-mono);
+    font-size: 0.92em;
+  }
+
+  .task-row {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    min-height: 32px;
+    margin: 8px 0;
+    color: var(--md-editor-fg);
+    cursor: pointer;
+  }
+
+  .task-row input {
+    width: 17px;
+    height: 17px;
+    margin-top: 5px;
+    accent-color: var(--md-editor-accent);
+    cursor: pointer;
+  }
+
+  .table-scroll {
+    max-width: 100%;
+    margin: 18px 0;
+    overflow-x: auto;
+    border: 1px solid var(--md-editor-table-border);
+    border-radius: var(--md-editor-radius-md);
+    background: var(--md-editor-surface);
+  }
+
+  .table-scroll table {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    padding: 10px 12px;
+    border-right: 1px solid var(--md-editor-table-border);
+    border-bottom: 1px solid var(--md-editor-table-border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .table-scroll th {
+    background: var(--md-editor-table-header-bg);
+    color: var(--md-editor-heading-fg);
+    font-weight: 700;
+  }
+
+  .table-scroll tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .table-scroll th:last-child,
+  .table-scroll td:last-child {
+    border-right: 0;
+  }
+
+  .rich-markdown blockquote {
+    margin: 18px 0;
+    padding: 12px 16px;
+    border-left: 3px solid var(--md-editor-blockquote-border);
+    border-radius: 0 var(--md-editor-radius-md) var(--md-editor-radius-md) 0;
+    background: color-mix(in srgb, var(--md-editor-table-header-bg) 72%, transparent);
+    color: var(--md-editor-blockquote-fg);
+  }
+
+  .code-card,
+  .mermaid-block,
+  .math-block,
+  .html-block {
+    margin: 18px 0;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-md);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 94%, #ffffff 6%);
+    color: var(--md-editor-code-fg);
+  }
+
+  .code-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 38px;
+    padding: 0 10px 0 14px;
+    border-bottom: 1px solid var(--md-editor-code-border);
+    color: color-mix(in srgb, var(--md-editor-code-fg) 82%, transparent);
+    font-family: var(--md-editor-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .code-card header div {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .code-card button {
+    display: inline-grid;
+    place-items: center;
+    min-width: 32px;
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 82%, #ffffff 18%);
+    color: var(--md-editor-code-fg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .code-card pre {
+    max-width: 100%;
+    margin: 0;
+    overflow-x: auto;
+    background: transparent;
+  }
+
+  .code-card code {
+    display: grid;
+    min-width: max-content;
+    padding: 12px 0;
+    background: transparent;
+    color: inherit;
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .code-card.wrapped pre {
+    overflow-x: hidden;
+  }
+
+  .code-card.wrapped code {
+    min-width: 0;
+  }
+
+  .code-line {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    min-height: 22px;
+  }
+
+  .line-number {
+    padding: 0 12px 0 10px;
+    color: color-mix(in srgb, var(--md-editor-code-fg) 42%, transparent);
+    text-align: right;
+    user-select: none;
+  }
+
+  .line-content {
+    padding-right: 16px;
+    white-space: pre;
+  }
+
+  .code-card.wrapped .line-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .code-line.diff-added {
+    background: rgba(46, 160, 67, 0.20);
+  }
+
+  .code-line.diff-removed {
+    background: rgba(248, 81, 73, 0.20);
+  }
+
+  .mermaid-block,
+  .math-block,
+  .html-block {
+    padding: 16px;
+    overflow-x: auto;
+    background: color-mix(in srgb, var(--md-editor-table-header-bg) 76%, var(--md-editor-surface));
+    color: var(--md-editor-fg);
+  }
+
+  .mermaid-block :global(svg) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    background: transparent;
+  }
+
+  .html-block :global(.demo-html-block) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 12px;
+    border: 1px dashed var(--md-editor-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: var(--md-editor-surface);
   }
 
   .prosemirror-host :global(.ProseMirror) {
@@ -2233,25 +2752,29 @@
   }
 
   .source-editor {
+    grid-column: 1;
     display: block;
     width: 100%;
-    max-width: 800px;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
     min-height: calc(100vh - 235px);
     margin: 0 auto;
     overflow: hidden;
   }
 
   .content-outline {
-    position: absolute;
-    top: 44px;
-    right: 20px;
-    z-index: 10;
-    width: 200px;
+    position: fixed;
+    top: 168px;
+    right: clamp(32px, 3.5cqw, 160px);
+    z-index: 30;
+    width: 220px;
     max-height: calc(100vh - 260px);
     overflow: auto;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(4px);
+    padding: 14px;
+    border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--md-editor-surface) 64%, transparent);
+    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(10px);
     color: var(--md-editor-muted-fg);
     font-size: 12px;
   }
@@ -2269,32 +2792,63 @@
     gap: 8px;
   }
 
-  .content-outline button {
+  .content-outline-row {
     display: grid;
     grid-template-columns: 16px minmax(0, 1fr);
     align-items: center;
     gap: 7px;
     min-height: 24px;
-    border: 0;
     border-radius: var(--md-editor-radius-sm);
-    background: transparent;
     color: inherit;
-    font-size: 13px;
-    text-align: left;
-    cursor: pointer;
   }
 
-  .content-outline button:hover {
-    color: var(--md-editor-accent-strong);
-  }
-
-  .content-outline button.active {
+  .content-outline-row.active {
     background: color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
     color: var(--md-editor-accent-strong);
     font-weight: 700;
   }
 
-  .content-outline button span:last-child {
+  .outline-toggle,
+  .outline-link {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .outline-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    min-height: 24px;
+    padding: 0;
+    transition: transform 0.15s ease;
+  }
+
+  .outline-toggle.collapsed {
+    transform: rotate(-90deg);
+  }
+
+  .outline-toggle-placeholder {
+    width: 16px;
+    min-height: 24px;
+  }
+
+  .outline-link {
+    min-width: 0;
+    min-height: 24px;
+    padding: 0;
+    text-align: left;
+  }
+
+  .outline-link:hover,
+  .outline-toggle:hover {
+    color: var(--md-editor-accent-strong);
+  }
+
+  .outline-link span {
+    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2321,6 +2875,12 @@
     font-size: 12px;
   }
 
+  @media (max-width: 1320px) {
+    .content-outline {
+      display: none;
+    }
+  }
+
   @media (max-width: 920px) {
     .workspace {
       grid-template-columns: 1fr;
@@ -2336,16 +2896,14 @@
     }
 
     .document-layout {
+      grid-template-columns: 1fr;
       padding-right: 20px;
       padding-left: 20px;
     }
 
-    .content-outline {
-      display: none;
-    }
-
     .prosemirror-host,
     .source-editor {
+      grid-column: 1;
       width: min(820px, 100%);
     }
   }
