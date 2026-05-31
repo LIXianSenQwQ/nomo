@@ -1,4 +1,4 @@
-export { createEditorCore } from './createEditorCore';
+export { createEditorCore, setCodeBlockTokenizer, setCodeBlockDiagramRenderer, setCodeBlockMathRenderer } from './createEditorCore';
 export type {
   EditorChangeEvent,
   EditorCommand,

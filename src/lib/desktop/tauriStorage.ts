@@ -293,3 +293,23 @@ function toSnakeWindowState(state: WindowState) {
     height: state.height ?? null
   };
 }
+
+/**
+ * 解析 Tauri 原生错误消息，返回错误码和可读消息。
+ * - 支持 '[ERROR_CODE] message' 格式的字符串
+ * - 对于 Error 对象，提取其 message 属性后递归解析
+ * - 非字符串类型回退到 UNKNOWN
+ */
+export function parseNativeError(error: unknown): { code: string; message: string } {
+  if (error instanceof Error) {
+    return parseNativeError(error.message);
+  }
+  if (typeof error !== 'string') {
+    return { code: 'UNKNOWN', message: String(error) };
+  }
+  const match = error.match(/^\[([A-Z_]+)\]\s*(.*)$/);
+  if (match) {
+    return { code: match[1], message: match[2] };
+  }
+  return { code: 'UNKNOWN', message: error };
+}

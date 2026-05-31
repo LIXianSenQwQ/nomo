@@ -64,7 +64,8 @@ export type EditorCommand =
   | { type: 'insertTable'; rows?: number; columns?: number }
   | { type: 'undo' }
   | { type: 'redo' }
-  | { type: 'formatDocument' };
+  | { type: 'formatDocument' }
+  | { type: 'scrollToHeading'; headingIndex: number; text: string; level: number };
 
 export type EditorListener = (event: EditorChangeEvent) => void;
 
@@ -94,3 +95,4 @@ export interface EditorCore {
   updateOptions(options: Partial<EditorRuntimeOptions>): void;
   subscribe(listener: EditorListener): () => void;
 }
+

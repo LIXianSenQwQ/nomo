@@ -19,7 +19,6 @@
     PanelRightOpen,
     Pilcrow,
     Quote,
-    RefreshCw,
     Save,
     Sigma,
     Sun,
@@ -47,9 +46,9 @@
     type SnapshotRecord
   } from '../lib/desktop/tauriStorage';
   import { createEditorCore, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
-  import { createRichMarkdownSample, ensureEditableTrailingBlankLine, parseRichMarkdown, type RichMarkdownBlock } from '../lib/markdown/richMarkdown';
-  import { extractTechnicalBlocks, type TechnicalBlocks } from '../lib/markdown/technicalBlocks';
   import { calculateDocumentStats, extractOutline, type DocumentStats, type OutlineItem } from '../lib/outline/outlineService';
+  import { createRichMarkdownSample } from '../lib/markdown/sample';
+  import { normalizeMarkdownForSave } from '../lib/markdown/normalize';
   import katex from 'katex';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
@@ -77,14 +76,8 @@
   let activeOutlineId = outline[0]?.id ?? '';
   let collapsedOutlineIds = new Set<string>();
   let suppressOutlineScrollUntil = 0;
+  let outlineDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let stats: DocumentStats = calculateDocumentStats(initialMarkdown);
-  let technicalBlocks: TechnicalBlocks = extractTechnicalBlocks(initialMarkdown);
-  let richBlocks: RichMarkdownBlock[] = parseRichMarkdown(initialMarkdown);
-  let mathHtml: string[] = [];
-  let mermaidSvg: string[] = [];
-  let codeTokenMap = new Map<string, CodeTokenLine[]>();
-  let wrappedCodeBlocks = new Set<string>();
-  let renderErrors: string[] = [];
   let fontSize = 16;
   let lineHeight = 1.75;
   let contentWidthPercent = 68;
@@ -94,7 +87,6 @@
   let sourceTextarea: HTMLTextAreaElement;
   let semanticPane: HTMLElement;
   let sourcePane: HTMLElement;
-  let renderVersion = 0;
   let largeDocumentMode = false;
   let readonlyDocumentMode = false;
   let externalFileWarning = '';
@@ -183,8 +175,6 @@
     activeOutlineId = outline[0]?.id ?? '';
     pruneCollapsedOutlineIds();
     stats = calculateDocumentStats(markdown);
-    technicalBlocks = extractTechnicalBlocks(markdown);
-    updateTechnicalPreviews(markdown);
     syncSourceTextareaHeight();
   }
 
@@ -376,8 +366,6 @@
     fileCheckTimer = window.setInterval(() => {
       checkExternalFileChange();
     }, 5000);
-    updateTechnicalPreviews(markdown);
-    updateCodePreviews(markdown);
     await tick();
     syncSourceTextareaHeight();
     await updateWindowTitle().catch(() => undefined);
@@ -438,8 +426,6 @@
     }
     pruneCollapsedOutlineIds();
     stats = calculateDocumentStats(event.markdown);
-    technicalBlocks = extractTechnicalBlocks(event.markdown);
-    richBlocks = parseRichMarkdown(event.markdown);
 
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (activeTab) {
@@ -450,16 +436,10 @@
     }
 
     if (event.markdown.length > LARGE_DOCUMENT_LIMIT) {
-      mathHtml = [];
-      mermaidSvg = [];
-      renderErrors = [];
-      codeTokenMap = new Map();
       syncSourceTextareaHeight();
       return;
     }
     syncSourceTextareaHeight();
-    updateTechnicalPreviews(event.markdown);
-    updateCodePreviews(event.markdown);
   }
 
   function setMode(nextMode: EditorMode) {
@@ -472,7 +452,7 @@
   }
 
   function updateMarkdown(event: Event) {
-    editor.setMarkdown(ensureEditableTrailingBlankLine((event.currentTarget as HTMLTextAreaElement).value));
+    editor.setMarkdown(normalizeMarkdownForSave((event.currentTarget as HTMLTextAreaElement).value));
     syncSourceTextareaHeight();
   }
 
@@ -487,8 +467,6 @@
     localStorage.setItem('new-md-theme', theme);
     persistSetting('theme', theme);
     editor.updateTheme({ name: theme });
-    updateTechnicalPreviews(markdown);
-    updateCodePreviews(markdown);
   }
 
   function updateFontSize(event: Event) {
@@ -768,7 +746,7 @@
 
     if (desktopEnabled) {
       const path = saveAs ? null : nativePath;
-      const markdownToSave = ensureEditableTrailingBlankLine(editor.getMarkdown());
+      const markdownToSave = normalizeMarkdownForSave(editor.getMarkdown());
       writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
       if (nativePath) {
         await createDocumentSnapshot(nativePath, markdownToSave, 'before-save').catch(() => undefined);
@@ -784,7 +762,7 @@
       return;
     }
 
-    const markdownToSave = ensureEditableTrailingBlankLine(editor.getMarkdown());
+    const markdownToSave = normalizeMarkdownForSave(editor.getMarkdown());
     const blob = new Blob([markdownToSave], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -1016,12 +994,7 @@
     requestAnimationFrame(() => {
       if (mode === 'semantic') {
         const index = outline.findIndex((outlineItem) => outlineItem.id === item.id);
-        const heading = semanticPane?.querySelectorAll('.rich-markdown h1, .rich-markdown h2, .rich-markdown h3, .rich-markdown h4, .rich-markdown h5, .rich-markdown h6')[index];
-        if (heading && semanticPane) {
-          const paneTop = semanticPane.getBoundingClientRect().top;
-          const targetTop = heading.getBoundingClientRect().top - paneTop + semanticPane.scrollTop - 48;
-          semanticPane.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-        }
+        editor.execute({ type: 'scrollToHeading', headingIndex: index, text: item.title, level: item.level });
         return;
       }
 
@@ -1148,106 +1121,15 @@
     return `...\\${parts.slice(-3).join('\\')}`;
   }
 
-  async function updateTechnicalPreviews(nextMarkdown: string) {
-    const currentVersion = (renderVersion += 1);
-    const blocks = extractTechnicalBlocks(nextMarkdown);
-    const mathResults = await Promise.all(blocks.mathBlocks.map((block) => mathRenderer.render(block.tex, { displayMode: block.displayMode })));
-    const mermaidResults = await Promise.all(blocks.mermaidBlocks.map((block) => diagramRenderer.renderMermaid(block.code, { theme })));
 
-    if (currentVersion !== renderVersion) {
-      return;
-    }
 
-    mathHtml = mathResults.map((result) => result.html);
-    mermaidSvg = mermaidResults.map((result) => result.svg);
-    renderErrors = [...mathResults, ...mermaidResults].flatMap((result) => (result.error ? [result.error] : []));
-  }
 
-  async function updateCodePreviews(nextMarkdown: string) {
-    const blocks = parseRichMarkdown(nextMarkdown).filter((block): block is Extract<RichMarkdownBlock, { type: 'code' }> => block.type === 'code');
-    const themeName = theme === 'dark' ? 'github-dark' : 'github-light';
-    const entries = await Promise.all(
-      blocks.map(async (block) => {
-        const result = await codeTokenizer.tokenize({
-          code: block.code,
-          language: block.language,
-          theme: themeName
-        });
-        return [getCodeBlockKey(block), result.tokens] as const;
-      })
-    );
-    codeTokenMap = new Map(entries);
-  }
 
-  function getCodeBlockKey(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
-    return `${block.line}:${block.language}:${block.title}:${block.code}`;
-  }
 
-  function getRenderedCodeLines(block: Extract<RichMarkdownBlock, { type: 'code' }>): CodeTokenLine[] {
-    const key = getCodeBlockKey(block);
-    return codeTokenMap.get(key) ?? block.code.split('\n').map((line) => ({ tokens: [{ content: line || ' ', color: undefined }] }));
-  }
 
-  function toggleTaskAtLine(lineNumber: number) {
-    const lines = markdown.split(/\r?\n/);
-    const index = lineNumber - 1;
-    const line = lines[index];
-    const match = /^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/.exec(line ?? '');
-    if (!match) {
-      return;
-    }
 
-    lines[index] = `${match[1]}${match[2].toLowerCase() === 'x' ? ' ' : 'x'}${match[3]}`;
-    editor.setMarkdown(ensureEditableTrailingBlankLine(lines.join('\n')), { reason: 'programmatic-update' });
-  }
 
-  function toggleCodeWrap(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
-    const key = getCodeBlockKey(block);
-    if (wrappedCodeBlocks.has(key)) {
-      wrappedCodeBlocks.delete(key);
-    } else {
-      wrappedCodeBlocks.add(key);
-    }
-    wrappedCodeBlocks = new Set(wrappedCodeBlocks);
-  }
 
-  function isCodeWrapped(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
-    return wrappedCodeBlocks.has(getCodeBlockKey(block));
-  }
-
-  async function copyCode(block: Extract<RichMarkdownBlock, { type: 'code' }>) {
-    await navigator.clipboard?.writeText(block.code);
-    statusMessage = `已复制 ${block.title || block.language || '代码块'}`;
-  }
-
-  function getCodeLineClass(block: Extract<RichMarkdownBlock, { type: 'code' }>, line: CodeTokenLine) {
-    if (!block.isDiff) {
-      return '';
-    }
-    const text = line.tokens.map((token) => token.content).join('');
-    if (text.startsWith('+')) {
-      return 'diff-added';
-    }
-    if (text.startsWith('-')) {
-      return 'diff-removed';
-    }
-    return '';
-  }
-
-  function formatInline(text: string) {
-    return escapeHtml(text)
-      .replace(/\$([^$\n]+)\$/g, (_match, tex: string) =>
-        katex.renderToString(tex, {
-          displayMode: false,
-          throwOnError: false,
-          strict: false
-        })
-      )
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-  }
 
   function escapeHtml(text: string) {
     return text
@@ -1630,9 +1512,6 @@
           <PanelRightOpen size={18} />
         {/if}
       </button>
-      <button class="icon-button" title="刷新渲染" on:click={() => updateTechnicalPreviews(markdown)}>
-        <RefreshCw size={18} />
-      </button>
       <button class="icon-button" title="专注模式" on:click={toggleFocusMode}>
         <Pilcrow size={18} />
       </button>
@@ -1665,89 +1544,6 @@
       <section bind:this={semanticPane} class="semantic-pane" aria-label="语义编辑区" on:scroll={updateActiveOutlineFromSemanticScroll} on:paste={handleEditorPaste} on:drop={handleEditorDrop} on:dragover|preventDefault>
         <div class="document-layout">
           <article class="rich-markdown" aria-label="Markdown 语义渲染">
-            {#each richBlocks as block}
-              {#if block.type === 'heading'}
-                <svelte:element this={`h${block.level}`} data-line={block.line}>{block.text}</svelte:element>
-              {:else if block.type === 'paragraph'}
-                <p data-line={block.line}>{@html formatInline(block.text)}</p>
-              {:else if block.type === 'task'}
-                <label class="task-row" data-line={block.line}>
-                  <input type="checkbox" checked={block.checked} on:change={() => toggleTaskAtLine(block.line)} />
-                  <span>{@html formatInline(block.text)}</span>
-                </label>
-              {:else if block.type === 'list'}
-                {#if block.ordered}
-                  <ol data-line={block.line}>
-                    {#each block.items as item}
-                      <li>{@html formatInline(item)}</li>
-                    {/each}
-                  </ol>
-                {:else}
-                  <ul data-line={block.line}>
-                    {#each block.items as item}
-                      <li>{@html formatInline(item)}</li>
-                    {/each}
-                  </ul>
-                {/if}
-              {:else if block.type === 'blockquote'}
-                <blockquote data-line={block.line}>{@html formatInline(block.text).replace(/\n/g, '<br>')}</blockquote>
-              {:else if block.type === 'table'}
-                <div class="table-scroll" data-line={block.line}>
-                  <table>
-                    <thead>
-                      <tr>
-                        {#each block.headers as header}
-                          <th>{@html formatInline(header)}</th>
-                        {/each}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each block.rows as row}
-                        <tr>
-                          {#each row as cell}
-                            <td>{@html formatInline(cell)}</td>
-                          {/each}
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                </div>
-              {:else if block.type === 'code'}
-                <section class="code-card" class:wrapped={isCodeWrapped(block)} data-line={block.line}>
-                  <header>
-                    <span>{block.title || block.language || 'code'}</span>
-                    <div>
-                      <button type="button" title={isCodeWrapped(block) ? '横向滚动' : '自动换行'} on:click={() => toggleCodeWrap(block)}>
-                        {isCodeWrapped(block) ? '滚动' : '换行'}
-                      </button>
-                      <button type="button" title="复制代码" on:click={() => copyCode(block)}>
-                        <Copy size={14} />
-                      </button>
-                    </div>
-                  </header>
-                  <pre><code>
-                    {#each getRenderedCodeLines(block) as line, lineIndex}
-                      <span class="code-line {getCodeLineClass(block, line)}">
-                        <span class="line-number">{lineIndex + 1}</span>
-                        <span class="line-content">{#each line.tokens as token}<span style:color={token.color}>{token.content}</span>{/each}</span>
-                      </span>
-                    {/each}
-                  </code></pre>
-                </section>
-              {:else if block.type === 'math'}
-                <div class="math-block" data-line={block.line}>
-                  {@html mathHtml[block.renderIndex] ?? escapeHtml(block.tex)}
-                </div>
-              {:else if block.type === 'mermaid'}
-                <div class="mermaid-block" data-line={block.line}>
-                  {@html mermaidSvg[block.renderIndex] ?? `<pre>${escapeHtml(block.code)}</pre>`}
-                </div>
-              {:else if block.type === 'html'}
-                <div class="html-block" data-line={block.line}>{@html block.html}</div>
-              {:else if block.type === 'horizontalRule'}
-                <hr data-line={block.line} />
-              {/if}
-            {/each}
           </article>
           <div bind:this={editorHost} class="prosemirror-host semantic-source-host"></div>
         </div>

@@ -60,4 +60,36 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toContain('$$\nE = mc^2\n$$');
     expect(editor.getMarkdown()).toContain('```mermaid');
   });
+
+  it('scrolls to the nth heading via scrollToHeading command', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '# First\n## Second\n### Third\n\n正文内容',
+      target
+    });
+
+    // scrollToHeading 命令应成功执行（返回 true）
+    const result = editor.execute({ type: 'scrollToHeading', headingIndex: 0, text: 'First', level: 1 });
+    expect(result).toBe(true);
+
+    // 执行第二个标题
+    const result2 = editor.execute({ type: 'scrollToHeading', headingIndex: 1, text: 'Second', level: 2 });
+    expect(result2).toBe(true);
+
+    // 执行第三个标题
+    const result3 = editor.execute({ type: 'scrollToHeading', headingIndex: 2, text: 'Third', level: 3 });
+    expect(result3).toBe(true);
+  });
+
+  it('returns false for out-of-range headingIndex', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '# Only One Heading',
+      target
+    });
+
+    const result = editor.execute({ type: 'scrollToHeading', headingIndex: 5, text: 'Nonexistent', level: 1 });
+    expect(result).toBe(false);
+  });
 });
+
