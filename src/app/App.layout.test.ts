@@ -33,11 +33,29 @@ describe('App outline layout', () => {
 
     expect(jumpSource).not.toContain("setMode('source')");
     expect(jumpSource).toContain('activeOutlineId = item.id;');
+    expect(jumpSource).toContain('scrollSemanticToAnchor(outline, semanticPane');
+  });
+
+  it('keeps source typing from normalizing content or resetting scroll', () => {
+    const updateStart = appSource.indexOf('function updateMarkdown');
+    const updateEnd = appSource.indexOf('function runCommand');
+    const updateSource = appSource.slice(updateStart, updateEnd);
+
+    expect(updateSource).not.toContain('normalizeMarkdownForSave');
+    expect(updateSource).toContain('pendingSourceScrollTop = sourcePane?.scrollTop ?? null;');
+    expect(updateSource).toContain('editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);');
+    expect(appSource).toContain('sourcePane.scrollTop = restoreScrollTop;');
   });
 
   it('renders one shared outline panel with expandable items', () => {
     expect(editorSource.match(/<aside class="content-outline"/g)).toHaveLength(1);
+    expect(editorSource).toContain('export let collapsedOutlineIds');
+    expect(editorSource).toContain('export let visibleOutlineIds');
+    expect(appSource).toContain('{collapsedOutlineIds}');
+    expect(appSource).toContain('{visibleOutlineIds}');
     expect(editorSource).toContain('toggleOutlineItemExpanded');
-    expect(editorSource).toContain('isOutlineItemVisible');
+    expect(editorSource).toContain('visibleOutlineIds.has(item.id)');
+    expect(editorSource).toContain('handleOutlineToggle(event, item)');
+    expect(editorSource).toContain('{#each outline as item, index (item.id)}');
   });
 });

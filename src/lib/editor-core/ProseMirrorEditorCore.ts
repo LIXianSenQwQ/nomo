@@ -59,11 +59,12 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.view = new EditorView(target, {
       state: this.createState(this.markdown),
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
-      editable: () => !this.runtime.readonly && this.runtime.mode === 'semantic',
+      editable: () => this.isEditable(),
       nodeViews: {
         code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number)
       }
     });
+    this.refreshInitialEditableState();
   }
 
   destroy(): void {
@@ -154,7 +155,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       ...options
     };
     this.view?.setProps({
-      editable: () => !this.runtime.readonly && this.runtime.mode === 'semantic'
+      editable: () => this.isEditable()
     });
     this.emit('runtime-options');
   }
@@ -242,6 +243,25 @@ export class ProseMirrorEditorCore implements EditorCore {
     }
 
     this.view.updateState(this.createState(markdown));
+  }
+
+  private isEditable(): boolean {
+    return !this.runtime.readonly && this.runtime.mode === 'semantic';
+  }
+
+  private refreshInitialEditableState(): void {
+    const view = this.view;
+    if (!view || !this.isEditable()) {
+      return;
+    }
+
+    view.setProps({ editable: () => false });
+    requestAnimationFrame(() => {
+      if (this.destroyed || this.view !== view) {
+        return;
+      }
+      view.setProps({ editable: () => this.isEditable() });
+    });
   }
 
   private runProseMirrorCommand(command: EditorCommand): boolean {

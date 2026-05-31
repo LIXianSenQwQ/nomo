@@ -10,6 +10,8 @@
   export let outlineVisible: boolean;
   export let outline: OutlineItem[];
   export let activeOutlineId: string;
+  export let collapsedOutlineIds: Set<string>;
+  export let visibleOutlineIds: Set<string>;
   export let sourceTextarea: HTMLTextAreaElement;
   export let sourcePane: HTMLElement;
   export let semanticPane: HTMLElement;
@@ -20,11 +22,15 @@
   export let updateActiveOutlineFromSemanticScroll: () => void;
   export let handleEditorPaste: (event: ClipboardEvent) => void;
   export let handleEditorDrop: (event: DragEvent) => void;
-  export let isOutlineItemVisible: (index: number) => boolean;
   export let isOutlineItemExpandable: (index: number) => boolean;
-  export let isOutlineItemExpanded: (item: OutlineItem) => boolean;
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
+
+  function handleOutlineToggle(event: MouseEvent, item: OutlineItem) {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleOutlineItemExpanded(item);
+  }
 </script>
 
 {#if externalFileWarning}
@@ -62,18 +68,18 @@
       <strong>文档大纲</strong>
       {#if outline.length > 0}
         <div class="content-outline-list">
-          {#each outline as item, index}
-            {#if isOutlineItemVisible(index)}
+          {#each outline as item, index (item.id)}
+            {#if visibleOutlineIds.has(item.id)}
               <div class:active={activeOutlineId === item.id} class="content-outline-row" style={`padding-left: ${(item.level - 1) * 16}px`}>
                 {#if isOutlineItemExpandable(index)}
                   <button
                     type="button"
-                    class:collapsed={!isOutlineItemExpanded(item)}
+                    class:collapsed={collapsedOutlineIds.has(item.id)}
                     class="outline-toggle"
-                    title={isOutlineItemExpanded(item) ? '折叠标题' : '展开标题'}
-                    aria-label={isOutlineItemExpanded(item) ? `折叠 ${item.title}` : `展开 ${item.title}`}
-                    aria-expanded={isOutlineItemExpanded(item)}
-                    on:click={() => toggleOutlineItemExpanded(item)}
+                    title={collapsedOutlineIds.has(item.id) ? '展开标题' : '折叠标题'}
+                    aria-label={collapsedOutlineIds.has(item.id) ? `展开 ${item.title}` : `折叠 ${item.title}`}
+                    aria-expanded={!collapsedOutlineIds.has(item.id)}
+                    on:click={(event) => handleOutlineToggle(event, item)}
                   >
                     <ChevronDown size={13} />
                   </button>

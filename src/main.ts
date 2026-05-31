@@ -1,5 +1,6 @@
 import App from './app/App.svelte';
 import 'katex/dist/katex.min.css';
+import 'prosemirror-view/style/prosemirror.css';
 import './app/styles/theme.css';
 import './app/styles/global.css';
 import './app/styles/app.css';

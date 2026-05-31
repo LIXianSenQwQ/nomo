@@ -174,8 +174,8 @@
     text-align: left;
   }
 
-  .tree-folder :global(svg),
-  .tree-file :global(svg) {
+  .tree-folder svg,
+  .tree-file svg {
     color: var(--md-editor-muted-fg);
   }
 
@@ -349,7 +349,7 @@
     white-space: nowrap;
   }
 
-  .doc-tab :global(svg:first-child) {
+  .doc-tab svg:first-child {
     color: var(--md-editor-accent);
     flex-shrink: 0;
   }
@@ -638,7 +638,7 @@
     color: var(--md-editor-link-fg);
   }
 
-  .rich-markdown :global(code) {
+  .rich-markdown code {
     padding: 2px 5px;
     border-radius: var(--md-editor-radius-sm);
     background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
@@ -825,7 +825,7 @@
     color: var(--md-editor-fg);
   }
 
-  .mermaid-block :global(svg) {
+  .mermaid-block svg {
     display: block;
     max-width: 100%;
     height: auto;
@@ -833,7 +833,7 @@
     background: transparent;
   }
 
-  .html-block :global(.demo-html-block) {
+  .html-block .demo-html-block {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -844,7 +844,7 @@
     background: var(--md-editor-surface);
   }
 
-  .prosemirror-host :global(.ProseMirror) {
+  .prosemirror-host .ProseMirror {
     min-height: calc(100vh - 235px);
     outline: none;
     color: var(--md-editor-fg);
@@ -853,38 +853,38 @@
     white-space: pre-wrap;
   }
 
-  .prosemirror-host :global(.ProseMirror h1),
-  .prosemirror-host :global(.ProseMirror h2),
-  .prosemirror-host :global(.ProseMirror h3) {
+  .prosemirror-host .ProseMirror h1,
+  .prosemirror-host .ProseMirror h2,
+  .prosemirror-host .ProseMirror h3 {
     color: var(--md-editor-heading-fg);
     line-height: 1.2;
   }
 
-  .prosemirror-host :global(.ProseMirror h1) {
+  .prosemirror-host .ProseMirror h1 {
     margin: 0 0 22px;
     font-size: 32px;
   }
 
-  .prosemirror-host :global(.ProseMirror h2) {
+  .prosemirror-host .ProseMirror h2 {
     margin-top: 30px;
     font-size: 26px;
   }
 
-  .prosemirror-host :global(.ProseMirror blockquote) {
+  .prosemirror-host .ProseMirror blockquote {
     margin: 18px 0;
     padding: 2px 0 2px 16px;
     border-left: 3px solid var(--md-editor-blockquote-border);
     color: var(--md-editor-blockquote-fg);
   }
 
-  .prosemirror-host :global(.ProseMirror code) {
+  .prosemirror-host .ProseMirror code {
     padding: 2px 5px;
     border-radius: var(--md-editor-radius-sm);
     background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
     font-family: var(--md-editor-font-mono);
   }
 
-  .prosemirror-host :global(.ProseMirror pre) {
+  .prosemirror-host .ProseMirror pre {
     overflow: auto;
     padding: 16px;
     border: 1px solid var(--md-editor-code-border);
@@ -893,17 +893,17 @@
     color: var(--md-editor-code-fg);
   }
 
-  .prosemirror-host :global(.ProseMirror pre code) {
+  .prosemirror-host .ProseMirror pre code {
     padding: 0;
     background: transparent;
     color: inherit;
   }
 
-  .prosemirror-host :global(.ProseMirror a) {
+  .prosemirror-host .ProseMirror a {
     color: var(--md-editor-link-fg);
   }
 
-  .prosemirror-host :global(.ProseMirror img) {
+  .prosemirror-host .ProseMirror img {
     max-width: 100%;
     min-width: 160px;
     min-height: 90px;
@@ -912,11 +912,11 @@
     object-fit: contain;
   }
 
-  .prosemirror-host :global(.ProseMirror ul li p:first-child) {
+  .prosemirror-host .ProseMirror ul li p:first-child {
     margin-bottom: 0;
   }
 
-  .prosemirror-host :global(.ProseMirror-selectednode) {
+  .prosemirror-host .ProseMirror-selectednode {
     outline: 2px solid var(--md-editor-accent);
   }
 
@@ -1231,7 +1231,7 @@
     margin-left: 24px;
   }
 
-  .dropdown-menu button:hover .shortcut, .dropdown-menu .nested-trigger:hover :global(svg) {
+  .dropdown-menu button:hover .shortcut, .dropdown-menu .nested-trigger:hover svg {
     color: rgba(255, 255, 255, 0.8) !important;
   }
 
@@ -1240,7 +1240,7 @@
     user-select: none;
   }
 
-  .nested-trigger :global(svg) {
+  .nested-trigger svg {
     color: var(--md-editor-muted-fg);
   }
 
@@ -1369,7 +1369,7 @@
     color: var(--md-editor-fg);
   }
 
-  .tree-folder-root-title :global(svg) {
+  .tree-folder-root-title svg {
     color: var(--md-editor-accent, #007acc);
   }
 
@@ -1409,12 +1409,12 @@
     background: rgba(128, 128, 128, 0.08);
   }
 
-  .tree-folder.nested-dir :global(svg) {
+  .tree-folder.nested-dir svg {
     color: var(--md-editor-muted-fg);
     flex-shrink: 0;
   }
 
-  .tree-folder.nested-dir :global(svg:first-child) {
+  .tree-folder.nested-dir svg:first-child {
     opacity: 0.75;
     transition: transform 0.2s;
   }
@@ -1450,17 +1450,17 @@
     font-weight: 500;
   }
 
-  .file-tree button.tree-file.active :global(svg) {
+  .file-tree button.tree-file.active svg {
     color: var(--md-editor-accent, #007acc) !important;
   }
 
-  .file-tree button.tree-file :global(svg) {
+  .file-tree button.tree-file svg {
     color: var(--md-editor-muted-fg);
     flex-shrink: 0;
   }
 
   /* 夜晚模式左侧侧边栏修正 */
-  :global([data-theme="dark"]) .rail {
+  [data-theme="dark"] .rail {
     background: #1e1e1e !important;
     border-right-color: #2e2e2e !important;
   }

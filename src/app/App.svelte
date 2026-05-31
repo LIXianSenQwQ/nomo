@@ -49,7 +49,6 @@
   import { createImageMarkdownSrc, getImageFiles } from './services/imageMarkdown';
   import {
     isOutlineItemExpandable as getOutlineItemExpandable,
-    isOutlineItemExpanded as getOutlineItemExpanded,
     isOutlineItemVisible as getOutlineItemVisible,
     pruneCollapsedOutlineIds as getPrunedCollapsedOutlineIds,
     toggleOutlineItemExpanded as getToggledOutlineItemIds
@@ -57,8 +56,12 @@
   import {
     getActiveOutlineIdFromSemantic,
     getActiveOutlineIdFromSource,
+    getSemanticScrollAnchor,
     getSourceHeadingSelection,
-    getSourceLineHeight as getTextareaLineHeight
+    getSourceScrollAnchor,
+    getSourceLineHeight as getTextareaLineHeight,
+    scrollSemanticToAnchor,
+    scrollSourceToAnchor
   } from './services/outlineNavigation';
   import {
     applyEditorLayoutSettings as applyEditorLayoutSettingsToDocument,
@@ -90,6 +93,7 @@
   let outlineVisible = true;
   let activeOutlineId = outline[0]?.id ?? '';
   let collapsedOutlineIds = new Set<string>();
+  let visibleOutlineIds = new Set(outline.map((item) => item.id));
   let suppressOutlineScrollUntil = 0;
   let outlineDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let stats: DocumentStats = calculateDocumentStats(initialMarkdown);
@@ -102,6 +106,7 @@
   let sourceTextarea: HTMLTextAreaElement;
   let semanticPane: HTMLElement;
   let sourcePane: HTMLElement;
+  let pendingSourceScrollTop: number | null = null;
   let largeDocumentMode = false;
   let readonlyDocumentMode = false;
   let externalFileWarning = '';
@@ -345,18 +350,37 @@
     syncSourceTextareaHeight();
   }
 
-  function setMode(nextMode: EditorMode) {
+  async function setMode(nextMode: EditorMode) {
     if (largeDocumentMode && nextMode === 'semantic') {
       statusMessage = '大文件已进入只读源码模式，暂不切回语义编辑以避免卡顿';
       return;
     }
+    if (nextMode === mode) {
+      return;
+    }
+
+    const scrollAnchor = mode === 'semantic'
+      ? getSemanticScrollAnchor(outline, semanticPane)
+      : getSourceScrollAnchor(outline, sourcePane?.scrollTop ?? 0, getSourceLineHeight(), sourceTextarea);
+
     editor.updateOptions({ mode: nextMode });
     syncSourceTextareaHeight();
+    await tick();
+    suppressOutlineScrollUntil = Date.now() + 300;
+    requestAnimationFrame(() => {
+      if (nextMode === 'semantic') {
+        scrollSemanticToAnchor(outline, semanticPane, scrollAnchor);
+        return;
+      }
+
+      scrollSourceToAnchor(outline, sourcePane, sourceTextarea, scrollAnchor);
+    });
   }
 
   function updateMarkdown(event: Event) {
-    editor.setMarkdown(normalizeMarkdownForSave((event.currentTarget as HTMLTextAreaElement).value));
-    syncSourceTextareaHeight();
+    pendingSourceScrollTop = sourcePane?.scrollTop ?? null;
+    editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);
+    syncSourceTextareaHeight(pendingSourceScrollTop);
   }
 
   function runCommand(command: EditorCommand) {
@@ -413,14 +437,6 @@
     return getOutlineItemExpandable(outline, index);
   }
 
-  function isOutlineItemExpanded(item: OutlineItem) {
-    return getOutlineItemExpanded(collapsedOutlineIds, item);
-  }
-
-  function isOutlineItemVisible(index: number) {
-    return getOutlineItemVisible(outline, collapsedOutlineIds, index);
-  }
-
   function toggleOutlineItemExpanded(item: OutlineItem) {
     collapsedOutlineIds = getToggledOutlineItemIds(collapsedOutlineIds, item);
   }
@@ -429,13 +445,19 @@
     collapsedOutlineIds = getPrunedCollapsedOutlineIds(outline, collapsedOutlineIds);
   }
 
-  function syncSourceTextareaHeight() {
+  $: visibleOutlineIds = new Set(outline.filter((_item, index) => getOutlineItemVisible(outline, collapsedOutlineIds, index)).map((item) => item.id));
+
+  function syncSourceTextareaHeight(restoreScrollTop: number | null = pendingSourceScrollTop) {
     requestAnimationFrame(() => {
       if (!sourceTextarea) {
         return;
       }
       sourceTextarea.style.height = 'auto';
       sourceTextarea.style.height = `${Math.max(sourceTextarea.scrollHeight, sourceTextarea.clientHeight)}px`;
+      if (restoreScrollTop !== null && sourcePane && mode === 'source') {
+        sourcePane.scrollTop = restoreScrollTop;
+        pendingSourceScrollTop = null;
+      }
     });
   }
 
@@ -720,8 +742,7 @@
 
     requestAnimationFrame(() => {
       if (mode === 'semantic') {
-        const index = outline.findIndex((outlineItem) => outlineItem.id === item.id);
-        editor.execute({ type: 'scrollToHeading', headingIndex: index, text: item.title, level: item.level });
+        scrollSemanticToAnchor(outline, semanticPane, { outlineId: item.id, sectionProgress: 0 });
         return;
       }
 
@@ -887,15 +908,15 @@
         {outlineVisible}
         {outline}
         {activeOutlineId}
+        {collapsedOutlineIds}
+        {visibleOutlineIds}
         {saveMarkdownFile}
         {updateMarkdown}
         {updateActiveOutlineFromSourceScroll}
         {updateActiveOutlineFromSemanticScroll}
         {handleEditorPaste}
         {handleEditorDrop}
-        {isOutlineItemVisible}
         {isOutlineItemExpandable}
-        {isOutlineItemExpanded}
         {toggleOutlineItemExpanded}
         {jumpToOutlineItem}
       />
