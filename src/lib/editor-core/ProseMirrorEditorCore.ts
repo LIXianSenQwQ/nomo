@@ -1,4 +1,14 @@
-import { chainCommands, createParagraphNear, liftEmptyBlock, newlineInCode, splitBlock, toggleMark } from 'prosemirror-commands';
+import {
+  chainCommands,
+  createParagraphNear,
+  deleteSelection,
+  joinBackward,
+  liftEmptyBlock,
+  newlineInCode,
+  selectNodeBackward,
+  splitBlock,
+  toggleMark
+} from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
@@ -15,6 +25,7 @@ import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
 import { createMarkdownInputRules, parseMarkdown, serializeMarkdown, splitFrontMatter } from './markdown';
 import { schema } from './schema';
+import { addTableRowAfter } from './tableCommands';
 import type {
   EditorChangeEvent,
   EditorCommand,
@@ -212,7 +223,9 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-b': toggleMark(schema.marks.strong),
           'Mod-i': toggleMark(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
+          'Ctrl-Enter': addTableRowAfter(),
           'Enter': chainCommands(newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
+          'Backspace': chainCommands(deleteSelection, joinBackward, selectNodeBackward),
           'Tab': chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
           'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item))
         })

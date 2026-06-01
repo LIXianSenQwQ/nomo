@@ -11,17 +11,22 @@ import {
   deleteCurrentTable,
   deleteCurrentTableColumn,
   deleteCurrentTableRow,
+  normalizeFirstTableRowHeader,
   setTableColumnAlignment,
   toggleFirstTableRowHeader
 } from '../tableCommands';
 
 export const tableControlsKey = new PluginKey('tableControls');
 
-export function tableControlsPlugin(): Plugin {
+type TableControlsOptions = {
+  showOuterBorderInsertButtons?: boolean;
+};
+
+export function tableControlsPlugin(options: TableControlsOptions = {}): Plugin {
   return new Plugin({
     key: tableControlsKey,
     view(view) {
-      return new TableControlsView(view);
+      return new TableControlsView(view, options);
     }
   });
 }
@@ -30,7 +35,7 @@ class TableControlsView {
   private readonly dom = document.createElement('div');
   private readonly refresh = () => requestAnimationFrame(() => this.update(this.view));
 
-  constructor(private readonly view: EditorView) {
+  constructor(private readonly view: EditorView, private readonly options: TableControlsOptions) {
     this.dom.className = 'table-inline-controls';
     this.dom.setAttribute('contenteditable', 'false');
     this.view.dom.parentElement?.appendChild(this.dom);
@@ -67,16 +72,21 @@ class TableControlsView {
 
     this.dom.replaceChildren();
 
-    // 步骤1：渲染行/列插入按钮
+    // 步骤1：渲染行/列插入按钮（跳过外边缘，由边框按钮处理）
     this.renderRowInsertButtons(table, rowCount);
     this.renderColInsertButtons(table, colCount);
 
-    // 步骤2：渲染删除按钮（所有行的左侧 + 所有列的下方）
+    // 步骤2：可选渲染表格外边框上的线性插入按钮；当前设计暂时隐藏，保留入口便于后续迭代。
+    if (this.options.showOuterBorderInsertButtons) {
+      this.renderOuterBorderButtons(table, rowCount, colCount);
+    }
+
+    // 步骤3：渲染删除按钮（所有行的左侧 + 所有列的下方）
     this.renderRowDeleteButtons(table, rowCount);
     this.renderColDeleteButtons(table, rowCount, colCount);
 
-    // 步骤3：渲染工具条（对齐、切换表头、删除表格）
-    this.renderUtilityBar();
+    // 步骤4：渲染表格工具条（边界新增、对齐、表头、删除表格）
+    this.renderUtilityBar(rowCount, colCount);
 
     this.dom.classList.add('visible');
   }
@@ -94,12 +104,10 @@ class TableControlsView {
     const tableRows = table.rows;
     const tableRect = table.getBoundingClientRect();
 
-    // 位置 i（0..rowCount）：第 i 行之前，rowCount 表示最后一行之后
-    for (let i = 0; i <= rowCount; i++) {
+    // 仅处理行间隙（1..rowCount-1），四角边缘由边框按钮处理
+    for (let i = 1; i < rowCount; i++) {
       const y = this.rowGapY(tableRows, i, tableRect);
-      const title = i === 0 ? '在第一行前插入行'
-        : i === rowCount ? '在最后一行后插入行'
-        : `在第 ${i} 行和第 ${i + 1} 行之间插入行`;
+      const title = `在第 ${i} 行和第 ${i + 1} 行之间插入行`;
 
       const leftBtn = this.createButton(title, '+', 'row-insert-left', () => this.insertRowAt(i));
       leftBtn.style.top = `${y}px`;
@@ -137,11 +145,10 @@ class TableControlsView {
 
     const tableRect = table.getBoundingClientRect();
 
-    for (let j = 0; j <= colCount; j++) {
+    // 仅处理列间隙（1..colCount-1），四角边缘由边框按钮处理
+    for (let j = 1; j < colCount; j++) {
       const x = this.colGapX(firstRowCells, j, tableRect);
-      const title = j === 0 ? '在第一列前插入列'
-        : j === colCount ? '在最后一列后插入列'
-        : `在第 ${j} 列和第 ${j + 1} 列之间插入列`;
+      const title = `在第 ${j} 列和第 ${j + 1} 列之间插入列`;
 
       const topBtn = this.createButton(title, '+', 'col-insert-top', () => this.insertColumnAt(j));
       topBtn.style.left = `${x}px`;
@@ -167,6 +174,107 @@ class TableControlsView {
     const prevRight = cells[pos - 1].getBoundingClientRect().right - tableRect.left;
     const currLeft = cells[pos].getBoundingClientRect().left - tableRect.left;
     return Math.round((prevRight + currLeft) / 2);
+  }
+
+  // ===== 渲染：表格外边框上的线性插入控件 =====
+
+  /** 控件厚度：实际视觉贴边，命中区在边框两侧各留一半 */
+  private static readonly BORDER_CTRL_HIT_SIZE = 18;
+
+  private renderOuterBorderButtons(table: HTMLTableElement, rowCount: number, colCount: number): void {
+    const tableRect = table.getBoundingClientRect();
+    const firstRow = table.rows[0];
+    const lastRow = table.rows[rowCount - 1];
+    if (!firstRow || !lastRow) return;
+
+    const rendered = new Set<string>();
+
+    // 顶部/底部整条外边框用于插入行，按边缘单元格分段铺满表格宽度。
+    for (const cell of Array.from(firstRow.cells)) {
+      this.addBorderCtrl(tableRect, cell, 'top', '在第一行前插入行', rendered, () => this.insertRowAt(0));
+    }
+    for (const cell of Array.from(lastRow.cells)) {
+      this.addBorderCtrl(tableRect, cell, 'bottom', '在最后一行后插入行', rendered, () => this.insertRowAt(rowCount));
+    }
+
+    // 左侧/右侧整条外边框用于插入列，按边缘单元格分段铺满表格高度。
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      const row = table.rows[rowIndex];
+      const leftCell = row.cells[0];
+      const rightCell = row.cells[colCount - 1];
+      if (leftCell) {
+        this.addBorderCtrl(tableRect, leftCell, 'left', '在第一列前插入列', rendered, () => this.insertColumnAt(0));
+      }
+      if (rightCell) {
+        this.addBorderCtrl(tableRect, rightCell, 'right', '在最后一列后插入列', rendered, () => this.insertColumnAt(colCount));
+      }
+    }
+  }
+
+  /** 创建贴合角落单元格外边框的轻量插入控件 */
+  private addBorderCtrl(
+    tableRect: DOMRect,
+    cell: HTMLTableCellElement,
+    side: 'top' | 'bottom' | 'left' | 'right',
+    title: string,
+    rendered: Set<string>,
+    onClick: () => void
+  ): void {
+    const cellRect = cell.getBoundingClientRect();
+    const hitSize = TableControlsView.BORDER_CTRL_HIT_SIZE;
+    const relativeLeft = cellRect.left - tableRect.left;
+    const relativeTop = cellRect.top - tableRect.top;
+    const key = [
+      side,
+      Math.round(relativeLeft),
+      Math.round(relativeTop),
+      Math.round(cellRect.width),
+      Math.round(cellRect.height)
+    ].join(':');
+    if (rendered.has(key)) return;
+    rendered.add(key);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `table-ctrl-btn border-insert-btn border-insert-${side}`;
+    btn.title = title;
+    btn.setAttribute('aria-label', title);
+    btn.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onClick();
+    });
+
+    // 定位：独立 button 的命中区骑在单元格外边框线上，视觉线条贴合边框本身。
+    switch (side) {
+      case 'top':
+        btn.style.left = `${relativeLeft + cellRect.width * 0.5}px`;
+        btn.style.top = `${relativeTop}px`;
+        btn.style.width = `${cellRect.width}px`;
+        btn.style.height = `${hitSize}px`;
+        break;
+      case 'bottom':
+        btn.style.left = `${relativeLeft + cellRect.width * 0.5}px`;
+        btn.style.top = `${cellRect.bottom - tableRect.top}px`;
+        btn.style.width = `${cellRect.width}px`;
+        btn.style.height = `${hitSize}px`;
+        break;
+      case 'left':
+        btn.style.left = `${relativeLeft}px`;
+        btn.style.top = `${relativeTop + cellRect.height * 0.5}px`;
+        btn.style.width = `${hitSize}px`;
+        btn.style.height = `${cellRect.height}px`;
+        break;
+      case 'right':
+        btn.style.left = `${cellRect.right - tableRect.left}px`;
+        btn.style.top = `${relativeTop + cellRect.height * 0.5}px`;
+        btn.style.width = `${hitSize}px`;
+        btn.style.height = `${cellRect.height}px`;
+        break;
+    }
+    btn.style.transform = 'translate(-50%, -50%)';
+
+    this.dom.appendChild(btn);
   }
 
   // ===== 渲染：删除行按钮（每行左侧） =====
@@ -207,18 +315,28 @@ class TableControlsView {
 
   // ===== 渲染：工具条（对齐、表头、删除表格） =====
 
-  private renderUtilityBar(): void {
+  private renderUtilityBar(rowCount: number, colCount: number): void {
     const bar = this.el('div', 'table-util-bar');
 
-    bar.appendChild(this.createButton('左对齐', '≡', 'util-btn',
+    bar.appendChild(this.createButton('在第一行前插入行', '', 'boundary-insert-btn boundary-insert-row-before',
+      () => this.insertRowAt(0)));
+    bar.appendChild(this.createButton('在第一列前插入列', '', 'boundary-insert-btn boundary-insert-column-before',
+      () => this.insertColumnAt(0)));
+    bar.appendChild(this.createButton('在最后一行后插入行', '', 'boundary-insert-btn boundary-insert-row-after',
+      () => this.insertRowAt(rowCount)));
+    bar.appendChild(this.createButton('在最后一列后插入列', '', 'boundary-insert-btn boundary-insert-column-after',
+      () => this.insertColumnAt(colCount)));
+    bar.appendChild(this.el('span', 'table-util-separator'));
+
+    bar.appendChild(this.createButton('左对齐', '≡', 'util-btn util-align-left',
       () => this.run(setTableColumnAlignment('left'))));
-    bar.appendChild(this.createButton('居中对齐', '≣', 'util-btn',
+    bar.appendChild(this.createButton('居中对齐', '≣', 'util-btn util-align-center',
       () => this.run(setTableColumnAlignment('center'))));
-    bar.appendChild(this.createButton('右对齐', '≡', 'util-btn',
+    bar.appendChild(this.createButton('右对齐', '≡', 'util-btn util-align-right',
       () => this.run(setTableColumnAlignment('right'))));
-    bar.appendChild(this.createButton('切换表头行', 'H', 'util-btn',
+    bar.appendChild(this.createButton('切换表头行', 'H', 'util-btn util-header-row',
       () => this.run(toggleFirstTableRowHeader())));
-    bar.appendChild(this.createButton('删除整张表格', '⌫', 'util-btn util-btn-danger',
+    bar.appendChild(this.createButton('删除整张表格', '⌫', 'util-btn util-delete-table util-btn-danger',
       () => this.run(deleteCurrentTable())));
 
     this.dom.appendChild(bar);
@@ -257,6 +375,7 @@ class TableControlsView {
     if (pos === 0) {
       this.moveCursorTo(info, map, 0, 0);
       addTableRowBefore()(this.view.state, (tr) => this.view.dispatch(tr));
+      normalizeFirstTableRowHeader()(this.view.state, (tr) => this.view.dispatch(tr));
     } else if (pos >= map.height) {
       this.moveCursorTo(info, map, map.height - 1, 0);
       addTableRowAfter()(this.view.state, (tr) => this.view.dispatch(tr));

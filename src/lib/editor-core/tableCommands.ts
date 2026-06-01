@@ -100,6 +100,35 @@ export function toggleFirstTableRowHeader(): Command {
   };
 }
 
+export function normalizeFirstTableRowHeader(): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state);
+    if (!context || context.map.height === 0) return false;
+
+    const tr = state.tr;
+    const touched = new Set<number>();
+
+    for (let rowIndex = 0; rowIndex < context.map.height; rowIndex += 1) {
+      const targetType = rowIndex === 0 ? schema.nodes.table_header : schema.nodes.table_cell;
+
+      for (let columnIndex = 0; columnIndex < context.map.width; columnIndex += 1) {
+        const cellPosition = context.tableStart + context.map.positionAt(rowIndex, columnIndex, context.table);
+        if (touched.has(cellPosition)) continue;
+        touched.add(cellPosition);
+
+        const cell = state.doc.nodeAt(cellPosition);
+        if (cell && cell.type !== targetType) {
+          tr.setNodeMarkup(cellPosition, targetType, cell.attrs);
+        }
+      }
+    }
+
+    if (!tr.docChanged) return false;
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  };
+}
+
 function createTableRow(columns: number, rowIndex: number, header: boolean): ProseMirrorNode {
   const cellType = header ? schema.nodes.table_header : schema.nodes.table_cell;
   const cells = Array.from({ length: columns }, (_, columnIndex) => {
