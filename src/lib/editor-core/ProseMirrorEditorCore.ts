@@ -1,18 +1,20 @@
-import { chainCommands, createParagraphNear, exitCode, liftEmptyBlock, newlineInCode, setBlockType, splitBlock, toggleMark, wrapIn } from 'prosemirror-commands';
+import { chainCommands, createParagraphNear, liftEmptyBlock, newlineInCode, splitBlock, toggleMark } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { schema } from 'prosemirror-markdown';
-import type { MarkType, NodeType } from 'prosemirror-model';
-import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { EditorState, type Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
+import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { executeEditorCommand } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { mathBlockPlugin } from './plugins/mathBlock';
+import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
-import { createMarkdownInputRules, createTableMarkdown, parseMarkdown, serializeMarkdown, splitFrontMatter } from './markdown';
+import { createMarkdownInputRules, parseMarkdown, serializeMarkdown, splitFrontMatter } from './markdown';
+import { schema } from './schema';
 import type {
   EditorChangeEvent,
   EditorCommand,
@@ -201,6 +203,8 @@ export class ProseMirrorEditorCore implements EditorCore {
         codeHighlightPlugin(),
         mathBlockPlugin(),
         tableHtmlBlockPlugin(),
+        tableControlsPlugin(),
+        tableEditing({ allowTableNodeSelection: true }),
         keymap({
           'Mod-z': undo,
           'Mod-y': redo,
@@ -209,8 +213,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-i': toggleMark(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
           'Enter': chainCommands(newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
-          'Tab': sinkListItem(schema.nodes.list_item),
-          'Shift-Tab': liftListItem(schema.nodes.list_item)
+          'Tab': chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
+          'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item))
         })
       ]
     });
@@ -268,125 +272,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     if (!this.view) {
       return false;
     }
-
-    const { state, dispatch } = this.view;
-    const run = (fn: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean) => fn(state, dispatch);
-
-    switch (command.type) {
-      case 'toggleBold':
-        return run(toggleMark(schema.marks.strong));
-      case 'toggleItalic':
-        return run(toggleMark(schema.marks.em));
-      case 'toggleCode':
-        return run(toggleMark(schema.marks.code));
-      case 'setHeading':
-        return run(setBlockType(schema.nodes.heading, { level: command.level }));
-      case 'setParagraph':
-        return run(setBlockType(schema.nodes.paragraph));
-      case 'toggleBlockquote':
-        return run(wrapIn(schema.nodes.blockquote));
-      case 'toggleBulletList':
-        return run(wrapInList(schema.nodes.bullet_list));
-      case 'toggleOrderedList':
-        return run(wrapInList(schema.nodes.ordered_list));
-      case 'insertLink':
-        return this.insertTextWithOptionalMark(command.text ?? command.href, schema.marks.link, {
-          href: command.href,
-          title: command.title ?? null
-        });
-      case 'insertImage':
-        return this.insertInlineNode(schema.nodes.image, {
-          src: command.src,
-          alt: command.alt ?? null,
-          title: command.title ?? null
-        });
-      case 'insertCodeBlock':
-        return this.insertBlock(schema.nodes.code_block, command.code ?? '', command.language ? { params: command.language } : undefined);
-      case 'toggleTaskList':
-        return this.insertMarkdownSnippet('- [ ] 待办事项\n');
-      case 'insertMathBlock':
-        return this.insertMarkdownSnippet(`$$\n${command.tex ?? 'E = mc^2'}\n$$\n`);
-      case 'insertMermaidBlock':
-        return this.insertMarkdownSnippet(`\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`);
-      case 'insertTable':
-        return this.insertMarkdownSnippet(createTableMarkdown(command.rows ?? 3, command.columns ?? 3));
-      case 'undo':
-        return run(undo);
-      case 'redo':
-        return run(redo);
-      case 'scrollToHeading':
-        return this.scrollToHeading(command.headingIndex, command.text);
-      default:
-        return false;
-    }
-  }
-
-
-  private scrollToHeading(headingIndex: number, text: string): boolean {
-    if (!this.view) return false;
-
-    let foundPos: number | null = null;
-    let headingCount = 0;
-    this.view.state.doc.descendants((node, pos) => {
-      if (node.type.name === "heading") {
-        headingCount++;
-        if (headingCount === headingIndex + 1) {
-          foundPos = pos;
-          return false;
-        }
-      }
-    });
-
-    if (foundPos === null) return false;
-
-    const $pos = this.view.state.doc.resolve(foundPos);
-    const tr = this.view.state.tr.setSelection(TextSelection.near($pos));
-    tr.scrollIntoView();
-    this.view.dispatch(tr);
-    return true;
-  }
-
-  private insertTextWithOptionalMark(text: string, markType: MarkType, attrs: Record<string, unknown>): boolean {
-    if (!this.view) {
-      return false;
-    }
-
-    const { state, dispatch } = this.view;
-    const mark = markType.create(attrs);
-    const tr = state.tr.replaceSelectionWith(schema.text(text, [mark]), false);
-    dispatch(tr.scrollIntoView());
-    return true;
-  }
-
-  private insertInlineNode(type: NodeType, attrs: Record<string, unknown>): boolean {
-    if (!this.view) {
-      return false;
-    }
-
-    const node = type.createAndFill(attrs);
-    if (!node) {
-      return false;
-    }
-
-    this.view.dispatch(this.view.state.tr.replaceSelectionWith(node).scrollIntoView());
-    return true;
-  }
-
-  private insertBlock(type: NodeType, text: string, attrs?: Record<string, unknown>): boolean {
-    if (!this.view) {
-      return false;
-    }
-
-    const content = text ? schema.text(text) : undefined;
-    const node = type.create(attrs, content);
-    this.view.dispatch(this.view.state.tr.replaceSelectionWith(node).scrollIntoView());
-    return true;
-  }
-
-  private insertMarkdownSnippet(snippet: string): boolean {
-    const separator = this.markdown.endsWith('\n') ? '\n' : '\n\n';
-    this.setMarkdown(`${this.markdown}${separator}${snippet}`, { reason: 'programmatic-update' });
-    return true;
+    return executeEditorCommand(command, this.view, this.markdown, (markdown, options) => this.setMarkdown(markdown, options));
   }
 
   private assertActive(): void {

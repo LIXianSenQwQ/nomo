@@ -574,6 +574,7 @@
   }
 
   .prosemirror-host {
+    position: relative;
     grid-column: 1;
     min-height: 100%;
     width: 100%;
@@ -914,6 +915,128 @@
 
   .prosemirror-host .ProseMirror ul li p:first-child {
     margin-bottom: 0;
+  }
+
+  .prosemirror-host .ProseMirror table {
+    width: 100%;
+    min-width: 520px;
+    margin: 20px 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: var(--md-editor-surface);
+    color: var(--md-editor-fg);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .prosemirror-host .ProseMirror table,
+  .prosemirror-host .ProseMirror th,
+  .prosemirror-host .ProseMirror td {
+    border: 1px solid var(--md-editor-table-border);
+  }
+
+  .prosemirror-host .ProseMirror th,
+  .prosemirror-host .ProseMirror td {
+    position: relative;
+    min-width: 90px;
+    padding: 9px 11px;
+    vertical-align: top;
+  }
+
+  .prosemirror-host .ProseMirror th {
+    background: var(--md-editor-table-header-bg);
+    color: var(--md-editor-heading-fg);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .prosemirror-host .ProseMirror td {
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  .prosemirror-host .ProseMirror th p,
+  .prosemirror-host .ProseMirror td p {
+    margin: 0;
+  }
+
+  .prosemirror-host .ProseMirror .selectedCell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--md-editor-accent) 15%, transparent);
+    box-shadow: inset 0 0 0 2px var(--md-editor-accent);
+  }
+
+  .table-inline-controls {
+    --table-control-left: 0px;
+    --table-control-top: 0px;
+    --table-control-width: 0px;
+    --table-control-height: 0px;
+    position: absolute;
+    left: var(--table-control-left);
+    top: var(--table-control-top);
+    z-index: 20;
+    display: none;
+    width: var(--table-control-width);
+    height: var(--table-control-height);
+    pointer-events: none;
+  }
+
+  .table-inline-controls.visible {
+    display: block;
+  }
+
+  .table-inline-controls button {
+    display: inline-grid;
+    place-items: center;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--md-editor-table-border) 86%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--md-editor-surface) 94%, var(--md-editor-accent) 6%);
+    color: var(--md-editor-muted-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .table-inline-controls button:hover {
+    border-color: var(--md-editor-accent);
+    color: var(--md-editor-accent-strong);
+  }
+
+  .table-column-controls,
+  .table-row-controls,
+  .table-edge-controls {
+    position: absolute;
+    display: flex;
+    gap: 5px;
+    pointer-events: none;
+  }
+
+  .table-column-controls {
+    left: 0;
+    bottom: calc(100% + 7px);
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .table-row-controls {
+    top: 0;
+    right: calc(100% + 7px);
+    flex-direction: column;
+  }
+
+  .table-edge-controls {
+    right: 0;
+    top: calc(100% + 7px);
   }
 
   .prosemirror-host .ProseMirror-selectednode {

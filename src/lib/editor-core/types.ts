@@ -62,6 +62,15 @@ export type EditorCommand =
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }
   | { type: 'insertTable'; rows?: number; columns?: number }
+  | { type: 'addTableRowBefore' }
+  | { type: 'addTableRowAfter' }
+  | { type: 'addTableColumnBefore' }
+  | { type: 'addTableColumnAfter' }
+  | { type: 'deleteTableRow' }
+  | { type: 'deleteTableColumn' }
+  | { type: 'deleteTable' }
+  | { type: 'toggleTableHeader' }
+  | { type: 'setTableColumnAlignment'; align: 'left' | 'center' | 'right' }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'formatDocument' }
