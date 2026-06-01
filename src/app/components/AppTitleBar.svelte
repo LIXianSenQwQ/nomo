@@ -119,6 +119,8 @@
             <button on:click={() => finish(() => runCommand({ type: 'setHeading', level: 2 }), 'paragraph')}>二级标题 <span class="shortcut">Ctrl+2</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'setHeading', level: 3 }), 'paragraph')}>三级标题 <span class="shortcut">Ctrl+3</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'setHeading', level: 4 }), 'paragraph')}>四级标题 <span class="shortcut">Ctrl+4</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'setHeading', level: 5 }), 'paragraph')}>五级标题 <span class="shortcut">Ctrl+5</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'setHeading', level: 6 }), 'paragraph')}>六级标题 <span class="shortcut">Ctrl+6</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}>正文 <span class="shortcut">Ctrl+0</span></button>
           </div>
         {/if}

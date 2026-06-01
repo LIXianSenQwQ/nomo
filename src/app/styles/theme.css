@@ -18,6 +18,7 @@
   --md-editor-danger: #b42318;
   --md-editor-blockquote-border: #9ab7b0;
   --md-editor-blockquote-fg: #4a5b58;
+  --md-editor-blockquote-bg: #f2f4f5;
   --md-editor-code-bg: #1f242b;
   --md-editor-code-fg: #f3f6f8;
   --md-editor-code-border: #343b45;
@@ -59,6 +60,7 @@
   --md-editor-danger: #ff8a7a;
   --md-editor-blockquote-border: #597d75;
   --md-editor-blockquote-fg: #c4d4d0;
+  --md-editor-blockquote-bg: #1a1e23;
   --md-editor-code-bg: #11151a;
   --md-editor-code-fg: #edf3f6;
   --md-editor-code-border: #2b333d;

@@ -277,7 +277,7 @@
     padding: 12px 16px;
     border-left: 3px solid var(--md-editor-blockquote-border);
     border-radius: 0 var(--md-editor-radius-md) var(--md-editor-radius-md) 0;
-    background: color-mix(in srgb, var(--md-editor-table-header-bg) 72%, transparent);
+    background: var(--md-editor-blockquote-bg);
     color: var(--md-editor-blockquote-fg);
   }
 
@@ -441,6 +441,7 @@
     margin: 18px 0;
     padding: 2px 0 2px 16px;
     border-left: 3px solid var(--md-editor-blockquote-border);
+    background: var(--md-editor-blockquote-bg);
     color: var(--md-editor-blockquote-fg);
   }
 

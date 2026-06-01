@@ -21,6 +21,22 @@ import type { EditorCommand, SetMarkdownOptions } from './types';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
 
+/** 如果当前已是同级标题，则取消为正文；否则设为对应级别 */
+function toggleHeading(view: EditorView, level: number): boolean {
+  const { $from } = view.state.selection;
+  // 向上遍历祖先节点找到包裹的 heading
+  for (let d = $from.depth; d >= 0; d--) {
+    const node = $from.node(d);
+    if (node.type === schema.nodes.heading) {
+      if (node.attrs.level === level) {
+        return setBlockType(schema.nodes.paragraph)(view.state, view.dispatch);
+      }
+      break;
+    }
+  }
+  return setBlockType(schema.nodes.heading, { level })(view.state, view.dispatch);
+}
+
 export function executeEditorCommand(command: EditorCommand, view: EditorView, markdown: string, setMarkdown: MarkdownSetter): boolean {
   const { state, dispatch } = view;
   const run = (fn: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean) => fn(state, dispatch);
@@ -33,7 +49,7 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
     case 'toggleCode':
       return run(toggleMark(schema.marks.code));
     case 'setHeading':
-      return run(setBlockType(schema.nodes.heading, { level: command.level }));
+      return toggleHeading(view, command.level);
     case 'setParagraph':
       return run(setBlockType(schema.nodes.paragraph));
     case 'toggleBlockquote':

@@ -70,9 +70,9 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === 'f' && event.shiftKey) {
     event.preventDefault();
     handlers.toggleFocusMode();
-  } else if (['1', '2', '3', '4'].includes(key)) {
+  } else if (['1', '2', '3', '4', '5', '6'].includes(key)) {
     event.preventDefault();
-    handlers.runCommand({ type: 'setHeading', level: Number(key) as 1 | 2 | 3 | 4 });
+    handlers.runCommand({ type: 'setHeading', level: Number(key) as 1 | 2 | 3 | 4 | 5 | 6 });
   } else if (key === '0') {
     event.preventDefault();
     handlers.runCommand({ type: 'setParagraph' });
