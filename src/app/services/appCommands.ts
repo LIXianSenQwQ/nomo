@@ -41,6 +41,10 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
 }
 
 export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandHandlers) {
+  if (event.defaultPrevented) {
+    return;
+  }
+
   if (!event.ctrlKey || event.altKey) {
     return;
   }
@@ -76,5 +80,22 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === '0') {
     event.preventDefault();
     handlers.runCommand({ type: 'setParagraph' });
+  }
+  // Ctrl+Shift 快捷键：用 event.code 按物理按键匹配，避免 Shift 影响 event.key
+  if (!event.shiftKey) return;
+
+  const code = event.code;
+  if (code === 'BracketLeft') {
+    // Ctrl+Shift+[ → 有序列表
+    event.preventDefault();
+    handlers.runCommand({ type: 'toggleOrderedList' });
+  } else if (code === 'BracketRight') {
+    // Ctrl+Shift+] → 无序列表
+    event.preventDefault();
+    handlers.runCommand({ type: 'toggleBulletList' });
+  } else if (key === 'x') {
+    // Ctrl+Shift+X → 任务列表
+    event.preventDefault();
+    handlers.runCommand({ type: 'toggleTaskList' });
   }
 }

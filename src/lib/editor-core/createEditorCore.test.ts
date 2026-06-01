@@ -55,10 +55,77 @@ describe('createEditorCore', () => {
     editor.execute({ type: 'insertMathBlock', tex: 'E = mc^2' });
     editor.execute({ type: 'insertMermaidBlock', code: 'flowchart TD\n  A --> B' });
 
-    expect(editor.getMarkdown()).toContain('- [ ] 待办事项');
+    expect(editor.getMarkdown()).toContain('- [ ] 技术文档');
     expect(editor.getMarkdown()).toContain('| 列 1 | 列 2 |');
     expect(editor.getMarkdown()).toContain('$$\nE = mc^2\n$$');
     expect(editor.getMarkdown()).toContain('```mermaid');
+  });
+
+  it('toggles bullet and ordered lists back to plain paragraphs', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '列表项', target });
+
+    editor.execute({ type: 'toggleBulletList' });
+    expect(editor.getMarkdown()).toBe('- 列表项');
+
+    editor.execute({ type: 'toggleBulletList' });
+    expect(editor.getMarkdown()).toBe('列表项');
+
+    editor.execute({ type: 'toggleOrderedList' });
+    expect(editor.getMarkdown()).toBe('1. 列表项');
+
+    editor.execute({ type: 'toggleOrderedList' });
+    expect(editor.getMarkdown()).toBe('列表项');
+  });
+
+  it('converts between ordered and bullet lists while preserving task markers', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '1. [ ] 待办事项', target });
+
+    editor.execute({ type: 'toggleBulletList' });
+    expect(editor.getMarkdown()).toBe('- [ ] 待办事项');
+
+    editor.execute({ type: 'toggleOrderedList' });
+    expect(editor.getMarkdown()).toBe('1. [ ] 待办事项');
+  });
+
+  it('removes task markers when cancelling task lists through the same list shortcut', () => {
+    const bulletTarget = document.createElement('div');
+    const bulletEditor = createEditorCore({ markdown: '- [ ] 待办事项', target: bulletTarget });
+
+    bulletEditor.execute({ type: 'toggleBulletList' });
+    expect(bulletEditor.getMarkdown()).toBe('待办事项');
+
+    const orderedTarget = document.createElement('div');
+    const orderedEditor = createEditorCore({ markdown: '1. [x] 已完成', target: orderedTarget });
+
+    orderedEditor.execute({ type: 'toggleOrderedList' });
+    expect(orderedEditor.getMarkdown()).toBe('已完成');
+  });
+
+  it('removes task markers through the task shortcut while preserving the list type', () => {
+    const bulletTarget = document.createElement('div');
+    const bulletEditor = createEditorCore({ markdown: '- [ ] 待办事项', target: bulletTarget });
+
+    bulletEditor.execute({ type: 'toggleTaskList' });
+    expect(bulletEditor.getMarkdown()).toBe('- 待办事项');
+
+    const orderedTarget = document.createElement('div');
+    const orderedEditor = createEditorCore({ markdown: '1. [x] 已完成', target: orderedTarget });
+
+    orderedEditor.execute({ type: 'toggleTaskList' });
+    expect(orderedEditor.getMarkdown()).toBe('1. 已完成');
+  });
+
+  it('toggles task lists from and back to plain paragraphs', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '待办事项', target });
+
+    editor.execute({ type: 'toggleTaskList' });
+    expect(editor.getMarkdown()).toBe('- [ ] 待办事项');
+
+    editor.execute({ type: 'toggleTaskList' });
+    expect(editor.getMarkdown()).toBe('- 待办事项');
   });
 
   it('renders editable HTML blocks with their original root element and attributes', () => {

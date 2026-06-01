@@ -2,7 +2,7 @@ import { textblockTypeInputRule, wrappingInputRule } from 'prosemirror-inputrule
 import MarkdownIt from 'markdown-it';
 import Token from 'markdown-it/lib/token.mjs';
 import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { schema, type TableColumnAlignment } from './schema';
 import { classifyHtmlBlock } from './html/htmlClassifier';
 import { parseHtmlContent } from './html/htmlToPmLogic';
@@ -163,6 +163,20 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
 const tableMarkdownSerializer = new MarkdownSerializer(
   {
     ...defaultMarkdownSerializer.nodes,
+    paragraph(state, node) {
+      const taskParagraph = splitTaskParagraph(node);
+      if (taskParagraph) {
+        state.write(taskParagraph.marker);
+        state.renderInline(taskParagraph.content);
+        state.closeBlock(node);
+        return;
+      }
+      state.renderInline(node);
+      state.closeBlock(node);
+    },
+    bullet_list(state, node) {
+      state.renderList(node, '  ', () => '- ');
+    },
     table(state, node) {
       state.ensureNewLine();
       state.write(serializeTable(node));
@@ -282,6 +296,26 @@ function serializeInlineText(node: ProseMirrorNode): string {
     if (mark.type.name === 'link') return `[${value}](${mark.attrs.href})`;
     return value;
   }, text);
+}
+
+function splitTaskParagraph(node: ProseMirrorNode): { marker: string; content: ProseMirrorNode } | null {
+  const firstChild = node.firstChild;
+  if (!firstChild?.isText) return null;
+
+  const match = /^\[[ x]\]\s?/.exec(firstChild.text ?? '');
+  if (!match) return null;
+
+  const children: ProseMirrorNode[] = [];
+  const restText = (firstChild.text ?? '').slice(match[0].length);
+  if (restText) children.push(node.type.schema.text(restText, firstChild.marks));
+  for (let index = 1; index < node.childCount; index++) {
+    children.push(node.child(index));
+  }
+
+  return {
+    marker: match[0].endsWith(' ') ? match[0] : `${match[0]} `,
+    content: node.type.create(node.attrs, Fragment.fromArray(children), node.marks)
+  };
 }
 
 function escapeTableText(text: string): string {

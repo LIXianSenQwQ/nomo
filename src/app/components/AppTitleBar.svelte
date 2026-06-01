@@ -133,8 +133,9 @@
             <button on:click={() => finish(() => runCommand({ type: 'toggleBold' }), 'format')}>粗体 <span class="shortcut">Ctrl+B</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleItalic' }), 'format')}>斜体 <span class="shortcut">Ctrl+I</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'format')}>引用块</button>
-            <button on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'format')}>无序列表</button>
-            <button on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'format')}>任务列表</button>
+            <button on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'format')}>有序列表 <span class="shortcut">Ctrl+Shift+[</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'format')}>无序列表 <span class="shortcut">Ctrl+Shift+]</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'format')}>任务列表 <span class="shortcut">Ctrl+Shift+X</span></button>
           </div>
         {/if}
       </div>

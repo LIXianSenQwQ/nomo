@@ -18,7 +18,7 @@ import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirr
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
-import { executeEditorCommand } from './editorCommands';
+import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { mathBlockPlugin } from './plugins/mathBlock';
 import { tableControlsPlugin } from './plugins/tableControls';
@@ -229,7 +229,10 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Enter': chainCommands(newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
           'Backspace': chainCommands(deleteSelection, joinBackward, selectNodeBackward),
           'Tab': chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
-          'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item))
+          'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
+          'Shift-Ctrl-[': (state, dispatch) => toggleList(state, dispatch, schema.nodes.ordered_list),
+          'Shift-Ctrl-]': (state, dispatch) => toggleList(state, dispatch, schema.nodes.bullet_list),
+          'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch)
         })
       ]
     });

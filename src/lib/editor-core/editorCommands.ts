@@ -1,7 +1,7 @@
 import { setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
 import { redo, undo } from 'prosemirror-history';
-import { wrapInList } from 'prosemirror-schema-list';
-import type { MarkType, NodeType } from 'prosemirror-model';
+import { liftListItem, wrapInList } from 'prosemirror-schema-list';
+import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createTableMarkdown } from './markdown';
@@ -24,7 +24,6 @@ type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
 /** 如果当前已是同级标题，则取消为正文；否则设为对应级别 */
 function toggleHeading(view: EditorView, level: number): boolean {
   const { $from } = view.state.selection;
-  // 向上遍历祖先节点找到包裹的 heading
   for (let d = $from.depth; d >= 0; d--) {
     const node = $from.node(d);
     if (node.type === schema.nodes.heading) {
@@ -35,6 +34,147 @@ function toggleHeading(view: EditorView, level: number): boolean {
     }
   }
   return setBlockType(schema.nodes.heading, { level })(view.state, view.dispatch);
+}
+
+// 查找光标所在位置的父列表（bullet_list 或 ordered_list）
+function findParentList($pos: ResolvedPos): { listPos: number; listType: NodeType } | null {
+  for (let d = $pos.depth; d >= 0; d--) {
+    const node = $pos.node(d);
+    if (node.type === schema.nodes.bullet_list || node.type === schema.nodes.ordered_list) {
+      return { listPos: $pos.before(d), listType: node.type };
+    }
+  }
+  return null;
+}
+
+// 查找包含 $pos 的 list_item 及父列表信息
+function findListItem($pos: ResolvedPos): { itemPos: number; itemNode: PmNode } | null {
+  for (let d = $pos.depth; d >= 0; d--) {
+    const node = $pos.node(d);
+    if (node.type === schema.nodes.list_item) {
+      return { itemPos: $pos.before(d), itemNode: node };
+    }
+  }
+  return null;
+}
+
+// 查找 list_item 中首个文本节点的内容偏移（相对于 list_item 内容起始）
+function findFirstTextInItem(item: PmNode): { offset: number } | null {
+  let result: { offset: number } | null = null;
+  item.descendants((node, pos) => {
+    if (node.isText) {
+      result = { offset: pos };
+      return false;
+    }
+  });
+  return result;
+}
+
+// 判断 list_item 首段文本是否以 [ ] 或 [x] 开头
+function findTaskMarkerInItem(item: PmNode): { offset: number; length: number } | null {
+  let result: { offset: number; length: number } | null = null;
+  item.descendants((node) => {
+    if (node.isText) {
+      const match = /^\[[ x]\]\s?/.exec(node.text ?? '');
+      if (match) result = { offset: 0, length: match[0].length };
+      return false;
+    }
+  });
+  return result;
+}
+
+function getTaskMarkerRange(listItem: { itemPos: number; itemNode: PmNode }): { from: number; to: number } | null {
+  const textInfo = findFirstTextInItem(listItem.itemNode);
+  const taskMarker = findTaskMarkerInItem(listItem.itemNode);
+  if (!textInfo || !taskMarker) return null;
+  const from = listItem.itemPos + 1 + textInfo.offset + taskMarker.offset;
+  return { from, to: from + taskMarker.length };
+}
+
+function liftCurrentListItem(state: EditorState, dispatch: (tr: Transaction) => void, tr?: Transaction): boolean {
+  if (!tr) return liftListItem(schema.nodes.list_item)(state, dispatch);
+
+  const nextState = state.apply(tr);
+  let liftTr: Transaction | null = null;
+  const lifted = liftListItem(schema.nodes.list_item)(nextState, (capturedTr) => {
+    liftTr = capturedTr;
+  });
+  if (!lifted || !liftTr) return false;
+
+  for (const step of (liftTr as Transaction).steps) tr.step(step);
+  dispatch(tr);
+  return true;
+}
+
+function getListAttrsForType(listType: NodeType): Record<string, unknown> | null {
+  if (listType === schema.nodes.ordered_list) return { order: 1 };
+  return null;
+}
+
+function appendCommandSteps(state: EditorState, tr: Transaction, command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean): boolean {
+  let capturedTr: Transaction | null = null;
+  const handled = command(state.apply(tr), (nextTr) => {
+    capturedTr = nextTr;
+  });
+  if (!handled || !capturedTr) return false;
+  for (const step of (capturedTr as Transaction).steps) tr.step(step);
+  return true;
+}
+
+// 列表切换：同类列表取消为普通段落；跨有序/无序转换时保留任务标记。
+// 适配 state/dispatch 签名，可直接用于 ProseMirror keymap
+export function toggleList(state: EditorState, dispatch?: (tr: Transaction) => void, listType?: NodeType): boolean {
+  if (!dispatch || !listType) return false;
+  const { $from } = state.selection;
+  const currentList = findParentList($from);
+
+  if (currentList?.listType === listType) {
+    const listItem = findListItem($from);
+    const taskRange = listItem ? getTaskMarkerRange(listItem) : null;
+    const tr = taskRange ? state.tr.delete(taskRange.from, taskRange.to) : undefined;
+    return liftCurrentListItem(state, dispatch, tr);
+  }
+
+  if (currentList) {
+    dispatch(state.tr.setNodeMarkup(currentList.listPos, listType, getListAttrsForType(listType)));
+    return true;
+  }
+
+  return wrapInList(listType, getListAttrsForType(listType))(state, dispatch);
+}
+
+// 切换任务列表：任务项 → 去掉 [ ]/[x] 并保留列表；普通列表项 → 加上 [ ]；正文 → 创建无序任务列表
+// 适配 state/dispatch 签名，可直接用于 ProseMirror keymap
+export function toggleTaskListAtCursor(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  if (!dispatch) return false;
+  const { $from } = state.selection;
+  const listItem = findListItem($from);
+
+  if (listItem) {
+    const textInfo = findFirstTextInItem(listItem.itemNode);
+    if (!textInfo) return false;
+    const textPos = listItem.itemPos + 1 + textInfo.offset;
+    const taskRange = getTaskMarkerRange(listItem);
+
+    if (taskRange) {
+      dispatch(state.tr.delete(taskRange.from, taskRange.to));
+      return true;
+    }
+
+    dispatch(state.tr.insertText('[ ] ', textPos));
+    return true;
+  }
+
+  const textStart = $from.start();
+  const tr = state.tr;
+  if ($from.parent.type !== schema.nodes.paragraph) {
+    if (!appendCommandSteps(state, tr, setBlockType(schema.nodes.paragraph))) return false;
+  }
+  if (!appendCommandSteps(state, tr, wrapInList(schema.nodes.bullet_list, getListAttrsForType(schema.nodes.bullet_list)))) return false;
+
+  tr.insertText('[ ] ', tr.mapping.map(textStart));
+  dispatch(tr);
+  return true;
 }
 
 export function executeEditorCommand(command: EditorCommand, view: EditorView, markdown: string, setMarkdown: MarkdownSetter): boolean {
@@ -55,9 +195,9 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
     case 'toggleBlockquote':
       return run(wrapIn(schema.nodes.blockquote));
     case 'toggleBulletList':
-      return run(wrapInList(schema.nodes.bullet_list));
+      return toggleList(state, dispatch, schema.nodes.bullet_list);
     case 'toggleOrderedList':
-      return run(wrapInList(schema.nodes.ordered_list));
+      return toggleList(state, dispatch, schema.nodes.ordered_list);
     case 'insertLink':
       return insertTextWithOptionalMark(view, command.text ?? command.href, schema.marks.link, {
         href: command.href,
@@ -72,7 +212,7 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
     case 'insertCodeBlock':
       return insertBlock(view, schema.nodes.code_block, command.code ?? '', command.language ? { params: command.language } : undefined);
     case 'toggleTaskList':
-      return insertMarkdownSnippet(markdown, setMarkdown, '- [ ] 待办事项\n');
+      return toggleTaskListAtCursor(state, dispatch);
     case 'insertMathBlock':
       return insertMarkdownSnippet(markdown, setMarkdown, `$$\n${command.tex ?? 'E = mc^2'}\n$$\n`);
     case 'insertMermaidBlock':
