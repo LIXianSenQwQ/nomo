@@ -61,6 +61,21 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toContain('```mermaid');
   });
 
+  it('renders editable HTML blocks with their original root element and attributes', () => {
+    const target = document.createElement('div');
+    createEditorCore({
+      markdown: '<section class="demo-html-block" id="demo"><strong>HTML 块：</strong><span>允许渲染内联 HTML 内容。</span></section>',
+      target
+    });
+
+    const htmlCard = target.querySelector('.html-card');
+    const contentRoot = target.querySelector('.html-card > section.html-card-content.demo-html-block#demo');
+
+    expect(htmlCard).not.toBeNull();
+    expect(contentRoot).not.toBeNull();
+    expect(contentRoot?.textContent).toContain('HTML 块：允许渲染内联 HTML 内容。');
+  });
+
   it('scrolls to the nth heading via scrollToHeading command', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({

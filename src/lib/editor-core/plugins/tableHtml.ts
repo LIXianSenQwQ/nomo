@@ -100,6 +100,8 @@ function tryParseTable(blocks: Array<{ node: ProseMirrorNode; pos: number }>, st
 }
 
 function tryParseHtmlBlock(block: { node: ProseMirrorNode; pos: number }): { pos: number; node: ProseMirrorNode; safeHtml: string } | null {
+  // 跳过已由 html_block 节点解析的内容
+  if (block.node.type.name === 'html_block') return null;
   const text = block.node.textContent.trim();
   if (!/^<(\w+)[^>]*>/.test(text)) return null;
   const safeHtml = sanitizeHtml(text);

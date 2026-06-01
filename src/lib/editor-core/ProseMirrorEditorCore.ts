@@ -17,6 +17,7 @@ import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
 import { executeEditorCommand } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { mathBlockPlugin } from './plugins/mathBlock';
@@ -74,7 +75,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
       editable: () => this.isEditable(),
       nodeViews: {
-        code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number)
+        code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number),
+        html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number)
       }
     });
     this.refreshInitialEditableState();
