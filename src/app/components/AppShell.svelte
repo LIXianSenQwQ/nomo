@@ -1,0 +1,185 @@
+<script lang="ts">
+  import type { RecentDocument } from '../../lib/desktop/tauriStorage';
+  import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+  import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
+  import type { FileTreeNode, Tab } from '../types';
+  import AppTitleBar from './AppTitleBar.svelte';
+  import DocumentTabs from './DocumentTabs.svelte';
+  import EditorToolbar from './EditorToolbar.svelte';
+  import EditorWorkspace from './EditorWorkspace.svelte';
+  import ExplorerSidebar from './ExplorerSidebar.svelte';
+  import StatusBar from './StatusBar.svelte';
+
+  export let focusMode: boolean;
+  export let isResizing: boolean;
+  export let contentWidthPercent: number;
+  export let fileInput: HTMLInputElement;
+  export let sourcePane: HTMLElement;
+  export let semanticPane: HTMLElement;
+  export let sourceTextarea: HTMLTextAreaElement;
+  export let editorHost: HTMLDivElement;
+  export let theme: 'light' | 'dark';
+  export let desktopEnabled: boolean;
+  export let activeMenu: string | null;
+  export let recentFiles: RecentDocument[];
+  export let mode: EditorMode;
+  export let outlineVisible: boolean;
+  export let currentFolderPath: string;
+  export let rootFolderExpanded: boolean;
+  export let folderTree: FileTreeNode[];
+  export let expandedFolders: Set<string>;
+  export let nativePath: string | null;
+  export let dirty: boolean;
+  export let fileName: string;
+  export let filePath: string;
+  export let sidebarWidth: number;
+  export let tabs: Tab[];
+  export let activeTabId: string;
+  export let fontSize: number;
+  export let lineHeight: number;
+  export let markdown: string;
+  export let readonlyDocumentMode: boolean;
+  export let externalFileWarning: string;
+  export let outline: OutlineItem[];
+  export let activeOutlineId: string;
+  export let collapsedOutlineIds: Set<string>;
+  export let visibleOutlineIds: Set<string>;
+  export let statusMessage: string;
+  export let version: number;
+  export let stats: DocumentStats;
+
+  export let getCompactPath: (path: string) => string;
+  export let getFolderName: (path: string) => string;
+  export let getDirectoryLabel: (path: string) => string;
+  export let toggleMenu: (menu: string) => void;
+  export let closeMenu: (menu: string) => void;
+  export let toggleTheme: () => void;
+  export let minimizeWindow: () => void;
+  export let maximizeWindow: () => void;
+  export let closeAppWindow: () => void;
+  export let createNewWindow: () => void;
+  export let createNewFile: () => void;
+  export let openFileDialog: () => void;
+  export let openFolderDialog: () => void;
+  export let openRecentFile: (path: string) => void;
+  export let saveMarkdownFile: (saveAs?: boolean) => void;
+  export let runCommand: (command: EditorCommand) => void;
+  export let setMode: (mode: EditorMode) => void;
+  export let toggleOutlineVisible: () => void;
+  export let toggleFocusMode: () => void;
+  export let toggleRootFolder: () => void;
+  export let toggleFolderCollapse: (folderPath: string) => void;
+  export let startResize: (event: MouseEvent) => void;
+  export let switchTab: (tabId: string) => void;
+  export let closeTab: (tabId: string, event?: Event) => void;
+  export let updateFontSize: (event: Event) => void;
+  export let updateLineHeight: (event: Event) => void;
+  export let updateContentWidth: (event: Event) => void;
+  export let updateMarkdown: (event: Event) => void;
+  export let updateActiveOutlineFromSourceScroll: () => void;
+  export let updateActiveOutlineFromSemanticScroll: () => void;
+  export let handleEditorPaste: (event: ClipboardEvent) => void;
+  export let handleEditorDrop: (event: DragEvent) => void;
+  export let isOutlineItemExpandable: (index: number) => boolean;
+  export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
+  export let jumpToOutlineItem: (item: OutlineItem) => void;
+  export let openMarkdownFile: (event: Event) => void;
+</script>
+
+<div class="app-layout" class:focus-mode={focusMode} class:resizing={isResizing} style={`--md-editor-content-width-percent: ${contentWidthPercent}`}>
+  <input bind:this={fileInput} class="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" on:change={openMarkdownFile} />
+
+  <AppTitleBar
+    {theme}
+    {desktopEnabled}
+    {activeMenu}
+    {recentFiles}
+    {mode}
+    {outlineVisible}
+    {getCompactPath}
+    {toggleMenu}
+    {closeMenu}
+    {toggleTheme}
+    {minimizeWindow}
+    {maximizeWindow}
+    {closeAppWindow}
+    {createNewWindow}
+    {createNewFile}
+    {openFileDialog}
+    {openFolderDialog}
+    {openRecentFile}
+    {saveMarkdownFile}
+    {runCommand}
+    {setMode}
+    {toggleOutlineVisible}
+    {toggleFocusMode}
+  />
+
+  <main class="workspace" style="--sidebar-width: {sidebarWidth}px">
+    <ExplorerSidebar
+      {currentFolderPath}
+      {rootFolderExpanded}
+      {folderTree}
+      {expandedFolders}
+      {nativePath}
+      {dirty}
+      {fileName}
+      {filePath}
+      {isResizing}
+      {getFolderName}
+      {getDirectoryLabel}
+      {toggleRootFolder}
+      {toggleFolderCollapse}
+      {openRecentFile}
+      {startResize}
+    />
+
+    <section class="editor-shell" aria-label="编辑器">
+      <DocumentTabs {tabs} {activeTabId} {switchTab} {closeTab} {createNewFile} />
+
+      <EditorToolbar
+        {mode}
+        {fontSize}
+        {lineHeight}
+        {contentWidthPercent}
+        {outlineVisible}
+        {openFileDialog}
+        {saveMarkdownFile}
+        {runCommand}
+        {updateFontSize}
+        {updateLineHeight}
+        {updateContentWidth}
+        {setMode}
+        {toggleOutlineVisible}
+        {toggleFocusMode}
+      />
+
+      <EditorWorkspace
+        bind:sourcePane
+        bind:semanticPane
+        bind:sourceTextarea
+        bind:editorHost
+        {mode}
+        {markdown}
+        {readonlyDocumentMode}
+        {externalFileWarning}
+        {outlineVisible}
+        {outline}
+        {activeOutlineId}
+        {collapsedOutlineIds}
+        {visibleOutlineIds}
+        {saveMarkdownFile}
+        {updateMarkdown}
+        {updateActiveOutlineFromSourceScroll}
+        {updateActiveOutlineFromSemanticScroll}
+        {handleEditorPaste}
+        {handleEditorDrop}
+        {isOutlineItemExpandable}
+        {toggleOutlineItemExpanded}
+        {jumpToOutlineItem}
+      />
+
+      <StatusBar {dirty} {statusMessage} {version} {stats} {mode} {readonlyDocumentMode} />
+    </section>
+  </main>
+</div>

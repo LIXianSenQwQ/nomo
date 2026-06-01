@@ -1,0 +1,114 @@
+  .content-outline {
+    position: fixed;
+    top: 168px;
+    right: clamp(32px, 3.5cqw, 160px);
+    z-index: 30;
+    width: 220px;
+    max-height: calc(100vh - 260px);
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--md-editor-surface) 64%, transparent);
+    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.10), 0 1px 2px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(10px);
+    color: var(--md-editor-muted-fg);
+    font-size: 12px;
+  }
+
+  .content-outline strong {
+    display: block;
+    margin-bottom: 12px;
+    color: var(--md-editor-heading-fg);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .content-outline-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .content-outline-row {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    min-height: 24px;
+    border-radius: var(--md-editor-radius-sm);
+    color: inherit;
+  }
+
+  .content-outline-row.active {
+    background: color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
+    color: var(--md-editor-accent-strong);
+    font-weight: 700;
+  }
+
+  .outline-toggle,
+  .outline-link {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .outline-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    min-height: 24px;
+    padding: 0;
+    transition: transform 0.15s ease;
+  }
+
+  .outline-toggle.collapsed {
+    transform: rotate(-90deg);
+  }
+
+  .outline-toggle-placeholder {
+    width: 16px;
+    min-height: 24px;
+  }
+
+  .outline-link {
+    min-width: 0;
+    min-height: 24px;
+    padding: 0;
+    text-align: left;
+  }
+
+  .outline-link:hover,
+  .outline-toggle:hover {
+    color: var(--md-editor-accent-strong);
+  }
+
+  .outline-link span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content-outline p {
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  textarea::selection {
+    background: var(--md-editor-selection-bg);
+  }
+
+  .statusbar {
+    justify-content: flex-end;
+    gap: 14px;
+    min-height: 28px;
+    padding: 4px 14px;
+    border-top: 1px solid var(--md-editor-border);
+    border-bottom: 0;
+    color: var(--md-editor-muted-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 12px;
+  }
+

@@ -15,6 +15,7 @@ import {
   setTableColumnAlignment,
   toggleFirstTableRowHeader
 } from '../tableCommands';
+import { findActiveTableElement } from './tableControlDom';
 
 export const tableControlsKey = new PluginKey('tableControls');
 
@@ -463,18 +464,4 @@ class TableControlsView {
     e.className = className;
     return e;
   }
-}
-
-// ===== 工具函数 =====
-
-function findActiveTableElement(view: EditorView): HTMLTableElement | null {
-  const { $from } = view.state.selection;
-  for (let depth = $from.depth; depth > 0; depth -= 1) {
-    if ($from.node(depth).type.spec.tableRole === 'table') {
-      const tablePosition = $from.before(depth);
-      const dom = view.nodeDOM(tablePosition);
-      return dom instanceof HTMLTableElement ? dom : dom instanceof HTMLElement ? dom.querySelector('table') : null;
-    }
-  }
-  return null;
 }

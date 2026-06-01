@@ -1,0 +1,447 @@
+  .editor-pane,
+  .semantic-pane {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .editor-pane {
+    display: none;
+    background: var(--md-editor-document-bg);
+  }
+
+  .editor-grid.source-only .source-pane {
+    display: block;
+  }
+
+  .editor-grid.source-only .semantic-pane {
+    display: none;
+  }
+
+  .semantic-pane {
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: var(--md-editor-document-bg);
+  }
+
+  .source-pane {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .document-layout {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, calc(var(--md-editor-content-width-percent) * 1cqw));
+    justify-content: center;
+    align-items: start;
+    min-height: 100%;
+    padding: 44px 20px 64px;
+    background:
+      radial-gradient(circle at 50% 12%, color-mix(in srgb, var(--md-editor-accent) 7%, transparent), transparent 34%),
+      var(--md-editor-document-bg);
+  }
+
+  .prosemirror-host {
+    position: relative;
+    grid-column: 1;
+    min-height: 100%;
+    width: 100%;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
+    margin: 0 auto;
+    padding: 0;
+    background: transparent;
+  }
+
+  .rich-markdown {
+    grid-column: 1;
+    width: 100%;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
+    min-height: calc(100vh - 235px);
+    margin: 0 auto;
+    color: var(--md-editor-fg);
+    font-size: var(--md-editor-font-size);
+    line-height: var(--md-editor-line-height);
+    overflow-wrap: anywhere;
+  }
+
+  .rich-markdown h1,
+  .rich-markdown h2,
+  .rich-markdown h3,
+  .rich-markdown h4,
+  .rich-markdown h5,
+  .rich-markdown h6 {
+    color: var(--md-editor-heading-fg);
+    line-height: 1.2;
+    letter-spacing: 0;
+  }
+
+  .rich-markdown h1 {
+    margin: 0 0 22px;
+    font-size: 32px;
+  }
+
+  .rich-markdown h2 {
+    margin: 32px 0 14px;
+    font-size: 26px;
+  }
+
+  .rich-markdown h3 {
+    margin: 24px 0 12px;
+    font-size: 21px;
+  }
+
+  .rich-markdown h4,
+  .rich-markdown h5,
+  .rich-markdown h6 {
+    margin: 20px 0 10px;
+    font-size: 17px;
+  }
+
+  .rich-markdown p,
+  .rich-markdown ul,
+  .rich-markdown ol {
+    margin: 12px 0;
+  }
+
+  .rich-markdown a {
+    color: var(--md-editor-link-fg);
+  }
+
+  .rich-markdown code {
+    padding: 2px 5px;
+    border-radius: var(--md-editor-radius-sm);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+    font-family: var(--md-editor-font-mono);
+    font-size: 0.92em;
+  }
+
+  .task-row {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    min-height: 32px;
+    margin: 8px 0;
+    color: var(--md-editor-fg);
+    cursor: pointer;
+  }
+
+  .task-row input {
+    width: 17px;
+    height: 17px;
+    margin-top: 5px;
+    accent-color: var(--md-editor-accent);
+    cursor: pointer;
+  }
+
+  .table-scroll {
+    max-width: 100%;
+    margin: 18px 0;
+    overflow-x: auto;
+    border: 1px solid var(--md-editor-table-border);
+    border-radius: var(--md-editor-radius-md);
+    background: var(--md-editor-surface);
+  }
+
+  .table-scroll table {
+    width: auto;
+    max-width: 100%;
+    border-collapse: collapse;
+    table-layout: auto;
+    font-size: 14px;
+  }
+
+  .table-scroll th,
+  .table-scroll td {
+    padding: 10px 12px;
+    border-right: 1px solid var(--md-editor-table-border);
+    border-bottom: 1px solid var(--md-editor-table-border);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .table-scroll th {
+    background: var(--md-editor-table-header-bg);
+    color: var(--md-editor-heading-fg);
+    font-weight: 700;
+  }
+
+  .table-scroll tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .table-scroll th:last-child,
+  .table-scroll td:last-child {
+    border-right: 0;
+  }
+
+  .rich-markdown blockquote {
+    margin: 18px 0;
+    padding: 12px 16px;
+    border-left: 3px solid var(--md-editor-blockquote-border);
+    border-radius: 0 var(--md-editor-radius-md) var(--md-editor-radius-md) 0;
+    background: color-mix(in srgb, var(--md-editor-table-header-bg) 72%, transparent);
+    color: var(--md-editor-blockquote-fg);
+  }
+
+  .code-card,
+  .mermaid-block,
+  .math-block,
+  .html-block {
+    margin: 18px 0;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-md);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 94%, #ffffff 6%);
+    color: var(--md-editor-code-fg);
+  }
+
+  .code-card header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 38px;
+    padding: 0 10px 0 14px;
+    border-bottom: 1px solid var(--md-editor-code-border);
+    color: color-mix(in srgb, var(--md-editor-code-fg) 82%, transparent);
+    font-family: var(--md-editor-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .code-card header div {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .code-card button {
+    display: inline-grid;
+    place-items: center;
+    min-width: 32px;
+    min-height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 82%, #ffffff 18%);
+    color: var(--md-editor-code-fg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .code-card pre {
+    max-width: 100%;
+    margin: 0;
+    overflow-x: auto;
+    background: transparent;
+  }
+
+  .code-card code {
+    display: grid;
+    min-width: max-content;
+    padding: 12px 0;
+    background: transparent;
+    color: inherit;
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .code-card.wrapped pre {
+    overflow-x: hidden;
+  }
+
+  .code-card.wrapped code {
+    min-width: 0;
+  }
+
+  .code-line {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    min-height: 22px;
+  }
+
+  .line-number {
+    padding: 0 12px 0 10px;
+    color: color-mix(in srgb, var(--md-editor-code-fg) 42%, transparent);
+    text-align: right;
+    user-select: none;
+  }
+
+  .line-content {
+    padding-right: 16px;
+    white-space: pre;
+  }
+
+  .code-card.wrapped .line-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .code-line.diff-added {
+    background: rgba(46, 160, 67, 0.20);
+  }
+
+  .code-line.diff-removed {
+    background: rgba(248, 81, 73, 0.20);
+  }
+
+  .mermaid-block,
+  .math-block,
+  .html-block {
+    padding: 16px;
+    overflow-x: auto;
+    background: color-mix(in srgb, var(--md-editor-table-header-bg) 76%, var(--md-editor-surface));
+    color: var(--md-editor-fg);
+  }
+
+  .mermaid-block svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    background: transparent;
+  }
+
+  .html-block .demo-html-block {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 12px;
+    border: 1px dashed var(--md-editor-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: var(--md-editor-surface);
+  }
+
+  .prosemirror-host .ProseMirror {
+    min-height: calc(100vh - 235px);
+    outline: none;
+    color: var(--md-editor-fg);
+    font-size: var(--md-editor-font-size);
+    line-height: var(--md-editor-line-height);
+    white-space: pre-wrap;
+  }
+
+  .prosemirror-host .ProseMirror h1,
+  .prosemirror-host .ProseMirror h2,
+  .prosemirror-host .ProseMirror h3 {
+    color: var(--md-editor-heading-fg);
+    line-height: 1.2;
+  }
+
+  .prosemirror-host .ProseMirror h1 {
+    margin: 0 0 22px;
+    font-size: 32px;
+  }
+
+  .prosemirror-host .ProseMirror h2 {
+    margin-top: 30px;
+    font-size: 26px;
+  }
+
+  .prosemirror-host .ProseMirror blockquote {
+    margin: 18px 0;
+    padding: 2px 0 2px 16px;
+    border-left: 3px solid var(--md-editor-blockquote-border);
+    color: var(--md-editor-blockquote-fg);
+  }
+
+  .prosemirror-host .ProseMirror code {
+    padding: 2px 5px;
+    border-radius: var(--md-editor-radius-sm);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+    font-family: var(--md-editor-font-mono);
+  }
+
+  .prosemirror-host .ProseMirror pre {
+    overflow: auto;
+    padding: 16px;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-md);
+    background: var(--md-editor-code-bg);
+    color: var(--md-editor-code-fg);
+  }
+
+  .prosemirror-host .ProseMirror pre code {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+  }
+
+  .prosemirror-host .ProseMirror a {
+    color: var(--md-editor-link-fg);
+  }
+
+  .prosemirror-host .ProseMirror img {
+    max-width: 100%;
+    min-width: 160px;
+    min-height: 90px;
+    border: 1px dashed var(--md-editor-border);
+    border-radius: var(--md-editor-radius-md);
+    object-fit: contain;
+  }
+
+  .prosemirror-host .ProseMirror ul li p:first-child {
+    margin-bottom: 0;
+  }
+
+  .prosemirror-host .ProseMirror table {
+    width: max-content;
+    max-width: 100%;
+    margin: 42px 0 20px;
+    border-collapse: collapse;
+    table-layout: auto;
+    background: var(--md-editor-surface);
+    color: var(--md-editor-fg);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .prosemirror-host .ProseMirror table,
+  .prosemirror-host .ProseMirror th,
+  .prosemirror-host .ProseMirror td {
+    border: 1px solid var(--md-editor-table-border);
+  }
+
+  .prosemirror-host .ProseMirror th,
+  .prosemirror-host .ProseMirror td {
+    position: relative;
+    min-width: 90px;
+    max-width: 100%;
+    padding: 9px 11px;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .prosemirror-host .ProseMirror th {
+    background: var(--md-editor-table-header-bg);
+    color: var(--md-editor-heading-fg);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .prosemirror-host .ProseMirror td {
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  .prosemirror-host .ProseMirror th p,
+  .prosemirror-host .ProseMirror td p {
+    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .prosemirror-host .ProseMirror .selectedCell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--md-editor-accent) 15%, transparent);
+    box-shadow: inset 0 0 0 2px var(--md-editor-accent);
+  }
+
