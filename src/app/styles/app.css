@@ -676,9 +676,10 @@
   }
 
   .table-scroll table {
-    width: 100%;
-    min-width: 520px;
+    width: auto;
+    max-width: 100%;
     border-collapse: collapse;
+    table-layout: auto;
     font-size: 14px;
   }
 
@@ -918,11 +919,11 @@
   }
 
   .prosemirror-host .ProseMirror table {
-    width: 100%;
-    min-width: 520px;
+    width: auto;
+    max-width: calc(var(--md-editor-content-width-percent) * 1cqw * 2 / 3);
     margin: 20px 0;
     border-collapse: collapse;
-    table-layout: fixed;
+    table-layout: auto;
     background: var(--md-editor-surface);
     color: var(--md-editor-fg);
     font-size: 14px;
