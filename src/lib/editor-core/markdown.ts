@@ -1,4 +1,4 @@
-import { textblockTypeInputRule, wrappingInputRule } from 'prosemirror-inputrules';
+import { InputRule, textblockTypeInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import MarkdownIt from 'markdown-it';
 import Token from 'markdown-it/lib/token.mjs';
 import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
@@ -9,6 +9,38 @@ import { parseHtmlContent } from './html/htmlToPmLogic';
 import { serializeHtmlBlock } from './html/pmToHtml';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable('table');
+
+markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
+  const src = state.src;
+  const pos = state.pos;
+  if (src.charCodeAt(pos) !== 0x24) return false;
+  if (pos + 1 < src.length && src.charCodeAt(pos + 1) === 0x24) return false; // $$ display
+  if (pos > 0 && src.charCodeAt(pos - 1) === 0x24) return false; // 属于 $$ 的第二个 $
+
+  let end = pos + 1;
+  while (end < src.length) {
+    if (src.charCodeAt(end) === 0x24) {
+      let bsCount = 0;
+      let i = end - 1;
+      while (i > pos && src.charCodeAt(i) === 0x5c) { bsCount++; i--; }
+      if (bsCount % 2 === 0) break;
+    }
+    end++;
+  }
+  if (end >= src.length || end === pos + 1) return false;
+
+  const tex = src.slice(pos + 1, end).trim().replace(/\\\$/g, '$');
+  if (!tex.trim()) return false;
+
+  if (!silent) {
+    const token = state.push('math_inline', '', 0);
+    token.content = tex;
+    token.markup = '$';
+    state.pos = end + 1;
+  }
+  return true;
+});
+
 const parseMarkdownTokens = markdownIt.parse.bind(markdownIt);
 markdownIt.parse = (src, env) => {
   const normalized = [];
@@ -36,6 +68,7 @@ const tableMarkdownParser = new MarkdownParser(
     tr: { block: 'table_row' },
     th: { block: 'table_header', getAttrs: getTableCellAttrs },
     td: { block: 'table_cell', getAttrs: getTableCellAttrs },
+    math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
     html_block: { ignore: true },
     html_inline: { ignore: true }
   }
@@ -195,6 +228,9 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       const html = serializeHtmlBlock(node);
       state.write(html);
       state.closeBlock(node);
+    },
+    math_inline(state, node) {
+      state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);
     }
   },
   defaultMarkdownSerializer.marks
@@ -334,12 +370,31 @@ function readColumnAlignment(rows: ProseMirrorNode[], columnIndex: number): Tabl
 
 export function createMarkdownInputRules() {
   return [
+    createMathInlineInputRule(),
     textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({ level: match[1].length })),
     wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote),
     wrappingInputRule(/^\s*([-+*])\s$/, schema.nodes.bullet_list),
     wrappingInputRule(/^(\d+)\.\s$/, schema.nodes.ordered_list, (match) => ({ order: Number(match[1]) })),
     textblockTypeInputRule(/^```$/, schema.nodes.code_block)
   ];
+}
+
+function createMathInlineInputRule(): InputRule {
+  return new InputRule(/(?:^|[^\\$])\$\s*([^$]*?\S[^$]*?)\s*\$$/, (state, match, start, end) => {
+    const fullMatch = match[0];
+    const tex = match[1]?.trim().replace(/\\\$/g, '$') ?? '';
+    if (!tex.trim()) {
+      return null;
+    }
+
+    // 步骤1：保留正则前导字符（如果有），只替换用户刚闭合的 $tex$ 片段。
+    const hasLeadingChar = !fullMatch.startsWith('$');
+    const mathStart = hasLeadingChar ? start + 1 : start;
+    const node = schema.nodes.math_inline.create({ tex });
+
+    // 步骤2：用语义公式节点替换源码标记，并把光标放到公式后面继续写正文。
+    return state.tr.replaceWith(mathStart, end, node);
+  });
 }
 
 function findLastIndex<T>(arr: T[], predicate: (value: T) => boolean): number {

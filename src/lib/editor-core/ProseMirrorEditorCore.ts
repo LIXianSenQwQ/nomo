@@ -12,15 +12,17 @@ import {
 import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { EditorState, type Transaction } from 'prosemirror-state';
+import { EditorState, NodeSelection, type Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
+import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { mathBlockPlugin } from './plugins/mathBlock';
+import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
@@ -76,7 +78,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       editable: () => this.isEditable(),
       nodeViews: {
         code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number),
-        html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number)
+        html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number),
+        math_inline: (node, view, getPos) => new MathInlineNodeView(node, view, getPos as () => number)
       }
     });
     this.refreshInitialEditableState();
@@ -213,6 +216,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         }),
         history(),
         taskListPlugin(),
+        mathInlineInputPlugin(),
         codeHighlightPlugin(),
         mathBlockPlugin(),
         tableHtmlBlockPlugin(),
@@ -232,7 +236,33 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
           'Shift-Ctrl-[': (state, dispatch) => toggleList(state, dispatch, schema.nodes.ordered_list),
           'Shift-Ctrl-]': (state, dispatch) => toggleList(state, dispatch, schema.nodes.bullet_list),
-          'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch)
+          'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch),
+          'ArrowRight': (state, dispatch) => {
+            const { $from, empty } = state.selection;
+            if (!empty) return false;
+            const nodeAfter = $from.nodeAfter;
+            if (nodeAfter?.type.name === 'math_inline') {
+              if (dispatch) {
+                MathInlineNodeView.requestKeyboardEntry('start');
+                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos)));
+              }
+              return true;
+            }
+            return false;
+          },
+          'ArrowLeft': (state, dispatch) => {
+            const { $from, empty } = state.selection;
+            if (!empty) return false;
+            const nodeBefore = $from.nodeBefore;
+            if (nodeBefore?.type.name === 'math_inline') {
+              if (dispatch) {
+                MathInlineNodeView.requestKeyboardEntry('end');
+                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize)));
+              }
+              return true;
+            }
+            return false;
+          }
         })
       ]
     });

@@ -75,14 +75,6 @@ function findAllMathMatches(doc: ProseMirrorNode): MathMatch[] {
     }
     i += 1;
   }
-  for (const block of topBlocks) {
-    if (block.node.type.name !== 'paragraph') continue;
-    const text = block.node.textContent;
-    if (!text.includes('$')) continue;
-    const alreadyMatched = matches.some((match) => block.pos >= match.from && block.pos < match.to);
-    if (alreadyMatched) continue;
-    findInlineMathInText(text, block.pos, matches);
-  }
   return matches;
 }
 
@@ -109,25 +101,6 @@ function tryMatchDisplayMath(blocks: Array<{ node: ProseMirrorNode; pos: number 
   const from = blocks[startIndex].pos;
   const to = blocks[closeIndex].pos + blocks[closeIndex].node.nodeSize;
   return { match: { from, to, tex: texLines.join('\n'), displayMode: true }, nextIndex: closeIndex + 1 };
-}
-
-function findInlineMathInText(text: string, blockOffset: number, matches: MathMatch[]): void {
-  if (text.startsWith('$$') && text.endsWith('$$') && text.length > 4) {
-    const tex = text.slice(2, -2).trim();
-    if (tex) {
-      matches.push({ from: blockOffset + 1, to: blockOffset + 1 + text.length, tex, displayMode: true });
-      return;
-    }
-  }
-  const inlineRegex = /(?<!\$)\$(?!\$)([^$]+?)\$(?!\$)/g;
-  let match: RegExpExecArray | null;
-  while ((match = inlineRegex.exec(text)) !== null) {
-    const tex = match[1];
-    if (!tex.trim()) continue;
-    const from = blockOffset + 1 + match.index;
-    const to = from + match[0].length;
-    matches.push({ from, to, tex, displayMode: false });
-  }
 }
 
 function createMathWidget(html: string, error: string | undefined, displayMode: boolean): HTMLElement {

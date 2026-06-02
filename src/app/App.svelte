@@ -6,7 +6,7 @@
     isTauriRuntime,
     type RecentDocument
   } from '../lib/desktop/tauriStorage';
-  import { createEditorCore, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
+  import { createEditorCore, setCodeBlockMathRenderer, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
   import { calculateDocumentStats, extractOutline, type DocumentStats, type OutlineItem } from '../lib/outline/outlineService';
   import { createRichMarkdownSample } from '../lib/markdown/sample';
   import AppShell from './components/AppShell.svelte';
@@ -34,10 +34,13 @@
   import { createDocumentActionsController } from './services/documentActionsController';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
+  import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
   const initialMarkdown = createRichMarkdownSample();
+
+  setCodeBlockMathRenderer(createKatexMathRenderer());
 
   let markdown = initialMarkdown, dirty = false, version = 0;
   let mode: EditorMode = 'semantic';

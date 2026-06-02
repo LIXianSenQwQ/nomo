@@ -530,6 +530,15 @@
     object-fit: contain;
   }
 
+  .prosemirror-host .ProseMirror img.ProseMirror-separator {
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
   .prosemirror-host .ProseMirror ul li p:first-child {
     margin-bottom: 0;
   }
@@ -591,5 +600,76 @@
     pointer-events: none;
     background: color-mix(in srgb, var(--md-editor-accent) 15%, transparent);
     box-shadow: inset 0 0 0 2px var(--md-editor-accent);
+  }
+
+  /* ---- 行内公式 math_inline ---- */
+
+  .math-inline {
+    display: inline;
+    cursor: pointer;
+    vertical-align: baseline;
+  }
+
+  .math-inline .katex {
+    font-size: 1.05em;
+  }
+
+  .math-inline.ProseMirror-selectednode {
+    outline: 2px solid var(--md-editor-accent, #5a8cdc);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .math-inline.is-editing,
+  .math-inline.is-editing.ProseMirror-selectednode {
+    outline: none;
+  }
+
+  .math-inline-input {
+    display: inline;
+    width: auto;
+    min-width: 40px;
+    padding: 1px 4px;
+    border: 1px solid var(--md-editor-accent, #5a8cdc);
+    border-radius: var(--md-editor-radius-sm, 3px);
+    background: var(--md-editor-surface, #fff);
+    color: var(--md-editor-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: inherit;
+    line-height: inherit;
+    vertical-align: baseline;
+    outline: none;
+  }
+
+  /* 浮动预览卡片 */
+  .math-inline-preview {
+    pointer-events: none;
+    background: var(--md-editor-surface, #fff);
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-md, 6px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 8px 12px;
+    overflow-x: auto;
+    min-width: 50px;
+    min-height: 24px;
+  }
+
+  .math-inline-preview-content {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 20px;
+  }
+
+  .math-inline-preview-content .katex {
+    font-size: 1.1em;
+  }
+
+  .math-inline-preview-error {
+    color: var(--md-editor-warning, #9a6700);
+    font-size: 13px;
+    font-family: var(--md-editor-font-mono);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 

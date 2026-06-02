@@ -30,6 +30,28 @@ export const schema = new Schema({
       })
     )
     .append({
+      math_inline: {
+        inline: true,
+        group: 'inline',
+        atom: true,
+        selectable: true,
+        draggable: false,
+        attrs: {
+          tex: { default: '' }
+        },
+        toDOM(node) {
+          const tex = node.attrs.tex as string;
+          return ['span', { class: 'math-inline', 'data-tex': tex }, `$${tex}$`];
+        },
+        parseDOM: [{
+          tag: 'span.math-inline',
+          getAttrs(dom) {
+            const el = dom as HTMLElement;
+            const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
+            return { tex: tex.startsWith('$') && tex.endsWith('$') ? tex.slice(1, -1) : tex };
+          }
+        }]
+      },
       html_block: {
         content: 'inline*',
         group: 'block',
