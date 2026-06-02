@@ -69,6 +69,29 @@ export const schema = new Schema({
           return [tag, domAttrs, 0];
         }
       },
+      // 行内代码（inline code）：`code` 语法
+      inline_code: {
+        inline: true,
+        group: 'inline',
+        atom: true,
+        selectable: true,
+        draggable: false,
+        attrs: {
+          code: { default: '' }
+        },
+        toDOM(node) {
+          const code = node.attrs.code as string;
+          return ['span', { class: 'inline-code', 'data-code': code }, `\`${code}\``];
+        },
+        parseDOM: [{
+          tag: 'span.inline-code',
+          getAttrs(dom) {
+            const el = dom as HTMLElement;
+            const code = el.getAttribute('data-code') ?? el.textContent ?? '';
+            return { code: code.startsWith('`') && code.endsWith('`') ? code.slice(1, -1) : code };
+          }
+        }]
+      },
       // 跨行公式块（display math）：$$...$$ 语法
       math_block: {
         atom: true,

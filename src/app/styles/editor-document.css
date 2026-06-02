@@ -742,3 +742,105 @@
     word-break: break-word;
   }
 
+  /* ---- 行内代码 inline_code ---- */
+
+  .inline-code {
+    display: inline;
+    cursor: pointer;
+    vertical-align: baseline;
+    padding: 2px 6px;
+    border-radius: var(--md-editor-radius-sm, 3px);
+    background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+    font-family: var(--md-editor-font-mono);
+    font-size: 0.92em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .inline-code.is-empty {
+    min-width: 2em;
+    background: color-mix(in srgb, var(--md-editor-code-bg) 8%, transparent);
+  }
+
+  .inline-code.ProseMirror-selectednode {
+    outline: 2px solid var(--md-editor-accent, #5a8cdc);
+    outline-offset: 2px;
+  }
+
+  .inline-code.is-editing,
+  .inline-code.is-editing.ProseMirror-selectednode {
+    outline: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  .inline-code-input {
+    display: inline;
+    width: auto;
+    min-width: 80px;
+    padding: 4px 10px;
+    border: 1px solid var(--md-editor-accent, #5a8cdc);
+    border-radius: var(--md-editor-radius-sm, 3px);
+    background: var(--md-editor-surface, #fff);
+    color: var(--md-editor-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 0.92em;
+    line-height: 1.4;
+    vertical-align: baseline;
+    outline: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* 轻量语法提示 token 样式 */
+  .inline-code-token-keyword {
+    color: #d73a49;
+    font-weight: 600;
+  }
+
+  .inline-code-token-boolean {
+    color: #005cc5;
+    font-weight: 600;
+  }
+
+  .inline-code-token-number {
+    color: #005cc5;
+  }
+
+  .inline-code-token-string {
+    color: #032f62;
+  }
+
+  .inline-code-token-operator {
+    color: #d73a49;
+  }
+
+  .inline-code-token-plain {
+    color: inherit;
+  }
+
+  /* 暗色主题适配 */
+  [data-theme="dark"] .inline-code-token-keyword,
+  .dark .inline-code-token-keyword {
+    color: #ff7b72;
+  }
+
+  [data-theme="dark"] .inline-code-token-boolean,
+  .dark .inline-code-token-boolean {
+    color: #79c0ff;
+  }
+
+  [data-theme="dark"] .inline-code-token-number,
+  .dark .inline-code-token-number {
+    color: #79c0ff;
+  }
+
+  [data-theme="dark"] .inline-code-token-string,
+  .dark .inline-code-token-string {
+    color: #a5d6ff;
+  }
+
+  [data-theme="dark"] .inline-code-token-operator,
+  .dark .inline-code-token-operator {
+    color: #ff7b72;
+  }
+

@@ -18,11 +18,13 @@ import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirr
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
+import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
+import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
@@ -80,6 +82,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       nodeViews: {
         code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number),
         html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number),
+        inline_code: (node, view, getPos) => new InlineCodeNodeView(node, view, getPos as () => number),
         math_inline: (node, view, getPos) => new MathInlineNodeView(node, view, getPos as () => number),
         math_block: (node, view, getPos) => new MathBlockNodeView(node, view, getPos as () => number)
       }
@@ -218,6 +221,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         }),
         history(),
         taskListPlugin(),
+        inlineCodeInputPlugin(),
         mathInlineInputPlugin(),
         codeHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
@@ -268,6 +272,13 @@ export class ProseMirrorEditorCore implements EditorCore {
               }
               return true;
             }
+            if (nodeAfter?.type.name === 'inline_code') {
+              if (dispatch) {
+                InlineCodeNodeView.requestKeyboardEntry('start');
+                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos)));
+              }
+              return true;
+            }
             return false;
           },
           'ArrowLeft': (state, dispatch) => {
@@ -277,6 +288,13 @@ export class ProseMirrorEditorCore implements EditorCore {
             if (nodeBefore?.type.name === 'math_inline') {
               if (dispatch) {
                 MathInlineNodeView.requestKeyboardEntry('end');
+                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize)));
+              }
+              return true;
+            }
+            if (nodeBefore?.type.name === 'inline_code') {
+              if (dispatch) {
+                InlineCodeNodeView.requestKeyboardEntry('end');
                 dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize)));
               }
               return true;

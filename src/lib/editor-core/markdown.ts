@@ -123,6 +123,7 @@ const tableMarkdownParser = new MarkdownParser(
     td: { block: 'table_cell', getAttrs: getTableCellAttrs },
     math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
     math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
+    code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
     html_block: { ignore: true },
     html_inline: { ignore: true }
   }
@@ -285,6 +286,15 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     },
     math_inline(state, node) {
       state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);
+    },
+    inline_code(state, node) {
+      const code = node.attrs.code as string;
+      // 如果代码内容包含反引号，使用双反引号包裹
+      if (code.includes('`')) {
+        state.write(`\`\` ${code} \`\``);
+      } else {
+        state.write(`\`${code}\``);
+      }
     },
     math_block(state, node) {
       state.ensureNewLine();
