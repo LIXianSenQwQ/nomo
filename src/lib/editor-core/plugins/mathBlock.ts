@@ -1,3 +1,5 @@
+// [LEGACY] 本文件已被 math_block 语义节点 + MathBlockNodeView + displayMathInputPlugin 取代。
+// 保留作为参考，不再被 ProseMirrorEditorCore 导入。
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';

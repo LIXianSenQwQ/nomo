@@ -68,6 +68,28 @@ export const schema = new Schema({
           if (id) domAttrs.id = id;
           return [tag, domAttrs, 0];
         }
+      },
+      // 跨行公式块（display math）：$$...$$ 语法
+      math_block: {
+        atom: true,
+        selectable: true,
+        draggable: false,
+        group: 'block',
+        attrs: {
+          tex: { default: '' }
+        },
+        toDOM(node) {
+          const tex = node.attrs.tex as string;
+          return ['div', { class: 'math-block', 'data-tex': tex }, `$$\n${tex}\n$$`];
+        },
+        parseDOM: [{
+          tag: 'div.math-block',
+          getAttrs(dom) {
+            const el = dom as HTMLElement;
+            const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
+            return { tex };
+          }
+        }]
       }
     }),
   marks: markdownSchema.spec.marks

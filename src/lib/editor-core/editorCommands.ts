@@ -213,8 +213,20 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
       return insertBlock(view, schema.nodes.code_block, command.code ?? '', command.language ? { params: command.language } : undefined);
     case 'toggleTaskList':
       return toggleTaskListAtCursor(state, dispatch);
-    case 'insertMathBlock':
-      return insertMarkdownSnippet(markdown, setMarkdown, `$$\n${command.tex ?? 'E = mc^2'}\n$$\n`);
+    case 'insertMathBlock': {
+      const tex = command.tex ?? 'E = mc^2';
+      const node = schema.nodes.math_block.create({ tex });
+      const { $from } = state.selection;
+      // 如果光标在顶层（doc 直接子节点），用 replaceSelectionWith；
+      // 否则（如在列表项内）追加到文档末尾，避免破坏嵌套结构。
+      if ($from.depth <= 1) {
+        view.dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
+      } else {
+        const endPos = state.doc.content.size;
+        view.dispatch(state.tr.insert(endPos, node).scrollIntoView());
+      }
+      return true;
+    }
     case 'insertMermaidBlock':
       return insertMarkdownSnippet(markdown, setMarkdown, `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`);
     case 'insertTable':

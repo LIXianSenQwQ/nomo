@@ -41,6 +41,59 @@ markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
   return true;
 });
 
+// 注册 markdown-it block rule 识别 $$...$$ 跨行公式
+markdownIt.block.ruler.after('fence', 'math_display', (state, startLine, endLine, silent) => {
+  const startPos = state.bMarks[startLine] + state.tShift[startLine];
+  const lineText = state.src.slice(startPos, state.eMarks[startLine]).trim();
+
+  // 当前行必须以 $$ 开头（允许前导空格，trim 后判断）
+  if (!lineText.startsWith('$$')) return false;
+
+  // 单行 $$...$$ 形式（同行闭合）：如 $$ E=mc^2 $$
+  const singleLineContent = lineText.slice(2);
+  if (singleLineContent.endsWith('$$') && singleLineContent.length > 2) {
+    const tex = singleLineContent.slice(0, -2).trim();
+    if (tex) {
+      if (silent) return true;
+      const token = state.push('math_display', 'math', 0);
+      token.content = tex;
+      token.markup = '$$';
+      token.map = [startLine, startLine + 1];
+      state.line = startLine + 1;
+      return true;
+    }
+  }
+
+  // 多行 $$ 形式：从 startLine+1 向下扫描闭合 $$ 行
+  const texLines: string[] = [];
+  let foundClose = false;
+  let nextLine = startLine + 1;
+
+  for (let i = startLine + 1; i < endLine; i++) {
+    const lineStart = state.bMarks[i] + state.tShift[i];
+    const line = state.src.slice(lineStart, state.eMarks[i]).trim();
+    if (line === '$$') {
+      foundClose = true;
+      nextLine = i + 1;
+      break;
+    }
+    texLines.push(state.src.slice(state.bMarks[i], state.eMarks[i]));
+  }
+
+  if (!foundClose) return false;
+
+  const content = texLines.join('\n').trim();
+  if (!content) return false; // 公式内容不能为空
+  if (silent) return true;
+
+  const token = state.push('math_display', 'math', 0);
+  token.content = content;
+  token.markup = '$$';
+  token.map = [startLine, nextLine];
+  state.line = nextLine;
+  return true;
+});
+
 const parseMarkdownTokens = markdownIt.parse.bind(markdownIt);
 markdownIt.parse = (src, env) => {
   const normalized = [];
@@ -69,6 +122,7 @@ const tableMarkdownParser = new MarkdownParser(
     th: { block: 'table_header', getAttrs: getTableCellAttrs },
     td: { block: 'table_cell', getAttrs: getTableCellAttrs },
     math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
+    math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
     html_block: { ignore: true },
     html_inline: { ignore: true }
   }
@@ -231,6 +285,13 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     },
     math_inline(state, node) {
       state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);
+    },
+    math_block(state, node) {
+      state.ensureNewLine();
+      state.write('$$\n');
+      state.write(node.attrs.tex as string);
+      state.write('\n$$\n');
+      state.closeBlock(node);
     }
   },
   defaultMarkdownSerializer.marks
@@ -396,6 +457,7 @@ function createMathInlineInputRule(): InputRule {
     return state.tr.replaceWith(mathStart, end, node);
   });
 }
+
 
 function findLastIndex<T>(arr: T[], predicate: (value: T) => boolean): number {
   for (let i = arr.length - 1; i >= 0; i--) {

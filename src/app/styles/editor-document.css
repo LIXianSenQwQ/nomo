@@ -602,6 +602,75 @@
     box-shadow: inset 0 0 0 2px var(--md-editor-accent);
   }
 
+  /* ---- 跨行公式 math_block ---- */
+
+  .math-block {
+    cursor: pointer;
+    border: none;
+    background: none;
+    transition: background-color 0.15s;
+  }
+
+  .math-block:hover {
+    background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+  }
+
+  .prosemirror-host .ProseMirror .math-block.ProseMirror-selectednode {
+    border-color: transparent;
+    background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+    outline: 2px solid var(--md-editor-accent, #5a8cdc);
+    outline-offset: 2px;
+  }
+
+  .math-block .katex-display {
+    margin: 0;
+  }
+
+  /* 编辑态 */
+  .math-block.is-editing {
+    cursor: default;
+    border-color: transparent;
+    background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+    outline: 2px solid var(--md-editor-accent, #5a8cdc) !important;
+    outline-offset: 2px;
+  }
+
+  .math-block.is-editing:hover {
+    background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+  }
+
+  .math-block-textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 48px;
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-sm, 3px);
+    background: var(--md-editor-surface, #fff);
+    color: var(--md-editor-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+  }
+
+  .math-block-textarea:focus {
+    border-color: var(--md-editor-accent, #5a8cdc);
+  }
+
+  .math-block-preview {
+    min-height: 24px;
+    padding: 8px 0;
+    overflow-x: auto;
+  }
+
+  .math-block-preview .katex-display {
+    margin: 0;
+  }
+
   /* ---- 行内公式 math_inline ---- */
 
   .math-inline {

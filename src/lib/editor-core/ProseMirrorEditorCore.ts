@@ -18,10 +18,11 @@ import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirr
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
+import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
-import { mathBlockPlugin } from './plugins/mathBlock';
+import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
@@ -79,7 +80,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       nodeViews: {
         code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number),
         html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number),
-        math_inline: (node, view, getPos) => new MathInlineNodeView(node, view, getPos as () => number)
+        math_inline: (node, view, getPos) => new MathInlineNodeView(node, view, getPos as () => number),
+        math_block: (node, view, getPos) => new MathBlockNodeView(node, view, getPos as () => number)
       }
     });
     this.refreshInitialEditableState();
@@ -218,7 +220,8 @@ export class ProseMirrorEditorCore implements EditorCore {
         taskListPlugin(),
         mathInlineInputPlugin(),
         codeHighlightPlugin(),
-        mathBlockPlugin(),
+        // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
+        displayMathInputPlugin(),
         tableHtmlBlockPlugin(),
         tableControlsPlugin(),
         tableEditing({ allowTableNodeSelection: true }),
@@ -230,7 +233,24 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-i': toggleMark(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
           'Ctrl-Enter': addTableRowAfter(),
-          'Enter': chainCommands(newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
+          'Enter': chainCommands(
+            // $$ 回车自动补全：段落内只有 $$ 时按回车，生成空 math_block 并自动进入编辑态
+            (state, dispatch) => {
+              const { $from, empty } = state.selection;
+              if (!empty || $from.parent.type.name !== 'paragraph') return false;
+              if ($from.parent.textContent !== '$$') return false;
+              if (dispatch) {
+                const blockStart = $from.before(1);
+                const blockEnd = $from.after(1);
+                const node = schema.nodes.math_block.create({ tex: '' });
+                const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+                // 选中新创建的 math_block，触发 NodeView.selectNode → 自动进入编辑态
+                tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+                dispatch(tr);
+              }
+              return true;
+            },
+            newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
           'Backspace': chainCommands(deleteSelection, joinBackward, selectNodeBackward),
           'Tab': chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
           'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
