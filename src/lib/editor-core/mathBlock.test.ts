@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DOMOutputSpec, TagParseRule } from 'prosemirror-model';
+import type { DOMOutputSpec, Node as ProseMirrorNode, TagParseRule } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
@@ -136,7 +136,7 @@ describe('math_block round-trip', () => {
 describe('math_block schema', () => {
   it('is represented as block atom node', () => {
     const doc = parseMarkdown('$$\nx^2\n$$');
-    let mathNode = null as ReturnType<typeof doc.firstChild>;
+    let mathNode: ProseMirrorNode | null = null;
     doc.descendants((node) => {
       if (node.type.name === 'math_block') {
         mathNode = node;
@@ -152,7 +152,7 @@ describe('math_block schema', () => {
 
   it('has only tex attribute', () => {
     const doc = parseMarkdown('$$\nx^2\n$$');
-    let mathNode = null as ReturnType<typeof doc.firstChild>;
+    let mathNode: ProseMirrorNode | null = null;
     doc.descendants((node) => {
       if (node.type.name === 'math_block') {
         mathNode = node;
@@ -166,7 +166,7 @@ describe('math_block schema', () => {
 
   it('toDOM fallback outputs div with data-tex', () => {
     const doc = parseMarkdown('$$\nx^2\n$$');
-    let mathNode = null as ReturnType<typeof doc.firstChild>;
+    let mathNode: ProseMirrorNode | null = null;
     doc.descendants((node) => {
       if (node.type.name === 'math_block') {
         mathNode = node;

@@ -242,11 +242,85 @@
     gap: 4px;
     min-height: 44px;
     padding: 5px 16px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .toolbar button {
     color: var(--md-editor-muted-fg);
+  }
+
+  .table-picker-anchor {
+    position: relative;
+    display: inline-grid;
+  }
+
+  .table-picker-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 40;
+    width: max-content;
+    padding: 10px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-md);
+    background: var(--md-editor-surface);
+    box-shadow: var(--md-editor-shadow);
+    animation: table-picker-in 160ms ease-out;
+  }
+
+  .table-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 214px;
+    margin-bottom: 8px;
+    color: var(--md-editor-muted-fg);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .table-picker-header strong {
+    color: var(--md-editor-accent-strong);
+    font-family: var(--md-editor-font-mono);
+    font-size: 12px;
+  }
+
+  .table-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 32px);
+    gap: 4px;
+  }
+
+  .toolbar .table-picker-cell {
+    min-width: 32px;
+    min-height: 28px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: var(--md-editor-chrome);
+    transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+  }
+
+  .toolbar .table-picker-cell:hover,
+  .toolbar .table-picker-cell:focus-visible,
+  .toolbar .table-picker-cell.active {
+    border-color: var(--md-editor-accent);
+    background: var(--md-editor-selection-bg);
+    color: var(--md-editor-accent-strong);
+  }
+
+  .toolbar .table-picker-cell:active {
+    transform: scale(0.96);
+  }
+
+  @keyframes table-picker-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .toolbar-spacer {

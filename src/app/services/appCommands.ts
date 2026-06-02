@@ -8,6 +8,7 @@ export interface AppCommandHandlers {
   openRecentFile: (path: string) => void;
   saveMarkdownFile: (saveAs?: boolean) => void;
   runCommand: (command: EditorCommand) => void;
+  openTablePicker: () => void;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
   toggleTheme: () => void;
@@ -31,6 +32,14 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.runCommand({ type: 'undo' });
   } else if (command === 'redo') {
     handlers.runCommand({ type: 'redo' });
+  } else if (command === 'toggle-blockquote') {
+    handlers.runCommand({ type: 'toggleBlockquote' });
+  } else if (command === 'insert-table') {
+    handlers.openTablePicker();
+  } else if (command === 'insert-math-block') {
+    handlers.runCommand({ type: 'insertMathBlock', tex: '' });
+  } else if (command === 'insert-code-block') {
+    handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
   } else if (command === 'toggle-source') {
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');
   } else if (command === 'toggle-theme') {
@@ -97,5 +106,21 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
     // Ctrl+Shift+X → 任务列表
     event.preventDefault();
     handlers.runCommand({ type: 'toggleTaskList' });
+  } else if (key === 'q') {
+    // Ctrl+Shift+Q → 引用块
+    event.preventDefault();
+    handlers.runCommand({ type: 'toggleBlockquote' });
+  } else if (key === 't') {
+    // Ctrl+Shift+T → 表格尺寸选择
+    event.preventDefault();
+    handlers.openTablePicker();
+  } else if (key === 'm') {
+    // Ctrl+Shift+M → 公式块
+    event.preventDefault();
+    handlers.runCommand({ type: 'insertMathBlock', tex: '' });
+  } else if (key === 'k') {
+    // Ctrl+Shift+K → 代码块
+    event.preventDefault();
+    handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
   }
 }

@@ -285,6 +285,12 @@
   .mermaid-block,
   .math-block,
   .html-block {
+    --code-gutter-width: 32px;
+    --code-content-padding-left: 12px;
+    --code-content-padding-right: 16px;
+    --code-content-padding-block: 12px;
+    --code-line-height: 18px;
+    position: relative;
     margin: 18px 0;
     border: 1px solid var(--md-editor-code-border);
     border-radius: var(--md-editor-radius-md);
@@ -326,6 +332,53 @@
     cursor: pointer;
   }
 
+  .code-card .code-copy-button {
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+  }
+
+  .code-card .code-copy-button svg {
+    display: block;
+  }
+
+  .code-card .code-copy-button.is-copied {
+    border-color: color-mix(in srgb, var(--md-editor-accent) 70%, transparent);
+    background: color-mix(in srgb, var(--md-editor-accent) 16%, var(--md-editor-code-bg));
+    color: var(--md-editor-accent);
+    animation: code-copy-pop 220ms ease-out;
+  }
+
+  .code-card .code-copy-button.is-copy-error {
+    border-color: var(--md-editor-danger-fg, #e5484d);
+    color: var(--md-editor-danger-fg, #e5484d);
+    animation: code-copy-shake 260ms ease-out;
+  }
+
+  @keyframes code-copy-pop {
+    0% {
+      transform: scale(0.92);
+    }
+    58% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes code-copy-shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    30% {
+      transform: translateX(-2px);
+    }
+    65% {
+      transform: translateX(2px);
+    }
+  }
+
   .code-card pre {
     max-width: 100%;
     margin: 0;
@@ -334,14 +387,15 @@
   }
 
   .code-card code {
-    display: grid;
+    display: block;
     min-width: max-content;
-    padding: 12px 0;
+    padding: var(--code-content-padding-block) var(--code-content-padding-right) var(--code-content-padding-block) var(--code-content-padding-left);
     background: transparent;
     color: inherit;
     font-family: var(--md-editor-font-mono);
     font-size: 13px;
-    line-height: 1.65;
+    line-height: var(--code-line-height);
+    white-space: pre;
   }
 
   .code-card.wrapped pre {
@@ -354,12 +408,12 @@
 
   .code-line {
     display: grid;
-    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-columns: var(--code-gutter-width) minmax(0, 1fr);
     min-height: 22px;
   }
 
   .line-number {
-    padding: 0 12px 0 10px;
+    padding: 0 8px 0 6px;
     color: color-mix(in srgb, var(--md-editor-code-fg) 42%, transparent);
     text-align: right;
     user-select: none;
@@ -381,6 +435,208 @@
 
   .code-line.diff-removed {
     background: rgba(248, 81, 73, 0.20);
+  }
+
+  /* ---- code_block 展示态布局 ---- */
+
+  .code-body {
+    display: flex;
+    overflow: hidden;
+  }
+
+  .line-numbers-gutter {
+    flex: 0 0 var(--code-gutter-width);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--md-editor-code-border);
+    user-select: none;
+    overflow: hidden;         /* 裁剪容器，wrapper 可以比 gutter 更高 */
+  }
+
+  /* 行号内部 wrapper：高度由内容撑开，滚动时 translateY 作用在此元素上 */
+  .line-numbers-wrapper {
+    padding: var(--code-content-padding-block) 0;
+  }
+
+  .line-numbers-gutter span {
+    display: block;
+    padding: 0 8px 0 6px;
+    color: color-mix(in srgb, var(--md-editor-code-fg) 42%, transparent);
+    text-align: right;
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: var(--code-line-height);
+  }
+
+  .prosemirror-host .ProseMirror .code-card .code-content {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .prosemirror-host .ProseMirror .code-card .code-content code {
+    padding: var(--code-content-padding-block) var(--code-content-padding-right) var(--code-content-padding-block) var(--code-content-padding-left);
+    border-radius: 0;
+    line-height: var(--code-line-height);
+  }
+
+  /* ---- code_block 编辑态 ---- */
+
+  .prosemirror-host .ProseMirror .code-card.ProseMirror-selectednode,
+  .code-card.is-editing {
+    border-color: transparent;
+    outline: 2px solid var(--md-editor-accent, #5a8cdc);
+    outline-offset: 0;
+  }
+
+  .code-card.is-editing .code-body {
+    position: relative;
+    overflow: hidden;         /* 裁剪绝对定位的 gutter wrapper 溢出 */
+  }
+
+  .code-edit-area {
+    flex: 1;
+    min-width: 0;
+    margin-left: var(--code-gutter-width);
+    overflow: hidden;         /* 裁剪高亮层与 textarea 的滚动区域 */
+    position: relative;
+    max-height: min(calc(24 * var(--code-line-height) + 2 * var(--code-content-padding-block)), 60vh);
+    border-radius: 0;
+  }
+
+  .prosemirror-host .ProseMirror .code-card .code-highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: var(--code-content-padding-block) 0;
+    pointer-events: none;
+    white-space: pre;
+    overflow: visible;        /* 允许内容自然撑高，由 .code-edit-area overflow:hidden 裁剪 */
+    will-change: transform;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .prosemirror-host .ProseMirror .code-card .code-highlight-layer code {
+    display: block;
+    min-width: max-content;
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: var(--code-line-height);
+    padding: 0 var(--code-content-padding-right) 0 var(--code-content-padding-left);
+    background: transparent;
+    border-radius: 0;
+    color: inherit;
+  }
+
+  .prosemirror-host .ProseMirror .code-card .code-input {
+    appearance: none;
+    -webkit-appearance: none;
+    display: block;
+    width: 100%;
+    min-height: calc(3 * var(--code-line-height) + 2 * var(--code-content-padding-block));
+    max-height: inherit;
+    box-sizing: border-box;
+    margin: 0;
+    padding: var(--code-content-padding-block) 0 var(--code-content-padding-block) var(--code-content-padding-left);
+    border: none;
+    border-radius: 0;
+    outline: none;
+    resize: none;
+    overflow: auto;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--md-editor-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 13px;
+    line-height: var(--code-line-height);
+    white-space: pre;
+    tab-size: 2;
+    position: relative;       /* 创建层叠上下文 */
+    z-index: 1;               /* 确保在高亮层之上，光标可见 */
+  }
+
+  .code-card.is-editing .line-numbers-gutter {
+    position: absolute;       /* 脱离 flex 流，不让 wrapper 内容撑开 code-body */
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--code-gutter-width);
+    flex-basis: var(--code-gutter-width);
+    z-index: 1;
+  }
+
+  .code-card.is-editing .line-numbers-wrapper {
+    will-change: transform;
+  }
+
+  /* ---- 语言选择器 ---- */
+
+  .lang-selector {
+    position: absolute;
+    z-index: 10;
+    width: 200px;
+    max-height: 240px;
+    border: 1px solid var(--md-editor-code-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: var(--md-editor-surface);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .lang-selector-search {
+    width: 100%;
+    padding: 6px 10px;
+    border: none;
+    border-bottom: 1px solid var(--md-editor-code-border);
+    outline: none;
+    background: transparent;
+    color: var(--md-editor-fg);
+    font-size: 12px;
+    font-family: var(--md-editor-font-mono);
+    box-sizing: border-box;
+  }
+
+  .lang-selector-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .lang-selector-item {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-family: var(--md-editor-font-mono);
+    color: var(--md-editor-fg);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .lang-selector-item:hover {
+    background: color-mix(in srgb, var(--md-editor-accent) 15%, transparent);
+  }
+
+  .lang-selector-item.is-active {
+    background: color-mix(in srgb, var(--md-editor-accent) 25%, transparent);
+    font-weight: 600;
+  }
+
+  .lang-selector-custom {
+    color: color-mix(in srgb, var(--md-editor-fg) 60%, transparent);
+    font-style: italic;
   }
 
   .mermaid-block,

@@ -261,6 +261,9 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Shift-Ctrl-[': (state, dispatch) => toggleList(state, dispatch, schema.nodes.ordered_list),
           'Shift-Ctrl-]': (state, dispatch) => toggleList(state, dispatch, schema.nodes.bullet_list),
           'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch),
+          'Shift-Ctrl-q': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'toggleBlockquote' }),
+          'Shift-Ctrl-m': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'insertMathBlock', tex: '' }),
+          'Shift-Ctrl-k': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'insertCodeBlock', language: 'ts' }),
           'ArrowRight': (state, dispatch) => {
             const { $from, empty } = state.selection;
             if (!empty) return false;

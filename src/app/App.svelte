@@ -6,7 +6,7 @@
     isTauriRuntime,
     type RecentDocument
   } from '../lib/desktop/tauriStorage';
-  import { createEditorCore, setCodeBlockMathRenderer, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
+  import { createEditorCore, setCodeBlockMathRenderer, setCodeBlockTokenizer, type EditorChangeEvent, type EditorCommand, type EditorMode } from '../lib/editor-core';
   import { calculateDocumentStats, extractOutline, type DocumentStats, type OutlineItem } from '../lib/outline/outlineService';
   import { createRichMarkdownSample } from '../lib/markdown/sample';
   import AppShell from './components/AppShell.svelte';
@@ -35,11 +35,13 @@
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
+  import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
   const initialMarkdown = createRichMarkdownSample();
 
+  setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockMathRenderer(createKatexMathRenderer());
 
   let markdown = initialMarkdown, dirty = false, version = 0;
@@ -63,6 +65,7 @@
   let desktopUnlisteners: Array<() => void> = [];
   let currentFolderPath = '', folderTree: FileTreeNode[] = [];
   let expandedFolders = new Set<string>();
+  let tablePickerOpen = false;
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -146,7 +149,7 @@
   const commandHandlers: AppCommandHandlers = {
     createNewFile: () => createNewFile(), createNewWindow, openFileDialog: () => openFileDialog(), openFolderDialog: () => openFolderDialog(),
     openRecentFile: (path) => openRecentFile(path), saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs), runCommand: (command) => runCommand(command),
-    setMode: (nextMode) => setMode(nextMode), getMode: () => mode, toggleTheme: () => toggleTheme(), toggleFocusMode: () => toggleFocusMode()
+    openTablePicker: () => openTablePicker(), setMode: (nextMode) => setMode(nextMode), getMode: () => mode, toggleTheme: () => toggleTheme(), toggleFocusMode: () => toggleFocusMode()
   };
 
   async function updateWindowTitle() {
@@ -270,6 +273,19 @@
     focusMode = !focusMode;
   }
 
+  function openTablePicker() {
+    tablePickerOpen = true;
+  }
+
+  function closeTablePicker() {
+    tablePickerOpen = false;
+  }
+
+  function insertTableWithSize(rows: number, columns: number) {
+    runCommand({ type: 'insertTable', rows, columns });
+    closeTablePicker();
+  }
+
   $: visibleOutlineIds = new Set(outline.filter((_item, index) => getOutlineItemVisible(outline, collapsedOutlineIds, index)).map((item) => item.id));
 
   async function setupDesktopEvents() {
@@ -325,10 +341,10 @@
   {focusMode} {isResizing} {contentWidthPercent} {theme} {desktopEnabled} {activeMenu} {recentFiles} {mode} {outlineVisible}
   {currentFolderPath} {rootFolderExpanded} {folderTree} {expandedFolders} {nativePath} {dirty} {fileName} {filePath}
   {sidebarWidth} {tabs} {activeTabId} {fontSize} {lineHeight} {markdown} {readonlyDocumentMode} {externalFileWarning}
-  {outline} {activeOutlineId} {collapsedOutlineIds} {visibleOutlineIds} {statusMessage} {version} {stats}
+  {outline} {activeOutlineId} {collapsedOutlineIds} {visibleOutlineIds} {statusMessage} {version} {stats} {tablePickerOpen}
   {getCompactPath} {getFolderName} {getDirectoryLabel} {toggleMenu} {closeMenu} {toggleTheme} {minimizeWindow}
   {maximizeWindow} {closeAppWindow} {createNewWindow} {createNewFile} {openFileDialog} {openFolderDialog} {openRecentFile}
-  {saveMarkdownFile} {runCommand} {setMode} {toggleOutlineVisible} {toggleFocusMode} {toggleRootFolder} {toggleFolderCollapse}
+  {saveMarkdownFile} {runCommand} {openTablePicker} {closeTablePicker} {insertTableWithSize} {setMode} {toggleOutlineVisible} {toggleFocusMode} {toggleRootFolder} {toggleFolderCollapse}
   {startResize} {switchTab} {closeTab} {updateFontSize} {updateLineHeight} {updateContentWidth} {updateMarkdown}
   {updateActiveOutlineFromSourceScroll} {updateActiveOutlineFromSemanticScroll} {handleEditorPaste} {handleEditorDrop}
   {isOutlineItemExpandable} {toggleOutlineItemExpanded} {jumpToOutlineItem} {openMarkdownFile}

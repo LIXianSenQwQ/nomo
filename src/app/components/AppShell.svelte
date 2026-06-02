@@ -47,6 +47,7 @@
   export let statusMessage: string;
   export let version: number;
   export let stats: DocumentStats;
+  export let tablePickerOpen: boolean;
 
   export let getCompactPath: (path: string) => string;
   export let getFolderName: (path: string) => string;
@@ -64,6 +65,9 @@
   export let openRecentFile: (path: string) => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
+  export let openTablePicker: () => void;
+  export let closeTablePicker: () => void;
+  export let insertTableWithSize: (rows: number, columns: number) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
@@ -110,6 +114,7 @@
     {openRecentFile}
     {saveMarkdownFile}
     {runCommand}
+    {openTablePicker}
     {setMode}
     {toggleOutlineVisible}
     {toggleFocusMode}
@@ -146,6 +151,10 @@
         {openFileDialog}
         {saveMarkdownFile}
         {runCommand}
+        {tablePickerOpen}
+        {openTablePicker}
+        {closeTablePicker}
+        {insertTableWithSize}
         {updateFontSize}
         {updateLineHeight}
         {updateContentWidth}

@@ -23,6 +23,7 @@
   export let openRecentFile: (path: string) => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
+  export let openTablePicker: () => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let outlineVisible: boolean;
@@ -132,10 +133,13 @@
           <div class="dropdown-menu">
             <button on:click={() => finish(() => runCommand({ type: 'toggleBold' }), 'format')}>粗体 <span class="shortcut">Ctrl+B</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleItalic' }), 'format')}>斜体 <span class="shortcut">Ctrl+I</span></button>
-            <button on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'format')}>引用块</button>
+            <button on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'format')}>引用块 <span class="shortcut">Ctrl+Shift+Q</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'format')}>有序列表 <span class="shortcut">Ctrl+Shift+[</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'format')}>无序列表 <span class="shortcut">Ctrl+Shift+]</span></button>
             <button on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'format')}>任务列表 <span class="shortcut">Ctrl+Shift+X</span></button>
+            <button on:click={() => finish(openTablePicker, 'format')}>表格 <span class="shortcut">Ctrl+Shift+T</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'insertMathBlock', tex: '' }), 'format')}>公式块 <span class="shortcut">Ctrl+Shift+M</span></button>
+            <button on:click={() => finish(() => runCommand({ type: 'insertCodeBlock', language: 'ts' }), 'format')}>代码块 <span class="shortcut">Ctrl+Shift+K</span></button>
           </div>
         {/if}
       </div>

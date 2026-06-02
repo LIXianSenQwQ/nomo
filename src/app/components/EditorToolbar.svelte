@@ -18,6 +18,7 @@
     Table2
   } from '@lucide/svelte';
   import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+  import { clickOutside } from '../actions/clickOutside';
 
   export let mode: EditorMode;
   export let fontSize: number;
@@ -27,12 +28,38 @@
   export let openFileDialog: () => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
+  export let tablePickerOpen: boolean;
+  export let openTablePicker: () => void;
+  export let closeTablePicker: () => void;
+  export let insertTableWithSize: (rows: number, columns: number) => void;
   export let updateFontSize: (event: Event) => void;
   export let updateLineHeight: (event: Event) => void;
   export let updateContentWidth: (event: Event) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
+
+  const tableRows = [1, 2, 3, 4, 5];
+  const tableColumns = [1, 2, 3, 4, 5, 6];
+  let previewRows = 3;
+  let previewColumns = 4;
+
+  function toggleTablePicker() {
+    if (tablePickerOpen) {
+      closeTablePicker();
+      return;
+    }
+    previewRows = 3;
+    previewColumns = 4;
+    openTablePicker();
+  }
+
+  function handleTablePickerKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeTablePicker();
+    }
+  }
 </script>
 
 <div class="toolbar" aria-label="格式工具">
@@ -61,9 +88,40 @@
   <button title="任务列表" on:click={() => runCommand({ type: 'toggleTaskList' })}>
     <CheckSquare size={17} />
   </button>
-  <button title="表格" on:click={() => runCommand({ type: 'insertTable', rows: 2, columns: 3 })}>
-    <Table2 size={17} />
-  </button>
+  <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>
+    <button
+      title="表格"
+      aria-haspopup="dialog"
+      aria-expanded={tablePickerOpen}
+      class:active={tablePickerOpen}
+      on:click|stopPropagation={toggleTablePicker}
+    >
+      <Table2 size={17} />
+    </button>
+    {#if tablePickerOpen}
+      <div class="table-picker-popover" role="dialog" aria-label="选择表格尺寸" tabindex="-1" on:keydown={handleTablePickerKeydown}>
+        <div class="table-picker-header">
+          <span>表格</span>
+          <strong>{previewRows} × {previewColumns}</strong>
+        </div>
+        <div class="table-picker-grid" aria-label="表格行列">
+          {#each tableRows as row}
+            {#each tableColumns as column}
+              <button
+                type="button"
+                class="table-picker-cell"
+                class:active={row <= previewRows && column <= previewColumns}
+                aria-label={`插入 ${row} 行 ${column} 列表格`}
+                on:mouseenter={() => { previewRows = row; previewColumns = column; }}
+                on:focus={() => { previewRows = row; previewColumns = column; }}
+                on:click={() => insertTableWithSize(row, column)}
+              ></button>
+            {/each}
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </div>
   <button title="代码块" on:click={() => runCommand({ type: 'insertCodeBlock', language: 'ts', code: 'console.log(\"NewMd\");' })}>
     <Code2 size={17} />
   </button>

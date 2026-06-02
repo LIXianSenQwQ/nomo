@@ -158,6 +158,34 @@ fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Menu
         .build()
         .map_err(|e| e.to_string())?;
 
+    let format_menu = SubmenuBuilder::new(app, "格式(&O)")
+        .item(
+            &MenuItemBuilder::with_id("toggle-blockquote", "引用块")
+                .accelerator("Ctrl+Shift+Q")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("insert-table", "表格")
+                .accelerator("Ctrl+Shift+T")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("insert-math-block", "公式块")
+                .accelerator("Ctrl+Shift+M")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("insert-code-block", "代码块")
+                .accelerator("Ctrl+Shift+K")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let view_menu = SubmenuBuilder::new(app, "查看(&V)")
         .item(
             &MenuItemBuilder::with_id("toggle-source", "切换源码模式")
@@ -183,6 +211,7 @@ fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Menu
     MenuBuilder::new(app)
         .item(&file_menu)
         .item(&edit_menu)
+        .item(&format_menu)
         .item(&view_menu)
         .build()
         .map_err(|e| e.to_string())
