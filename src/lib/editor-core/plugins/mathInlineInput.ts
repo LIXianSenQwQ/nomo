@@ -1,11 +1,13 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin } from 'prosemirror-state';
 import { schema } from '../schema';
+import { MathInlineNodeView } from '../nodeViews/MathInlineNodeView';
 
 interface InlineMathMatch {
   from: number;
   to: number;
   tex: string;
+  isNew?: boolean; // 标记是否是新创建的行公式
 }
 
 export function mathInlineInputPlugin(): Plugin {
@@ -21,9 +23,21 @@ export function mathInlineInputPlugin(): Plugin {
       }
 
       const tr = newState.tr;
+      let newMatchPos: number | null = null;
+
       for (const match of matches.reverse()) {
         tr.replaceWith(match.from, match.to, schema.nodes.math_inline.create({ tex: match.tex }));
+        if (match.isNew) {
+          newMatchPos = match.from;
+        }
       }
+
+      // 如果有新创建的行公式，触发立即编辑
+      if (newMatchPos !== null) {
+        // 请求立即进入编辑态
+        MathInlineNodeView.requestInstantEdit();
+      }
+
       return tr;
     }
   });
@@ -75,7 +89,8 @@ function scanTextForInlineMath(text: string, absoluteTextPos: number): InlineMat
       matches.push({
         from: absoluteTextPos + start,
         to: absoluteTextPos + end + 1,
-        tex: tex.trim().replace(/\\\$/g, '$')
+        tex: tex.trim().replace(/\\\$/g, '$'),
+        isNew: true // 标记为新创建的行公式
       });
     }
 

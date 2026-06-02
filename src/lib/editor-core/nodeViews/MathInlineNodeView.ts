@@ -5,6 +5,7 @@ import { getMathRenderer } from '../renderers';
 
 export class MathInlineNodeView {
   private static nextKeyboardCursorSide: 'start' | 'end' | null = null;
+  private static instantEditMode = false;
 
   dom: HTMLElement;
 
@@ -50,10 +51,24 @@ export class MathInlineNodeView {
     });
     this.dom.textContent = `$${node.attrs.tex}$`;
     this.renderKaTeX();
+
+    // 检查是否需要立即进入编辑态
+    if (MathInlineNodeView.instantEditMode) {
+      MathInlineNodeView.instantEditMode = false;
+      this.pendingPointerRatio = 1; // 光标在末尾
+      // 延迟一帧确保 DOM 已渲染
+      requestAnimationFrame(() => {
+        this.enterEdit();
+      });
+    }
   }
 
   static requestKeyboardEntry(cursorSide: 'start' | 'end'): void {
     MathInlineNodeView.nextKeyboardCursorSide = cursorSide;
+  }
+
+  static requestInstantEdit(): void {
+    MathInlineNodeView.instantEditMode = true;
   }
 
   update(node: ProseMirrorNode): boolean {

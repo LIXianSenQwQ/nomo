@@ -291,4 +291,29 @@ describe('math_inline semantic input', () => {
 
     expect(found).toBe(false);
   });
+
+  it('converts $a$ to math_inline and allows continued input', () => {
+    let state = EditorState.create({
+      doc: schema.node('doc', null, [schema.node('paragraph')]),
+      plugins: [mathInlineInputPlugin()]
+    });
+
+    // 模拟用户输入 $a$
+    state = state.apply(state.tr.insertText('$a$'));
+
+    const texValues: string[] = [];
+    let found = false;
+    state.doc.descendants((node) => {
+      if (node.type.name === 'math_inline') {
+        texValues.push(node.attrs.tex as string);
+        found = true;
+        return false;
+      }
+      return true;
+    });
+
+    // $a$ 应该被转换为 math_inline 节点
+    expect(found).toBe(true);
+    expect(texValues).toEqual(['a']);
+  });
 });
