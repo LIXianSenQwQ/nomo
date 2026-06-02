@@ -132,8 +132,7 @@ export function normalizeFirstTableRowHeader(): Command {
 function createTableRow(columns: number, rowIndex: number, header: boolean): ProseMirrorNode {
   const cellType = header ? schema.nodes.table_header : schema.nodes.table_cell;
   const cells = Array.from({ length: columns }, (_, columnIndex) => {
-    const label = header ? `列 ${columnIndex + 1}` : `单元格 ${rowIndex}-${columnIndex + 1}`;
-    return cellType.createAndFill(null, schema.nodes.paragraph.create(null, schema.text(label)));
+    return cellType.createAndFill(null, schema.nodes.paragraph.createAndFill());
   }).filter((cell): cell is ProseMirrorNode => Boolean(cell));
 
   return schema.nodes.table_row.createChecked(null, cells);

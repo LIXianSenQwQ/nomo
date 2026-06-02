@@ -339,9 +339,9 @@ export function splitFrontMatter(markdown: string): { frontMatter: string; body:
 export function createTableMarkdown(rows: number, columns: number): string {
   const columnCount = Math.max(2, Math.min(columns, 6));
   const rowCount = Math.max(1, Math.min(rows, 8));
-  const headers = Array.from({ length: columnCount }, (_, index) => `列 ${index + 1}`);
+  const headers = Array.from({ length: columnCount }, () => '');
   const separator = Array.from({ length: columnCount }, () => '---');
-  const body = Array.from({ length: rowCount }, (_, rowIndex) => headers.map((_, columnIndex) => `单元格 ${rowIndex + 1}-${columnIndex + 1}`));
+  const body = Array.from({ length: rowCount }, () => headers.map(() => ''));
   const lines = [headers, separator, ...body].map((cells) => `| ${cells.join(' | ')} |`);
   return `${lines.join('\n')}\n`;
 }

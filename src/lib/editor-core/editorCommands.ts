@@ -4,13 +4,13 @@ import { liftListItem, wrapInList } from 'prosemirror-schema-list';
 import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import { createTableMarkdown } from './markdown';
 import { schema } from './schema';
 import {
   addTableColumnAfter,
   addTableColumnBefore,
   addTableRowAfter,
   addTableRowBefore,
+  createTableNode,
   deleteCurrentTable,
   deleteCurrentTableColumn,
   deleteCurrentTableRow,
@@ -229,8 +229,11 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
     }
     case 'insertMermaidBlock':
       return insertMarkdownSnippet(markdown, setMarkdown, `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`);
-    case 'insertTable':
-      return insertMarkdownSnippet(markdown, setMarkdown, createTableMarkdown(command.rows ?? 3, command.columns ?? 3));
+    case 'insertTable': {
+      const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
+      view.dispatch(state.tr.replaceSelectionWith(tableNode).scrollIntoView());
+      return true;
+    }
     case 'addTableRowBefore':
       return run(addTableRowBefore());
     case 'addTableRowAfter':
