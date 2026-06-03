@@ -97,6 +97,7 @@
     folderTree: FileTreeNode[] = [];
   let expandedFolders = new Set<string>();
   let tablePickerOpen = false;
+  let unavailableFeatureTimer: number | null = null;
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -221,6 +222,7 @@
     saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs),
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
+    showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
     setMode: (nextMode) => setMode(nextMode),
     getMode: () => mode,
     toggleTheme: () => toggleTheme(),
@@ -404,6 +406,7 @@
   onDestroy(() => {
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
+    if (unavailableFeatureTimer !== null) window.clearTimeout(unavailableFeatureTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
     sidebarResize.destroy();
     unsubscribe();
@@ -451,6 +454,22 @@
   function insertTableWithSize(rows: number, columns: number) {
     runCommand({ type: 'insertTable', rows, columns });
     closeTablePicker();
+  }
+
+  function showUnavailableFeature(featureName: string) {
+    if (unavailableFeatureTimer !== null) {
+      window.clearTimeout(unavailableFeatureTimer);
+    }
+
+    const previousMessage = statusMessage;
+    const nextMessage = `${featureName}功能开发中`;
+    statusMessage = nextMessage;
+    unavailableFeatureTimer = window.setTimeout(() => {
+      if (statusMessage === nextMessage) {
+        statusMessage = previousMessage;
+      }
+      unavailableFeatureTimer = null;
+    }, 1500);
   }
 
   $: visibleOutlineIds = new Set(
@@ -565,6 +584,7 @@
   {saveMarkdownFile}
   {runCommand}
   {openTablePicker}
+  {showUnavailableFeature}
   {closeTablePicker}
   {insertTableWithSize}
   {setMode}
