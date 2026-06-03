@@ -1,5 +1,6 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { getCodeTokenizer } from '../renderers';
 import type { CodeTokenLine } from '../../services/render';
 import { escapeHtml } from '../utils/html';
@@ -123,6 +124,7 @@ function createCheckIcon(): SVGSVGElement {
 
 export class CodeBlockNodeView {
   private static activeEditingView: CodeBlockNodeView | null = null;
+  private static instances = new Set<CodeBlockNodeView>();
 
   dom: HTMLElement;
 
@@ -156,6 +158,7 @@ export class CodeBlockNodeView {
     this.view = view;
     this.getPos = getPos;
     this.language = node.attrs.params ?? '';
+    CodeBlockNodeView.instances.add(this);
 
     this.dom = document.createElement('section');
     this.dom.className = 'code-card';
@@ -207,6 +210,10 @@ export class CodeBlockNodeView {
     this.codeDisplay.className = 'code-content';
     const codeEl = document.createElement('code');
     this.codeDisplay.appendChild(codeEl);
+    // 展示态滚动时同步行号位置
+    this.codeDisplay.addEventListener('scroll', () => {
+      this.lineNumbersWrapper.style.transform = `translateY(-${this.codeDisplay.scrollTop}px)`;
+    });
     this.codeBody.appendChild(this.codeDisplay);
     this.dom.appendChild(this.codeBody);
 
@@ -271,6 +278,7 @@ export class CodeBlockNodeView {
   }
 
   destroy(): void {
+    CodeBlockNodeView.instances.delete(this);
     if (this.highlightTimer) clearTimeout(this.highlightTimer);
     if (this.copyFeedbackTimer) clearTimeout(this.copyFeedbackTimer);
     this.cleanupEdit();
@@ -293,6 +301,17 @@ export class CodeBlockNodeView {
         span.textContent = String(i);
         this.lineNumbersWrapper.appendChild(span);
       }
+      // 行号数量变化后同步行号栏宽度到编辑区 margin-left
+      this.syncGutterWidth();
+    }
+  }
+
+  /** 测量行号栏实际宽度，同步到编辑区的 margin-left */
+  private syncGutterWidth(): void {
+    if (!this.editArea) return;
+    const gutterWidth = this.lineNumbersGutter.offsetWidth;
+    if (gutterWidth > 0) {
+      this.editArea.style.marginLeft = `${gutterWidth}px`;
     }
   }
 
@@ -321,7 +340,7 @@ export class CodeBlockNodeView {
 
   // ---- 编辑态管理 ----
 
-  private enterEdit(clickLine?: number): void {
+  enterEdit(clickLine?: number, caret: 'start' | 'end' = 'start'): void {
     if (this.editing) return;
 
     if (CodeBlockNodeView.activeEditingView && CodeBlockNodeView.activeEditingView !== this) {
@@ -377,19 +396,35 @@ export class CodeBlockNodeView {
     this.updateLineNumbers(this.originalCode);
     this.renderHighlightFor(this.originalCode, this.language, this.highlightLayer);
 
+    // 初始同步行号栏宽度（updateLineNumbers 可能未触发 syncGutterWidth，这里兜底）
+    this.syncGutterWidth();
+
     // 步骤4：聚焦 textarea，尝试定位到点击的行
     requestAnimationFrame(() => {
       if (!this.textarea) return;
       this.textarea.focus({ preventScroll: true });
-      if (clickLine !== undefined && clickLine > 0) {
+      if (clickLine !== undefined) {
         const lines = this.textarea.value.split('\n');
         let offset = 0;
         for (let i = 0; i < Math.min(clickLine, lines.length); i++) {
           offset += lines[i].length + 1; // +1 for \n
         }
+        if (caret === 'end' && clickLine < lines.length) {
+          offset += lines[clickLine].length;
+        }
         this.textarea.selectionStart = this.textarea.selectionEnd = Math.min(offset, this.textarea.value.length);
       }
     });
+  }
+
+  static enterEditAt(view: EditorView, pos: number, clickLine: number, caret: 'start' | 'end'): boolean {
+    for (const instance of CodeBlockNodeView.instances) {
+      if (instance.view !== view) continue;
+      if (instance.getPos() !== pos) continue;
+      instance.enterEdit(clickLine, caret);
+      return true;
+    }
+    return false;
   }
 
   private exitEdit(save: boolean): void {
@@ -463,6 +498,78 @@ export class CodeBlockNodeView {
       e.preventDefault();
       this.exitEdit(false);
       return;
+    }
+
+    // ArrowDown：光标在最后一行时跳出代码块，移到下一个块
+    if (e.key === 'ArrowDown' && !e.shiftKey) {
+      const { selectionStart, value } = this.textarea;
+      const afterCursor = value.slice(selectionStart);
+      // 光标之后没有换行符 = 在最后一行
+      if (!afterCursor.includes('\n')) {
+        e.preventDefault();
+        const pos = this.getPos();
+        const oldCode = this.node.textContent;
+        const nextPos = pos + this.node.nodeSize;
+        const nextNode = this.view.state.doc.nodeAt(nextPos);
+        const adjustedNextPos = nextPos + value.length - oldCode.length;
+        const nextCodeBlockPos = nextNode?.type.name === 'code_block'
+          ? adjustedNextPos
+          : null;
+
+        this.exitEdit(true);
+
+        const { state } = this.view;
+        if (nextCodeBlockPos !== null && state.doc.nodeAt(nextCodeBlockPos)?.type.name === 'code_block') {
+          const tr = state.tr.setSelection(NodeSelection.create(state.doc, nextCodeBlockPos));
+          this.view.dispatch(tr);
+          CodeBlockNodeView.enterEditAt(this.view, nextCodeBlockPos, 0, 'start');
+          return;
+        }
+
+        // 将 ProseMirror 选区移到代码块之后
+        if (adjustedNextPos <= state.doc.content.size) {
+          const $pos = state.doc.resolve(Math.min(adjustedNextPos, state.doc.content.size));
+          this.view.dispatch(state.tr.setSelection(TextSelection.near($pos)));
+          this.view.focus();
+        }
+        return;
+      }
+    }
+
+    // ArrowUp：光标在第一行时跳出代码块，移到上一个块
+    if (e.key === 'ArrowUp' && !e.shiftKey) {
+      const { selectionStart, value } = this.textarea;
+      const beforeCursor = value.slice(0, selectionStart);
+      // 光标之前没有换行符 = 在第一行
+      if (!beforeCursor.includes('\n')) {
+        e.preventDefault();
+        const pos = this.getPos();
+        const nodeBefore = this.view.state.doc.resolve(pos).nodeBefore;
+        const previousCodeBlockPos = nodeBefore?.type.name === 'code_block'
+          ? pos - nodeBefore.nodeSize
+          : null;
+        const previousCodeBlockLine = nodeBefore?.type.name === 'code_block'
+          ? nodeBefore.textContent.split('\n').length - 1
+          : 0;
+
+        this.exitEdit(true);
+
+        const { state } = this.view;
+        if (previousCodeBlockPos !== null && state.doc.nodeAt(previousCodeBlockPos)?.type.name === 'code_block') {
+          const tr = state.tr.setSelection(NodeSelection.create(state.doc, previousCodeBlockPos));
+          this.view.dispatch(tr);
+          CodeBlockNodeView.enterEditAt(this.view, previousCodeBlockPos, previousCodeBlockLine, 'end');
+          return;
+        }
+
+        // 将 ProseMirror 选区移到代码块之前
+        if (pos > 0) {
+          const $pos = state.doc.resolve(pos);
+          this.view.dispatch(state.tr.setSelection(TextSelection.near($pos, -1)));
+          this.view.focus();
+        }
+        return;
+      }
     }
 
     // Tab：插入 2 个空格

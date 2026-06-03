@@ -442,10 +442,11 @@
   .code-body {
     display: flex;
     overflow: hidden;
+    max-height: min(calc(24 * var(--code-line-height) + 2 * var(--code-content-padding-block)), 60vh);
   }
 
   .line-numbers-gutter {
-    flex: 0 0 var(--code-gutter-width);
+    flex: 0 0 auto;           /* 宽度由内容撑开，不再固定 */
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--md-editor-code-border);
@@ -466,12 +467,14 @@
     font-family: var(--md-editor-font-mono);
     font-size: 13px;
     line-height: var(--code-line-height);
+    white-space: nowrap;      /* 防止行号换行，确保宽度由最宽行号决定 */
   }
 
   .prosemirror-host .ProseMirror .code-card .code-content {
     flex: 1;
     min-width: 0;
     overflow-x: auto;
+    overflow-y: auto;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -501,7 +504,7 @@
   .code-edit-area {
     flex: 1;
     min-width: 0;
-    margin-left: var(--code-gutter-width);
+    margin-left: var(--code-gutter-width, 32px);  /* JS 动态覆盖 */
     overflow: hidden;         /* 裁剪高亮层与 textarea 的滚动区域 */
     position: relative;
     max-height: min(calc(24 * var(--code-line-height) + 2 * var(--code-content-padding-block)), 60vh);
@@ -568,8 +571,7 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: var(--code-gutter-width);
-    flex-basis: var(--code-gutter-width);
+    width: fit-content;       /* 宽度由行号内容撑开 */
     z-index: 1;
   }
 

@@ -23,6 +23,7 @@ import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
+import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
@@ -304,6 +305,11 @@ export class ProseMirrorEditorCore implements EditorCore {
             }
             return false;
           }
+        }),
+        // 必须在 keymap 之后注册：ProseMirror 的 someProp 取最后一个结果，
+        // 若在 keymap 之前，keymap 返回 false 会覆盖本插件的 true。
+        codeBlockNavigationPlugin({
+          enterEditAt: (view, pos, clickLine, caret) => CodeBlockNodeView.enterEditAt(view, pos, clickLine, caret)
         })
       ]
     });
