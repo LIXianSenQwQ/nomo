@@ -15,7 +15,7 @@ import {
   deleteCurrentTableColumn,
   deleteCurrentTableRow,
   setTableColumnAlignment,
-  toggleFirstTableRowHeader
+  toggleFirstTableRowHeader,
 } from './tableCommands';
 import type { EditorCommand, SetMarkdownOptions } from './types';
 
@@ -83,7 +83,10 @@ function findTaskMarkerInItem(item: PmNode): { offset: number; length: number } 
   return result;
 }
 
-function getTaskMarkerRange(listItem: { itemPos: number; itemNode: PmNode }): { from: number; to: number } | null {
+function getTaskMarkerRange(listItem: {
+  itemPos: number;
+  itemNode: PmNode;
+}): { from: number; to: number } | null {
   const textInfo = findFirstTextInItem(listItem.itemNode);
   const taskMarker = findTaskMarkerInItem(listItem.itemNode);
   if (!textInfo || !taskMarker) return null;
@@ -91,7 +94,11 @@ function getTaskMarkerRange(listItem: { itemPos: number; itemNode: PmNode }): { 
   return { from, to: from + taskMarker.length };
 }
 
-function liftCurrentListItem(state: EditorState, dispatch: (tr: Transaction) => void, tr?: Transaction): boolean {
+function liftCurrentListItem(
+  state: EditorState,
+  dispatch: (tr: Transaction) => void,
+  tr?: Transaction,
+): boolean {
   if (!tr) return liftListItem(schema.nodes.list_item)(state, dispatch);
 
   const nextState = state.apply(tr);
@@ -111,7 +118,11 @@ function getListAttrsForType(listType: NodeType): Record<string, unknown> | null
   return null;
 }
 
-function appendCommandSteps(state: EditorState, tr: Transaction, command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean): boolean {
+function appendCommandSteps(
+  state: EditorState,
+  tr: Transaction,
+  command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean,
+): boolean {
   let capturedTr: Transaction | null = null;
   const handled = command(state.apply(tr), (nextTr) => {
     capturedTr = nextTr;
@@ -123,7 +134,11 @@ function appendCommandSteps(state: EditorState, tr: Transaction, command: (state
 
 // 列表切换：同类列表取消为普通段落；跨有序/无序转换时保留任务标记。
 // 适配 state/dispatch 签名，可直接用于 ProseMirror keymap
-export function toggleList(state: EditorState, dispatch?: (tr: Transaction) => void, listType?: NodeType): boolean {
+export function toggleList(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+  listType?: NodeType,
+): boolean {
   if (!dispatch || !listType) return false;
   const { $from } = state.selection;
   const currentList = findParentList($from);
@@ -145,7 +160,10 @@ export function toggleList(state: EditorState, dispatch?: (tr: Transaction) => v
 
 // 切换任务列表：任务项 → 去掉 [ ]/[x] 并保留列表；普通列表项 → 加上 [ ]；正文 → 创建无序任务列表
 // 适配 state/dispatch 签名，可直接用于 ProseMirror keymap
-export function toggleTaskListAtCursor(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+export function toggleTaskListAtCursor(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
   if (!dispatch) return false;
   const { $from } = state.selection;
   const listItem = findListItem($from);
@@ -170,16 +188,29 @@ export function toggleTaskListAtCursor(state: EditorState, dispatch?: (tr: Trans
   if ($from.parent.type !== schema.nodes.paragraph) {
     if (!appendCommandSteps(state, tr, setBlockType(schema.nodes.paragraph))) return false;
   }
-  if (!appendCommandSteps(state, tr, wrapInList(schema.nodes.bullet_list, getListAttrsForType(schema.nodes.bullet_list)))) return false;
+  if (
+    !appendCommandSteps(
+      state,
+      tr,
+      wrapInList(schema.nodes.bullet_list, getListAttrsForType(schema.nodes.bullet_list)),
+    )
+  )
+    return false;
 
   tr.insertText('[ ] ', tr.mapping.map(textStart));
   dispatch(tr);
   return true;
 }
 
-export function executeEditorCommand(command: EditorCommand, view: EditorView, markdown: string, setMarkdown: MarkdownSetter): boolean {
+export function executeEditorCommand(
+  command: EditorCommand,
+  view: EditorView,
+  markdown: string,
+  setMarkdown: MarkdownSetter,
+): boolean {
   const { state, dispatch } = view;
-  const run = (fn: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean) => fn(state, dispatch);
+  const run = (fn: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean) =>
+    fn(state, dispatch);
 
   switch (command.type) {
     case 'toggleBold':
@@ -201,16 +232,21 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
     case 'insertLink':
       return insertTextWithOptionalMark(view, command.text ?? command.href, schema.marks.link, {
         href: command.href,
-        title: command.title ?? null
+        title: command.title ?? null,
       });
     case 'insertImage':
       return insertInlineNode(view, schema.nodes.image, {
         src: command.src,
         alt: command.alt ?? null,
-        title: command.title ?? null
+        title: command.title ?? null,
       });
     case 'insertCodeBlock':
-      return insertBlock(view, schema.nodes.code_block, command.code ?? '', command.language ? { params: command.language } : undefined);
+      return insertBlock(
+        view,
+        schema.nodes.code_block,
+        command.code ?? '',
+        command.language ? { params: command.language } : undefined,
+      );
     case 'toggleTaskList':
       return toggleTaskListAtCursor(state, dispatch);
     case 'insertMathBlock': {
@@ -228,7 +264,11 @@ export function executeEditorCommand(command: EditorCommand, view: EditorView, m
       return true;
     }
     case 'insertMermaidBlock':
-      return insertMarkdownSnippet(markdown, setMarkdown, `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`);
+      return insertMarkdownSnippet(
+        markdown,
+        setMarkdown,
+        `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`,
+      );
     case 'insertTable': {
       const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
       view.dispatch(state.tr.replaceSelectionWith(tableNode).scrollIntoView());
@@ -283,13 +323,24 @@ function scrollToHeading(view: EditorView, headingIndex: number): boolean {
   return true;
 }
 
-function insertTextWithOptionalMark(view: EditorView, text: string, markType: MarkType, attrs: Record<string, unknown>): boolean {
+function insertTextWithOptionalMark(
+  view: EditorView,
+  text: string,
+  markType: MarkType,
+  attrs: Record<string, unknown>,
+): boolean {
   const mark = markType.create(attrs);
-  view.dispatch(view.state.tr.replaceSelectionWith(schema.text(text, [mark]), false).scrollIntoView());
+  view.dispatch(
+    view.state.tr.replaceSelectionWith(schema.text(text, [mark]), false).scrollIntoView(),
+  );
   return true;
 }
 
-function insertInlineNode(view: EditorView, type: NodeType, attrs: Record<string, unknown>): boolean {
+function insertInlineNode(
+  view: EditorView,
+  type: NodeType,
+  attrs: Record<string, unknown>,
+): boolean {
   const node = type.createAndFill(attrs);
   if (!node) return false;
 
@@ -297,14 +348,23 @@ function insertInlineNode(view: EditorView, type: NodeType, attrs: Record<string
   return true;
 }
 
-function insertBlock(view: EditorView, type: NodeType, text: string, attrs?: Record<string, unknown>): boolean {
+function insertBlock(
+  view: EditorView,
+  type: NodeType,
+  text: string,
+  attrs?: Record<string, unknown>,
+): boolean {
   const content = text ? schema.text(text) : undefined;
   const node = type.create(attrs, content);
   view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
   return true;
 }
 
-function insertMarkdownSnippet(markdown: string, setMarkdown: MarkdownSetter, snippet: string): boolean {
+function insertMarkdownSnippet(
+  markdown: string,
+  setMarkdown: MarkdownSetter,
+  snippet: string,
+): boolean {
   const separator = markdown.endsWith('\n') ? '\n' : '\n\n';
   setMarkdown(`${markdown}${separator}${snippet}`, { reason: 'programmatic-update' });
   return true;

@@ -232,7 +232,11 @@ export class InlineCodeNodeView {
     }
 
     // 右箭头在 input 末尾时退出编辑态（光标在节点后）
-    if (e.key === 'ArrowRight' && this.input.selectionStart === this.input.value.length && this.input.selectionEnd === this.input.value.length) {
+    if (
+      e.key === 'ArrowRight' &&
+      this.input.selectionStart === this.input.value.length &&
+      this.input.selectionEnd === this.input.value.length
+    ) {
       e.preventDefault();
       this.exitEdit(true, 'after');
       return;
@@ -264,20 +268,100 @@ interface InlineCodeToken {
 
 /** 常见关键字集合（语言无关） */
 const KEYWORDS = new Set([
-  'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while',
-  'do', 'switch', 'case', 'break', 'continue', 'new', 'this', 'class',
-  'extends', 'import', 'export', 'default', 'from', 'async', 'await',
-  'try', 'catch', 'finally', 'throw', 'typeof', 'instanceof', 'in', 'of',
-  'null', 'undefined', 'true', 'false', 'void', 'delete', 'yield', 'static',
-  'super', 'with', 'debugger', 'interface', 'type', 'enum', 'implements',
-  'package', 'private', 'protected', 'public', 'abstract', 'as', 'readonly',
-  'def', 'print', 'lambda', 'pass', 'global', 'nonlocal', 'assert', 'elif',
-  'except', 'raise', 'with', 'yield', 'from', 'and', 'or', 'not', 'is',
-  'fn', 'mod', 'pub', 'use', 'mut', 'ref', 'match', 'loop', 'move',
+  'const',
+  'let',
+  'var',
+  'function',
+  'return',
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'break',
+  'continue',
+  'new',
+  'this',
+  'class',
+  'extends',
+  'import',
+  'export',
+  'default',
+  'from',
+  'async',
+  'await',
+  'try',
+  'catch',
+  'finally',
+  'throw',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'null',
+  'undefined',
+  'true',
+  'false',
+  'void',
+  'delete',
+  'yield',
+  'static',
+  'super',
+  'with',
+  'debugger',
+  'interface',
+  'type',
+  'enum',
+  'implements',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'abstract',
+  'as',
+  'readonly',
+  'def',
+  'print',
+  'lambda',
+  'pass',
+  'global',
+  'nonlocal',
+  'assert',
+  'elif',
+  'except',
+  'raise',
+  'with',
+  'yield',
+  'from',
+  'and',
+  'or',
+  'not',
+  'is',
+  'fn',
+  'mod',
+  'pub',
+  'use',
+  'mut',
+  'ref',
+  'match',
+  'loop',
+  'move',
 ]);
 
 /** 布尔值 */
-const BOOLEANS = new Set(['true', 'false', 'null', 'undefined', 'None', 'True', 'False', 'nil', 'null']);
+const BOOLEANS = new Set([
+  'true',
+  'false',
+  'null',
+  'undefined',
+  'None',
+  'True',
+  'False',
+  'nil',
+  'null',
+]);
 
 /**
  * 将行内代码文本分割为带类型的 token 列表
@@ -418,7 +502,27 @@ function findOperatorEnd(code: string, start: number): number {
   // 双字符运算符
   if (start + 1 < code.length) {
     const two = ch + code[start + 1];
-    if (['==', '!=', '<=', '>=', '&&', '||', '++', '--', '+=', '-=', '*=', '/=', '=>', '->', '**', '??', '?.'].includes(two)) {
+    if (
+      [
+        '==',
+        '!=',
+        '<=',
+        '>=',
+        '&&',
+        '||',
+        '++',
+        '--',
+        '+=',
+        '-=',
+        '*=',
+        '/=',
+        '=>',
+        '->',
+        '**',
+        '??',
+        '?.',
+      ].includes(two)
+    ) {
       return start + 2;
     }
   }

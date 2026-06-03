@@ -104,4 +104,3 @@ export interface EditorCore {
   updateOptions(options: Partial<EditorRuntimeOptions>): void;
   subscribe(listener: EditorListener): () => void;
 }
-

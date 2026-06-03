@@ -60,15 +60,19 @@ const EDIT_LINE_HEIGHT_PX = 18;
 
 // 将 Shiki token 行转为 HTML 字符串（用于高亮层 innerHTML）
 function tokensToHtml(tokenLines: CodeTokenLine[]): string {
-  return tokenLines.map(line =>
-    line.tokens.map(token => {
-      const escaped = escapeHtml(token.content);
-      if (!token.color) return escaped;
-      let style = `color: ${token.color}`;
-      if (token.fontStyle === '2') style += '; font-style: italic';
-      return `<span style="${style}">${escaped}</span>`;
-    }).join('')
-  ).join('\n');
+  return tokenLines
+    .map((line) =>
+      line.tokens
+        .map((token) => {
+          const escaped = escapeHtml(token.content);
+          if (!token.color) return escaped;
+          let style = `color: ${token.color}`;
+          if (token.fontStyle === '2') style += '; font-style: italic';
+          return `<span style="${style}">${escaped}</span>`;
+        })
+        .join(''),
+    )
+    .join('\n');
 }
 
 function getHighlightLanguage(params: string): string {
@@ -137,7 +141,7 @@ export class CodeBlockNodeView {
   private language: string;
   private langLabel: HTMLElement;
   private lineNumbersGutter: HTMLElement;
-  private lineNumbersWrapper: HTMLElement;  // 行号内部容器，用于滚动时 translateY
+  private lineNumbersWrapper: HTMLElement; // 行号内部容器，用于滚动时 translateY
   private codeBody: HTMLElement;
   private codeDisplay: HTMLElement;
 
@@ -316,7 +320,11 @@ export class CodeBlockNodeView {
   }
 
   /** 为指定容器渲染高亮 HTML（异步，带 renderId 防过期） */
-  private async renderHighlightFor(code: string, language: string, container: HTMLElement): Promise<void> {
+  private async renderHighlightFor(
+    code: string,
+    language: string,
+    container: HTMLElement,
+  ): Promise<void> {
     const id = ++this.renderId;
     const codeEl = container.querySelector('code') ?? container;
     const codeTokenizer = getCodeTokenizer();
@@ -329,7 +337,11 @@ export class CodeBlockNodeView {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const theme = isDark ? 'dark' : 'github-light';
     try {
-      const result = await codeTokenizer.tokenize({ code, language: getHighlightLanguage(language), theme });
+      const result = await codeTokenizer.tokenize({
+        code,
+        language: getHighlightLanguage(language),
+        theme,
+      });
       if (id !== this.renderId) return; // 放弃过期渲染
       codeEl.innerHTML = tokensToHtml(result.tokens);
     } catch {
@@ -412,12 +424,20 @@ export class CodeBlockNodeView {
         if (caret === 'end' && clickLine < lines.length) {
           offset += lines[clickLine].length;
         }
-        this.textarea.selectionStart = this.textarea.selectionEnd = Math.min(offset, this.textarea.value.length);
+        this.textarea.selectionStart = this.textarea.selectionEnd = Math.min(
+          offset,
+          this.textarea.value.length,
+        );
       }
     });
   }
 
-  static enterEditAt(view: EditorView, pos: number, clickLine: number, caret: 'start' | 'end'): boolean {
+  static enterEditAt(
+    view: EditorView,
+    pos: number,
+    clickLine: number,
+    caret: 'start' | 'end',
+  ): boolean {
     for (const instance of CodeBlockNodeView.instances) {
       if (instance.view !== view) continue;
       if (instance.getPos() !== pos) continue;
@@ -512,14 +532,15 @@ export class CodeBlockNodeView {
         const nextPos = pos + this.node.nodeSize;
         const nextNode = this.view.state.doc.nodeAt(nextPos);
         const adjustedNextPos = nextPos + value.length - oldCode.length;
-        const nextCodeBlockPos = nextNode?.type.name === 'code_block'
-          ? adjustedNextPos
-          : null;
+        const nextCodeBlockPos = nextNode?.type.name === 'code_block' ? adjustedNextPos : null;
 
         this.exitEdit(true);
 
         const { state } = this.view;
-        if (nextCodeBlockPos !== null && state.doc.nodeAt(nextCodeBlockPos)?.type.name === 'code_block') {
+        if (
+          nextCodeBlockPos !== null &&
+          state.doc.nodeAt(nextCodeBlockPos)?.type.name === 'code_block'
+        ) {
           const tr = state.tr.setSelection(NodeSelection.create(state.doc, nextCodeBlockPos));
           this.view.dispatch(tr);
           CodeBlockNodeView.enterEditAt(this.view, nextCodeBlockPos, 0, 'start');
@@ -545,20 +566,28 @@ export class CodeBlockNodeView {
         e.preventDefault();
         const pos = this.getPos();
         const nodeBefore = this.view.state.doc.resolve(pos).nodeBefore;
-        const previousCodeBlockPos = nodeBefore?.type.name === 'code_block'
-          ? pos - nodeBefore.nodeSize
-          : null;
-        const previousCodeBlockLine = nodeBefore?.type.name === 'code_block'
-          ? nodeBefore.textContent.split('\n').length - 1
-          : 0;
+        const previousCodeBlockPos =
+          nodeBefore?.type.name === 'code_block' ? pos - nodeBefore.nodeSize : null;
+        const previousCodeBlockLine =
+          nodeBefore?.type.name === 'code_block'
+            ? nodeBefore.textContent.split('\n').length - 1
+            : 0;
 
         this.exitEdit(true);
 
         const { state } = this.view;
-        if (previousCodeBlockPos !== null && state.doc.nodeAt(previousCodeBlockPos)?.type.name === 'code_block') {
+        if (
+          previousCodeBlockPos !== null &&
+          state.doc.nodeAt(previousCodeBlockPos)?.type.name === 'code_block'
+        ) {
           const tr = state.tr.setSelection(NodeSelection.create(state.doc, previousCodeBlockPos));
           this.view.dispatch(tr);
-          CodeBlockNodeView.enterEditAt(this.view, previousCodeBlockPos, previousCodeBlockLine, 'end');
+          CodeBlockNodeView.enterEditAt(
+            this.view,
+            previousCodeBlockPos,
+            previousCodeBlockLine,
+            'end',
+          );
           return;
         }
 
@@ -589,7 +618,10 @@ export class CodeBlockNodeView {
       const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
       if (value.slice(lineStart, lineStart + 2) === '  ') {
         this.textarea.value = value.slice(0, lineStart) + value.slice(lineStart + 2);
-        this.textarea.selectionStart = this.textarea.selectionEnd = Math.max(lineStart, selectionStart - 2);
+        this.textarea.selectionStart = this.textarea.selectionEnd = Math.max(
+          lineStart,
+          selectionStart - 2,
+        );
         this.handleInput();
       }
       return;
@@ -636,11 +668,12 @@ export class CodeBlockNodeView {
     // 渲染过滤后的列表
     const renderList = (filter: string) => {
       const lowerFilter = filter.toLowerCase().trim();
-      const matched = LANGUAGES.filter(lang =>
-        !lowerFilter ||
-        lang.label.toLowerCase().includes(lowerFilter) ||
-        lang.value.toLowerCase().includes(lowerFilter) ||
-        lang.aliases.some(a => a.toLowerCase().includes(lowerFilter))
+      const matched = LANGUAGES.filter(
+        (lang) =>
+          !lowerFilter ||
+          lang.label.toLowerCase().includes(lowerFilter) ||
+          lang.value.toLowerCase().includes(lowerFilter) ||
+          lang.aliases.some((a) => a.toLowerCase().includes(lowerFilter)),
       );
       listEl.innerHTML = '';
       for (const lang of matched) {
@@ -656,7 +689,7 @@ export class CodeBlockNodeView {
         listEl.appendChild(li);
       }
       // 如果输入了自定义语言名且不在列表中，显示"使用: xxx"
-      if (lowerFilter && !matched.some(l => l.value === lowerFilter)) {
+      if (lowerFilter && !matched.some((l) => l.value === lowerFilter)) {
         const customLi = document.createElement('li');
         customLi.className = 'lang-selector-item lang-selector-custom';
         customLi.textContent = `使用: ${filter.trim()}`;
@@ -679,7 +712,8 @@ export class CodeBlockNodeView {
         const activeItem = listEl.querySelector('.lang-selector-item') as HTMLElement | null;
         const value = activeItem?.textContent?.startsWith('使用:')
           ? searchInput.value.trim()
-          : (LANGUAGES.find(l => l.label === activeItem?.textContent)?.value ?? searchInput.value.trim());
+          : (LANGUAGES.find((l) => l.label === activeItem?.textContent)?.value ??
+            searchInput.value.trim());
         this.applyLanguage(value);
         this.hideLangSelector();
         // 返回焦点到 textarea
@@ -793,12 +827,15 @@ export class CodeBlockNodeView {
     button.setAttribute('aria-label', copied ? '已复制' : '复制失败');
     button.replaceChildren(copied ? createCheckIcon() : createCopyIcon());
 
-    this.copyFeedbackTimer = setTimeout(() => {
-      button.classList.remove('is-copied', 'is-copy-error');
-      button.title = '复制代码';
-      button.setAttribute('aria-label', '复制代码');
-      button.replaceChildren(createCopyIcon());
-      this.copyFeedbackTimer = null;
-    }, copied ? 1200 : 1500);
+    this.copyFeedbackTimer = setTimeout(
+      () => {
+        button.classList.remove('is-copied', 'is-copy-error');
+        button.title = '复制代码';
+        button.setAttribute('aria-label', '复制代码');
+        button.replaceChildren(createCopyIcon());
+        this.copyFeedbackTimer = null;
+      },
+      copied ? 1200 : 1500,
+    );
   }
 }

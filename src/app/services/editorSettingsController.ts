@@ -4,7 +4,7 @@ import {
   applyThemeSetting,
   applyTypographySettings,
   loadPersistedEditorSettings,
-  persistEditorSetting
+  persistEditorSetting,
 } from './settings';
 
 type Theme = 'light' | 'dark';
@@ -87,6 +87,6 @@ export function createEditorSettingsController(options: EditorSettingsController
     toggleTheme,
     updateFontSize,
     updateLineHeight,
-    updateContentWidth
+    updateContentWidth,
   };
 }

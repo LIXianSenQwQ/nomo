@@ -13,7 +13,7 @@ import {
   deleteCurrentTableRow,
   normalizeFirstTableRowHeader,
   setTableColumnAlignment,
-  toggleFirstTableRowHeader
+  toggleFirstTableRowHeader,
 } from '../tableCommands';
 import { findActiveTableElement } from './tableControlDom';
 
@@ -28,7 +28,7 @@ export function tableControlsPlugin(options: TableControlsOptions = {}): Plugin 
     key: tableControlsKey,
     view(view) {
       return new TableControlsView(view, options);
-    }
+    },
   });
 }
 
@@ -36,7 +36,10 @@ class TableControlsView {
   private readonly dom = document.createElement('div');
   private readonly refresh = () => requestAnimationFrame(() => this.update(this.view));
 
-  constructor(private readonly view: EditorView, private readonly options: TableControlsOptions) {
+  constructor(
+    private readonly view: EditorView,
+    private readonly options: TableControlsOptions,
+  ) {
     this.dom.className = 'table-inline-controls';
     this.dom.setAttribute('contenteditable', 'false');
     this.view.dom.parentElement?.appendChild(this.dom);
@@ -121,7 +124,11 @@ class TableControlsView {
   }
 
   /** 计算第 pos 个行间隙的垂直中心（相对于表格 overlay） */
-  private rowGapY(rows: HTMLCollectionOf<HTMLTableRowElement>, pos: number, tableRect: DOMRect): number {
+  private rowGapY(
+    rows: HTMLCollectionOf<HTMLTableRowElement>,
+    pos: number,
+    tableRect: DOMRect,
+  ): number {
     if (pos === 0) {
       // 第一行上方
       const rowTop = rows[0].getBoundingClientRect().top - tableRect.top;
@@ -155,14 +162,20 @@ class TableControlsView {
       topBtn.style.left = `${x}px`;
       this.dom.appendChild(topBtn);
 
-      const bottomBtn = this.createButton(title, '+', 'col-insert-bottom', () => this.insertColumnAt(j));
+      const bottomBtn = this.createButton(title, '+', 'col-insert-bottom', () =>
+        this.insertColumnAt(j),
+      );
       bottomBtn.style.left = `${x}px`;
       this.dom.appendChild(bottomBtn);
     }
   }
 
   /** 计算第 pos 个列间隙的水平中心（相对于表格 overlay） */
-  private colGapX(cells: HTMLCollectionOf<HTMLTableCellElement>, pos: number, tableRect: DOMRect): number {
+  private colGapX(
+    cells: HTMLCollectionOf<HTMLTableCellElement>,
+    pos: number,
+    tableRect: DOMRect,
+  ): number {
     if (pos === 0) {
       // 第一列左侧
       return cells[0].getBoundingClientRect().left - tableRect.left;
@@ -182,7 +195,11 @@ class TableControlsView {
   /** 控件厚度：实际视觉贴边，命中区在边框两侧各留一半 */
   private static readonly BORDER_CTRL_HIT_SIZE = 18;
 
-  private renderOuterBorderButtons(table: HTMLTableElement, rowCount: number, colCount: number): void {
+  private renderOuterBorderButtons(
+    table: HTMLTableElement,
+    rowCount: number,
+    colCount: number,
+  ): void {
     const tableRect = table.getBoundingClientRect();
     const firstRow = table.rows[0];
     const lastRow = table.rows[rowCount - 1];
@@ -192,10 +209,14 @@ class TableControlsView {
 
     // 顶部/底部整条外边框用于插入行，按边缘单元格分段铺满表格宽度。
     for (const cell of Array.from(firstRow.cells)) {
-      this.addBorderCtrl(tableRect, cell, 'top', '在第一行前插入行', rendered, () => this.insertRowAt(0));
+      this.addBorderCtrl(tableRect, cell, 'top', '在第一行前插入行', rendered, () =>
+        this.insertRowAt(0),
+      );
     }
     for (const cell of Array.from(lastRow.cells)) {
-      this.addBorderCtrl(tableRect, cell, 'bottom', '在最后一行后插入行', rendered, () => this.insertRowAt(rowCount));
+      this.addBorderCtrl(tableRect, cell, 'bottom', '在最后一行后插入行', rendered, () =>
+        this.insertRowAt(rowCount),
+      );
     }
 
     // 左侧/右侧整条外边框用于插入列，按边缘单元格分段铺满表格高度。
@@ -204,10 +225,14 @@ class TableControlsView {
       const leftCell = row.cells[0];
       const rightCell = row.cells[colCount - 1];
       if (leftCell) {
-        this.addBorderCtrl(tableRect, leftCell, 'left', '在第一列前插入列', rendered, () => this.insertColumnAt(0));
+        this.addBorderCtrl(tableRect, leftCell, 'left', '在第一列前插入列', rendered, () =>
+          this.insertColumnAt(0),
+        );
       }
       if (rightCell) {
-        this.addBorderCtrl(tableRect, rightCell, 'right', '在最后一列后插入列', rendered, () => this.insertColumnAt(colCount));
+        this.addBorderCtrl(tableRect, rightCell, 'right', '在最后一列后插入列', rendered, () =>
+          this.insertColumnAt(colCount),
+        );
       }
     }
   }
@@ -219,7 +244,7 @@ class TableControlsView {
     side: 'top' | 'bottom' | 'left' | 'right',
     title: string,
     rendered: Set<string>,
-    onClick: () => void
+    onClick: () => void,
   ): void {
     const cellRect = cell.getBoundingClientRect();
     const hitSize = TableControlsView.BORDER_CTRL_HIT_SIZE;
@@ -230,7 +255,7 @@ class TableControlsView {
       Math.round(relativeLeft),
       Math.round(relativeTop),
       Math.round(cellRect.width),
-      Math.round(cellRect.height)
+      Math.round(cellRect.height),
     ].join(':');
     if (rendered.has(key)) return;
     rendered.add(key);
@@ -288,8 +313,9 @@ class TableControlsView {
       const rowRect = tableRows[r].getBoundingClientRect();
       const centerY = rowRect.top - tableRect.top + rowRect.height / 2;
 
-      const btn = this.createButton(`删除第 ${r + 1} 行`, '−', 'delete-row-btn',
-        () => this.deleteRowAt(r, 0));
+      const btn = this.createButton(`删除第 ${r + 1} 行`, '−', 'delete-row-btn', () =>
+        this.deleteRowAt(r, 0),
+      );
       btn.style.top = `${Math.round(centerY)}px`;
       this.dom.appendChild(btn);
     }
@@ -297,7 +323,11 @@ class TableControlsView {
 
   // ===== 渲染：删除列按钮（每列下方） =====
 
-  private renderColDeleteButtons(table: HTMLTableElement, _rowCount: number, colCount: number): void {
+  private renderColDeleteButtons(
+    table: HTMLTableElement,
+    _rowCount: number,
+    colCount: number,
+  ): void {
     const firstRowCells = table.rows[0]?.cells;
     if (!firstRowCells) return;
 
@@ -307,8 +337,9 @@ class TableControlsView {
       const cellRect = firstRowCells[c].getBoundingClientRect();
       const centerX = cellRect.left - tableRect.left + cellRect.width / 2;
 
-      const btn = this.createButton(`删除第 ${c + 1} 列`, '−', 'delete-col-btn',
-        () => this.deleteColumnAt(0, c));
+      const btn = this.createButton(`删除第 ${c + 1} 列`, '−', 'delete-col-btn', () =>
+        this.deleteColumnAt(0, c),
+      );
       btn.style.left = `${Math.round(centerX)}px`;
       this.dom.appendChild(btn);
     }
@@ -319,26 +350,65 @@ class TableControlsView {
   private renderUtilityBar(rowCount: number, colCount: number): void {
     const bar = this.el('div', 'table-util-bar');
 
-    bar.appendChild(this.createButton('在第一行前插入行', '', 'boundary-insert-btn boundary-insert-row-before',
-      () => this.insertRowAt(0)));
-    bar.appendChild(this.createButton('在第一列前插入列', '', 'boundary-insert-btn boundary-insert-column-before',
-      () => this.insertColumnAt(0)));
-    bar.appendChild(this.createButton('在最后一行后插入行', '', 'boundary-insert-btn boundary-insert-row-after',
-      () => this.insertRowAt(rowCount)));
-    bar.appendChild(this.createButton('在最后一列后插入列', '', 'boundary-insert-btn boundary-insert-column-after',
-      () => this.insertColumnAt(colCount)));
+    bar.appendChild(
+      this.createButton(
+        '在第一行前插入行',
+        '',
+        'boundary-insert-btn boundary-insert-row-before',
+        () => this.insertRowAt(0),
+      ),
+    );
+    bar.appendChild(
+      this.createButton(
+        '在第一列前插入列',
+        '',
+        'boundary-insert-btn boundary-insert-column-before',
+        () => this.insertColumnAt(0),
+      ),
+    );
+    bar.appendChild(
+      this.createButton(
+        '在最后一行后插入行',
+        '',
+        'boundary-insert-btn boundary-insert-row-after',
+        () => this.insertRowAt(rowCount),
+      ),
+    );
+    bar.appendChild(
+      this.createButton(
+        '在最后一列后插入列',
+        '',
+        'boundary-insert-btn boundary-insert-column-after',
+        () => this.insertColumnAt(colCount),
+      ),
+    );
     bar.appendChild(this.el('span', 'table-util-separator'));
 
-    bar.appendChild(this.createButton('左对齐', '≡', 'util-btn util-align-left',
-      () => this.run(setTableColumnAlignment('left'))));
-    bar.appendChild(this.createButton('居中对齐', '≣', 'util-btn util-align-center',
-      () => this.run(setTableColumnAlignment('center'))));
-    bar.appendChild(this.createButton('右对齐', '≡', 'util-btn util-align-right',
-      () => this.run(setTableColumnAlignment('right'))));
-    bar.appendChild(this.createButton('切换表头行', 'H', 'util-btn util-header-row',
-      () => this.run(toggleFirstTableRowHeader())));
-    bar.appendChild(this.createButton('删除整张表格', '⌫', 'util-btn util-delete-table util-btn-danger',
-      () => this.run(deleteCurrentTable())));
+    bar.appendChild(
+      this.createButton('左对齐', '≡', 'util-btn util-align-left', () =>
+        this.run(setTableColumnAlignment('left')),
+      ),
+    );
+    bar.appendChild(
+      this.createButton('居中对齐', '≣', 'util-btn util-align-center', () =>
+        this.run(setTableColumnAlignment('center')),
+      ),
+    );
+    bar.appendChild(
+      this.createButton('右对齐', '≡', 'util-btn util-align-right', () =>
+        this.run(setTableColumnAlignment('right')),
+      ),
+    );
+    bar.appendChild(
+      this.createButton('切换表头行', 'H', 'util-btn util-header-row', () =>
+        this.run(toggleFirstTableRowHeader()),
+      ),
+    );
+    bar.appendChild(
+      this.createButton('删除整张表格', '⌫', 'util-btn util-delete-table util-btn-danger', () =>
+        this.run(deleteCurrentTable()),
+      ),
+    );
 
     this.dom.appendChild(bar);
   }
@@ -349,7 +419,7 @@ class TableControlsView {
     title: string,
     label: string,
     className: string,
-    onClick: () => void
+    onClick: () => void,
   ): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
@@ -430,15 +500,22 @@ class TableControlsView {
   // ===== 辅助方法 =====
 
   /** 将光标移动到指定单元格内 */
-  private moveCursorTo(info: { tableStart: number; node: Node }, map: TableMap, row: number, col: number): void {
+  private moveCursorTo(
+    info: { tableStart: number; node: Node },
+    map: TableMap,
+    row: number,
+    col: number,
+  ): void {
     const cellNodePos = info.tableStart + map.positionAt(row, col, info.node);
     const tr = this.view.state.tr.setSelection(
-      TextSelection.create(this.view.state.doc, cellNodePos + 1)
+      TextSelection.create(this.view.state.doc, cellNodePos + 1),
     );
     this.view.dispatch(tr);
   }
 
-  private run(command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean): void {
+  private run(
+    command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean,
+  ): void {
     command(this.view.state, (tr) => this.view.dispatch(tr));
     this.view.focus();
     this.update(this.view);
@@ -452,7 +529,7 @@ class TableControlsView {
       if (node.type.spec.tableRole === 'table') {
         return {
           tableStart: $from.before(depth) + 1,
-          node
+          node,
         };
       }
     }

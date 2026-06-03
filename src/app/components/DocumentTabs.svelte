@@ -30,7 +30,9 @@
           tabindex="0"
           title="关闭标签页"
           on:click|stopPropagation={(event) => closeTab(tab.id, event)}
-          on:keydown|stopPropagation={(event) => { if (event.key === 'Enter') closeTab(tab.id, event); }}
+          on:keydown|stopPropagation={(event) => {
+            if (event.key === 'Enter') closeTab(tab.id, event);
+          }}
         >
           <X size={12} />
         </span>
@@ -38,6 +40,12 @@
     {/each}
   </div>
   <div class="tab-actions" aria-label="标签页操作">
-    <button type="button" class="tab-add" title="新建文件" aria-label="新建文件" on:click={createNewFile}>+</button>
+    <button
+      type="button"
+      class="tab-add"
+      title="新建文件"
+      aria-label="新建文件"
+      on:click={createNewFile}>+</button
+    >
   </div>
 </header>

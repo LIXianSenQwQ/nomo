@@ -15,7 +15,7 @@ export function createMarkdownBridge(): MarkdownBridge {
 
       return {
         markdown: frontMatter ? markdown.slice(frontMatter.length).trimStart() : markdown,
-        frontMatter
+        frontMatter,
       };
     },
     serialize(document) {
@@ -24,7 +24,7 @@ export function createMarkdownBridge(): MarkdownBridge {
       }
 
       return `${document.frontMatter}${document.markdown}`;
-    }
+    },
   };
 }
 

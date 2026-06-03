@@ -10,7 +10,11 @@ export function isOutlineItemExpanded(collapsedOutlineIds: Set<string>, item: Ou
   return !collapsedOutlineIds.has(item.id);
 }
 
-export function isOutlineItemVisible(outline: OutlineItem[], collapsedOutlineIds: Set<string>, index: number) {
+export function isOutlineItemVisible(
+  outline: OutlineItem[],
+  collapsedOutlineIds: Set<string>,
+  index: number,
+) {
   const item = outline[index];
   if (!item) {
     return false;

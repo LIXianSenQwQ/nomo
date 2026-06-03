@@ -118,9 +118,9 @@ export async function openMarkdownWithDialog(): Promise<NativeDocument | null> {
     filters: [
       {
         name: 'Markdown',
-        extensions: ['md', 'markdown', 'txt']
-      }
-    ]
+        extensions: ['md', 'markdown', 'txt'],
+      },
+    ],
   });
 
   if (typeof selected !== 'string') {
@@ -134,7 +134,7 @@ export async function openFolderWithDialog(): Promise<string | null> {
   const { open } = await import('@tauri-apps/plugin-dialog');
   const selected = await open({
     multiple: false,
-    directory: true
+    directory: true,
   });
 
   return typeof selected === 'string' ? selected : null;
@@ -142,10 +142,16 @@ export async function openFolderWithDialog(): Promise<string | null> {
 
 export async function readMarkdownFile(path: string): Promise<NativeDocument> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return normalizeDocumentPayload(await invoke<NativeDocumentPayload>('read_markdown_file', { path }));
+  return normalizeDocumentPayload(
+    await invoke<NativeDocumentPayload>('read_markdown_file', { path }),
+  );
 }
 
-export async function saveMarkdownNative(path: string | null, markdown: string, fallbackName: string): Promise<NativeDocument | null> {
+export async function saveMarkdownNative(
+  path: string | null,
+  markdown: string,
+  fallbackName: string,
+): Promise<NativeDocument | null> {
   const { invoke } = await import('@tauri-apps/api/core');
   const { save } = await import('@tauri-apps/plugin-dialog');
   const targetPath =
@@ -155,16 +161,18 @@ export async function saveMarkdownNative(path: string | null, markdown: string, 
       filters: [
         {
           name: 'Markdown',
-          extensions: ['md', 'markdown']
-        }
-      ]
+          extensions: ['md', 'markdown'],
+        },
+      ],
     }));
 
   if (!targetPath) {
     return null;
   }
 
-  return normalizeDocumentPayload(await invoke<NativeDocumentPayload>('write_markdown_file', { path: targetPath, markdown }));
+  return normalizeDocumentPayload(
+    await invoke<NativeDocumentPayload>('write_markdown_file', { path: targetPath, markdown }),
+  );
 }
 
 export async function statMarkdownFile(path: string): Promise<FileStatus> {
@@ -172,14 +180,18 @@ export async function statMarkdownFile(path: string): Promise<FileStatus> {
   return normalizeFileStatus(await invoke<FileStatusPayload>('stat_markdown_file', { path }));
 }
 
-export async function rememberRecentFile(path: string, title: string | null, wordCount: number): Promise<void> {
+export async function rememberRecentFile(
+  path: string,
+  title: string | null,
+  wordCount: number,
+): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('remember_recent_file', {
     input: {
       path,
       title,
-      word_count: wordCount
-    }
+      word_count: wordCount,
+    },
   });
 }
 
@@ -191,18 +203,22 @@ export async function listRecentFiles(): Promise<RecentDocument[]> {
     title: row.title,
     modifiedAt: row.modified_at,
     wordCount: row.word_count,
-    openedAt: row.opened_at
+    openedAt: row.opened_at,
   }));
 }
 
-export async function createDocumentSnapshot(path: string, markdown: string, reason: string): Promise<void> {
+export async function createDocumentSnapshot(
+  path: string,
+  markdown: string,
+  reason: string,
+): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('create_document_snapshot', {
     input: {
       path,
       markdown,
-      reason
-    }
+      reason,
+    },
   });
 }
 
@@ -215,7 +231,7 @@ export async function listDocumentSnapshots(path: string): Promise<SnapshotRecor
     contentHash: row.content_hash,
     markdown: row.markdown,
     createdAt: row.created_at,
-    reason: row.reason
+    reason: row.reason,
   }));
 }
 
@@ -224,8 +240,8 @@ export async function updateAppSetting(key: string, value: unknown): Promise<voi
   await invoke('update_app_setting', {
     input: {
       key,
-      value_json: JSON.stringify(value)
-    }
+      value_json: JSON.stringify(value),
+    },
   });
 }
 
@@ -235,7 +251,7 @@ export async function listAppSettings(): Promise<SettingRecord[]> {
   return rows.map((row) => ({
     key: row.key,
     valueJson: row.value_json,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
   }));
 }
 
@@ -247,22 +263,31 @@ export async function updateWindowState(state: WindowState): Promise<void> {
 export async function readCurrentWindowState(): Promise<WindowState> {
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const currentWindow = getCurrentWindow();
-  const [position, size] = await Promise.all([currentWindow.outerPosition(), currentWindow.innerSize()]);
+  const [position, size] = await Promise.all([
+    currentWindow.outerPosition(),
+    currentWindow.innerSize(),
+  ]);
 
   return {
     x: position.x,
     y: position.y,
     width: size.width,
-    height: size.height
+    height: size.height,
   };
 }
 
-export async function listenDesktopMenuCommands(handler: (command: DesktopMenuCommand) => void): Promise<UnlistenFn> {
+export async function listenDesktopMenuCommands(
+  handler: (command: DesktopMenuCommand) => void,
+): Promise<UnlistenFn> {
   const { listen } = await import('@tauri-apps/api/event');
-  return listen<string>('newmd://menu-command', (event) => handler(event.payload as DesktopMenuCommand));
+  return listen<string>('newmd://menu-command', (event) =>
+    handler(event.payload as DesktopMenuCommand),
+  );
 }
 
-export async function listenDesktopFileDrops(handler: (paths: string[]) => void): Promise<UnlistenFn> {
+export async function listenDesktopFileDrops(
+  handler: (paths: string[]) => void,
+): Promise<UnlistenFn> {
   const { listen, TauriEvent } = await import('@tauri-apps/api/event');
   return listen<{ paths: string[] }>(TauriEvent.DRAG_DROP, (event) => handler(event.payload.paths));
 }
@@ -274,7 +299,7 @@ function normalizeDocumentPayload(payload: NativeDocumentPayload): NativeDocumen
     markdown: payload.markdown,
     modifiedAt: payload.modified_at,
     sizeBytes: payload.size_bytes,
-    readonly: payload.readonly
+    readonly: payload.readonly,
   };
 }
 
@@ -285,7 +310,7 @@ function normalizeFileStatus(payload: FileStatusPayload): FileStatus {
     isFile: payload.is_file,
     modifiedAt: payload.modified_at,
     sizeBytes: payload.size_bytes,
-    readonly: payload.readonly
+    readonly: payload.readonly,
   };
 }
 
@@ -294,7 +319,7 @@ function toSnakeWindowState(state: WindowState) {
     x: state.x ?? null,
     y: state.y ?? null,
     width: state.width ?? null,
-    height: state.height ?? null
+    height: state.height ?? null,
   };
 }
 

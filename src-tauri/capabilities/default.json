@@ -3,9 +3,5 @@
   "identifier": "default",
   "description": "Default desktop capability for the NewMd shell.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "dialog:default",
-    "core:window:allow-set-title"
-  ]
+  "permissions": ["core:default", "dialog:default", "core:window:allow-set-title"]
 }

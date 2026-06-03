@@ -7,7 +7,7 @@ import {
   newlineInCode,
   selectNodeBackward,
   splitBlock,
-  toggleMark
+  toggleMark,
 } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
@@ -30,7 +30,12 @@ import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
-import { createMarkdownInputRules, parseMarkdown, serializeMarkdown, splitFrontMatter } from './markdown';
+import {
+  createMarkdownInputRules,
+  parseMarkdown,
+  serializeMarkdown,
+  splitFrontMatter,
+} from './markdown';
 import { schema } from './schema';
 import { addTableRowAfter } from './tableCommands';
 import type {
@@ -42,7 +47,7 @@ import type {
   EditorRuntimeOptions,
   EditorSnapshot,
   EditorThemeOptions,
-  SetMarkdownOptions
+  SetMarkdownOptions,
 } from './types';
 
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
@@ -64,7 +69,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.frontMatter = splitFrontMatter(options.markdown).frontMatter;
     this.runtime = {
       readonly: options.readonly ?? false,
-      mode: options.mode ?? 'semantic'
+      mode: options.mode ?? 'semantic',
     };
 
     if (this.target) {
@@ -81,12 +86,17 @@ export class ProseMirrorEditorCore implements EditorCore {
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
       editable: () => this.isEditable(),
       nodeViews: {
-        code_block: (node, view, getPos) => new CodeBlockNodeView(node, view, getPos as () => number),
-        html_block: (node, view, getPos) => new HtmlBlockNodeView(node, view, getPos as () => number),
-        inline_code: (node, view, getPos) => new InlineCodeNodeView(node, view, getPos as () => number),
-        math_inline: (node, view, getPos) => new MathInlineNodeView(node, view, getPos as () => number),
-        math_block: (node, view, getPos) => new MathBlockNodeView(node, view, getPos as () => number)
-      }
+        code_block: (node, view, getPos) =>
+          new CodeBlockNodeView(node, view, getPos as () => number),
+        html_block: (node, view, getPos) =>
+          new HtmlBlockNodeView(node, view, getPos as () => number),
+        inline_code: (node, view, getPos) =>
+          new InlineCodeNodeView(node, view, getPos as () => number),
+        math_inline: (node, view, getPos) =>
+          new MathInlineNodeView(node, view, getPos as () => number),
+        math_block: (node, view, getPos) =>
+          new MathBlockNodeView(node, view, getPos as () => number),
+      },
     });
     this.refreshInitialEditableState();
   }
@@ -109,7 +119,11 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.markdown = markdown;
     this.frontMatter = splitFrontMatter(markdown).frontMatter;
     this.version += 1;
-    this.dirty = options?.dirty ?? (options?.reason !== 'open-file' && options?.reason !== 'save-file' && options?.reason !== 'switch-tab');
+    this.dirty =
+      options?.dirty ??
+      (options?.reason !== 'open-file' &&
+        options?.reason !== 'save-file' &&
+        options?.reason !== 'switch-tab');
     this.replaceViewState(markdown);
     this.emit(options?.reason ?? 'programmatic-update');
   }
@@ -120,8 +134,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       markdown: this.markdown,
       version: this.version,
       meta: {
-        mode: this.runtime.mode
-      }
+        mode: this.runtime.mode,
+      },
     };
   }
 
@@ -176,10 +190,10 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.assertActive();
     this.runtime = {
       ...this.runtime,
-      ...options
+      ...options,
     };
     this.view?.setProps({
-      editable: () => this.isEditable()
+      editable: () => this.isEditable(),
     });
     this.emit('runtime-options');
   }
@@ -209,7 +223,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       dirty: this.dirty,
       mode: this.runtime.mode,
       readonly: this.runtime.readonly,
-      reason
+      reason,
     };
   }
 
@@ -218,7 +232,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       doc: parseMarkdown(markdown),
       plugins: [
         inputRules({
-          rules: createMarkdownInputRules()
+          rules: createMarkdownInputRules(),
         }),
         history(),
         taskListPlugin(),
@@ -238,7 +252,7 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-i': toggleMark(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
           'Ctrl-Enter': addTableRowAfter(),
-          'Enter': chainCommands(
+          Enter: chainCommands(
             // $$ 回车自动补全：段落内只有 $$ 时按回车，生成空 math_block 并自动进入编辑态
             (state, dispatch) => {
               const { $from, empty } = state.selection;
@@ -255,17 +269,27 @@ export class ProseMirrorEditorCore implements EditorCore {
               }
               return true;
             },
-            newlineInCode, splitListItem(schema.nodes.list_item), createParagraphNear, liftEmptyBlock, splitBlock),
-          'Backspace': chainCommands(deleteSelection, joinBackward, selectNodeBackward),
-          'Tab': chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
+            newlineInCode,
+            splitListItem(schema.nodes.list_item),
+            createParagraphNear,
+            liftEmptyBlock,
+            splitBlock,
+          ),
+          Backspace: chainCommands(deleteSelection, joinBackward, selectNodeBackward),
+          Tab: chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
           'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
-          'Shift-Ctrl-[': (state, dispatch) => toggleList(state, dispatch, schema.nodes.ordered_list),
-          'Shift-Ctrl-]': (state, dispatch) => toggleList(state, dispatch, schema.nodes.bullet_list),
+          'Shift-Ctrl-[': (state, dispatch) =>
+            toggleList(state, dispatch, schema.nodes.ordered_list),
+          'Shift-Ctrl-]': (state, dispatch) =>
+            toggleList(state, dispatch, schema.nodes.bullet_list),
           'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch),
-          'Shift-Ctrl-q': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'toggleBlockquote' }),
-          'Shift-Ctrl-m': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'insertMathBlock', tex: '' }),
-          'Shift-Ctrl-k': (_state, _dispatch, view) => this.runProseMirrorCommand({ type: 'insertCodeBlock', language: 'ts' }),
-          'ArrowRight': (state, dispatch) => {
+          'Shift-Ctrl-q': (_state, _dispatch, view) =>
+            this.runProseMirrorCommand({ type: 'toggleBlockquote' }),
+          'Shift-Ctrl-m': (_state, _dispatch, view) =>
+            this.runProseMirrorCommand({ type: 'insertMathBlock', tex: '' }),
+          'Shift-Ctrl-k': (_state, _dispatch, view) =>
+            this.runProseMirrorCommand({ type: 'insertCodeBlock', language: 'ts' }),
+          ArrowRight: (state, dispatch) => {
             const { $from, empty } = state.selection;
             if (!empty) return false;
             const nodeAfter = $from.nodeAfter;
@@ -285,33 +309,42 @@ export class ProseMirrorEditorCore implements EditorCore {
             }
             return false;
           },
-          'ArrowLeft': (state, dispatch) => {
+          ArrowLeft: (state, dispatch) => {
             const { $from, empty } = state.selection;
             if (!empty) return false;
             const nodeBefore = $from.nodeBefore;
             if (nodeBefore?.type.name === 'math_inline') {
               if (dispatch) {
                 MathInlineNodeView.requestKeyboardEntry('end');
-                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize)));
+                dispatch(
+                  state.tr.setSelection(
+                    NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),
+                  ),
+                );
               }
               return true;
             }
             if (nodeBefore?.type.name === 'inline_code') {
               if (dispatch) {
                 InlineCodeNodeView.requestKeyboardEntry('end');
-                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize)));
+                dispatch(
+                  state.tr.setSelection(
+                    NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),
+                  ),
+                );
               }
               return true;
             }
             return false;
-          }
+          },
         }),
         // 必须在 keymap 之后注册：ProseMirror 的 someProp 取最后一个结果，
         // 若在 keymap 之前，keymap 返回 false 会覆盖本插件的 true。
         codeBlockNavigationPlugin({
-          enterEditAt: (view, pos, clickLine, caret) => CodeBlockNodeView.enterEditAt(view, pos, clickLine, caret)
-        })
-      ]
+          enterEditAt: (view, pos, clickLine, caret) =>
+            CodeBlockNodeView.enterEditAt(view, pos, clickLine, caret),
+        }),
+      ],
     });
   }
 
@@ -367,7 +400,9 @@ export class ProseMirrorEditorCore implements EditorCore {
     if (!this.view) {
       return false;
     }
-    return executeEditorCommand(command, this.view, this.markdown, (markdown, options) => this.setMarkdown(markdown, options));
+    return executeEditorCommand(command, this.view, this.markdown, (markdown, options) =>
+      this.setMarkdown(markdown, options),
+    );
   }
 
   private assertActive(): void {

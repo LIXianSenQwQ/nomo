@@ -43,13 +43,13 @@ NewMd 在语义模式下将所有 Markdown 中的 HTML 块渲染为 `contentedit
 
 新增模块（均为 deep module，接口简单、可独立测试）：
 
-| 模块 | 职责 | 接口 |
-|------|------|------|
-| `htmlPolicy` | 标签/属性白名单黑名单常量 | 导出的 `Set` / `Record` 常量 |
-| `htmlClassifier` | 判断 raw HTML 是否可编辑 | `classifyHtmlBlock(rawHtml)` → 分类结果 + 解析出的 tag/innerHTML/attrs |
-| `htmlToPmLogic` | raw HTML → ProseMirror MarkdownParseState 操作 | `parseHtmlContent(state, innerHTML, schema)` 直接操作 parser state |
-| `pmToHtml` | ProseMirror node → HTML 字符串 | `serializeHtmlBlock(node)` → string |
-| `HtmlBlockNodeView` | 卡片 UI 外壳 + contentDOM 可编辑内容 | 标准 ProseMirror NodeView 接口 |
+| 模块                | 职责                                           | 接口                                                                   |
+| ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- |
+| `htmlPolicy`        | 标签/属性白名单黑名单常量                      | 导出的 `Set` / `Record` 常量                                           |
+| `htmlClassifier`    | 判断 raw HTML 是否可编辑                       | `classifyHtmlBlock(rawHtml)` → 分类结果 + 解析出的 tag/innerHTML/attrs |
+| `htmlToPmLogic`     | raw HTML → ProseMirror MarkdownParseState 操作 | `parseHtmlContent(state, innerHTML, schema)` 直接操作 parser state     |
+| `pmToHtml`          | ProseMirror node → HTML 字符串                 | `serializeHtmlBlock(node)` → string                                    |
+| `HtmlBlockNodeView` | 卡片 UI 外壳 + contentDOM 可编辑内容           | 标准 ProseMirror NodeView 接口                                         |
 
 ### Schema 决策
 
@@ -87,10 +87,10 @@ NewMd 在语义模式下将所有 Markdown 中的 HTML 块渲染为 `contentedit
 
 ### 测试模块
 
-| 模块 | 测试内容 |
-|------|---------|
+| 模块                     | 测试内容                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
 | `htmlClassifier.test.ts` | section/div → editable；script/iframe/input/form → fallback；未知标签 → fallback；嵌套允许标签 → editable |
-| `tableMarkdown.test.ts` | 补充 HTML 块往返测试：简单 HTML 往返不丢内容；fallback HTML 不丢内容 |
+| `tableMarkdown.test.ts`  | 补充 HTML 块往返测试：简单 HTML 往返不丢内容；fallback HTML 不丢内容                                      |
 
 ### 测试模式参照
 

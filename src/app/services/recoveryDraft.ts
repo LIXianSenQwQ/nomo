@@ -12,7 +12,7 @@ export function writeRecoveryDraft(key: string, draft: Omit<RecoveryDraft, 'save
     key,
     JSON.stringify({
       ...draft,
-      savedAt: Date.now()
-    })
+      savedAt: Date.now(),
+    }),
   );
 }

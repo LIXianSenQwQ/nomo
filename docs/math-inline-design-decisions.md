@@ -23,6 +23,7 @@ Markdown serializer 输出 `$tex$`
 **结论**：方案 A——`math_inline` 作为 ProseMirror inline atomic node 实现。
 
 **理由**：
+
 - 编辑/渲染切换由 NodeView 的 focus/blur 事件精确控制，不依赖全局 selection 插件
 - 源码作为 attribute 存储，不会在普通文本编辑中被意外修改
 - 浮动预览卡片由 NodeView 内部创建，生命周期清晰
@@ -32,6 +33,7 @@ Markdown serializer 输出 `$tex$`
 **结论**：点击 + 键盘导航都支持进入编辑态。
 
 **交互**：
+
 - 点击 KaTeX 渲染结果 → 进入编辑态
 - 键盘左右箭头移到公式节点 → 进入编辑态
 - 键盘导航到节点时，原子节点被选中（NodeSelection），触发 `selectNode()` 进入编辑
@@ -48,6 +50,7 @@ Markdown serializer 输出 `$tex$`
 **结论**：Enter / 失焦 / Esc / 箭头边界均视为确认退出。
 
 **交互**：
+
 - Enter 确认退出并保存修改
 - 点击公式外区域（失焦）自动保存修改
 - Esc 退出编辑态并恢复原始 tex
@@ -56,6 +59,7 @@ Markdown serializer 输出 `$tex$`
 ### 5. 浮动预览卡片定位
 
 **结论**：
+
 - 水平左对齐公式节点
 - 垂直紧贴下方 4-6px
 - 宽度 `min(自适应内容宽度, 编辑器内容区宽度)`，最大 600px
@@ -68,6 +72,7 @@ Markdown serializer 输出 `$tex$`
 **结论**：非编辑态回退显示原始 `$tex$` 文本；预览卡片中显示 KaTeX 错误信息。
 
 **理由**：
+
 - 用户能看到自己写的内容，比红色错误标记更温和
 - 不破坏阅读体验
 - 预览卡片中单独展示错误信息，不修改输入
@@ -83,11 +88,13 @@ Markdown serializer 输出 `$tex$`
 **结论**：手写 inline ruler，不引入 `markdown-it-texmath` 等额外依赖。
 
 **理由**：
+
 - `$...$` 解析规则简单（约 30 行代码）
 - 项目已有手写 token handler（html_block、html_inline），保持一致风格
 - 控制力最强，处理 `\$` 转义、`$100` 货币、代码块内 `$` 等边界
 
 **Inline ruler 注册位置**：`markdownIt.inline.ruler.after('backticks', 'math_inline', ...)`
+
 - 排在 backticks/code_inline 之后，确保 `` `$x^2$` `` 走代码通道
 - 排在 escape 之后，`\$` 被 escape 规则先处理
 
@@ -113,6 +120,7 @@ math_inline: {
 **结论**：用 `<input>` 做原地源码编辑，预览卡片 `position: fixed` 挂 `document.body`。
 
 **理由**：
+
 - 行内公式语义上为单行，多行需求交给 math_block
 - Fixed 定位避免被 ProseMirror 的 overflow/clip 裁剪
 
@@ -133,6 +141,7 @@ math_inline: {
 **结论**：编辑期间（input 内键入）不同步 ProseMirror state；退出编辑态时一次性提交 transaction。
 
 **理由**：
+
 - 预览卡片实时渲染不依赖 ProseMirror——直接在 input 事件中调 `katex.renderToString()`
 - 用户按 Ctrl+Z 撤销的是退出编辑这个操作（恢复旧 tex），不是逐字符撤销
 - 编辑到一半按 Esc 回退到原始值也很自然
@@ -140,6 +149,7 @@ math_inline: {
 ### 14. 复制/粘贴行为
 
 **结论**：
+
 - 复制：纯文本 `$tex$` + HTML `<span class="math-inline" data-tex="...">$tex$</span>`
 - 同编辑器粘贴：ProseMirror 原生保留 node 结构
 - 外部粘贴纯文本 `$x^2$`：依赖 markdown-it 重新解析，不额外处理
@@ -155,14 +165,14 @@ math_inline: {
 
 ## 模块拆分
 
-| 模块 | 位置 | 职责 |
-|---|---|---|
-| markdown-it inline ruler | markdown.ts | 识别 `$...$` → `math_inline` token |
-| math_inline Schema | schema.ts | node spec 定义 |
-| markdown 序列化/反序列化 | markdown.ts | token → PM node + node → `$tex$` |
-| MathInlineNodeView | nodeViews/MathInlineNodeView.ts | 渲染态/编辑态切换、input 管理、预览卡片 |
-| mathBlock 瘦身 | plugins/mathBlock.ts | 移除 inline regex，仅保留 `$$...$$` |
-| 样式 | app/styles/editor-document.css | 渲染态、input、预览卡片样式 |
+| 模块                     | 位置                            | 职责                                    |
+| ------------------------ | ------------------------------- | --------------------------------------- |
+| markdown-it inline ruler | markdown.ts                     | 识别 `$...$` → `math_inline` token      |
+| math_inline Schema       | schema.ts                       | node spec 定义                          |
+| markdown 序列化/反序列化 | markdown.ts                     | token → PM node + node → `$tex$`        |
+| MathInlineNodeView       | nodeViews/MathInlineNodeView.ts | 渲染态/编辑态切换、input 管理、预览卡片 |
+| mathBlock 瘦身           | plugins/mathBlock.ts            | 移除 inline regex，仅保留 `$$...$$`     |
+| 样式                     | app/styles/editor-document.css  | 渲染态、input、预览卡片样式             |
 
 ## 测试策略
 

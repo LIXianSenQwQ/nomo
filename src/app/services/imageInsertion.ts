@@ -35,7 +35,7 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
       editor.execute({
         type: 'insertImage',
         src: markdownSrc,
-        alt: file.name
+        alt: file.name,
       });
     }
     options.setStatusMessage(`已插入 ${files.length} 张图片相对路径`);
@@ -44,6 +44,6 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
 
   return {
     handleEditorDrop,
-    handleEditorPaste
+    handleEditorPaste,
   };
 }

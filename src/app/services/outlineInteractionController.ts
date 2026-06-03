@@ -5,12 +5,12 @@ import {
   getActiveOutlineIdFromSource,
   getSourceHeadingSelection,
   getSourceLineHeight as getTextareaLineHeight,
-  scrollSemanticToAnchor
+  scrollSemanticToAnchor,
 } from './outlineNavigation';
 import {
   isOutlineItemExpandable as getOutlineItemExpandable,
   pruneCollapsedOutlineIds as getPrunedCollapsedOutlineIds,
-  toggleOutlineItemExpanded as getToggledOutlineItemIds
+  toggleOutlineItemExpanded as getToggledOutlineItemIds,
 } from './outlineState';
 
 interface OutlineInteractionOptions {
@@ -39,11 +39,15 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
   }
 
   function toggleOutlineItemExpanded(item: OutlineItem) {
-    options.setCollapsedOutlineIds(getToggledOutlineItemIds(options.getCollapsedOutlineIds(), item));
+    options.setCollapsedOutlineIds(
+      getToggledOutlineItemIds(options.getCollapsedOutlineIds(), item),
+    );
   }
 
   function pruneCollapsedOutlineIds() {
-    options.setCollapsedOutlineIds(getPrunedCollapsedOutlineIds(options.getOutline(), options.getCollapsedOutlineIds()));
+    options.setCollapsedOutlineIds(
+      getPrunedCollapsedOutlineIds(options.getOutline(), options.getCollapsedOutlineIds()),
+    );
   }
 
   function jumpToOutlineItem(item: OutlineItem) {
@@ -52,7 +56,10 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
 
     requestAnimationFrame(() => {
       if (options.getMode() === 'semantic') {
-        scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), { outlineId: item.id, sectionProgress: 0 });
+        scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), {
+          outlineId: item.id,
+          sectionProgress: 0,
+        });
         return;
       }
 
@@ -61,7 +68,9 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
       sourceTextarea.focus();
       sourceTextarea.setSelectionRange(selection.start, selection.end);
       const lineHeightPx = getSourceLineHeight();
-      options.getSourcePane()?.scrollTo({ top: Math.max(0, (item.line - 1) * lineHeightPx - 40), behavior: 'smooth' });
+      options
+        .getSourcePane()
+        ?.scrollTo({ top: Math.max(0, (item.line - 1) * lineHeightPx - 40), behavior: 'smooth' });
     });
   }
 
@@ -74,14 +83,22 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
       options.setActiveOutlineId('');
       return;
     }
-    options.setActiveOutlineId(getActiveOutlineIdFromSource(options.getOutline(), sourcePane.scrollTop, getSourceLineHeight()));
+    options.setActiveOutlineId(
+      getActiveOutlineIdFromSource(
+        options.getOutline(),
+        sourcePane.scrollTop,
+        getSourceLineHeight(),
+      ),
+    );
   }
 
   function updateActiveOutlineFromSemanticScroll() {
     if (Date.now() < options.getSuppressOutlineScrollUntil()) {
       return;
     }
-    options.setActiveOutlineId(getActiveOutlineIdFromSemantic(options.getOutline(), options.getSemanticPane()));
+    options.setActiveOutlineId(
+      getActiveOutlineIdFromSemantic(options.getOutline(), options.getSemanticPane()),
+    );
   }
 
   function getSourceLineHeight() {
@@ -96,6 +113,6 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
     jumpToOutlineItem,
     updateActiveOutlineFromSourceScroll,
     updateActiveOutlineFromSemanticScroll,
-    getSourceLineHeight
+    getSourceLineHeight,
   };
 }

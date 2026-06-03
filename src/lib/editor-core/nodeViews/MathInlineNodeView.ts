@@ -188,7 +188,11 @@ export class MathInlineNodeView {
     });
     this.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
     this.input.addEventListener('blur', (e) => {
-      if (this.previewCard && e.relatedTarget instanceof Node && this.previewCard.contains(e.relatedTarget)) {
+      if (
+        this.previewCard &&
+        e.relatedTarget instanceof Node &&
+        this.previewCard.contains(e.relatedTarget)
+      ) {
         return;
       }
       this.exitEdit(true);
@@ -274,7 +278,11 @@ export class MathInlineNodeView {
       return;
     }
 
-    if (e.key === 'ArrowRight' && this.input.selectionStart === this.input.value.length && this.input.selectionEnd === this.input.value.length) {
+    if (
+      e.key === 'ArrowRight' &&
+      this.input.selectionStart === this.input.value.length &&
+      this.input.selectionEnd === this.input.value.length
+    ) {
       e.preventDefault();
       this.exitEdit(true, 'after');
       return;
@@ -321,14 +329,12 @@ export class MathInlineNodeView {
       const result = await mathRenderer.render(tex, { displayMode: false });
       if (id !== this.previewRenderId || !this.previewContent) return;
       if (result.error) {
-        this.previewContent.innerHTML =
-          `<span class="math-inline-preview-error">${escapeHtml(result.error)}</span>`;
+        this.previewContent.innerHTML = `<span class="math-inline-preview-error">${escapeHtml(result.error)}</span>`;
       } else {
         this.previewContent.innerHTML = result.html;
       }
     } catch {
-      this.previewContent.innerHTML =
-        '<span class="math-inline-preview-error">KaTeX error</span>';
+      this.previewContent.innerHTML = '<span class="math-inline-preview-error">KaTeX error</span>';
     }
   }
 

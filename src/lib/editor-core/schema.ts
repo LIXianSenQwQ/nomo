@@ -24,10 +24,10 @@ export const schema = new Schema({
                 attrs['data-align'] = value;
                 attrs.style = `${attrs.style ? `${attrs.style}; ` : ''}text-align: ${value}`;
               }
-            }
-          }
-        }
-      })
+            },
+          },
+        },
+      }),
     )
     .append({
       math_inline: {
@@ -37,20 +37,22 @@ export const schema = new Schema({
         selectable: true,
         draggable: false,
         attrs: {
-          tex: { default: '' }
+          tex: { default: '' },
         },
         toDOM(node) {
           const tex = node.attrs.tex as string;
           return ['span', { class: 'math-inline', 'data-tex': tex }, `$${tex}$`];
         },
-        parseDOM: [{
-          tag: 'span.math-inline',
-          getAttrs(dom) {
-            const el = dom as HTMLElement;
-            const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
-            return { tex: tex.startsWith('$') && tex.endsWith('$') ? tex.slice(1, -1) : tex };
-          }
-        }]
+        parseDOM: [
+          {
+            tag: 'span.math-inline',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
+              return { tex: tex.startsWith('$') && tex.endsWith('$') ? tex.slice(1, -1) : tex };
+            },
+          },
+        ],
       },
       html_block: {
         content: 'inline*',
@@ -59,7 +61,7 @@ export const schema = new Schema({
         attrs: {
           tag: { default: 'div' },
           class: { default: null },
-          id: { default: null }
+          id: { default: null },
         },
         toDOM(node) {
           const { tag, class: cls, id } = node.attrs;
@@ -67,7 +69,7 @@ export const schema = new Schema({
           if (cls) domAttrs.class = cls;
           if (id) domAttrs.id = id;
           return [tag, domAttrs, 0];
-        }
+        },
       },
       // 行内代码（inline code）：`code` 语法
       inline_code: {
@@ -77,20 +79,24 @@ export const schema = new Schema({
         selectable: true,
         draggable: false,
         attrs: {
-          code: { default: '' }
+          code: { default: '' },
         },
         toDOM(node) {
           const code = node.attrs.code as string;
           return ['span', { class: 'inline-code', 'data-code': code }, `\`${code}\``];
         },
-        parseDOM: [{
-          tag: 'span.inline-code',
-          getAttrs(dom) {
-            const el = dom as HTMLElement;
-            const code = el.getAttribute('data-code') ?? el.textContent ?? '';
-            return { code: code.startsWith('`') && code.endsWith('`') ? code.slice(1, -1) : code };
-          }
-        }]
+        parseDOM: [
+          {
+            tag: 'span.inline-code',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              const code = el.getAttribute('data-code') ?? el.textContent ?? '';
+              return {
+                code: code.startsWith('`') && code.endsWith('`') ? code.slice(1, -1) : code,
+              };
+            },
+          },
+        ],
       },
       // 跨行公式块（display math）：$$...$$ 语法
       math_block: {
@@ -99,21 +105,23 @@ export const schema = new Schema({
         draggable: false,
         group: 'block',
         attrs: {
-          tex: { default: '' }
+          tex: { default: '' },
         },
         toDOM(node) {
           const tex = node.attrs.tex as string;
           return ['div', { class: 'math-block', 'data-tex': tex }, `$$\n${tex}\n$$`];
         },
-        parseDOM: [{
-          tag: 'div.math-block',
-          getAttrs(dom) {
-            const el = dom as HTMLElement;
-            const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
-            return { tex };
-          }
-        }]
-      }
+        parseDOM: [
+          {
+            tag: 'div.math-block',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              const tex = el.getAttribute('data-tex') ?? el.textContent ?? '';
+              return { tex };
+            },
+          },
+        ],
+      },
     }),
-  marks: markdownSchema.spec.marks
+  marks: markdownSchema.spec.marks,
 });

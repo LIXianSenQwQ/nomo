@@ -18,20 +18,24 @@ export function mathBlockPlugin(): Plugin {
   return new Plugin({
     key: mathBlockKey,
     state: {
-      init() { return DecorationSet.empty; },
+      init() {
+        return DecorationSet.empty;
+      },
       apply(tr, set) {
         const meta = tr.getMeta(mathBlockKey);
         if (meta instanceof DecorationSet) return meta;
         return tr.docChanged ? set.map(tr.mapping, tr.doc) : set;
-      }
+      },
     },
     view(editorView) {
       scheduleMathRender(editorView);
       return { update() {}, destroy() {} };
     },
     props: {
-      decorations(state) { return this.getState(state); }
-    }
+      decorations(state) {
+        return this.getState(state);
+      },
+    },
   });
 }
 
@@ -49,7 +53,14 @@ async function renderMathBlocks(view: EditorView): Promise<void> {
   }
   const decorations: Decoration[] = [];
   for (const match of matches) {
-    decorations.push(Decoration.inline(match.from, match.to, { style: 'display: none' }, { inclusiveStart: false, inclusiveEnd: false }));
+    decorations.push(
+      Decoration.inline(
+        match.from,
+        match.to,
+        { style: 'display: none' },
+        { inclusiveStart: false, inclusiveEnd: false },
+      ),
+    );
     try {
       const result = await mathRenderer.render(match.tex, { displayMode: match.displayMode });
       const widget = createMathWidget(result.html, result.error, match.displayMode);
@@ -66,7 +77,9 @@ async function renderMathBlocks(view: EditorView): Promise<void> {
 function findAllMathMatches(doc: ProseMirrorNode): MathMatch[] {
   const matches: MathMatch[] = [];
   const topBlocks: Array<{ node: ProseMirrorNode; pos: number }> = [];
-  doc.forEach((node, offset) => { topBlocks.push({ node, pos: offset }); });
+  doc.forEach((node, offset) => {
+    topBlocks.push({ node, pos: offset });
+  });
   let i = 0;
   while (i < topBlocks.length) {
     const displayResult = tryMatchDisplayMath(topBlocks, i);
@@ -80,7 +93,10 @@ function findAllMathMatches(doc: ProseMirrorNode): MathMatch[] {
   return matches;
 }
 
-function tryMatchDisplayMath(blocks: Array<{ node: ProseMirrorNode; pos: number }>, startIndex: number): { match: MathMatch; nextIndex: number } | null {
+function tryMatchDisplayMath(
+  blocks: Array<{ node: ProseMirrorNode; pos: number }>,
+  startIndex: number,
+): { match: MathMatch; nextIndex: number } | null {
   const first = blocks[startIndex];
   if (first.node.type.name !== 'paragraph') return null;
   const firstText = first.node.textContent.trim();
@@ -102,10 +118,17 @@ function tryMatchDisplayMath(blocks: Array<{ node: ProseMirrorNode; pos: number 
   if (!foundClose) return null;
   const from = blocks[startIndex].pos;
   const to = blocks[closeIndex].pos + blocks[closeIndex].node.nodeSize;
-  return { match: { from, to, tex: texLines.join('\n'), displayMode: true }, nextIndex: closeIndex + 1 };
+  return {
+    match: { from, to, tex: texLines.join('\n'), displayMode: true },
+    nextIndex: closeIndex + 1,
+  };
 }
 
-function createMathWidget(html: string, error: string | undefined, displayMode: boolean): HTMLElement {
+function createMathWidget(
+  html: string,
+  error: string | undefined,
+  displayMode: boolean,
+): HTMLElement {
   const wrapper = document.createElement('span');
   wrapper.className = displayMode ? 'math-widget math-display' : 'math-widget math-inline';
   wrapper.setAttribute('contenteditable', 'false');

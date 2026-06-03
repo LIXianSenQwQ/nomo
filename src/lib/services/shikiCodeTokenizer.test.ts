@@ -8,12 +8,12 @@ describe('createShikiCodeTokenizer', () => {
     const known = await tokenizer.tokenize({
       code: 'const value = 1;',
       language: 'ts',
-      theme: 'github-light'
+      theme: 'github-light',
     });
     const unknown = await tokenizer.tokenize({
       code: 'plain text',
       language: 'unknown-language',
-      theme: 'github-light'
+      theme: 'github-light',
     });
 
     expect(known.tokens.length).toBeGreaterThan(0);

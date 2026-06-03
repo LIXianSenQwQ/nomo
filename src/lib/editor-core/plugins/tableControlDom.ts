@@ -10,7 +10,11 @@ export function findActiveTableElement(view: EditorView): HTMLTableElement | nul
     if ($from.node(depth).type.spec.tableRole === 'table') {
       const tablePosition = $from.before(depth);
       const dom = view.nodeDOM(tablePosition);
-      return dom instanceof HTMLTableElement ? dom : dom instanceof HTMLElement ? dom.querySelector('table') : null;
+      return dom instanceof HTMLTableElement
+        ? dom
+        : dom instanceof HTMLElement
+          ? dom.querySelector('table')
+          : null;
     }
   }
   return null;

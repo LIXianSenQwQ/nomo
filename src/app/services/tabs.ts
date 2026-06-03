@@ -25,7 +25,7 @@ export function createDefaultTab(markdown: string): Tab {
     largeDocumentMode: false,
     readonlyDocumentMode: false,
     externalFileWarning: '',
-    version: 0
+    version: 0,
   };
 }
 
@@ -41,7 +41,7 @@ export function createBlankTab(fileName = 'untitled.md', filePath = '无标题.m
     largeDocumentMode: false,
     readonlyDocumentMode: false,
     externalFileWarning: '',
-    version: 0
+    version: 0,
   };
 }
 
@@ -55,7 +55,12 @@ export function getOrCreateReusableTab(tabs: Tab[], activeTabId: string) {
   return { tabs: [...tabs, newTab], activeTabId: newTab.id, targetTab: newTab };
 }
 
-export function getNativeDocumentTargetTab(tabs: Tab[], activeTabId: string, existingTab: Tab | undefined, saved: boolean) {
+export function getNativeDocumentTargetTab(
+  tabs: Tab[],
+  activeTabId: string,
+  existingTab: Tab | undefined,
+  saved: boolean,
+) {
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
   if (isReusableUntitledTab(activeTab)) {
     return { tabs, activeTabId, targetTab: activeTab };
@@ -69,7 +74,13 @@ export function getNativeDocumentTargetTab(tabs: Tab[], activeTabId: string, exi
 }
 
 export function isReusableUntitledTab(tab: Tab | undefined): tab is Tab {
-  return Boolean(tab && tab.fileName === 'untitled.md' && !tab.dirty && tab.markdown.trim() === '' && !tab.nativePath);
+  return Boolean(
+    tab &&
+    tab.fileName === 'untitled.md' &&
+    !tab.dirty &&
+    tab.markdown.trim() === '' &&
+    !tab.nativePath,
+  );
 }
 
 export function writeActiveTabState(tabs: Tab[], activeTabId: string, state: ActiveTabState) {

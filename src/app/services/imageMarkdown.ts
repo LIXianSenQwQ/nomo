@@ -4,6 +4,9 @@ export function getImageFiles(fileList: FileList | undefined | null) {
 
 export function createImageMarkdownSrc(fileName: string, imageName: string) {
   const baseName = fileName.replace(/\.(md|markdown)$/i, '') || 'document';
-  const safeName = imageName.trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '-');
+  const safeName = imageName
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, '-');
   return `./${baseName}.assets/${safeName}`;
 }

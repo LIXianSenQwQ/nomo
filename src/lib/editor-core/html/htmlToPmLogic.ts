@@ -6,9 +6,13 @@ import { INLINE_TAG_TO_MARK } from './htmlPolicy';
  * 此函数在 parser handler 内部使用，不直接创建 ProseMirror Node。
  */
 export function parseHtmlContent(
-  state: { openMark(mark: unknown): void; closeMark(markType: unknown): void; addText(text: string): void },
+  state: {
+    openMark(mark: unknown): void;
+    closeMark(markType: unknown): void;
+    addText(text: string): void;
+  },
   innerHTML: string,
-  schema: Schema
+  schema: Schema,
 ): void {
   const template = document.createElement('template');
   template.innerHTML = innerHTML;
@@ -16,9 +20,13 @@ export function parseHtmlContent(
 }
 
 function walkDOMFragment(
-  state: { openMark(mark: unknown): void; closeMark(markType: unknown): void; addText(text: string): void },
+  state: {
+    openMark(mark: unknown): void;
+    closeMark(markType: unknown): void;
+    addText(text: string): void;
+  },
   parent: Node,
-  schema: Schema
+  schema: Schema,
 ): void {
   for (const child of Array.from(parent.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
@@ -29,13 +37,18 @@ function walkDOMFragment(
       const markName = INLINE_TAG_TO_MARK[tag];
 
       if (markName) {
-        const markType = (schema.marks as Record<string, { create(attrs?: Record<string, unknown> | null): unknown }>)[markName];
+        const markType = (
+          schema.marks as Record<
+            string,
+            { create(attrs?: Record<string, unknown> | null): unknown }
+          >
+        )[markName];
         if (markType) {
           let attrs: Record<string, unknown> | null = null;
           if (markName === 'link') {
             attrs = {
               href: el.getAttribute('href') ?? '',
-              title: el.getAttribute('title') ?? null
+              title: el.getAttribute('title') ?? null,
             };
           }
           const mark = markType.create(attrs);

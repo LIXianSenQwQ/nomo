@@ -8,7 +8,7 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
-  TableMap
+  TableMap,
 } from 'prosemirror-tables';
 import { schema, type TableColumnAlignment } from './schema';
 
@@ -68,7 +68,8 @@ export function setTableColumnAlignment(align: TableColumnAlignment): Command {
 
     const tr = state.tr;
     for (let rowIndex = 0; rowIndex < context.map.height; rowIndex += 1) {
-      const cellPosition = context.tableStart + context.map.positionAt(rowIndex, context.columnIndex, context.table);
+      const cellPosition =
+        context.tableStart + context.map.positionAt(rowIndex, context.columnIndex, context.table);
       const cell = tr.doc.nodeAt(cellPosition);
       if (cell) {
         tr.setNodeMarkup(cellPosition, undefined, { ...cell.attrs, align });
@@ -89,7 +90,9 @@ export function toggleFirstTableRowHeader(): Command {
       return { position, node: state.doc.nodeAt(position) };
     }).filter((cell): cell is { position: number; node: ProseMirrorNode } => Boolean(cell.node));
 
-    const shouldDisableHeader = firstRowCells.every((cell) => cell.node.type === schema.nodes.table_header);
+    const shouldDisableHeader = firstRowCells.every(
+      (cell) => cell.node.type === schema.nodes.table_header,
+    );
     const targetType = shouldDisableHeader ? schema.nodes.table_cell : schema.nodes.table_header;
     const tr = state.tr;
     for (const cell of firstRowCells) {
@@ -112,7 +115,8 @@ export function normalizeFirstTableRowHeader(): Command {
       const targetType = rowIndex === 0 ? schema.nodes.table_header : schema.nodes.table_cell;
 
       for (let columnIndex = 0; columnIndex < context.map.width; columnIndex += 1) {
-        const cellPosition = context.tableStart + context.map.positionAt(rowIndex, columnIndex, context.table);
+        const cellPosition =
+          context.tableStart + context.map.positionAt(rowIndex, columnIndex, context.table);
         if (touched.has(cellPosition)) continue;
         touched.add(cellPosition);
 
@@ -167,6 +171,6 @@ function findTableContext(state: EditorState): TableContext | null {
     tableStart,
     rowIndex: rect.top,
     columnIndex: rect.left,
-    map
+    map,
   };
 }

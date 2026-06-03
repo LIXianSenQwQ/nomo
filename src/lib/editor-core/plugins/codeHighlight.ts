@@ -8,20 +8,27 @@ export function codeHighlightPlugin(): Plugin {
   return new Plugin({
     key: codeHighlightKey,
     state: {
-      init() { return DecorationSet.empty; },
+      init() {
+        return DecorationSet.empty;
+      },
       apply(tr, set) {
         const meta = tr.getMeta(codeHighlightKey);
         if (meta instanceof DecorationSet) return meta;
         return tr.docChanged ? set.map(tr.mapping, tr.doc) : set;
-      }
+      },
     },
     props: {
-      decorations(state) { return this.getState(state); }
-    }
+      decorations(state) {
+        return this.getState(state);
+      },
+    },
   });
 }
 
-export function buildCodeDecorations(tokenLines: CodeTokenLine[], contentStart: number): Decoration[] {
+export function buildCodeDecorations(
+  tokenLines: CodeTokenLine[],
+  contentStart: number,
+): Decoration[] {
   const decorations: Decoration[] = [];
   let pos = contentStart;
   for (const line of tokenLines) {

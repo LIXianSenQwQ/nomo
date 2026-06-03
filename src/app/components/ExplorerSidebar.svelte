@@ -39,7 +39,14 @@
               on:click={() => toggleFolderCollapse(node.path)}
             >
               <span class="chevron-icon">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M3 4.5l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+                  ><path
+                    d="M3 4.5l3 3 3-3"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  /></svg
+                >
               </span>
               <FolderOpen size={13} />
               <span>{node.name}</span>
@@ -77,7 +84,14 @@
           on:click={toggleRootFolder}
         >
           <span class="chevron-icon">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M3 4.5l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+              ><path
+                d="M3 4.5l3 3 3-3"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            >
           </span>
           <FolderOpen size={14} />
           <span>{getFolderName(currentFolderPath)}</span>
@@ -97,7 +111,14 @@
           on:click={toggleRootFolder}
         >
           <span class="chevron-icon">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"><path d="M3 4.5l3 3 3-3" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+              ><path
+                d="M3 4.5l3 3 3-3"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              /></svg
+            >
           </span>
           <FolderOpen size={14} />
           <span>{getFolderName(getDirectoryLabel(filePath))}</span>
@@ -113,5 +134,11 @@
       {/if}
     </div>
   </section>
-  <button type="button" class="sidebar-resizer" class:active={isResizing} aria-label="调整侧边栏宽度" on:mousedown={startResize}></button>
+  <button
+    type="button"
+    class="sidebar-resizer"
+    class:active={isResizing}
+    aria-label="调整侧边栏宽度"
+    on:mousedown={startResize}
+  ></button>
 </aside>

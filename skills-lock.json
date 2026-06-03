@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "fix-knip-unused-exports": {
+      "source": "factory-ai/factory-plugins",
+      "sourceType": "github",
+      "skillPath": "plugins/typescript/skills/fix-knip-unused-exports/SKILL.md",
+      "computedHash": "3e368a8a3d6ab324fd260639becf9144c87eab9fc93147299ee5f88b127d4518"
+    },
+    "refactor": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "87789a786b96f99ba0680e89345a975106e10e7db1071c7cdc2e76d507c449d6"
+    }
+  }
+}

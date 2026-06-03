@@ -20,7 +20,11 @@ export function getSourceHeadingSelection(markdown: string, item: OutlineItem) {
   return { start, end: start + lines[item.line - 1].length };
 }
 
-export function getActiveOutlineIdFromSource(outline: OutlineItem[], scrollTop: number, lineHeight: number) {
+export function getActiveOutlineIdFromSource(
+  outline: OutlineItem[],
+  scrollTop: number,
+  lineHeight: number,
+) {
   if (!outline.length) {
     return '';
   }
@@ -28,14 +32,22 @@ export function getActiveOutlineIdFromSource(outline: OutlineItem[], scrollTop: 
   return getOutlineItemAtLine(outline, visibleLine)?.id ?? outline[0]?.id ?? '';
 }
 
-export function getSourceScrollAnchor(outline: OutlineItem[], scrollTop: number, lineHeight: number, sourceTextarea?: HTMLTextAreaElement): OutlineScrollAnchor | null {
+export function getSourceScrollAnchor(
+  outline: OutlineItem[],
+  scrollTop: number,
+  lineHeight: number,
+  sourceTextarea?: HTMLTextAreaElement,
+): OutlineScrollAnchor | null {
   if (!outline.length) {
     return null;
   }
 
   const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
   const activeOutlineId = getActiveOutlineIdFromSource(outline, scrollTop, lineHeight);
-  const currentIndex = Math.max(0, outline.findIndex((item) => item.id === activeOutlineId));
+  const currentIndex = Math.max(
+    0,
+    outline.findIndex((item) => item.id === activeOutlineId),
+  );
   const currentItem = outline[currentIndex] ?? outline[0];
   const nextItem = outline[currentIndex + 1];
   const totalLineCount = getSourceTotalLineCount(sourceTextarea, visibleLine);
@@ -46,7 +58,12 @@ export function getSourceScrollAnchor(outline: OutlineItem[], scrollTop: number,
   return { outlineId: currentItem.id, sectionProgress };
 }
 
-export function scrollSourceToAnchor(outline: OutlineItem[], sourcePane: HTMLElement | undefined, sourceTextarea: HTMLTextAreaElement | undefined, anchor: OutlineScrollAnchor | null) {
+export function scrollSourceToAnchor(
+  outline: OutlineItem[],
+  sourcePane: HTMLElement | undefined,
+  sourceTextarea: HTMLTextAreaElement | undefined,
+  anchor: OutlineScrollAnchor | null,
+) {
   if (!sourcePane || !anchor) {
     return;
   }
@@ -65,12 +82,19 @@ export function scrollSourceToAnchor(outline: OutlineItem[], sourcePane: HTMLEle
   sourcePane.scrollTop = Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea));
 }
 
-export function getActiveOutlineIdFromSemantic(outline: OutlineItem[], semanticPane: HTMLElement | undefined) {
+export function getActiveOutlineIdFromSemantic(
+  outline: OutlineItem[],
+  semanticPane: HTMLElement | undefined,
+) {
   if (!outline.length || !semanticPane) {
     return '';
   }
 
-  const headings = Array.from(semanticPane.querySelectorAll('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'));
+  const headings = Array.from(
+    semanticPane.querySelectorAll(
+      '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
+    ),
+  );
   if (headings.length === 0) {
     return outline[0]?.id ?? '';
   }
@@ -86,7 +110,10 @@ export function getActiveOutlineIdFromSemantic(outline: OutlineItem[], semanticP
   return outline[Math.min(activeIndex, outline.length - 1)]?.id ?? '';
 }
 
-export function getSemanticScrollAnchor(outline: OutlineItem[], semanticPane: HTMLElement | undefined): OutlineScrollAnchor | null {
+export function getSemanticScrollAnchor(
+  outline: OutlineItem[],
+  semanticPane: HTMLElement | undefined,
+): OutlineScrollAnchor | null {
   const headings = getSemanticHeadings(semanticPane);
   if (!outline.length || !semanticPane || headings.length === 0) {
     return null;
@@ -109,11 +136,15 @@ export function getSemanticScrollAnchor(outline: OutlineItem[], semanticPane: HT
 
   return {
     outlineId: outline[Math.min(activeIndex, outline.length - 1)]?.id ?? outline[0].id,
-    sectionProgress
+    sectionProgress,
   };
 }
 
-export function scrollSemanticToAnchor(outline: OutlineItem[], semanticPane: HTMLElement | undefined, anchor: OutlineScrollAnchor | null) {
+export function scrollSemanticToAnchor(
+  outline: OutlineItem[],
+  semanticPane: HTMLElement | undefined,
+  anchor: OutlineScrollAnchor | null,
+) {
   const headings = getSemanticHeadings(semanticPane);
   if (!semanticPane || !anchor || headings.length === 0) {
     return;
@@ -136,7 +167,11 @@ function getSemanticHeadings(semanticPane: HTMLElement | undefined) {
   if (!semanticPane) {
     return [];
   }
-  return Array.from(semanticPane.querySelectorAll<HTMLElement>('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6'));
+  return Array.from(
+    semanticPane.querySelectorAll<HTMLElement>(
+      '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
+    ),
+  );
 }
 
 function getElementTopInScrollContainer(element: HTMLElement, scrollContainer: HTMLElement) {
@@ -145,7 +180,10 @@ function getElementTopInScrollContainer(element: HTMLElement, scrollContainer: H
   return elementTop - containerTop + scrollContainer.scrollTop;
 }
 
-function getSourceTotalLineCount(sourceTextarea: HTMLTextAreaElement | undefined, fallbackLine: number) {
+function getSourceTotalLineCount(
+  sourceTextarea: HTMLTextAreaElement | undefined,
+  fallbackLine: number,
+) {
   if (!sourceTextarea) {
     return Math.max(1, fallbackLine);
   }

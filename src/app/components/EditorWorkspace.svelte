@@ -42,7 +42,12 @@
 {/if}
 
 <div class="editor-grid" class:source-only={mode === 'source'}>
-  <section bind:this={sourcePane} class="editor-pane source-pane" aria-label="Markdown 源文本" on:scroll={updateActiveOutlineFromSourceScroll}>
+  <section
+    bind:this={sourcePane}
+    class="editor-pane source-pane"
+    aria-label="Markdown 源文本"
+    on:scroll={updateActiveOutlineFromSourceScroll}
+  >
     <div class="document-layout">
       <textarea
         bind:this={sourceTextarea}
@@ -57,7 +62,15 @@
     </div>
   </section>
 
-  <section bind:this={semanticPane} class="semantic-pane" aria-label="语义编辑区" on:scroll={updateActiveOutlineFromSemanticScroll} on:paste={handleEditorPaste} on:drop={handleEditorDrop} on:dragover|preventDefault>
+  <section
+    bind:this={semanticPane}
+    class="semantic-pane"
+    aria-label="语义编辑区"
+    on:scroll={updateActiveOutlineFromSemanticScroll}
+    on:paste={handleEditorPaste}
+    on:drop={handleEditorDrop}
+    on:dragover|preventDefault
+  >
     <div class="document-layout">
       <div bind:this={editorHost} class="prosemirror-host"></div>
     </div>
@@ -70,14 +83,20 @@
         <div class="content-outline-list">
           {#each outline as item, index (item.id)}
             {#if visibleOutlineIds.has(item.id)}
-              <div class:active={activeOutlineId === item.id} class="content-outline-row" style={`padding-left: ${(item.level - 1) * 16}px`}>
+              <div
+                class:active={activeOutlineId === item.id}
+                class="content-outline-row"
+                style={`padding-left: ${(item.level - 1) * 16}px`}
+              >
                 {#if isOutlineItemExpandable(index)}
                   <button
                     type="button"
                     class:collapsed={collapsedOutlineIds.has(item.id)}
                     class="outline-toggle"
                     title={collapsedOutlineIds.has(item.id) ? '展开标题' : '折叠标题'}
-                    aria-label={collapsedOutlineIds.has(item.id) ? `展开 ${item.title}` : `折叠 ${item.title}`}
+                    aria-label={collapsedOutlineIds.has(item.id)
+                      ? `展开 ${item.title}`
+                      : `折叠 ${item.title}`}
                     aria-expanded={!collapsedOutlineIds.has(item.id)}
                     on:click={(event) => handleOutlineToggle(event, item)}
                   >
@@ -86,7 +105,12 @@
                 {:else}
                   <span class="outline-toggle-placeholder"></span>
                 {/if}
-                <button type="button" class="outline-link" title={item.title} on:click={() => jumpToOutlineItem(item)}>
+                <button
+                  type="button"
+                  class="outline-link"
+                  title={item.title}
+                  on:click={() => jumpToOutlineItem(item)}
+                >
                   <span>{item.title}</span>
                 </button>
               </div>

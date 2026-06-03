@@ -188,7 +188,11 @@ describe('inline_code schema', () => {
   it('toDOM fallback outputs span with data-code', () => {
     const doc = parseMarkdown('`const x = 1`');
     const codeNode = doc.firstChild?.firstChild;
-    const dom = codeNode!.type.spec.toDOM!(codeNode!) as [string, Record<string, string>, DOMOutputSpec];
+    const dom = codeNode!.type.spec.toDOM!(codeNode!) as [
+      string,
+      Record<string, string>,
+      DOMOutputSpec,
+    ];
     expect(dom[0]).toBe('span');
     expect(dom[1].class).toBe('inline-code');
     expect(dom[1]['data-code']).toBe('const x = 1');
@@ -235,7 +239,7 @@ describe('inline_code semantic input', () => {
   it('converts newly typed `code` text into inline_code node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [inlineCodeInputPlugin()]
+      plugins: [inlineCodeInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('语义输入 `const x = 1`'));
@@ -256,7 +260,7 @@ describe('inline_code semantic input', () => {
   it('converts newly typed `code` with spaces into inline_code node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [inlineCodeInputPlugin()]
+      plugins: [inlineCodeInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('语义输入 `const ok = true`'));
@@ -276,7 +280,7 @@ describe('inline_code semantic input', () => {
   it('converts `a` to inline_code and allows continued input', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [inlineCodeInputPlugin()]
+      plugins: [inlineCodeInputPlugin()],
     });
 
     // 模拟用户输入 `a`
@@ -301,7 +305,7 @@ describe('inline_code semantic input', () => {
   it('converts double backtick code into inline_code node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [inlineCodeInputPlugin()]
+      plugins: [inlineCodeInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('语义输入 `` code with ` backtick ``'));

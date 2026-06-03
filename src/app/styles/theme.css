@@ -27,8 +27,8 @@
   --md-editor-shadow: 0 14px 34px rgba(22, 32, 44, 0.08);
   --md-editor-radius-sm: 4px;
   --md-editor-radius-md: 8px;
-  --md-editor-font-body: "Segoe UI", "Microsoft YaHei", sans-serif;
-  --md-editor-font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --md-editor-font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --md-editor-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
   --md-editor-font-size: 16px;
   --md-editor-line-height: 1.7;
 

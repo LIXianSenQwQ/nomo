@@ -1,7 +1,11 @@
 import type { FileTreeNode } from '../types';
 import { getFolderName } from '../utils/pathLabels';
 import { loadFolderTree, pickFolderPath } from './documentFiles';
-import { expandAncestors as expandFolderAncestors, getDefaultExpandedFolders, toggleExpandedFolder } from './folderTree';
+import {
+  expandAncestors as expandFolderAncestors,
+  getDefaultExpandedFolders,
+  toggleExpandedFolder,
+} from './folderTree';
 
 interface FolderExplorerControllerOptions {
   getDesktopEnabled(): boolean;
@@ -17,7 +21,9 @@ interface FolderExplorerControllerOptions {
 
 export function createFolderExplorerController(options: FolderExplorerControllerOptions) {
   function expandAncestors(filePath: string, rootPath: string) {
-    options.setExpandedFolders(expandFolderAncestors(options.getExpandedFolders(), filePath, rootPath));
+    options.setExpandedFolders(
+      expandFolderAncestors(options.getExpandedFolders(), filePath, rootPath),
+    );
   }
 
   function toggleFolderCollapse(folderPath: string) {
@@ -63,6 +69,6 @@ export function createFolderExplorerController(options: FolderExplorerController
     toggleFolderCollapse,
     toggleRootFolder,
     loadFolder,
-    openFolderDialog
+    openFolderDialog,
   };
 }

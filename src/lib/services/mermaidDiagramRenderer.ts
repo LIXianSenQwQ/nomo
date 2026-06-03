@@ -8,7 +8,7 @@ export function createMermaidDiagramRenderer(): DiagramRenderer {
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'strict',
-          theme: options.theme === 'dark' ? 'dark' : 'default'
+          theme: options.theme === 'dark' ? 'dark' : 'default',
         });
         const id = `newmd-${hashText(code)}`;
         const result = await mermaid.render(id, code);
@@ -16,10 +16,10 @@ export function createMermaidDiagramRenderer(): DiagramRenderer {
       } catch (error) {
         return {
           svg: '',
-          error: error instanceof Error ? error.message : 'Mermaid 渲染失败'
+          error: error instanceof Error ? error.message : 'Mermaid 渲染失败',
         };
       }
-    }
+    },
   };
 }
 

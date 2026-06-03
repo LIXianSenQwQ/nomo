@@ -47,7 +47,7 @@ export function displayMathInputPlugin(): Plugin {
         tr = tr.replaceWith(from, to, mathNode);
       }
       return tr;
-    }
+    },
   });
 }
 
@@ -57,7 +57,7 @@ export function displayMathInputPlugin(): Plugin {
  */
 function tryMatchDisplayMath(
   blocks: Array<{ node: ProseMirrorNode; pos: number }>,
-  startIndex: number
+  startIndex: number,
 ): { replacement: { from: number; to: number; tex: string }; nextIndex: number } | null {
   const first = blocks[startIndex];
 
@@ -77,9 +77,9 @@ function tryMatchDisplayMath(
         replacement: {
           from: first.pos,
           to: first.pos + first.node.nodeSize,
-          tex
+          tex,
         },
-        nextIndex: startIndex + 1
+        nextIndex: startIndex + 1,
       };
     }
   }
@@ -113,6 +113,6 @@ function tryMatchDisplayMath(
 
   return {
     replacement: { from, to, tex },
-    nextIndex: closeIndex + 1
+    nextIndex: closeIndex + 1,
   };
 }
