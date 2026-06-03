@@ -34,6 +34,7 @@
   let isMac = false;
   let isWin = false;
   let isFullscreen = false;
+  let isMaximized = false;
   let unlistenResized: (() => void) | null = null;
 
   onMount(() => {
@@ -51,10 +52,19 @@
         appWindow.isFullscreen().then(fullscreen => {
           if (!isDestroyed) isFullscreen = fullscreen;
         });
+        appWindow.isMaximized().then(maximized => {
+          if (!isDestroyed) isMaximized = maximized;
+        });
 
         // 监听窗口改变事件
         appWindow.onResized(async () => {
-          if (!isDestroyed) isFullscreen = await appWindow.isFullscreen();
+          if (!isDestroyed) {
+            isFullscreen = await appWindow.isFullscreen();
+            // 在 Mac 上双击 topbar 放大其实是 zoom，但原生的红绿灯还在！
+            // 所以即使 isMaximized 变成了 true，我们也不应该去掉 80px 的左内边距。
+            // 只有 isFullscreen 才会让红绿灯消失。
+            isMaximized = await appWindow.isMaximized();
+          }
         }).then(unlisten => {
           if (isDestroyed) {
             unlisten();

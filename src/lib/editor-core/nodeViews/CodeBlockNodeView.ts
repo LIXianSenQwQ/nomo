@@ -240,6 +240,15 @@ export class CodeBlockNodeView {
     this.renderDisplay();
   }
 
+  static updateTheme(): void {
+    for (const instance of CodeBlockNodeView.instances) {
+      instance.renderDisplay();
+      if (instance.editing && instance.textarea && instance.highlightLayer) {
+        void instance.renderHighlightFor(instance.textarea.value, instance.language, instance.highlightLayer);
+      }
+    }
+  }
+
   // ---- NodeView 接口 ----
 
   update(node: ProseMirrorNode): boolean {
@@ -335,7 +344,7 @@ export class CodeBlockNodeView {
     }
     // 根据当前主题选择 Shiki 主题
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const theme = isDark ? 'dark' : 'github-light';
+    const theme = isDark ? 'github-dark' : 'github-light';
     try {
       const result = await codeTokenizer.tokenize({
         code,

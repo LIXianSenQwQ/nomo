@@ -289,10 +289,7 @@
   color: var(--md-editor-blockquote-fg);
 }
 
-.code-card,
-.mermaid-block,
-.math-block,
-.html-block {
+.code-card {
   --code-gutter-width: 32px;
   --code-content-padding-left: 12px;
   --code-content-padding-right: 16px;
@@ -302,7 +299,7 @@
   margin: 18px 0;
   border: 1px solid var(--md-editor-code-border);
   border-radius: var(--md-editor-radius-md);
-  background: color-mix(in srgb, var(--md-editor-code-bg) 94%, #ffffff 6%);
+  background: var(--md-editor-code-bg);
   color: var(--md-editor-code-fg);
 }
 
@@ -657,6 +654,8 @@
 .math-block,
 .html-block {
   padding: 16px;
+  margin: 18px 0;
+  border-radius: var(--md-editor-radius-md);
   overflow-x: auto;
   background: color-mix(in srgb, var(--md-editor-table-header-bg) 76%, var(--md-editor-surface));
   color: var(--md-editor-fg);
@@ -1112,4 +1111,9 @@
 [data-theme='dark'] .inline-code-token-operator,
 .dark .inline-code-token-operator {
   color: #ff7b72;
+}
+
+[data-theme='dark'] .mermaid-block {
+  filter: invert(0.9) hue-rotate(180deg);
+  background: #fcfcfc; /* 翻转后变成深色，确保文字可见 */
 }
