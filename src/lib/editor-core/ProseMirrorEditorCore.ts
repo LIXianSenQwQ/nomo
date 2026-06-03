@@ -30,6 +30,7 @@ import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
+import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import {
   createMarkdownInputRules,
   parseMarkdown,
@@ -241,6 +242,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         codeHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
+        trailingParagraphPlugin(),
         tableHtmlBlockPlugin(),
         tableControlsPlugin(),
         tableEditing({ allowTableNodeSelection: true }),
