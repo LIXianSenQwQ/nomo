@@ -1,4 +1,5 @@
 import { listAppSettings, updateAppSetting } from '../../lib/desktop/tauriStorage';
+import { CodeBlockNodeView } from '../../lib/editor-core/nodeViews/CodeBlockNodeView';
 
 export interface PersistedEditorSettings {
   theme?: 'light' | 'dark';
@@ -53,6 +54,8 @@ export function persistEditorSetting(desktopEnabled: boolean, key: string, value
 
 export function applyThemeSetting(theme: 'light' | 'dark') {
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
+  // 通知代码块更新语法高亮主题
+  CodeBlockNodeView.updateTheme();
 }
 
 export function applyTypographySettings(fontSize: number, lineHeight: number) {

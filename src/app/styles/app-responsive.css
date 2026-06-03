@@ -58,6 +58,10 @@
   border-bottom: 1px dashed var(--md-titlebar-border);
 }
 
+.titlebar.is-mac .titlebar-row.top-row {
+  transition: padding-left 0.15s;
+}
+
 .titlebar.is-mac:not(.is-fullscreen) .titlebar-row.top-row {
   padding-left: 80px; /* 为 macOS 原生红绿灯留出空间，全屏时不需要 */
 }
