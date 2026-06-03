@@ -120,7 +120,43 @@ markdownIt.parse = (src, env) => {
       normalized.push(new Token('paragraph_open', 'p', 1));
     }
   }
-  return normalized;
+
+  // 检测连续段落间的多余空白行，插入空段落 token
+  // markdown-it 把连续空行视为段落分隔符，不产生空段落节点，
+  // 这里通过分析 token 的行号映射来恢复空段落，保证 round-trip 不丢失
+  const result: Token[] = [];
+  let lastParaEnd = -1;
+
+  for (const token of normalized) {
+    if (token.type === 'paragraph_open' && token.map) {
+      if (lastParaEnd >= 0) {
+        const gap = token.map[0] - lastParaEnd - 1;
+        // 每个多余的空白行对应一个空段落
+        for (let j = 0; j < gap; j++) {
+          const line = lastParaEnd + 1 + j;
+          const emptyOpen = new Token('paragraph_open', 'p', 1);
+          emptyOpen.map = [line, line + 1];
+          const emptyInline = new Token('inline', '', 0);
+          emptyInline.content = '';
+          emptyInline.children = [];
+          emptyInline.map = [line, line + 1];
+          const emptyClose = new Token('paragraph_close', 'p', -1);
+          result.push(emptyOpen, emptyInline, emptyClose);
+        }
+      }
+      lastParaEnd = token.map[1];
+    } else if (
+      (token.nesting === 1 && token.type !== 'paragraph_open') ||
+      ['fence', 'code_block', 'hr', 'html_block'].includes(token.type)
+    ) {
+      // 遇到非段落的块级元素时重置跟踪，避免跨块元素误插空段落
+      lastParaEnd = -1;
+    }
+
+    result.push(token);
+  }
+
+  return result;
 };
 
 const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
@@ -267,7 +303,13 @@ const tableMarkdownSerializer = new MarkdownSerializer(
         state.closeBlock(node);
         return;
       }
-      state.renderInline(node);
+      if (node.content.size === 0) {
+        // 空段落需要调用 write() 触发 flushClose，
+        // 否则前一个 closeBlock 会被覆盖导致空段落在序列化时丢失
+        state.write();
+      } else {
+        state.renderInline(node);
+      }
       state.closeBlock(node);
     },
     bullet_list(state, node) {
