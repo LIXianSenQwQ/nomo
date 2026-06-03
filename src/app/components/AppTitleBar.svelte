@@ -32,25 +32,71 @@
 
   let isMac = false;
   let isWin = false;
+  let isFullscreen = false;
+  let unlistenResized: (() => void) | null = null;
 
   onMount(() => {
     isMac = navigator.userAgent.includes('Mac');
     isWin = navigator.userAgent.includes('Win');
+    
+    let isDestroyed = false;
+
+    if (desktopEnabled) {
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        if (isDestroyed) return;
+        const appWindow = getCurrentWindow();
+        
+        // 初始化状态
+        appWindow.isFullscreen().then(fullscreen => {
+          if (!isDestroyed) isFullscreen = fullscreen;
+        });
+
+        // 监听窗口改变事件
+        appWindow.onResized(async () => {
+          if (!isDestroyed) isFullscreen = await appWindow.isFullscreen();
+        }).then(unlisten => {
+          if (isDestroyed) {
+            unlisten();
+          } else {
+            unlistenResized = unlisten;
+          }
+        });
+      });
+    }
+
+    return () => {
+      isDestroyed = true;
+      if (unlistenResized) {
+        unlistenResized();
+      }
+    };
   });
 
   async function handleDrag(e: MouseEvent) {
     if (!desktopEnabled || e.buttons !== 1) return;
-    if (isMac) return; // Mac let CSS handle it natively
 
-    // 只在拖动区域触发，避免影响内部按钮点击
     const target = e.target as HTMLElement;
-    if (!target.closest('[data-tauri-drag-region]')) {
+    
+    // 排除交互元素，避免影响按钮点击
+    if (target.closest('button') || target.closest('.titlebar-right') || target.closest('.titlebar-menu')) {
+      return;
+    }
+
+    // 只在拖动区域触发
+    if (!target.closest('[data-drag-region]')) {
       return;
     }
 
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().startDragging();
+      const appWindow = getCurrentWindow();
+      
+      if (e.detail === 2) {
+        // 双击最大化/还原
+        await appWindow.toggleMaximize();
+      } else {
+        await appWindow.startDragging();
+      }
     } catch (err) {
       console.error('Failed to start dragging:', err);
     }
@@ -62,13 +108,13 @@
   }
 </script>
 
-<header class="titlebar" class:is-mac={isMac} class:is-win={isWin}>
-  <div class="titlebar-row top-row" data-tauri-drag-region on:mousedown={handleDrag}>
-    <div class="titlebar-left" data-tauri-drag-region>
+<header class="titlebar" class:is-mac={isMac} class:is-win={isWin} class:is-fullscreen={isFullscreen}>
+  <div class="titlebar-row top-row" data-drag-region on:mousedown={handleDrag}>
+    <div class="titlebar-left" data-drag-region>
       <span class="app-logo">M</span>
-      <span class="app-name" data-tauri-drag-region>NewMd</span>
+      <span class="app-name" data-drag-region>NewMd</span>
     </div>
-    <span class="titlebar-spacer" data-tauri-drag-region></span>
+    <span class="titlebar-spacer" data-drag-region></span>
     <div class="titlebar-right">
       <button class="icon-btn" title="切换主题" on:click={toggleTheme}>
         {#if theme === 'light'}

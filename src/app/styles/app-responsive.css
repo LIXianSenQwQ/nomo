@@ -58,15 +58,13 @@
   border-bottom: 1px dashed var(--md-titlebar-border);
 }
 
-.titlebar.is-mac .titlebar-row.top-row {
-  padding-left: 80px; /* 为 macOS 原生红绿灯留出空间 */
-  -webkit-app-region: drag;
+.titlebar.is-mac:not(.is-fullscreen) .titlebar-row.top-row {
+  padding-left: 80px; /* 为 macOS 原生红绿灯留出空间，全屏时不需要 */
 }
 
 .titlebar-row.bottom-row {
   height: 27px;
   padding: 0 12px;
-  -webkit-app-region: no-drag;
 }
 
 .titlebar-left {
@@ -103,7 +101,6 @@
 .titlebar-menu {
   display: flex;
   align-items: center;
-  -webkit-app-region: no-drag;
 }
 
 .menu-item {
@@ -163,7 +160,6 @@
     background 0.1s,
     color 0.1s;
   font-family: inherit;
-  -webkit-app-region: no-drag;
 }
 
 .dropdown-menu button:hover,
@@ -226,7 +222,6 @@
   display: flex;
   align-items: center;
   height: 100%;
-  -webkit-app-region: no-drag;
 }
 
 .titlebar-right .icon-btn {
@@ -252,7 +247,6 @@
   display: flex;
   height: 100%;
   align-items: center;
-  -webkit-app-region: no-drag;
 }
 
 .control-btn {
@@ -268,7 +262,6 @@
   transition:
     background 0.15s,
     color 0.15s;
-  -webkit-app-region: no-drag;
   pointer-events: auto;
 }
 
