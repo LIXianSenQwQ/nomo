@@ -168,7 +168,7 @@
 }
 
 .tree-folder span:last-child,
-.tree-folder.nested-dir span:last-child,
+.tree-folder.nested-dir span.node-name,
 .tree-file span {
   flex: 1;
   min-width: 0;
@@ -176,6 +176,64 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
+}
+
+.folder-actions {
+  display: flex;
+  opacity: 0;
+  gap: 4px;
+}
+
+.tree-folder:hover .folder-actions,
+.tree-folder-root-title:hover .folder-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--md-editor-radius-sm);
+  background: transparent;
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: var(--md-editor-surface);
+  color: var(--md-editor-accent-strong);
+}
+
+.rename-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  padding: 0 4px;
+  border: 1px solid var(--md-editor-accent);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-bg);
+  color: var(--md-editor-fg);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.tree-creating {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
+.tree-creating svg {
+  color: var(--md-editor-muted-fg);
 }
 
 .tree-folder svg,

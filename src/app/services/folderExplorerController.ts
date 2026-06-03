@@ -1,3 +1,4 @@
+import { createFolder, renameFile } from '../../lib/desktop/tauriStorage';
 import type { FileTreeNode } from '../types';
 import { getFolderName } from '../utils/pathLabels';
 import { loadFolderTree, pickFolderPath } from './documentFiles';

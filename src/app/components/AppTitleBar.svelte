@@ -30,6 +30,7 @@
   export let toggleOutlineVisible: () => void;
   export let outlineVisible: boolean;
   export let toggleFocusMode: () => void;
+  export let openSettings: () => void;
 
   let isMac = false;
   let isWin = false;
@@ -125,6 +126,7 @@
 </script>
 
 <header class="titlebar" class:is-mac={isMac} class:is-win={isWin} class:is-fullscreen={isFullscreen}>
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="titlebar-row top-row" data-drag-region on:mousedown={handleDrag}>
     <div class="titlebar-left" data-drag-region>
       <span class="app-logo">M</span>
@@ -439,6 +441,10 @@
             >
           </div>
         {/if}
+      </div>
+
+      <div class="menu-item">
+        <button class="menu-btn" on:click|stopPropagation={() => finish(openSettings, 'settings')}>设置</button>
       </div>
     </nav>
   </div>

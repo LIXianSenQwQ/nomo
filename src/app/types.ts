@@ -18,3 +18,8 @@ export interface FileTreeNode {
   is_dir: boolean;
   children: FileTreeNode[];
 }
+
+export interface WorkspaceState {
+  tabs: Tab[];
+  activeTabId: string;
+}

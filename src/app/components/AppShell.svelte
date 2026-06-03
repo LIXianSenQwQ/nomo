@@ -69,6 +69,7 @@
   export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
+  export let openSettings: () => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
@@ -131,6 +132,7 @@
     {setMode}
     {toggleOutlineVisible}
     {toggleFocusMode}
+    {openSettings}
   />
 
   <main class="workspace" style="--sidebar-width: {sidebarWidth}px">
@@ -150,6 +152,8 @@
       {toggleFolderCollapse}
       {openRecentFile}
       {startResize}
+      on:createNode
+      on:renameNode
     />
 
     <section class="editor-shell" aria-label="编辑器">
