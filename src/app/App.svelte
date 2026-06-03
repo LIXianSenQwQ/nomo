@@ -4,6 +4,8 @@
     listenDesktopFileDrops,
     listenDesktopMenuCommands,
     isTauriRuntime,
+    listAppSettings,
+    updateAppSetting,
     type RecentDocument,
   } from '../lib/desktop/tauriStorage';
   import {
@@ -22,7 +24,8 @@
   } from '../lib/outline/outlineService';
   import { createRichMarkdownSample } from '../lib/markdown/sample';
   import AppShell from './components/AppShell.svelte';
-  import type { FileTreeNode, Tab } from './types';
+  import SettingsDrawer from './components/SettingsDrawer.svelte';
+  import type { FileTreeNode, Tab, WorkspaceState } from './types';
   import { getCompactPath, getDirectoryLabel, getFolderName } from './utils/pathLabels';
   import {
     executeDesktopCommand as executeDesktopAppCommand,
@@ -102,6 +105,12 @@
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
 
+  function persistWorkspaceState() {
+    if (desktopEnabled) {
+      updateAppSetting('workspaceTabs', { tabs, activeTabId }).catch(() => undefined);
+    }
+  }
+
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
     tabs = writeActiveTabState(tabs, activeTabId, {
@@ -116,34 +125,44 @@
       externalFileWarning,
       lastKnownModifiedAt,
     });
+    persistWorkspaceState();
   }
+
+  let isSwitchingTab = false;
 
   // 加载指定 Tab 的状态并更新编辑器
   function loadTabState(tab: Tab) {
-    markdown = tab.markdown;
-    dirty = tab.dirty;
-    version = tab.version;
-    fileName = tab.fileName;
-    filePath = tab.filePath;
-    nativePath = tab.nativePath;
-    largeDocumentMode = tab.largeDocumentMode;
-    readonlyDocumentMode = tab.readonlyDocumentMode;
-    externalFileWarning = tab.externalFileWarning;
-    lastKnownModifiedAt = tab.lastKnownModifiedAt;
+    isSwitchingTab = true;
+    try {
+      markdown = tab.markdown;
+      dirty = tab.dirty;
+      version = tab.version;
+      fileName = tab.fileName;
+      filePath = tab.filePath;
+      nativePath = tab.nativePath;
+      largeDocumentMode = tab.largeDocumentMode;
+      readonlyDocumentMode = tab.readonlyDocumentMode;
+      externalFileWarning = tab.externalFileWarning;
+      lastKnownModifiedAt = tab.lastKnownModifiedAt;
 
-    if (editor) {
-      editor.updateOptions({
-        readonly: readonlyDocumentMode,
-        mode: largeDocumentMode ? 'source' : mode,
-      });
-      editor.setMarkdown(markdown, { reason: 'switch-tab', dirty: tab.dirty });
+      if (editor) {
+        const nextMode = largeDocumentMode ? 'source' : mode;
+        editor.updateOptions({
+          readonly: readonlyDocumentMode,
+          mode: nextMode,
+        });
+        mode = nextMode;
+        editor.setMarkdown(markdown, { reason: 'switch-tab', dirty: tab.dirty });
+      }
+
+      outline = extractOutline(markdown);
+      activeOutlineId = outline[0]?.id ?? '';
+      pruneCollapsedOutlineIds();
+      stats = calculateDocumentStats(markdown);
+      syncSourceTextareaHeight();
+    } finally {
+      isSwitchingTab = false;
     }
-
-    outline = extractOutline(markdown);
-    activeOutlineId = outline[0]?.id ?? '';
-    pruneCollapsedOutlineIds();
-    stats = calculateDocumentStats(markdown);
-    syncSourceTextareaHeight();
   }
 
   // 切换活动标签页
@@ -153,6 +172,7 @@
     const targetTab = tabs.find((t) => t.id === tabId);
     if (targetTab) {
       activeTabId = tabId;
+      persistWorkspaceState();
       loadTabState(targetTab);
       updateWindowTitle();
     }
@@ -266,24 +286,51 @@
       contentWidthPercent = value;
     },
   });
+  let isSettingsOpen = false;
+
+  function openSettings() {
+    isSettingsOpen = true;
+  }
+
+  function closeSettings() {
+    isSettingsOpen = false;
+  }
+
+  async function handleSaveSettings(newWorkspaceDir: string) {
+    if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
+      await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
+      currentFolderPath = newWorkspaceDir;
+      await loadFolder(newWorkspaceDir).catch(() => undefined);
+    }
+    closeSettings();
+  }
+
   const documentActions = createDocumentActionsController({
     largeDocumentLimit: LARGE_DOCUMENT_LIMIT,
     recoveryKey: RECOVERY_KEY,
     getDesktopEnabled: () => desktopEnabled,
     getDirty: () => dirty,
+    setDirty: (value) => { dirty = value; },
     getNativePath: () => nativePath,
+    setNativePath: (value) => { nativePath = value; },
     getFileName: () => fileName,
+    setFileName: (value) => { fileName = value; },
+    getFilePath: () => filePath,
+    setFilePath: (value) => { filePath = value; },
     getLastKnownModifiedAt: () => lastKnownModifiedAt,
+    setLastKnownModifiedAt: (value) => { lastKnownModifiedAt = value; },
     getCurrentFolderPath: () => currentFolderPath,
     getFileInput: () => fileInput,
     getEditor: () => editor,
     getTabs: () => tabs,
     setTabs: (value) => {
       tabs = value;
+      persistWorkspaceState();
     },
     getActiveTabId: () => activeTabId,
     setActiveTabId: (value) => {
       activeTabId = value;
+      persistWorkspaceState();
     },
     setStatusMessage: (value) => {
       statusMessage = value;
@@ -383,10 +430,129 @@
   const updateActiveOutlineFromSemanticScroll =
     outlineInteraction.updateActiveOutlineFromSemanticScroll;
 
+  async function handleCreateNode(event: CustomEvent<{ parentPath: string; type: 'folder' | 'file'; name: string }>) {
+    const { parentPath, type, name } = event.detail;
+    let finalName = name || (type === 'folder' ? '新建文件夹' : '无标题.md');
+    finalName = finalName.replace(/[<>:"/\\|?*]/g, '');
+    if (!finalName) finalName = type === 'folder' ? '新建文件夹' : '无标题.md';
+    if (type === 'file' && !finalName.toLowerCase().endsWith('.md')) {
+      finalName += '.md';
+    }
+
+    const { join } = await import('@tauri-apps/api/path');
+    let targetPath = await join(parentPath, finalName);
+    
+    const { statMarkdownFile } = await import('../lib/desktop/tauriStorage');
+    let suffix = 1;
+    let currentName = finalName;
+    while (true) {
+      const stat = await statMarkdownFile(targetPath).catch(() => null);
+      if (!stat || !stat.exists) break;
+      if (type === 'file') {
+        const base = finalName.replace(/\.md$/i, '');
+        currentName = `${base} (${suffix}).md`;
+      } else {
+        currentName = `${finalName} (${suffix})`;
+      }
+      targetPath = await join(parentPath, currentName);
+      suffix++;
+    }
+
+    if (type === 'folder') {
+      const { createFolder } = await import('../lib/desktop/tauriStorage');
+      await createFolder(targetPath).catch((err) => {
+        statusMessage = `创建文件夹失败: ${err}`;
+      });
+      await loadFolder(currentFolderPath);
+      expandAncestors(targetPath, currentFolderPath);
+    } else {
+      const { saveMarkdownNative } = await import('../lib/desktop/tauriStorage');
+      const defaultContent = `# ${currentName.replace(/\.md$/i, '')}\n\n`;
+      const result = await saveMarkdownNative(targetPath, defaultContent, currentName);
+      if (result) {
+        await loadFolder(currentFolderPath);
+        expandAncestors(targetPath, currentFolderPath);
+        openRecentFile(targetPath);
+      }
+    }
+  }
+
+  async function handleRenameNode(event: CustomEvent<{ path: string; newName: string }>) {
+    const { path, newName } = event.detail;
+    let finalName = newName.replace(/[<>:"/\\|?*]/g, '');
+    if (!finalName) return;
+
+    const { dirname, join } = await import('@tauri-apps/api/path');
+    const parentDir = await dirname(path);
+    const targetPath = await join(parentDir, finalName);
+
+    if (path === targetPath) return;
+
+    const { renameFile } = await import('../lib/desktop/tauriStorage');
+    await renameFile(path, targetPath).catch((err) => {
+      statusMessage = `重命名失败: ${err}`;
+    });
+    
+    await loadFolder(currentFolderPath);
+    
+    tabs.forEach(t => {
+      if (t.nativePath === path || t.nativePath?.startsWith(path + '/')) {
+        const newNativePath = t.nativePath.replace(path, targetPath);
+        t.nativePath = newNativePath;
+        t.filePath = newNativePath;
+        if (t.nativePath === targetPath) {
+          t.fileName = finalName;
+        }
+        if (activeTabId === t.id) {
+          fileName = t.fileName;
+          filePath = t.filePath;
+          nativePath = t.nativePath;
+        }
+      }
+    });
+    tabs = [...tabs];
+    persistWorkspaceState();
+  }
+
   const unsubscribe = editor.subscribe(syncFromEditor);
 
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
+    
+    if (desktopEnabled) {
+      const settings = await listAppSettings().catch(() => []);
+      const workspaceTabsSetting = settings.find((s) => s.key === 'workspaceTabs');
+      if (workspaceTabsSetting) {
+        try {
+          const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
+          if (state.tabs && state.tabs.length > 0) {
+            tabs = state.tabs;
+            activeTabId = state.activeTabId;
+            const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+            activeTabId = activeTab.id;
+            loadTabState(activeTab);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const workspaceDirSetting = settings.find((s) => s.key === 'workspaceDir');
+      if (workspaceDirSetting) {
+        try {
+          currentFolderPath = JSON.parse(workspaceDirSetting.valueJson);
+        } catch {
+          // ignore
+        }
+      } else {
+        const { getDefaultWorkspaceDir } = await import('../lib/desktop/tauriStorage');
+        currentFolderPath = await getDefaultWorkspaceDir().catch(() => '');
+        if (currentFolderPath) {
+          await updateAppSetting('workspaceDir', currentFolderPath).catch(() => undefined);
+        }
+      }
+    }
+
     editor.mount(editorHost);
     await loadPersistedSettings();
     await refreshRecentFiles();
@@ -399,8 +565,12 @@
     syncSourceTextareaHeight();
     await updateWindowTitle().catch(() => undefined);
 
-    const parentDir = getDirectoryLabel(filePath);
-    if (parentDir && parentDir !== '当前文件夹') loadFolder(parentDir).catch(() => undefined);
+    if (currentFolderPath) {
+      loadFolder(currentFolderPath).catch(() => undefined);
+    } else {
+      const parentDir = getDirectoryLabel(filePath);
+      if (parentDir && parentDir !== '当前文件夹') loadFolder(parentDir).catch(() => undefined);
+    }
   });
 
   onDestroy(() => {
@@ -414,6 +584,8 @@
   });
 
   function syncFromEditor(event: EditorChangeEvent) {
+    if (isSwitchingTab) return;
+
     markdown = event.markdown;
     dirty = event.dirty;
     version = event.version;
@@ -430,6 +602,11 @@
       activeTab.dirty = dirty;
       activeTab.version = version;
       tabs = [...tabs];
+      persistWorkspaceState();
+    }
+
+    if (desktopEnabled && dirty && nativePath) {
+      documentActions.debouncedAutoSave(event.markdown);
     }
 
     if (event.markdown.length > LARGE_DOCUMENT_LIMIT) {
@@ -607,4 +784,14 @@
   {toggleOutlineItemExpanded}
   {jumpToOutlineItem}
   {openMarkdownFile}
+  {openSettings}
+  on:createNode={handleCreateNode}
+  on:renameNode={handleRenameNode}
+/>
+
+<SettingsDrawer
+  isOpen={isSettingsOpen}
+  currentWorkspaceDir={currentFolderPath}
+  {closeSettings}
+  saveSettings={handleSaveSettings}
 />

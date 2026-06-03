@@ -11,7 +11,7 @@
 
 <header class="topbar" aria-label="文档标签">
   <div class="tabs-container">
-    {#each tabs as tab}
+    {#each tabs as tab (tab.id)}
       <button
         type="button"
         class="doc-tab"

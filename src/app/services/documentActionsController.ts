@@ -22,8 +22,14 @@ interface DocumentActionsOptions {
   getDesktopEnabled(): boolean;
   getDirty(): boolean;
   getNativePath(): string | null;
+  setNativePath(value: string | null): void;
   getFileName(): string;
+  setFileName(value: string): void;
+  getFilePath(): string;
+  setFilePath(value: string): void;
   getLastKnownModifiedAt(): number;
+  setLastKnownModifiedAt(value: number): void;
+  setDirty(value: boolean): void;
   getCurrentFolderPath(): string;
   getFileInput(): HTMLInputElement;
   getEditor(): EditorCore;
@@ -265,6 +271,116 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setRecentFiles(await loadRecentDocuments(options.getDesktopEnabled()));
   }
 
+  let saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+  function debouncedAutoSave(currentMarkdown: string) {
+    const tabId = options.getActiveTabId();
+    const path = options.getNativePath();
+    const fileName = options.getFileName();
+
+    if (!tabId || !path) return;
+
+    if (saveTimers[tabId] !== undefined) {
+      clearTimeout(saveTimers[tabId]);
+    }
+    
+    saveTimers[tabId] = setTimeout(async () => {
+      delete saveTimers[tabId];
+      if (!options.getDesktopEnabled()) return;
+
+      const markdownToSave = normalizeMarkdownForSave(currentMarkdown);
+      
+      const { document, error } = await saveNativeMarkdownFile(
+        path,
+        markdownToSave,
+        fileName,
+        null,
+      );
+
+      if (error) {
+        if (options.getActiveTabId() === tabId) {
+          options.setStatusMessage(`自动保存失败: ${error}`);
+        }
+        return;
+      }
+
+      if (document) {
+        if (options.getActiveTabId() === tabId) {
+          options.setStatusMessage('已保存');
+        }
+        
+        const tabs = options.getTabs();
+        const savedTab = tabs.find((tab) => tab.id === tabId);
+        if (savedTab) {
+          savedTab.dirty = false;
+          savedTab.lastKnownModifiedAt = document.modifiedAt;
+          
+          if (options.getActiveTabId() === tabId) {
+            options.setDirty(false);
+            options.setLastKnownModifiedAt(document.modifiedAt);
+          }
+          options.setTabs([...tabs]);
+        }
+
+        // H1 Sync
+        const match = markdownToSave.match(/^#\s+(.+)$/m);
+        const h1 = match ? match[1].trim() : null;
+        if (h1) {
+          let finalName = h1.replace(/[<>:"/\\|?*]/g, '');
+          if (finalName && !finalName.toLowerCase().endsWith('.md')) {
+            finalName += '.md';
+          }
+          if (finalName && finalName !== fileName) {
+            const { dirname, join } = await import('@tauri-apps/api/path');
+            const parentDir = await dirname(path);
+            let targetPath = await join(parentDir, finalName);
+            
+            const { statMarkdownFile, renameFile } = await import('../../lib/desktop/tauriStorage');
+            let suffix = 1;
+            let currentName = finalName;
+            while (true) {
+              const stat = await statMarkdownFile(targetPath).catch(() => null);
+              if (!stat || !stat.exists) break;
+              if (stat.path === path) break; // It's the same file (e.g. case change on Windows)
+              const base = finalName.replace(/\.md$/i, '');
+              currentName = `${base} (${suffix}).md`;
+              targetPath = await join(parentDir, currentName);
+              suffix++;
+            }
+
+            if (targetPath !== path) {
+              await renameFile(path, targetPath).catch(() => null);
+              
+              if (savedTab) {
+                savedTab.nativePath = targetPath;
+                savedTab.filePath = targetPath;
+                savedTab.fileName = currentName;
+                
+                const stat = await statMarkdownFile(targetPath).catch(() => null);
+                if (stat && stat.exists) {
+                  savedTab.lastKnownModifiedAt = stat.modifiedAt;
+                  if (options.getActiveTabId() === tabId) {
+                    options.setLastKnownModifiedAt(stat.modifiedAt);
+                  }
+                }
+
+                if (options.getActiveTabId() === tabId) {
+                  options.setFileName(currentName);
+                  options.setFilePath(targetPath);
+                  options.setNativePath(targetPath);
+                }
+                
+                options.setTabs([...options.getTabs()]);
+              }
+              if (options.getCurrentFolderPath()) {
+                options.loadFolder(options.getCurrentFolderPath());
+              }
+            }
+          }
+        }
+      }
+    }, 1000);
+  }
   async function checkExternalFileChange() {
     const warning = await getExternalFileWarning(
       options.getDesktopEnabled(),
@@ -288,5 +404,6 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     closeTab,
     refreshRecentFiles,
     checkExternalFileChange,
+    debouncedAutoSave,
   };
 }

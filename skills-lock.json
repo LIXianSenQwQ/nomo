@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "skills/refactor/SKILL.md",
       "computedHash": "87789a786b96f99ba0680e89345a975106e10e7db1071c7cdc2e76d507c449d6"
+    },
+    "smart-requirement-workflow": {
+      "source": "tianyu0919/skills",
+      "sourceType": "github",
+      "skillPath": "smart-requirement-workflow/SKILL.md",
+      "computedHash": "a496979931eafb4e9ebe93185a88bc3b9d6baea31afdbccc07852282d93ee00c"
     }
   }
 }

@@ -4,6 +4,31 @@ use std::{
     path::Path,
     time::UNIX_EPOCH,
 };
+use tauri::{AppHandle, Manager};
+
+#[tauri::command]
+pub(crate) fn get_default_workspace_dir(app: AppHandle) -> Result<String, String> {
+    let document_dir = app
+        .path()
+        .document_dir()
+        .map_err(|error| format!("无法获取文档目录：{error}"))?;
+    let workspace_dir = document_dir.join("NewMd");
+    if !workspace_dir.exists() {
+        fs::create_dir_all(&workspace_dir)
+            .map_err(|error| format!("无法创建工作区目录：{error}"))?;
+    }
+    Ok(workspace_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub(crate) fn create_folder(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|error| format!("创建文件夹失败：{error}"))
+}
+
+#[tauri::command]
+pub(crate) fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    fs::rename(&old_path, &new_path).map_err(|error| format!("重命名失败：{error}"))
+}
 
 #[tauri::command]
 pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String> {
@@ -146,14 +171,12 @@ fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
 
         if path_buf.is_dir() {
             if let Ok(sub_entries) = read_dir_tree(&path_buf) {
-                if !sub_entries.is_empty() {
-                    entries.push(FileTreeEntry {
-                        name,
-                        path: path_buf.to_string_lossy().to_string(),
-                        is_dir: true,
-                        children: sub_entries,
-                    });
-                }
+                entries.push(FileTreeEntry {
+                    name,
+                    path: path_buf.to_string_lossy().to_string(),
+                    is_dir: true,
+                    children: sub_entries,
+                });
             }
         } else if path_buf.is_file() {
             if let Some(extension) = path_buf.extension().and_then(|ext| ext.to_str()) {

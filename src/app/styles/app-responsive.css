@@ -319,6 +319,14 @@
   box-sizing: border-box;
 }
 
+.tree-folder-root-title span.node-name {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tree-folder-root-title:hover {
   background-color: rgba(128, 128, 128, 0.08);
   color: var(--md-editor-fg);

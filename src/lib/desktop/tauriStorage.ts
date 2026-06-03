@@ -260,6 +260,21 @@ export async function updateWindowState(state: WindowState): Promise<void> {
   await invoke('update_window_state', { input: toSnakeWindowState(state) });
 }
 
+export async function getDefaultWorkspaceDir(): Promise<string> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string>('get_default_workspace_dir');
+}
+
+export async function createFolder(path: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('create_folder', { path });
+}
+
+export async function renameFile(oldPath: string, newPath: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('rename_file', { oldPath, newPath });
+}
+
 export async function readCurrentWindowState(): Promise<WindowState> {
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const currentWindow = getCurrentWindow();
