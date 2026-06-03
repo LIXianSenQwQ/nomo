@@ -25,6 +25,7 @@
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let openTablePicker: () => void;
+  export let showUnavailableFeature: (featureName: string) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let outlineVisible: boolean;
@@ -58,6 +59,11 @@
 
   function finish(action: () => void, menu: string) {
     action();
+    closeMenu(menu);
+  }
+
+  function comingSoon(featureName: string, menu: string) {
+    showUnavailableFeature(featureName);
     closeMenu(menu);
   }
 </script>
@@ -210,39 +216,105 @@
         >
         {#if activeMenu === 'paragraph'}
           <div class="dropdown-menu">
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 1 }), 'paragraph')}
-              >一级标题 <span class="shortcut">Ctrl+1</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 2 }), 'paragraph')}
-              >二级标题 <span class="shortcut">Ctrl+2</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 3 }), 'paragraph')}
-              >三级标题 <span class="shortcut">Ctrl+3</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 4 }), 'paragraph')}
-              >四级标题 <span class="shortcut">Ctrl+4</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 5 }), 'paragraph')}
-              >五级标题 <span class="shortcut">Ctrl+5</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'setHeading', level: 6 }), 'paragraph')}
-              >六级标题 <span class="shortcut">Ctrl+6</span></button
-            >
+            <div class="nested-trigger">
+              <span>标题</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+                ><path
+                  d="M3 1l4 4-4 4"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              >
+              <div class="dropdown-menu nested">
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 1 }), 'paragraph')}
+                  >一级标题 <span class="shortcut">Ctrl+1</span></button
+                >
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 2 }), 'paragraph')}
+                  >二级标题 <span class="shortcut">Ctrl+2</span></button
+                >
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 3 }), 'paragraph')}
+                  >三级标题 <span class="shortcut">Ctrl+3</span></button
+                >
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 4 }), 'paragraph')}
+                  >四级标题 <span class="shortcut">Ctrl+4</span></button
+                >
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 5 }), 'paragraph')}
+                  >五级标题 <span class="shortcut">Ctrl+5</span></button
+                >
+                <button
+                  on:click={() =>
+                    finish(() => runCommand({ type: 'setHeading', level: 6 }), 'paragraph')}
+                  >六级标题 <span class="shortcut">Ctrl+6</span></button
+                >
+              </div>
+            </div>
             <button on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
-              >正文 <span class="shortcut">Ctrl+0</span></button
+              >段落 <span class="shortcut">Ctrl+0</span></button
             >
+            <button on:click={() => comingSoon('提升标题级别', 'paragraph')}
+              >提升标题级别 <span class="shortcut">Ctrl+=</span></button
+            >
+            <button on:click={() => comingSoon('降低标题级别', 'paragraph')}
+              >降低标题级别 <span class="shortcut">Ctrl+-</span></button
+            >
+            <div class="divider"></div>
+            <button on:click={() => finish(openTablePicker, 'paragraph')}
+              >表格 <span class="shortcut">Ctrl+Shift+T</span></button
+            >
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'insertCodeBlock', language: 'ts' }), 'paragraph')}
+              >代码块 <span class="shortcut">Ctrl+Shift+K</span></button
+            >
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'insertMathBlock', tex: '' }), 'paragraph')}
+              >公式块 <span class="shortcut">Ctrl+Shift+M</span></button
+            >
+            <div class="divider"></div>
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'toggleBlockquote' }), 'paragraph')}
+              >引用 <span class="shortcut">Ctrl+Shift+Q</span></button
+            >
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
+              >有序列表 <span class="shortcut">Ctrl+Shift+[</span></button
+            >
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'toggleBulletList' }), 'paragraph')}
+              >无序列表 <span class="shortcut">Ctrl+Shift+]</span></button
+            >
+            <button
+              on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'paragraph')}
+              >任务列表 <span class="shortcut">Ctrl+Shift+X</span></button
+            >
+            <div class="divider"></div>
+            <button on:click={() => comingSoon('在上方插入段落', 'paragraph')}
+              >在上方插入段落 <span class="shortcut">Ctrl+Shift+Enter</span></button
+            >
+            <button on:click={() => comingSoon('在下方插入段落', 'paragraph')}
+              >在下方插入段落 <span class="shortcut">Ctrl+Enter</span></button
+            >
+            <div class="divider"></div>
+            <button on:click={() => comingSoon('图表', 'paragraph')}>图表</button>
+            <button on:click={() => comingSoon('脚注', 'paragraph')}>脚注</button>
+            <button on:click={() => comingSoon('水平分割线', 'paragraph')}>水平分割线</button>
+            <button on:click={() => comingSoon('内容目录', 'paragraph')}>内容目录</button>
+            <button on:click={() => comingSoon('YAML Front Matter', 'paragraph')}>YAML Front Matter</button>
           </div>
         {/if}
       </div>
@@ -256,38 +328,32 @@
         {#if activeMenu === 'format'}
           <div class="dropdown-menu">
             <button on:click={() => finish(() => runCommand({ type: 'toggleBold' }), 'format')}
-              >粗体 <span class="shortcut">Ctrl+B</span></button
+              >加粗 <span class="shortcut">Ctrl+B</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleItalic' }), 'format')}
               >斜体 <span class="shortcut">Ctrl+I</span></button
             >
-            <button
-              on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'format')}
-              >引用块 <span class="shortcut">Ctrl+Shift+Q</span></button
+            <button on:click={() => comingSoon('下划线', 'format')}
+              >下划线 <span class="shortcut">Ctrl+U</span></button
             >
-            <button
-              on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'format')}
-              >有序列表 <span class="shortcut">Ctrl+Shift+[</span></button
+            <button on:click={() => finish(() => runCommand({ type: 'toggleCode' }), 'format')}
+              >行代码 <span class="shortcut">Ctrl+`</span></button
             >
-            <button
-              on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'format')}
-              >无序列表 <span class="shortcut">Ctrl+Shift+]</span></button
+            <button on:click={() => comingSoon('行公式', 'format')}>行公式</button>
+            <div class="divider"></div>
+            <button on:click={() => comingSoon('删除线', 'format')}
+              >删除线 <span class="shortcut">Alt+Shift+5</span></button
             >
-            <button on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'format')}
-              >任务列表 <span class="shortcut">Ctrl+Shift+X</span></button
+            <button on:click={() => comingSoon('高亮', 'format')}>高亮</button>
+            <button on:click={() => comingSoon('注释', 'format')}>注释</button>
+            <div class="divider"></div>
+            <button on:click={() => comingSoon('超链接', 'format')}
+              >超链接 <span class="shortcut">Ctrl+K</span></button
             >
-            <button on:click={() => finish(openTablePicker, 'format')}
-              >表格 <span class="shortcut">Ctrl+Shift+T</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'insertMathBlock', tex: '' }), 'format')}
-              >公式块 <span class="shortcut">Ctrl+Shift+M</span></button
-            >
-            <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'insertCodeBlock', language: 'ts' }), 'format')}
-              >代码块 <span class="shortcut">Ctrl+Shift+K</span></button
+            <button on:click={() => comingSoon('图像', 'format')}>图像</button>
+            <div class="divider"></div>
+            <button on:click={() => comingSoon('清除样式', 'format')}
+              >清除样式 <span class="shortcut">Ctrl+\</span></button
             >
           </div>
         {/if}

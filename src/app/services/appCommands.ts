@@ -9,6 +9,7 @@ export interface AppCommandHandlers {
   saveMarkdownFile: (saveAs?: boolean) => void;
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
+  showUnavailableFeature: (featureName: string) => void;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
   toggleTheme: () => void;
@@ -40,6 +41,60 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.runCommand({ type: 'insertMathBlock', tex: '' });
   } else if (command === 'insert-code-block') {
     handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
+  } else if (command === 'set-heading-1') {
+    handlers.runCommand({ type: 'setHeading', level: 1 });
+  } else if (command === 'set-heading-2') {
+    handlers.runCommand({ type: 'setHeading', level: 2 });
+  } else if (command === 'set-heading-3') {
+    handlers.runCommand({ type: 'setHeading', level: 3 });
+  } else if (command === 'set-heading-4') {
+    handlers.runCommand({ type: 'setHeading', level: 4 });
+  } else if (command === 'set-heading-5') {
+    handlers.runCommand({ type: 'setHeading', level: 5 });
+  } else if (command === 'set-heading-6') {
+    handlers.runCommand({ type: 'setHeading', level: 6 });
+  } else if (command === 'set-paragraph') {
+    handlers.runCommand({ type: 'setParagraph' });
+  } else if (command === 'toggle-bold') {
+    handlers.runCommand({ type: 'toggleBold' });
+  } else if (command === 'toggle-italic') {
+    handlers.runCommand({ type: 'toggleItalic' });
+  } else if (command === 'toggle-inline-code') {
+    handlers.runCommand({ type: 'toggleCode' });
+  } else if (command === 'menu-heading-up') {
+    handlers.showUnavailableFeature('提升标题级别');
+  } else if (command === 'menu-heading-down') {
+    handlers.showUnavailableFeature('降低标题级别');
+  } else if (command === 'menu-insert-paragraph-before') {
+    handlers.showUnavailableFeature('在上方插入段落');
+  } else if (command === 'menu-insert-paragraph-after') {
+    handlers.showUnavailableFeature('在下方插入段落');
+  } else if (command === 'menu-chart') {
+    handlers.showUnavailableFeature('图表');
+  } else if (command === 'menu-footnote') {
+    handlers.showUnavailableFeature('脚注');
+  } else if (command === 'menu-horizontal-rule') {
+    handlers.showUnavailableFeature('水平分割线');
+  } else if (command === 'menu-content-directory') {
+    handlers.showUnavailableFeature('内容目录');
+  } else if (command === 'menu-yaml-front-matter') {
+    handlers.showUnavailableFeature('YAML Front Matter');
+  } else if (command === 'menu-underline') {
+    handlers.showUnavailableFeature('下划线');
+  } else if (command === 'menu-inline-math') {
+    handlers.showUnavailableFeature('行公式');
+  } else if (command === 'menu-strikethrough') {
+    handlers.showUnavailableFeature('删除线');
+  } else if (command === 'menu-highlight') {
+    handlers.showUnavailableFeature('高亮');
+  } else if (command === 'menu-comment') {
+    handlers.showUnavailableFeature('注释');
+  } else if (command === 'menu-link') {
+    handlers.showUnavailableFeature('超链接');
+  } else if (command === 'menu-image') {
+    handlers.showUnavailableFeature('图像');
+  } else if (command === 'menu-clear-format') {
+    handlers.showUnavailableFeature('清除样式');
   } else if (command === 'toggle-source') {
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');
   } else if (command === 'toggle-theme') {

@@ -66,6 +66,7 @@
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let openTablePicker: () => void;
+  export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
   export let setMode: (mode: EditorMode) => void;
@@ -126,6 +127,7 @@
     {saveMarkdownFile}
     {runCommand}
     {openTablePicker}
+    {showUnavailableFeature}
     {setMode}
     {toggleOutlineVisible}
     {toggleFocusMode}
