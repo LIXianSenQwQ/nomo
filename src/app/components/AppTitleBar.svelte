@@ -126,8 +126,7 @@
 </script>
 
 <header class="titlebar" class:is-mac={isMac} class:is-win={isWin} class:is-fullscreen={isFullscreen}>
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="titlebar-row top-row" data-drag-region on:mousedown={handleDrag}>
+  <div class="titlebar-row top-row" data-drag-region role="presentation" on:mousedown={handleDrag}>
     <div class="titlebar-left" data-drag-region>
       <span class="app-logo">M</span>
       <span class="app-name" data-drag-region>NewMd</span>
