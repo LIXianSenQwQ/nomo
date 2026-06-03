@@ -38,6 +38,6 @@ export function createSidebarResizeHandlers(handlers: SidebarResizeHandlers) {
 
   return {
     startResize,
-    destroy: stopResize
+    destroy: stopResize,
   };
 }

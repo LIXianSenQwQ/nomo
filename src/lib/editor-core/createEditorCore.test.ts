@@ -10,7 +10,7 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toBe('# NewMd\n\n阶段0');
     expect(editor.getSnapshot()).toMatchObject({
       markdown: '# NewMd\n\n阶段0',
-      version: 1
+      version: 1,
     });
   });
 
@@ -25,7 +25,11 @@ describe('createEditorCore', () => {
     editor.updateOptions({ mode: 'source' });
     editor.setMarkdown('正文');
 
-    expect(events).toEqual(['0:subscribe:semantic', '0:runtime-options:source', '1:programmatic-update:source']);
+    expect(events).toEqual([
+      '0:subscribe:semantic',
+      '0:runtime-options:source',
+      '1:programmatic-update:source',
+    ]);
   });
 
   it('serializes ProseMirror edits back to Markdown through EditorCore', () => {
@@ -131,12 +135,15 @@ describe('createEditorCore', () => {
   it('renders editable HTML blocks with their original root element and attributes', () => {
     const target = document.createElement('div');
     createEditorCore({
-      markdown: '<section class="demo-html-block" id="demo"><strong>HTML 块：</strong><span>允许渲染内联 HTML 内容。</span></section>',
-      target
+      markdown:
+        '<section class="demo-html-block" id="demo"><strong>HTML 块：</strong><span>允许渲染内联 HTML 内容。</span></section>',
+      target,
     });
 
     const htmlCard = target.querySelector('.html-card');
-    const contentRoot = target.querySelector('.html-card > section.html-card-content.demo-html-block#demo');
+    const contentRoot = target.querySelector(
+      '.html-card > section.html-card-content.demo-html-block#demo',
+    );
 
     expect(htmlCard).not.toBeNull();
     expect(contentRoot).not.toBeNull();
@@ -147,19 +154,34 @@ describe('createEditorCore', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({
       markdown: '# First\n## Second\n### Third\n\n正文内容',
-      target
+      target,
     });
 
     // scrollToHeading 命令应成功执行（返回 true）
-    const result = editor.execute({ type: 'scrollToHeading', headingIndex: 0, text: 'First', level: 1 });
+    const result = editor.execute({
+      type: 'scrollToHeading',
+      headingIndex: 0,
+      text: 'First',
+      level: 1,
+    });
     expect(result).toBe(true);
 
     // 执行第二个标题
-    const result2 = editor.execute({ type: 'scrollToHeading', headingIndex: 1, text: 'Second', level: 2 });
+    const result2 = editor.execute({
+      type: 'scrollToHeading',
+      headingIndex: 1,
+      text: 'Second',
+      level: 2,
+    });
     expect(result2).toBe(true);
 
     // 执行第三个标题
-    const result3 = editor.execute({ type: 'scrollToHeading', headingIndex: 2, text: 'Third', level: 3 });
+    const result3 = editor.execute({
+      type: 'scrollToHeading',
+      headingIndex: 2,
+      text: 'Third',
+      level: 3,
+    });
     expect(result3).toBe(true);
   });
 
@@ -167,11 +189,15 @@ describe('createEditorCore', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({
       markdown: '# Only One Heading',
-      target
+      target,
     });
 
-    const result = editor.execute({ type: 'scrollToHeading', headingIndex: 5, text: 'Nonexistent', level: 1 });
+    const result = editor.execute({
+      type: 'scrollToHeading',
+      headingIndex: 5,
+      text: 'Nonexistent',
+      level: 1,
+    });
     expect(result).toBe(false);
   });
 });
-

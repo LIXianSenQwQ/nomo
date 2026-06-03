@@ -19,7 +19,8 @@ describe('table Markdown editing', () => {
 
 describe('HTML block round-trip', () => {
   it('preserves editable HTML block with inline tags', () => {
-    const html = '<section class="demo-html-block"><strong>HTML 块：</strong><span>允许渲染内联 HTML 内容。</span></section>';
+    const html =
+      '<section class="demo-html-block"><strong>HTML 块：</strong><span>允许渲染内联 HTML 内容。</span></section>';
     const markdown = `${html}\n`;
 
     const serialized = serializeMarkdown(parseMarkdown(markdown)).trim();

@@ -37,9 +37,12 @@ describe('codeBlockNavigationPlugin', () => {
     const view = new EditorView(target, {
       state: EditorState.create({
         doc,
-        selection: TextSelection.create(doc, paragraphs[0].pos + 1 + paragraphs[0].node.content.size),
-        plugins: [codeBlockNavigationPlugin({ enterEditAt })]
-      })
+        selection: TextSelection.create(
+          doc,
+          paragraphs[0].pos + 1 + paragraphs[0].node.content.size,
+        ),
+        plugins: [codeBlockNavigationPlugin({ enterEditAt })],
+      }),
     });
 
     view.dom.dispatchEvent(createKeyboardEvent('ArrowDown'));
@@ -61,8 +64,8 @@ describe('codeBlockNavigationPlugin', () => {
       state: EditorState.create({
         doc,
         selection: TextSelection.create(doc, paragraphs[1].pos + 1),
-        plugins: [codeBlockNavigationPlugin({ enterEditAt })]
-      })
+        plugins: [codeBlockNavigationPlugin({ enterEditAt })],
+      }),
     });
 
     view.dom.dispatchEvent(createKeyboardEvent('ArrowUp'));
@@ -84,8 +87,8 @@ describe('codeBlockNavigationPlugin', () => {
       state: EditorState.create({
         doc,
         selection: TextSelection.create(doc, paragraph.pos + 1 + paragraph.node.content.size),
-        plugins: [codeBlockNavigationPlugin({ enterEditAt })]
-      })
+        plugins: [codeBlockNavigationPlugin({ enterEditAt })],
+      }),
     });
 
     view.dom.dispatchEvent(createKeyboardEvent('ArrowDown'));
@@ -107,8 +110,8 @@ describe('codeBlockNavigationPlugin', () => {
       state: EditorState.create({
         doc,
         selection: TextSelection.create(doc, paragraph.pos + 1),
-        plugins: [codeBlockNavigationPlugin({ enterEditAt })]
-      })
+        plugins: [codeBlockNavigationPlugin({ enterEditAt })],
+      }),
     });
 
     view.dom.dispatchEvent(createKeyboardEvent('ArrowUp'));

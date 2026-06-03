@@ -43,7 +43,7 @@ export function inlineCodeInputPlugin(): Plugin {
       }
 
       return tr;
-    }
+    },
   });
 }
 
@@ -114,7 +114,7 @@ function scanTextForInlineCode(text: string, absoluteTextPos: number): InlineCod
           from: absoluteTextPos + start,
           to: absoluteTextPos + end + 2,
           code: code.trim(),
-          isNew: true
+          isNew: true,
         });
       }
       index = end + 2;
@@ -132,7 +132,7 @@ function scanTextForInlineCode(text: string, absoluteTextPos: number): InlineCod
           from: absoluteTextPos + start,
           to: absoluteTextPos + end + 1,
           code: code.trim(),
-          isNew: true
+          isNew: true,
         });
       }
       index = end + 1;

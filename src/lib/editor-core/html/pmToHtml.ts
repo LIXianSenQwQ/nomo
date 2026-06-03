@@ -19,7 +19,7 @@ function buildAttrString(cls?: string | null, id?: string | null): string {
 
 function serializeInlineContent(node: ProseMirrorNode): string {
   const parts: string[] = [];
-  node.forEach(child => {
+  node.forEach((child) => {
     if (child.isText) {
       parts.push(wrapTextWithMarks(child));
     }

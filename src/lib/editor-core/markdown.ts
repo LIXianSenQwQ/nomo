@@ -1,7 +1,12 @@
 import { InputRule, textblockTypeInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import MarkdownIt from 'markdown-it';
 import Token from 'markdown-it/lib/token.mjs';
-import { defaultMarkdownParser, defaultMarkdownSerializer, MarkdownParser, MarkdownSerializer } from 'prosemirror-markdown';
+import {
+  defaultMarkdownParser,
+  defaultMarkdownSerializer,
+  MarkdownParser,
+  MarkdownSerializer,
+} from 'prosemirror-markdown';
 import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { schema, type TableColumnAlignment } from './schema';
 import { classifyHtmlBlock } from './html/htmlClassifier';
@@ -22,14 +27,20 @@ markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
     if (src.charCodeAt(end) === 0x24) {
       let bsCount = 0;
       let i = end - 1;
-      while (i > pos && src.charCodeAt(i) === 0x5c) { bsCount++; i--; }
+      while (i > pos && src.charCodeAt(i) === 0x5c) {
+        bsCount++;
+        i--;
+      }
       if (bsCount % 2 === 0) break;
     }
     end++;
   }
   if (end >= src.length || end === pos + 1) return false;
 
-  const tex = src.slice(pos + 1, end).trim().replace(/\\\$/g, '$');
+  const tex = src
+    .slice(pos + 1, end)
+    .trim()
+    .replace(/\\\$/g, '$');
   if (!tex.trim()) return false;
 
   if (!silent) {
@@ -112,22 +123,18 @@ markdownIt.parse = (src, env) => {
   return normalized;
 };
 
-const tableMarkdownParser = new MarkdownParser(
-  schema,
-  markdownIt,
-  {
-    ...defaultMarkdownParser.tokens,
-    table: { block: 'table' },
-    tr: { block: 'table_row' },
-    th: { block: 'table_header', getAttrs: getTableCellAttrs },
-    td: { block: 'table_cell', getAttrs: getTableCellAttrs },
-    math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
-    math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
-    code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
-    html_block: { ignore: true },
-    html_inline: { ignore: true }
-  }
-);
+const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
+  ...defaultMarkdownParser.tokens,
+  table: { block: 'table' },
+  tr: { block: 'table_row' },
+  th: { block: 'table_header', getAttrs: getTableCellAttrs },
+  td: { block: 'table_cell', getAttrs: getTableCellAttrs },
+  math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
+  math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
+  code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
+  html_block: { ignore: true },
+  html_inline: { ignore: true },
+});
 
 type HtmlMarkdownParseState = {
   openNode(type: unknown, attrs?: unknown): void;
@@ -141,7 +148,8 @@ type MarkdownParserWithTokenHandlers = MarkdownParser & {
   tokenHandlers: Record<string, (state: HtmlMarkdownParseState, tok: Token) => void>;
 };
 
-const tableMarkdownParserWithHandlers = tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
+const tableMarkdownParserWithHandlers =
+  tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
 
 // 覆盖 html_block token handler — 分类 HTML 后决定走可编辑节点还是 fallback paragraph
 tableMarkdownParserWithHandlers.tokenHandlers = {
@@ -152,7 +160,7 @@ tableMarkdownParserWithHandlers.tokenHandlers = {
       const attrs: Record<string, unknown> = {
         tag: classification.tag!,
         class: classification.attrs?.class ?? null,
-        id: classification.attrs?.id ?? null
+        id: classification.attrs?.id ?? null,
       };
       state.openNode(schema.nodes.html_block, attrs);
       parseHtmlContent(state, classification.innerHTML!, schema);
@@ -163,7 +171,7 @@ tableMarkdownParserWithHandlers.tokenHandlers = {
       state.addText(tok.content.trimEnd());
       state.closeNode();
     }
-  }
+  },
 };
 
 // 覆盖 html_inline token handler — 映射内联 HTML 到已有 mark
@@ -177,7 +185,7 @@ const INLINE_MARK_MAP: Record<string, string> = {
   em: 'em',
   i: 'em',
   code: 'code',
-  a: 'link'
+  a: 'link',
 };
 
 const htmlInlineStack: Array<{ tag: string; markName: string }> = [];
@@ -188,7 +196,7 @@ function resetHtmlInlineStack(): void {
 
 tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
   state: HtmlMarkdownParseState,
-  tok: Token
+  tok: Token,
 ) => {
   const content = tok.content;
   const tagMatch = /^<\/?([a-zA-Z][a-zA-Z0-9]*)/.exec(content);
@@ -215,7 +223,7 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
 
   if (isClosing) {
     // 在栈中查找匹配的开标签
-    const idx = findLastIndex(htmlInlineStack, e => e.tag === tag);
+    const idx = findLastIndex(htmlInlineStack, (e) => e.tag === tag);
     if (idx >= 0) {
       // 先关闭后面开的标签
       while (htmlInlineStack.length > idx) {
@@ -236,7 +244,7 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
     if (markName === 'link') {
       attrs = {
         href: extractAttr(content, 'href') ?? '',
-        title: extractAttr(content, 'title') ?? null
+        title: extractAttr(content, 'title') ?? null,
       };
     }
     const mark = markType.create(attrs);
@@ -302,9 +310,9 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.write(node.attrs.tex as string);
       state.write('\n$$\n');
       state.closeBlock(node);
-    }
+    },
   },
-  defaultMarkdownSerializer.marks
+  defaultMarkdownSerializer.marks,
 );
 
 export function parseMarkdown(markdown: string): ProseMirrorNode {
@@ -313,7 +321,9 @@ export function parseMarkdown(markdown: string): ProseMirrorNode {
     return tableMarkdownParser.parse(splitFrontMatter(markdown).body);
   } catch {
     resetHtmlInlineStack();
-    return schema.node('doc', null, [schema.node('paragraph', null, [schema.text(splitFrontMatter(markdown).body)])]);
+    return schema.node('doc', null, [
+      schema.node('paragraph', null, [schema.text(splitFrontMatter(markdown).body)]),
+    ]);
   }
 }
 
@@ -346,7 +356,9 @@ export function createTableMarkdown(rows: number, columns: number): string {
   return `${lines.join('\n')}\n`;
 }
 
-function getTableCellAttrs(token: { attrGet(name: string): string | null }): { align: TableColumnAlignment | null } {
+function getTableCellAttrs(token: { attrGet(name: string): string | null }): {
+  align: TableColumnAlignment | null;
+} {
   const style = token.attrGet('style') ?? '';
   const match = /text-align\s*:\s*(left|center|right)/i.exec(style);
   return { align: match ? (match[1].toLowerCase() as TableColumnAlignment) : null };
@@ -359,7 +371,9 @@ function serializeTable(table: ProseMirrorNode): string {
 
   const columnCount = Math.max(...rows.map((row) => row.childCount));
   const serializedRows = rows.map((row) => serializeTableRow(row, columnCount));
-  const alignments = Array.from({ length: columnCount }, (_, index) => readColumnAlignment(rows, index));
+  const alignments = Array.from({ length: columnCount }, (_, index) =>
+    readColumnAlignment(rows, index),
+  );
   const separator = alignments.map((align) => {
     if (align === 'center') return ':---:';
     if (align === 'right') return '---:';
@@ -405,7 +419,9 @@ function serializeInlineText(node: ProseMirrorNode): string {
   }, text);
 }
 
-function splitTaskParagraph(node: ProseMirrorNode): { marker: string; content: ProseMirrorNode } | null {
+function splitTaskParagraph(
+  node: ProseMirrorNode,
+): { marker: string; content: ProseMirrorNode } | null {
   const firstChild = node.firstChild;
   if (!firstChild?.isText) return null;
 
@@ -421,7 +437,7 @@ function splitTaskParagraph(node: ProseMirrorNode): { marker: string; content: P
 
   return {
     marker: match[0].endsWith(' ') ? match[0] : `${match[0]} `,
-    content: node.type.create(node.attrs, Fragment.fromArray(children), node.marks)
+    content: node.type.create(node.attrs, Fragment.fromArray(children), node.marks),
   };
 }
 
@@ -429,7 +445,10 @@ function escapeTableText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 }
 
-function readColumnAlignment(rows: ProseMirrorNode[], columnIndex: number): TableColumnAlignment | null {
+function readColumnAlignment(
+  rows: ProseMirrorNode[],
+  columnIndex: number,
+): TableColumnAlignment | null {
   for (const row of rows) {
     if (columnIndex >= row.childCount) continue;
     const cell = row.child(columnIndex);
@@ -442,11 +461,15 @@ function readColumnAlignment(rows: ProseMirrorNode[], columnIndex: number): Tabl
 export function createMarkdownInputRules() {
   return [
     createMathInlineInputRule(),
-    textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({ level: match[1].length })),
+    textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({
+      level: match[1].length,
+    })),
     wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote),
     wrappingInputRule(/^\s*([-+*])\s$/, schema.nodes.bullet_list),
-    wrappingInputRule(/^(\d+)\.\s$/, schema.nodes.ordered_list, (match) => ({ order: Number(match[1]) })),
-    textblockTypeInputRule(/^```$/, schema.nodes.code_block)
+    wrappingInputRule(/^(\d+)\.\s$/, schema.nodes.ordered_list, (match) => ({
+      order: Number(match[1]),
+    })),
+    textblockTypeInputRule(/^```$/, schema.nodes.code_block),
   ];
 }
 
@@ -467,7 +490,6 @@ function createMathInlineInputRule(): InputRule {
     return state.tr.replaceWith(mathStart, end, node);
   });
 }
-
 
 function findLastIndex<T>(arr: T[], predicate: (value: T) => boolean): number {
   for (let i = arr.length - 1; i >= 0; i--) {

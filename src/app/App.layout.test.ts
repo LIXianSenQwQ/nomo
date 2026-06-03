@@ -4,11 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 describe('App outline layout', () => {
   const appSource = readFileSync(resolve(__dirname, 'App.svelte'), 'utf-8');
-  const editorSource = readFileSync(resolve(__dirname, 'components/EditorWorkspace.svelte'), 'utf-8');
+  const editorSource = readFileSync(
+    resolve(__dirname, 'components/EditorWorkspace.svelte'),
+    'utf-8',
+  );
   const styles = readFileSync(resolve(__dirname, 'styles/app.css'), 'utf-8');
 
   it('keeps the document outline out of the document layout flow', () => {
-    const documentLayouts = editorSource.match(/<div class="document-layout">[\s\S]*?<\/div>/g) ?? [];
+    const documentLayouts =
+      editorSource.match(/<div class="document-layout">[\s\S]*?<\/div>/g) ?? [];
 
     expect(documentLayouts).toHaveLength(2);
     for (const layout of documentLayouts) {
@@ -16,14 +20,18 @@ describe('App outline layout', () => {
     }
     expect(styles).toMatch(/\.content-outline\s*\{[\s\S]*?position:\s*fixed;/);
     expect(styles).toMatch(/\.editor-shell\s*\{[\s\S]*?container-type:\s*inline-size;/);
-    expect(styles).toMatch(/\.content-outline\s*\{[\s\S]*?right:\s*clamp\(32px,\s*3\.5cqw,\s*160px\);/);
+    expect(styles).toMatch(
+      /\.content-outline\s*\{[\s\S]*?right:\s*clamp\(32px,\s*3\.5cqw,\s*160px\);/,
+    );
     expect(styles).not.toContain('7vw');
   });
 
   it('sizes the document content as a percentage of the editor shell', () => {
     expect(appSource).toContain('let contentWidthPercent = 68;');
     expect(appSource).toContain('{contentWidthPercent}');
-    expect(styles).toMatch(/grid-template-columns:\s*minmax\(0,\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\)\);/);
+    expect(styles).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\)\);/,
+    );
   });
 
   it('keeps outline navigation in the current editor mode', () => {
@@ -43,7 +51,9 @@ describe('App outline layout', () => {
 
     expect(updateSource).not.toContain('normalizeMarkdownForSave');
     expect(updateSource).toContain('pendingSourceScrollTop = sourcePane?.scrollTop ?? null;');
-    expect(updateSource).toContain('editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);');
+    expect(updateSource).toContain(
+      'editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);',
+    );
     expect(appSource).toContain('sourcePane.scrollTop = restoreScrollTop;');
   });
 

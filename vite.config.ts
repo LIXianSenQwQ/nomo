@@ -5,11 +5,11 @@ export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
   server: {
-    port: 5173,
-    strictPort: true
+    port: 1420,
+    strictPort: true,
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.ts']
-  }
+    include: ['src/**/*.test.ts'],
+  },
 });

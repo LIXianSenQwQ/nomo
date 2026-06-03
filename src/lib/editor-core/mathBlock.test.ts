@@ -174,7 +174,11 @@ describe('math_block schema', () => {
       }
       return true;
     });
-    const dom = mathNode!.type.spec.toDOM!(mathNode!) as [string, Record<string, string>, DOMOutputSpec];
+    const dom = mathNode!.type.spec.toDOM!(mathNode!) as [
+      string,
+      Record<string, string>,
+      DOMOutputSpec,
+    ];
     expect(dom[0]).toBe('div');
     expect(dom[1].class).toBe('math-block');
     expect(dom[1]['data-tex']).toBe('x^2');
@@ -219,7 +223,7 @@ describe('displayMathInputPlugin — semantic input', () => {
   it('converts newly typed $$...$$ text into math_block node (multi-line)', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [displayMathInputPlugin()]
+      plugins: [displayMathInputPlugin()],
     });
 
     // 模拟用户输入 $$\nE = mc^2\n$$
@@ -240,7 +244,7 @@ describe('displayMathInputPlugin — semantic input', () => {
   it('converts single-line $$tex$$ into math_block node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [displayMathInputPlugin()]
+      plugins: [displayMathInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('$$E = mc^2$$'));
@@ -260,7 +264,7 @@ describe('displayMathInputPlugin — semantic input', () => {
   it('does NOT convert unclosed $$ into math_block', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [displayMathInputPlugin()]
+      plugins: [displayMathInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('$$\nE = mc^2'));
@@ -280,7 +284,7 @@ describe('displayMathInputPlugin — semantic input', () => {
   it('does NOT convert empty $$...$$ into math_block', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [displayMathInputPlugin()]
+      plugins: [displayMathInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('$$$$'));

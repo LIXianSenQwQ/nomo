@@ -80,7 +80,10 @@ describe('math_inline round-trip', () => {
     expect(serialized).toBe('$$');
     let found = false;
     doc.descendants((node) => {
-      if (node.type.name === 'math_inline') { found = true; return false; }
+      if (node.type.name === 'math_inline') {
+        found = true;
+        return false;
+      }
       return true;
     });
     expect(found).toBe(false);
@@ -189,7 +192,11 @@ describe('math_inline schema', () => {
   it('toDOM fallback outputs span with data-tex', () => {
     const doc = parseMarkdown('$x^2$');
     const mathNode = doc.firstChild?.firstChild;
-    const dom = mathNode!.type.spec.toDOM!(mathNode!) as [string, Record<string, string>, DOMOutputSpec];
+    const dom = mathNode!.type.spec.toDOM!(mathNode!) as [
+      string,
+      Record<string, string>,
+      DOMOutputSpec,
+    ];
     expect(dom[0]).toBe('span');
     expect(dom[1].class).toBe('math-inline');
     expect(dom[1]['data-tex']).toBe('x^2');
@@ -233,7 +240,7 @@ describe('math_inline semantic input', () => {
   it('converts newly typed $tex$ text into math_inline node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [mathInlineInputPlugin()]
+      plugins: [mathInlineInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('语义输入 $a^2 + b^2 = c^2$'));
@@ -254,7 +261,7 @@ describe('math_inline semantic input', () => {
   it('converts newly typed $ tex $ text into math_inline node', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [mathInlineInputPlugin()]
+      plugins: [mathInlineInputPlugin()],
     });
 
     state = state.apply(state.tr.insertText('语义输入 $ a=c $'));
@@ -274,7 +281,7 @@ describe('math_inline semantic input', () => {
   it('does not convert inline code math-looking text', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [mathInlineInputPlugin()]
+      plugins: [mathInlineInputPlugin()],
     });
 
     const code = schema.marks.code.create();
@@ -295,7 +302,7 @@ describe('math_inline semantic input', () => {
   it('converts $a$ to math_inline and allows continued input', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
-      plugins: [mathInlineInputPlugin()]
+      plugins: [mathInlineInputPlugin()],
     });
 
     // 模拟用户输入 $a$

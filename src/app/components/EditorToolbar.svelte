@@ -15,7 +15,7 @@
     Quote,
     Save,
     Sigma,
-    Table2
+    Table2,
   } from '@lucide/svelte';
   import type { EditorCommand, EditorMode } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
@@ -99,7 +99,13 @@
       <Table2 size={17} />
     </button>
     {#if tablePickerOpen}
-      <div class="table-picker-popover" role="dialog" aria-label="选择表格尺寸" tabindex="-1" on:keydown={handleTablePickerKeydown}>
+      <div
+        class="table-picker-popover"
+        role="dialog"
+        aria-label="选择表格尺寸"
+        tabindex="-1"
+        on:keydown={handleTablePickerKeydown}
+      >
         <div class="table-picker-header">
           <span>表格</span>
           <strong>{previewRows} × {previewColumns}</strong>
@@ -112,8 +118,14 @@
                 class="table-picker-cell"
                 class:active={row <= previewRows && column <= previewColumns}
                 aria-label={`插入 ${row} 行 ${column} 列表格`}
-                on:mouseenter={() => { previewRows = row; previewColumns = column; }}
-                on:focus={() => { previewRows = row; previewColumns = column; }}
+                on:mouseenter={() => {
+                  previewRows = row;
+                  previewColumns = column;
+                }}
+                on:focus={() => {
+                  previewRows = row;
+                  previewColumns = column;
+                }}
                 on:click={() => insertTableWithSize(row, column)}
               ></button>
             {/each}
@@ -122,16 +134,29 @@
       </div>
     {/if}
   </div>
-  <button title="代码块" on:click={() => runCommand({ type: 'insertCodeBlock', language: 'ts', code: 'console.log(\"NewMd\");' })}>
+  <button
+    title="代码块"
+    on:click={() =>
+      runCommand({ type: 'insertCodeBlock', language: 'ts', code: 'console.log(\"NewMd\");' })}
+  >
     <Code2 size={17} />
   </button>
-  <button title="数学公式" on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}>
+  <button
+    title="数学公式"
+    on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}
+  >
     <Sigma size={17} />
   </button>
-  <button title="图片" on:click={() => runCommand({ type: 'insertImage', src: './assets/image.png', alt: 'image' })}>
+  <button
+    title="图片"
+    on:click={() => runCommand({ type: 'insertImage', src: './assets/image.png', alt: 'image' })}
+  >
     <Image size={17} />
   </button>
-  <button title="Mermaid 占位" on:click={() => runCommand({ type: 'insertMermaidBlock', code: 'flowchart TD\\n  A --> B' })}>
+  <button
+    title="Mermaid 占位"
+    on:click={() => runCommand({ type: 'insertMermaidBlock', code: 'flowchart TD\\n  A --> B' })}
+  >
     <Braces size={17} />
   </button>
   <span class="divider"></span>
@@ -141,11 +166,25 @@
   </label>
   <label class="range-control" title="行高">
     <span>{lineHeight.toFixed(2)}</span>
-    <input type="range" min="1.4" max="2.1" step="0.05" value={lineHeight} on:input={updateLineHeight} />
+    <input
+      type="range"
+      min="1.4"
+      max="2.1"
+      step="0.05"
+      value={lineHeight}
+      on:input={updateLineHeight}
+    />
   </label>
   <label class="range-control width-control" title="内容宽度">
     <span>{contentWidthPercent}%</span>
-    <input type="range" min="45" max="90" step="1" value={contentWidthPercent} on:input={updateContentWidth} />
+    <input
+      type="range"
+      min="45"
+      max="90"
+      step="1"
+      value={contentWidthPercent}
+      on:input={updateContentWidth}
+    />
   </label>
   <span class="toolbar-spacer"></span>
   <div class="mode-switch" aria-label="编辑模式">

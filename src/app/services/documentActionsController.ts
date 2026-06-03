@@ -11,7 +11,7 @@ import {
   openMarkdownFromDialog,
   readMarkdownFromPath,
   rememberNativeDocument,
-  saveNativeMarkdownFile
+  saveNativeMarkdownFile,
 } from './documentFiles';
 import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
@@ -126,7 +126,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       const path = saveAs ? null : options.getNativePath();
       const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
       options.writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
-      const { document, error } = await saveNativeMarkdownFile(path, markdownToSave, options.getFileName(), options.getNativePath());
+      const { document, error } = await saveNativeMarkdownFile(
+        path,
+        markdownToSave,
+        options.getFileName(),
+        options.getNativePath(),
+      );
       if (error) {
         options.setStatusMessage(error);
       }
@@ -159,7 +164,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   }
 
   async function applyNativeDocument(document: NativeDocument, message: string, saved = false) {
-    const isLargeDocument = document.markdown.length > options.largeDocumentLimit || document.sizeBytes > options.largeDocumentLimit;
+    const isLargeDocument =
+      document.markdown.length > options.largeDocumentLimit ||
+      document.sizeBytes > options.largeDocumentLimit;
     const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
     if (existingTab && !saved) {
       options.switchTab(existingTab.id);
@@ -169,7 +176,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
     options.saveActiveTabState();
 
-    const nativeDocumentTarget = getNativeDocumentTargetTab(options.getTabs(), options.getActiveTabId(), existingTab, saved);
+    const nativeDocumentTarget = getNativeDocumentTargetTab(
+      options.getTabs(),
+      options.getActiveTabId(),
+      existingTab,
+      saved,
+    );
     options.setTabs(nativeDocumentTarget.tabs);
     options.setActiveTabId(nativeDocumentTarget.activeTabId);
     const targetTab = nativeDocumentTarget.targetTab;
@@ -182,7 +194,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
     targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
-    targetTab.externalFileWarning = document.readonly ? '当前文件是只读文件，建议使用另存为保存修改' : '';
+    targetTab.externalFileWarning = document.readonly
+      ? '当前文件是只读文件，建议使用另存为保存修改'
+      : '';
 
     options.setActiveTabId(targetTab.id);
     options.setTabs([...options.getTabs()]);
@@ -226,7 +240,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!tabToClose) return;
 
     if (tabToClose.dirty) {
-      const confirmClose = confirm(`文件 "${tabToClose.fileName}" 已修改，是否确认关闭？您的修改可能会丢失。`);
+      const confirmClose = confirm(
+        `文件 "${tabToClose.fileName}" 已修改，是否确认关闭？您的修改可能会丢失。`,
+      );
       if (!confirmClose) return;
     }
 
@@ -254,7 +270,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       options.getDesktopEnabled(),
       options.getNativePath(),
       options.getLastKnownModifiedAt(),
-      options.getDirty()
+      options.getDirty(),
     );
     if (warning) {
       options.setExternalFileWarning(warning);
@@ -271,6 +287,6 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     createNewFile,
     closeTab,
     refreshRecentFiles,
-    checkExternalFileChange
+    checkExternalFileChange,
   };
 }

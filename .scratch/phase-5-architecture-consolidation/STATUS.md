@@ -8,6 +8,7 @@ pnpm test: 36 passed (9 files)
 ## 已完成
 
 ### 新建文件
+
 - src/lib/markdown/sample.ts -- createRichMarkdownSample() 搬家
 - src/lib/markdown/normalize.ts -- normalizeMarkdownForSave() 搬家
 - src/lib/markdown/normalize.test.ts -- 7 个测试用例
@@ -35,34 +36,37 @@ pnpm test: 36 passed (9 files)
 7. **App.svelte CSS** — 删除死 CSS：`.rich-markdown`, `.task-row`, `.table-scroll`, `.code-line`, `.line-number`, `.line-content`, `.code-card.wrapped`, `.code-line.diff-added/removed`, `.topbar-spacer`, `.theme-toggle-btn`。
 
 ### 删除的旧模块
+
 - src/lib/markdown/richMarkdown.ts (含测试)
 - src/lib/markdown/technicalBlocks.ts (含测试)
 
 ### 验证结果
+
 - pnpm check: 0 errors ✅
 - pnpm test: 36 passed (9 test files) ✅
 - pnpm build: ✓ built ✅
 
 ## 剩余问题
+
 - 70 个 unused CSS warnings — 部分为阶段 5 前已存在的死 CSS（.explorer、.menu-bar 等），建议后续清理
 - 代码块换行 CSS 变量（--md-editor-code-wrap）在 theme.css 中已定义但未接入 App.svelte
 
 ## 修改文件清单
 
-| 文件 | 状态 | 说明 |
-|------|------|------|
-| src/app/App.svelte | M | outlineDebounceTimer, import 修复, jumpToOutlineItem, CSS 清理 |
-| src/lib/desktop/tauriStorage.ts | M | 添加 parseNativeError |
-| src/lib/desktop/tauriStorage.test.ts | A | 新增 parseNativeError 测试 + Windows-first 路径编码测试 |
-| src/lib/editor-core/createEditorCore.ts | M | 添加 scrollToHeading case, 修复 heading 查找逻辑 |
-| src/lib/editor-core/createEditorCore.test.ts | M | 新增 scrollToHeading 测试 (2 cases) |
-| src/lib/editor-core/index.ts | M | 重导出 setCodeBlock* |
-| src/lib/editor-core/types.ts | M | 修复 scrollToHeading union 语法 |
-| src/lib/markdown/richMarkdown.ts | D | 旧模块删除 |
-| src/lib/markdown/richMarkdown.test.ts | D | 旧模块删除 |
-| src/lib/markdown/technicalBlocks.ts | D | 旧模块删除 |
-| src/lib/markdown/technicalBlocks.test.ts | D | 旧模块删除 |
-| src/lib/markdown/normalize.ts | A | normalizeMarkdownForSave 搬家 |
-| src/lib/markdown/normalize.test.ts | A | 7 个测试用例 |
-| src/lib/markdown/sample.ts | A | createRichMarkdownSample 搬家 |
-| .scratch/phase-5-architecture-consolidation/STATUS.md | M | 本文件 |
+| 文件                                                  | 状态 | 说明                                                           |
+| ----------------------------------------------------- | ---- | -------------------------------------------------------------- |
+| src/app/App.svelte                                    | M    | outlineDebounceTimer, import 修复, jumpToOutlineItem, CSS 清理 |
+| src/lib/desktop/tauriStorage.ts                       | M    | 添加 parseNativeError                                          |
+| src/lib/desktop/tauriStorage.test.ts                  | A    | 新增 parseNativeError 测试 + Windows-first 路径编码测试        |
+| src/lib/editor-core/createEditorCore.ts               | M    | 添加 scrollToHeading case, 修复 heading 查找逻辑               |
+| src/lib/editor-core/createEditorCore.test.ts          | M    | 新增 scrollToHeading 测试 (2 cases)                            |
+| src/lib/editor-core/index.ts                          | M    | 重导出 setCodeBlock\*                                          |
+| src/lib/editor-core/types.ts                          | M    | 修复 scrollToHeading union 语法                                |
+| src/lib/markdown/richMarkdown.ts                      | D    | 旧模块删除                                                     |
+| src/lib/markdown/richMarkdown.test.ts                 | D    | 旧模块删除                                                     |
+| src/lib/markdown/technicalBlocks.ts                   | D    | 旧模块删除                                                     |
+| src/lib/markdown/technicalBlocks.test.ts              | D    | 旧模块删除                                                     |
+| src/lib/markdown/normalize.ts                         | A    | normalizeMarkdownForSave 搬家                                  |
+| src/lib/markdown/normalize.test.ts                    | A    | 7 个测试用例                                                   |
+| src/lib/markdown/sample.ts                            | A    | createRichMarkdownSample 搬家                                  |
+| .scratch/phase-5-architecture-consolidation/STATUS.md | M    | 本文件                                                         |

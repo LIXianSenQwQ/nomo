@@ -5,7 +5,7 @@ import {
   getSemanticScrollAnchor,
   getSourceScrollAnchor,
   scrollSemanticToAnchor,
-  scrollSourceToAnchor
+  scrollSourceToAnchor,
 } from './outlineNavigation';
 
 interface EditorInteractionOptions {
@@ -34,9 +34,15 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     }
 
     const outline = options.getOutline();
-    const scrollAnchor = options.getMode() === 'semantic'
-      ? getSemanticScrollAnchor(outline, options.getSemanticPane())
-      : getSourceScrollAnchor(outline, options.getSourcePane()?.scrollTop ?? 0, options.getSourceLineHeight(), options.getSourceTextarea());
+    const scrollAnchor =
+      options.getMode() === 'semantic'
+        ? getSemanticScrollAnchor(outline, options.getSemanticPane())
+        : getSourceScrollAnchor(
+            outline,
+            options.getSourcePane()?.scrollTop ?? 0,
+            options.getSourceLineHeight(),
+            options.getSourceTextarea(),
+          );
 
     options.getEditor().updateOptions({ mode: nextMode });
     syncSourceTextareaHeight();
@@ -48,7 +54,12 @@ export function createEditorInteractionController(options: EditorInteractionOpti
         return;
       }
 
-      scrollSourceToAnchor(options.getOutline(), options.getSourcePane(), options.getSourceTextarea(), scrollAnchor);
+      scrollSourceToAnchor(
+        options.getOutline(),
+        options.getSourcePane(),
+        options.getSourceTextarea(),
+        scrollAnchor,
+      );
     });
   }
 
@@ -63,7 +74,9 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     options.getEditor().focus();
   }
 
-  function syncSourceTextareaHeight(restoreScrollTop: number | null = options.getPendingSourceScrollTop()) {
+  function syncSourceTextareaHeight(
+    restoreScrollTop: number | null = options.getPendingSourceScrollTop(),
+  ) {
     requestAnimationFrame(() => {
       const sourceTextarea = options.getSourceTextarea();
       if (!sourceTextarea) {
@@ -82,6 +95,6 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     setMode,
     updateMarkdown,
     runCommand,
-    syncSourceTextareaHeight
+    syncSourceTextareaHeight,
   };
 }

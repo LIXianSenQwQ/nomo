@@ -48,7 +48,10 @@ function isOnFirstVisualLine(view: EditorView, $from: ResolvedPos): boolean {
   return isSameVisualLine(view, $from.pos, textblockStart);
 }
 
-function findNextCodeBlock($from: ResolvedPos, canLeaveTextblock: boolean): AdjacentCodeBlock | null {
+function findNextCodeBlock(
+  $from: ResolvedPos,
+  canLeaveTextblock: boolean,
+): AdjacentCodeBlock | null {
   if (!canLeaveTextblock) return null;
 
   for (let depth = $from.depth; depth > 0; depth--) {
@@ -68,7 +71,10 @@ function findNextCodeBlock($from: ResolvedPos, canLeaveTextblock: boolean): Adja
   return null;
 }
 
-function findPreviousCodeBlock($from: ResolvedPos, canLeaveTextblock: boolean): AdjacentCodeBlock | null {
+function findPreviousCodeBlock(
+  $from: ResolvedPos,
+  canLeaveTextblock: boolean,
+): AdjacentCodeBlock | null {
   if (!canLeaveTextblock) return null;
 
   for (let depth = $from.depth; depth > 0; depth--) {
@@ -136,7 +142,7 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
         }
 
         return false;
-      }
-    }
+      },
+    },
   });
 }

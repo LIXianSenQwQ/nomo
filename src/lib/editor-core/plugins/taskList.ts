@@ -15,7 +15,7 @@ export function taskListPlugin(): Plugin {
       apply(tr, oldSet, _oldState, newState) {
         if (!tr.docChanged) return oldSet;
         return buildTaskDecorations(newState.doc);
-      }
+      },
     },
     props: {
       decorations(state) {
@@ -35,9 +35,9 @@ export function taskListPlugin(): Plugin {
           const newText = oldText === '[x]' ? '[ ]' : '[x]';
           view.dispatch(view.state.tr.replaceWith(from, to, schema.text(newText)));
           return true;
-        }
-      }
-    }
+        },
+      },
+    },
   });
 }
 
@@ -63,7 +63,14 @@ function buildTaskDecorations(doc: ProseMirrorNode): DecorationSet {
     const bracketEnd = pos + 3;
     const widget = createTaskCheckboxWidget(checked, bracketStart, bracketEnd);
     decorations.push(Decoration.widget(bracketStart, widget));
-    decorations.push(Decoration.inline(bracketStart, bracketEnd, { style: 'display: none;' }, { inclusiveStart: false, inclusiveEnd: false }));
+    decorations.push(
+      Decoration.inline(
+        bracketStart,
+        bracketEnd,
+        { style: 'display: none;' },
+        { inclusiveStart: false, inclusiveEnd: false },
+      ),
+    );
   });
   return DecorationSet.create(doc, decorations);
 }

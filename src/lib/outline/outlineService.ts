@@ -32,7 +32,7 @@ export function extractOutline(markdown: string): OutlineItem[] {
         id: seen === 0 ? baseId : `${baseId}-${seen + 1}`,
         level: match[1].length as OutlineItem['level'],
         title,
-        line: index + 1
+        line: index + 1,
       };
     })
     .filter((item): item is OutlineItem => item !== null);
@@ -49,7 +49,7 @@ export function calculateDocumentStats(markdown: string): DocumentStats {
     chars: markdown.length,
     words,
     headings: extractOutline(markdown).length,
-    readingMinutes: Math.max(1, Math.ceil(words / 280))
+    readingMinutes: Math.max(1, Math.ceil(words / 280)),
   };
 }
 

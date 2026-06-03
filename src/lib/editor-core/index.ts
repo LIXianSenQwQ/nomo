@@ -1,4 +1,9 @@
-export { createEditorCore, setCodeBlockTokenizer, setCodeBlockDiagramRenderer, setCodeBlockMathRenderer } from './createEditorCore';
+export {
+  createEditorCore,
+  setCodeBlockTokenizer,
+  setCodeBlockDiagramRenderer,
+  setCodeBlockMathRenderer,
+} from './createEditorCore';
 export type {
   EditorChangeEvent,
   EditorCommand,
@@ -12,5 +17,5 @@ export type {
   EditorSelectionSnapshot,
   EditorSnapshot,
   EditorThemeOptions,
-  SetMarkdownOptions
+  SetMarkdownOptions,
 } from './types';

@@ -39,7 +39,7 @@ export function mathInlineInputPlugin(): Plugin {
       }
 
       return tr;
-    }
+    },
   });
 }
 
@@ -90,7 +90,7 @@ function scanTextForInlineMath(text: string, absoluteTextPos: number): InlineMat
         from: absoluteTextPos + start,
         to: absoluteTextPos + end + 1,
         tex: tex.trim().replace(/\\\$/g, '$'),
-        isNew: true // 标记为新创建的行公式
+        isNew: true, // 标记为新创建的行公式
       });
     }
 

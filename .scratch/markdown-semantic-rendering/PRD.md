@@ -54,4 +54,3 @@ Labels: ready-for-agent
 ## Further Notes
 
 This is a staged implementation that improves the semantic reading and checkbox interaction experience now, while leaving room for deeper ProseMirror Adapter node work later.
-

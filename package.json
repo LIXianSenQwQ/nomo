@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -43,6 +45,8 @@
     "@types/node": "^22.0.0",
     "jsdom": "^25.0.0",
     "playwright": "^1.60.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-svelte": "^4.1.0",
     "svelte-check": "^4.0.0",
     "typescript": "^5.0.0",
     "vite": "^6.0.0",

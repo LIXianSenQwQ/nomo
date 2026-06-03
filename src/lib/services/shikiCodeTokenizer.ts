@@ -14,34 +14,34 @@ export function createShikiCodeTokenizer(): CodeTokenizer {
       if (cached) {
         return {
           language,
-          tokens: cached
+          tokens: cached,
         };
       }
 
       const result = await codeToTokens(input.code, {
         lang: language as BundledLanguage,
-        theme
+        theme,
       }).catch(() =>
         codeToTokens(input.code, {
           lang: 'text',
-          theme
-        })
+          theme,
+        }),
       );
 
       const tokens = result.tokens.map((line) => ({
         tokens: line.map((token) => ({
           content: token.content,
           color: token.color,
-          fontStyle: token.fontStyle ? String(token.fontStyle) : undefined
-        }))
+          fontStyle: token.fontStyle ? String(token.fontStyle) : undefined,
+        })),
       }));
 
       cache.set(key, tokens);
 
       return {
         language,
-        tokens
+        tokens,
       };
-    }
+    },
   };
 }

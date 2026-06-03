@@ -48,7 +48,11 @@ export async function createAppWindow(desktopEnabled: boolean) {
   await invoke('create_new_window').catch(() => undefined);
 }
 
-export async function updateAppWindowTitle(desktopEnabled: boolean, fileName: string, dirty: boolean) {
+export async function updateAppWindowTitle(
+  desktopEnabled: boolean,
+  fileName: string,
+  dirty: boolean,
+) {
   if (!desktopEnabled) {
     return;
   }

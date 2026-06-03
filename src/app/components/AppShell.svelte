@@ -90,8 +90,19 @@
   export let openMarkdownFile: (event: Event) => void;
 </script>
 
-<div class="app-layout" class:focus-mode={focusMode} class:resizing={isResizing} style={`--md-editor-content-width-percent: ${contentWidthPercent}`}>
-  <input bind:this={fileInput} class="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" on:change={openMarkdownFile} />
+<div
+  class="app-layout"
+  class:focus-mode={focusMode}
+  class:resizing={isResizing}
+  style={`--md-editor-content-width-percent: ${contentWidthPercent}`}
+>
+  <input
+    bind:this={fileInput}
+    class="file-input"
+    type="file"
+    accept=".md,.markdown,text/markdown,text/plain"
+    on:change={openMarkdownFile}
+  />
 
   <AppTitleBar
     {theme}

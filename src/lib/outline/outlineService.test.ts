@@ -6,7 +6,7 @@ describe('outlineService', () => {
     expect(extractOutline('# 标题\n\n## Child\n### Child')).toEqual([
       { id: '标题', level: 1, title: '标题', line: 1 },
       { id: 'child', level: 2, title: 'Child', line: 3 },
-      { id: 'child-2', level: 3, title: 'Child', line: 4 }
+      { id: 'child-2', level: 3, title: 'Child', line: 4 },
     ]);
   });
 
@@ -17,7 +17,7 @@ describe('outlineService', () => {
       chars: 43,
       words: 3,
       headings: 1,
-      readingMinutes: 1
+      readingMinutes: 1,
     });
   });
 });

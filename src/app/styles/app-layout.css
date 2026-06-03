@@ -1,205 +1,208 @@
-  .app-layout {
-    --md-editor-content-width-percent: 68;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    background: var(--md-editor-bg);
-  }
+.app-layout {
+  --md-editor-content-width-percent: 68;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--md-editor-bg);
+}
 
-  .app-layout.resizing {
-    user-select: none;
-    cursor: col-resize;
-  }
+.app-layout.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
 
-  .workspace {
-    display: grid;
-    grid-template-columns: var(--sidebar-width, 250px) minmax(0, 1fr);
-    flex: 1;
-    min-height: 0;
-    min-width: 0;
-    background: var(--md-editor-bg);
-  }
+.workspace {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 250px) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  background: var(--md-editor-bg);
+}
 
-  .file-input {
-    position: fixed;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    opacity: 0;
-    pointer-events: none;
-  }
+.file-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
 
-  .rail {
-    position: relative; /* 允许 sidebar-resizer 相对定位 */
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    border-right: 1px solid var(--md-editor-border);
-    background: var(--md-editor-rail);
-  }
+.rail {
+  position: relative; /* 允许 sidebar-resizer 相对定位 */
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--md-editor-border);
+  background: var(--md-editor-rail);
+}
 
-  .sidebar-resizer {
-    position: absolute;
-    top: 0;
-    right: -3px;
-    width: 6px;
-    height: 100%;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: col-resize;
-    z-index: 1000;
-    transition: background-color 0.15s;
-  }
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 1000;
+  transition: background-color 0.15s;
+}
 
-  .sidebar-resizer:hover,
-  .sidebar-resizer.active {
-    background-color: var(--md-editor-accent, #007acc);
-  }
+.sidebar-resizer:hover,
+.sidebar-resizer.active {
+  background-color: var(--md-editor-accent, #007acc);
+}
 
-  .explorer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 54px;
-    padding: 0 18px 0 20px;
-    border-bottom: 1px solid var(--md-editor-border);
-    color: var(--md-editor-heading-fg);
-    font-size: 14px;
-    font-weight: 700;
-  }
+.explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 0 18px 0 20px;
+  border-bottom: 1px solid var(--md-editor-border);
+  color: var(--md-editor-heading-fg);
+  font-size: 14px;
+  font-weight: 700;
+}
 
-  .explorer-header button,
-  .explorer-actions button {
-    display: inline-grid;
-    place-items: center;
-    min-width: 32px;
-    min-height: 32px;
-    border: 0;
-    border-radius: var(--md-editor-radius-sm);
-    background: transparent;
-    color: var(--md-editor-muted-fg);
-    cursor: pointer;
-  }
+.explorer-header button,
+.explorer-actions button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--md-editor-radius-sm);
+  background: transparent;
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+}
 
-  .explorer-header button:hover,
-  .explorer-actions button:hover {
-    background: var(--md-editor-surface);
-    color: var(--md-editor-accent-strong);
-  }
+.explorer-header button:hover,
+.explorer-actions button:hover {
+  background: var(--md-editor-surface);
+  color: var(--md-editor-accent-strong);
+}
 
-  .app-layout.focus-mode .workspace {
-    grid-template-columns: 1fr;
-  }
+.app-layout.focus-mode .workspace {
+  grid-template-columns: 1fr;
+}
 
-  .app-layout.focus-mode .rail {
-    display: none;
-  }
+.app-layout.focus-mode .rail {
+  display: none;
+}
 
-  .explorer-header button:focus-visible,
-  .explorer-actions button:focus-visible,
-  .menu-bar button:focus-visible,
-  .mode-switch button:focus-visible,
-  .icon-button:focus-visible,
-  .tab-add:focus-visible,
-  .toolbar button:focus-visible,
-  .tree-file:focus-visible,
-  .content-outline button:focus-visible {
-    outline: 2px solid var(--md-editor-accent);
-    outline-offset: -2px;
-  }
+.explorer-header button:focus-visible,
+.explorer-actions button:focus-visible,
+.menu-bar button:focus-visible,
+.mode-switch button:focus-visible,
+.icon-button:focus-visible,
+.tab-add:focus-visible,
+.toolbar button:focus-visible,
+.tree-file:focus-visible,
+.content-outline button:focus-visible {
+  outline: 2px solid var(--md-editor-accent);
+  outline-offset: -2px;
+}
 
-  .file-tree {
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding: 14px 16px 18px;
-  }
+.file-tree {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+}
 
-  .tree-file:hover {
-    background: var(--md-editor-surface);
-  }
+.tree-file:hover {
+  background: var(--md-editor-surface);
+}
 
-  .tree-root,
-  .recent-tree {
-    display: grid;
-    gap: 2px;
-    margin-top: 0;
-  }
+.tree-root,
+.recent-tree {
+  display: grid;
+  gap: 2px;
+  margin-top: 0;
+}
 
-  .tree-folder,
-  .tree-file {
-    display: grid;
-    grid-template-columns: 14px 18px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-height: 30px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--md-editor-radius-sm);
-    background: transparent;
-    color: var(--md-editor-fg);
-    text-align: left;
-  }
+.tree-folder,
+.tree-file {
+  display: grid;
+  grid-template-columns: 14px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--md-editor-radius-sm);
+  background: transparent;
+  color: var(--md-editor-fg);
+  text-align: left;
+}
 
-  .tree-folder {
-    font-weight: 600;
-  }
+.tree-folder {
+  font-weight: 600;
+}
 
-  .tree-file {
-    cursor: pointer;
-  }
+.tree-file {
+  cursor: pointer;
+}
 
-  .tree-file.active {
-    background: linear-gradient(90deg, var(--md-editor-sidebar-active), color-mix(in srgb, var(--md-editor-sidebar-active) 55%, transparent));
-    color: var(--md-editor-accent-strong);
-    font-weight: 700;
-  }
+.tree-file.active {
+  background: linear-gradient(
+    90deg,
+    var(--md-editor-sidebar-active),
+    color-mix(in srgb, var(--md-editor-sidebar-active) 55%, transparent)
+  );
+  color: var(--md-editor-accent-strong);
+  font-weight: 700;
+}
 
-  .tree-indent {
-    width: 14px;
-  }
+.tree-indent {
+  width: 14px;
+}
 
-  .tree-folder span:last-child,
-  .tree-folder.nested-dir span:last-child,
-  .tree-file span {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: left;
-  }
+.tree-folder span:last-child,
+.tree-folder.nested-dir span:last-child,
+.tree-file span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
 
-  .tree-folder svg,
-  .tree-file svg {
-    color: var(--md-editor-muted-fg);
-  }
+.tree-folder svg,
+.tree-file svg {
+  color: var(--md-editor-muted-fg);
+}
 
-  .tree-file small {
-    color: var(--md-editor-muted-fg);
-    font-size: 11px;
-    white-space: nowrap;
-  }
+.tree-file small {
+  color: var(--md-editor-muted-fg);
+  font-size: 11px;
+  white-space: nowrap;
+}
 
-  .tree-section-title {
-    margin: 22px 8px 8px;
-    color: var(--md-editor-muted-fg);
-    font-size: 12px;
-    font-weight: 600;
-  }
+.tree-section-title {
+  margin: 22px 8px 8px;
+  color: var(--md-editor-muted-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
 
-  .explorer-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 60px;
-    margin-top: auto;
-    padding: 0 18px;
-    border-top: 1px solid var(--md-editor-border);
-    background: var(--md-editor-chrome);
-  }
-
+.explorer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  margin-top: auto;
+  padding: 0 18px;
+  border-top: 1px solid var(--md-editor-border);
+  background: var(--md-editor-chrome);
+}

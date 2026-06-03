@@ -9,20 +9,28 @@ export function tableHtmlBlockPlugin(): Plugin {
   return new Plugin({
     key: tableHtmlKey,
     state: {
-      init(_, state) { return buildTableHtmlDecorations(state.doc); },
+      init(_, state) {
+        return buildTableHtmlDecorations(state.doc);
+      },
       apply(tr, oldSet, _oldState, newState) {
         if (!tr.docChanged) return oldSet;
         return buildTableHtmlDecorations(newState.doc);
-      }
+      },
     },
-    props: { decorations(state) { return this.getState(state); } }
+    props: {
+      decorations(state) {
+        return this.getState(state);
+      },
+    },
   });
 }
 
 function buildTableHtmlDecorations(doc: ProseMirrorNode): DecorationSet {
   const decorations: Decoration[] = [];
   const blocks: Array<{ node: ProseMirrorNode; pos: number }> = [];
-  doc.forEach((node, offset) => { blocks.push({ node, pos: offset }); });
+  doc.forEach((node, offset) => {
+    blocks.push({ node, pos: offset });
+  });
   let i = 0;
   while (i < blocks.length) {
     const tableResult = tryParseTable(blocks, i);
@@ -33,7 +41,14 @@ function buildTableHtmlDecorations(doc: ProseMirrorNode): DecorationSet {
       widget.setAttribute('contenteditable', 'false');
       widget.innerHTML = html;
       decorations.push(Decoration.widget(from, widget, { side: 0 }));
-      decorations.push(Decoration.inline(from, to, { style: 'display: none' }, { inclusiveStart: false, inclusiveEnd: false }));
+      decorations.push(
+        Decoration.inline(
+          from,
+          to,
+          { style: 'display: none' },
+          { inclusiveStart: false, inclusiveEnd: false },
+        ),
+      );
       i = tableResult.nextIndex;
       continue;
     }
@@ -45,14 +60,24 @@ function buildTableHtmlDecorations(doc: ProseMirrorNode): DecorationSet {
       widget.setAttribute('contenteditable', 'false');
       widget.innerHTML = safeHtml;
       decorations.push(Decoration.widget(pos, widget, { side: 0 }));
-      decorations.push(Decoration.inline(pos + 1, pos + node.nodeSize - 1, { style: 'display: none' }, { inclusiveStart: false, inclusiveEnd: false }));
+      decorations.push(
+        Decoration.inline(
+          pos + 1,
+          pos + node.nodeSize - 1,
+          { style: 'display: none' },
+          { inclusiveStart: false, inclusiveEnd: false },
+        ),
+      );
     }
     i += 1;
   }
   return decorations.length > 0 ? DecorationSet.create(doc, decorations) : DecorationSet.empty;
 }
 
-function tryParseTable(blocks: Array<{ node: ProseMirrorNode; pos: number }>, startIndex: number): { from: number; to: number; html: string; nextIndex: number } | null {
+function tryParseTable(
+  blocks: Array<{ node: ProseMirrorNode; pos: number }>,
+  startIndex: number,
+): { from: number; to: number; html: string; nextIndex: number } | null {
   const rows: string[][] = [];
   let hasSeparator = false;
   let i = startIndex;
@@ -61,9 +86,14 @@ function tryParseTable(blocks: Array<{ node: ProseMirrorNode; pos: number }>, st
     if (block.node.type.name !== 'paragraph') break;
     const text = block.node.textContent.trim();
     if (!text.startsWith('|') || !text.endsWith('|')) break;
-    const parts = text.slice(1, -1).split('|').map((cell) => cell.trim());
+    const parts = text
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => cell.trim());
     let cols = 0;
-    while (cols < parts.length && parts[cols] !== '') { cols++; }
+    while (cols < parts.length && parts[cols] !== '') {
+      cols++;
+    }
     if (cols < 2) break;
     const stride = cols + 1;
     let pos = 0;
@@ -87,10 +117,24 @@ function tryParseTable(blocks: Array<{ node: ProseMirrorNode; pos: number }>, st
   if (rows.length === 0 || i === startIndex) return null;
   let html = '<table>';
   if (rows.length > 0 && hasSeparator) {
-    html += '<thead><tr>' + rows[0].map((cell) => `<th>${escapeHtml(cell)}</th>`).join('') + '</tr></thead>';
-    html += '<tbody>' + rows.slice(1).map((row) => '<tr>' + row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+    html +=
+      '<thead><tr>' +
+      rows[0].map((cell) => `<th>${escapeHtml(cell)}</th>`).join('') +
+      '</tr></thead>';
+    html +=
+      '<tbody>' +
+      rows
+        .slice(1)
+        .map((row) => '<tr>' + row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('') + '</tr>')
+        .join('') +
+      '</tbody>';
   } else {
-    html += '<tbody>' + rows.map((row) => '<tr>' + row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('') + '</tr>').join('') + '</tbody>';
+    html +=
+      '<tbody>' +
+      rows
+        .map((row) => '<tr>' + row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('') + '</tr>')
+        .join('') +
+      '</tbody>';
   }
   html += '</table>';
   const from = blocks[startIndex].pos;
@@ -99,7 +143,10 @@ function tryParseTable(blocks: Array<{ node: ProseMirrorNode; pos: number }>, st
   return { from, to, html, nextIndex: i };
 }
 
-function tryParseHtmlBlock(block: { node: ProseMirrorNode; pos: number }): { pos: number; node: ProseMirrorNode; safeHtml: string } | null {
+function tryParseHtmlBlock(block: {
+  node: ProseMirrorNode;
+  pos: number;
+}): { pos: number; node: ProseMirrorNode; safeHtml: string } | null {
   // 跳过已由 html_block 节点解析的内容
   if (block.node.type.name === 'html_block') return null;
   const text = block.node.textContent.trim();
