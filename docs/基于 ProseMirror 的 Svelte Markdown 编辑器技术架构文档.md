@@ -1,8 +1,8 @@
 # 基于 ProseMirror 的 Svelte Markdown 编辑器技术架构文档
 
-> 文档日期：2026-05-29  
-> 项目方向：一个轻量化 Markdown 阅读编辑器  
-> 目标版本：MVP / 第一版架构方案  
+> 文档日期：2026-05-29\
+> 项目方向：一个轻量化 Markdown 阅读编辑器\
+> 目标版本：MVP / 第一版架构方案\
 > 结论摘要：第一版采用 **Tauri 2 + Svelte + TypeScript + EditorCore 自定义封装层 + ProseMirror + Markdown Parser / Serializer + Shiki / KaTeX / Mermaid + 本地文件系统 / SQLite**。吸收 DOMD 的 Markdown-native、单一数据源、不可变状态、局部渲染、轻量本地体验等思路，但不在第一版自研完整编辑器内核。
 
 ---
@@ -56,15 +56,15 @@ Shiki / KaTeX / Mermaid
 
 ### 2.2 技术目标
 
-| 目标           | 解释                                                     |
-| -------------- | -------------------------------------------------------- |
-| Markdown-first | 长期存储以 `.md` 为准，编辑器状态可随时序列化回 Markdown |
-| 内核可替换     | UI 层依赖 EditorCore API，不直接依赖 ProseMirror         |
-| Svelte 友好    | 提供 Svelte action / store / component 封装              |
-| 本地优先       | 文件系统是主存储，SQLite 是索引和元数据辅助              |
-| 渲染解耦       | 图片、代码高亮、数学、图表都通过服务接口接入             |
-| 主题可配置     | 从第一版使用 CSS 变量管理主题                            |
-| 风险可控       | 不在 MVP 阶段自研完整编辑器引擎                          |
+| 目标 | 解释 |
+| :--- | :--- |
+| Markdown-first | 长期存储以  为准，编辑器状态可随时序列化回 Markdown |
+| 内核可替换 | UI 层依赖 EditorCore API，不直接依赖 ProseMirror |
+| Svelte 友好 | 提供 Svelte action / store / component 封装 |
+| 本地优先 | 文件系统是主存储，SQLite 是索引和元数据辅助 |
+| 渲染解耦 | 图片、代码高亮、数学、图表都通过服务接口接入 |
+| 主题可配置 | 从第一版使用 CSS 变量管理主题 |
+| 风险可控 | 不在 MVP 阶段自研完整编辑器引擎 |
 
 ---
 
@@ -72,17 +72,17 @@ Shiki / KaTeX / Mermaid
 
 ### 3.1 总体选型表
 
-| 层级        | 技术                                    | 职责                                                          | 选择理由                                                                                                          |
-| ----------- | --------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| 桌面壳      | Tauri 2                                 | 窗口、文件系统、原生菜单、系统对话框、SQLite 插件 / Rust 命令 | 适合小体积、本地优先、跨平台桌面应用。Tauri 官方定位是创建 small / fast / secure cross-platform applications。[1] |
-| UI 层       | Svelte + TypeScript                     | 应用界面、侧栏、工具栏、状态栏、设置页、主题切换              | Svelte 通过编译生成高效 JS，组件写法简洁，适合轻量桌面 UI。[2]                                                    |
-| 编辑器封装  | EditorCore                              | 对外暴露稳定 API，屏蔽 ProseMirror 细节                       | 第一版必须做，避免未来所有业务代码都绑定 ProseMirror                                                              |
-| 编辑内核    | ProseMirror                             | 文档模型、事务、选区、插件、NodeView、编辑行为                | 成熟、可扩展，适合构建语义富文本 / Markdown 编辑器                                                                |
-| Markdown 桥 | prosemirror-markdown + markdown-it 扩展 | Markdown ↔ ProseMirror Doc 转换                               | `prosemirror-markdown` 提供 CommonMark schema、parser、serializer。[3]                                            |
-| 代码高亮    | Shiki                                   | 代码块 token 化与高亮                                         | Shiki 基于 TextMate grammar，使用与 VS Code 类似的语法高亮能力，并可零运行时渲染。[4]                             |
-| 数学公式    | KaTeX                                   | 行内 / 块级公式渲染                                           | KaTeX 适合快速同步渲染数学公式，便于本地编辑器集成。[5]                                                           |
-| 图表        | Mermaid                                 | 文本图表渲染                                                  | Mermaid 使用 Markdown-inspired text definitions 生成图表，适合技术文档。[6]                                       |
-| 本地数据    | 文件系统 + SQLite                       | Markdown 文件、资源、索引、缓存、设置、历史                   | SQLite 是 self-contained、serverless、zero-configuration 的事务型数据库引擎。[7]                                  |
+| 层级 | 技术 | 职责 | 选择理由 |
+| :--- | :--- | :--- | :--- |
+| 桌面壳 | Tauri 2 | 窗口、文件系统、原生菜单、系统对话框、SQLite 插件 / Rust 命令 | 适合小体积、本地优先、跨平台桌面应用。Tauri 官方定位是创建 small / fast / secure cross-platform applications。[1] |
+| UI 层 | Svelte + TypeScript | 应用界面、侧栏、工具栏、状态栏、设置页、主题切换 | Svelte 通过编译生成高效 JS，组件写法简洁，适合轻量桌面 UI。[2] |
+| 编辑器封装 | EditorCore | 对外暴露稳定 API，屏蔽 ProseMirror 细节 | 第一版必须做，避免未来所有业务代码都绑定 ProseMirror |
+| 编辑内核 | ProseMirror | 文档模型、事务、选区、插件、NodeView、编辑行为 | 成熟、可扩展，适合构建语义富文本 / Markdown 编辑器 |
+| Markdown 桥 | prosemirror-markdown + markdown-it 扩展 | Markdown ↔ ProseMirror Doc 转换 | 提供 CommonMark schema、parser、serializer。[3] |
+| 代码高亮 | Shiki | 代码块 token 化与高亮 | Shiki 基于 TextMate grammar，使用与 VS Code 类似的语法高亮能力，并可零运行时渲染。[4] |
+| 数学公式 | KaTeX | 行内 / 块级公式渲染 | KaTeX 适合快速同步渲染数学公式，便于本地编辑器集成。[5] |
+| 图表 | Mermaid | 文本图表渲染 | Mermaid 使用 Markdown-inspired text definitions 生成图表，适合技术文档。[6] |
+| 本地数据 | 文件系统 + SQLite | Markdown 文件、资源、索引、缓存、设置、历史 | SQLite 是 self-contained、serverless、zero-configuration 的事务型数据库引擎。[7] |
 
 ---
 
@@ -98,36 +98,36 @@ DOMD 的公开描述中，最有价值的点包括：
 - immutable state；
 - typing、undo/redo、AI 流式注入、chunked file loading 都建模为同一种 state change；
 - 只在变化区域渲染；
-- 强调轻量本地文件体验。[8]
+- 强调轻量本地文件体验。\[8\]
 
 这些思路非常适合成为本项目的长期架构方向，但不适合作为第一版完整内核实现目标。
 
 ### 4.2 自研内核的主要风险
 
-| 风险            | 说明                                                                      | MVP 影响                   |
-| --------------- | ------------------------------------------------------------------------- | -------------------------- |
-| 选区模型复杂    | Markdown 文本位置、渲染节点位置、DOM selection 三者映射非常难             | 容易出现光标跳动、输入错位 |
-| IME 输入复杂    | 中文输入法 composition 状态需要稳定处理                                   | 中文场景会直接影响可用性   |
-| 撤销重做复杂    | Markdown 原文、语义节点、局部变更都要纳入历史                             | 容易产生状态不一致         |
-| 列表 / 表格复杂 | Enter、Backspace、Tab、粘贴、嵌套列表都需要大量规则                       | 会拖慢 MVP                 |
-| 复制粘贴复杂    | Markdown、HTML、纯文本之间要双向转换                                      | 难以短期打磨稳定           |
-| 插件生态缺失    | 所有扩展都要自己定义协议                                                  | 前期迭代慢                 |
-| 测试成本高      | 编辑器内核需要大量光标、输入、事务测试                                    | 超出第一版资源             |
-| 许可风险        | DOMD 核心渲染引擎公开说明为 PolyForm Noncommercial，商业使用需要授权。[8] | 不应直接依赖其核心构件     |
+| 风险 | 说明 | MVP 影响 |
+| :--- | :--- | :--- |
+| 选区模型复杂 | Markdown 文本位置、渲染节点位置、DOM selection 三者映射非常难 | 容易出现光标跳动、输入错位 |
+| IME 输入复杂 | 中文输入法 composition 状态需要稳定处理 | 中文场景会直接影响可用性 |
+| 撤销重做复杂 | Markdown 原文、语义节点、局部变更都要纳入历史 | 容易产生状态不一致 |
+| 列表 / 表格复杂 | Enter、Backspace、Tab、粘贴、嵌套列表都需要大量规则 | 会拖慢 MVP |
+| 复制粘贴复杂 | Markdown、HTML、纯文本之间要双向转换 | 难以短期打磨稳定 |
+| 插件生态缺失 | 所有扩展都要自己定义协议 | 前期迭代慢 |
+| 测试成本高 | 编辑器内核需要大量光标、输入、事务测试 | 超出第一版资源 |
+| 许可风险 | DOMD 核心渲染引擎公开说明为 PolyForm Noncommercial，商业使用需要授权。[8] | 不应直接依赖其核心构件 |
 
 ### 4.3 正确吸收 DOMD 的方式
 
 第一版不自研完整内核，但可以吸收 DOMD 的经验逻辑：
 
-| DOMD 思路              | 本项目落地方式                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| Markdown-native        | 保存格式、导入导出、核心 API 都以 Markdown 为中心                                 |
-| single source of truth | 对外以 Markdown 文本为主数据；内部 ProseMirror Doc 是运行时派生状态               |
-| immutable state        | EditorCore 对外事件使用不可变快照，不暴露可变内部对象                             |
-| state change 统一建模  | 用户输入、命令、粘贴、图片导入、AI 插入都包装为 EditorCommand / EditorTransaction |
-| 局部渲染               | 依赖 ProseMirror 的事务和 NodeView 更新，避免全量重渲染                           |
-| chunked file loading   | 大文件模式先做只读预览 / 分块解析，编辑模式后续增强                               |
-| 本地极简体验           | 不把账户、云同步、复杂知识库作为 MVP 核心                                         |
+| DOMD 思路 | 本项目落地方式 |
+| :--- | :--- |
+| Markdown-native | 保存格式、导入导出、核心 API 都以 Markdown 为中心 |
+| single source of truth | 对外以 Markdown 文本为主数据；内部 ProseMirror Doc 是运行时派生状态 |
+| immutable state | EditorCore 对外事件使用不可变快照，不暴露可变内部对象 |
+| state change 统一建模 | 用户输入、命令、粘贴、图片导入、AI 插入都包装为 EditorCommand / EditorTransaction |
+| 局部渲染 | 依赖 ProseMirror 的事务和 NodeView 更新，避免全量重渲染 |
+| chunked file loading | 大文件模式先做只读预览 / 分块解析，编辑模式后续增强 |
+| 本地极简体验 | 不把账户、云同步、复杂知识库作为 MVP 核心 |
 
 最终策略：
 
@@ -158,15 +158,15 @@ flowchart TD
 
 ### 5.1 分层说明
 
-| 层                  | 说明                                                     | 不能做什么                       |
-| ------------------- | -------------------------------------------------------- | -------------------------------- |
-| Tauri Shell         | 提供桌面能力：文件、路径、窗口、菜单、SQLite、系统对话框 | 不处理编辑器业务逻辑             |
-| Svelte UI           | 管理界面、布局、状态展示、设置页、工具栏                 | 不直接调用 ProseMirror 内部命令  |
-| EditorCore          | 编辑器统一入口，对外暴露简洁 API                         | 不绑定具体 UI 框架               |
-| ProseMirror Adapter | 将 EditorCore 命令翻译为 ProseMirror transaction         | 不向 UI 泄漏 view/state/tr 对象  |
-| MarkdownBridge      | 负责 Markdown 与编辑状态转换                             | 不处理文件系统读写               |
-| Render Services     | 图片、代码、数学、图表等异步渲染服务                     | 不改变文档主数据                 |
-| Storage Service     | 文件、资源、索引、快照、设置                             | 不把 SQLite 当作 Markdown 主存储 |
+| 层 | 说明 | 不能做什么 |
+| :--- | :--- | :--- |
+| Tauri Shell | 提供桌面能力：文件、路径、窗口、菜单、SQLite、系统对话框 | 不处理编辑器业务逻辑 |
+| Svelte UI | 管理界面、布局、状态展示、设置页、工具栏 | 不直接调用 ProseMirror 内部命令 |
+| EditorCore | 编辑器统一入口，对外暴露简洁 API | 不绑定具体 UI 框架 |
+| ProseMirror Adapter | 将 EditorCore 命令翻译为 ProseMirror transaction | 不向 UI 泄漏 view/state/tr 对象 |
+| MarkdownBridge | 负责 Markdown 与编辑状态转换 | 不处理文件系统读写 |
+| Render Services | 图片、代码、数学、图表等异步渲染服务 | 不改变文档主数据 |
+| Storage Service | 文件、资源、索引、快照、设置 | 不把 SQLite 当作 Markdown 主存储 |
 
 ---
 
@@ -267,35 +267,35 @@ export interface EditorSnapshot {
 
 - 对应 CommonMark 文档模型的 ProseMirror schema；
 - Markdown → ProseMirror document 的 parser；
-- ProseMirror document → Markdown text 的 serializer。[3]
+- ProseMirror document → Markdown text 的 serializer。\[3\]
 
-ProseMirror 官方 Markdown 示例也展示了一个关键设计：对外接口仍然可以是 Markdown 文本，内部转换为 ProseMirror document 进行编辑，读取时再序列化回 Markdown。[9]
+ProseMirror 官方 Markdown 示例也展示了一个关键设计：对外接口仍然可以是 Markdown 文本，内部转换为 ProseMirror document 进行编辑，读取时再序列化回 Markdown。\[9\]
 
 ### 7.2 需要扩展的 Markdown 能力
 
 默认 CommonMark 能力不能完全覆盖 Typora / GFM 体验。第一版要评估以下扩展：
 
-| 能力                | 是否建议第一版做  | 实现方式                                                 |
-| ------------------- | ----------------- | -------------------------------------------------------- |
-| task list           | 建议做            | 自定义 schema + markdown-it token rule + serializer rule |
-| table               | 建议做基础版      | prosemirror-tables + 自定义 Markdown 表格序列化          |
-| strikethrough       | 建议做            | 自定义 mark                                              |
-| front matter        | 建议做只读 / 保留 | parse 前切出 YAML front matter，serialize 时放回         |
-| footnote            | 可延后            | 需要 token、引用跳转、渲染规则                           |
-| math inline / block | 建议做            | 自定义 node / mark，KaTeX NodeView 渲染                  |
-| mermaid             | 建议做            | fenced code block language = mermaid，NodeView 预览      |
-| HTML block          | MVP 谨慎          | 可先保留源码，不做完整富文本编辑                         |
+| 能力 | 是否建议第一版做 | 实现方式 |
+| :--- | :--- | :--- |
+| task list | 建议做 | 自定义 schema + markdown-it token rule + serializer rule |
+| table | 建议做基础版 | prosemirror-tables + 自定义 Markdown 表格序列化 |
+| strikethrough | 建议做 | 自定义 mark |
+| front matter | 建议做只读 / 保留 | parse 前切出 YAML front matter，serialize 时放回 |
+| footnote | 可延后 | 需要 token、引用跳转、渲染规则 |
+| math inline / block | 建议做 | 自定义 node / mark，KaTeX NodeView 渲染 |
+| mermaid | 建议做 | fenced code block language = mermaid，NodeView 预览 |
+| HTML block | MVP 谨慎 | 可先保留源码，不做完整富文本编辑 |
 
 ### 7.3 Markdown 保真策略
 
 Markdown 编辑器常见问题是“保存后格式被重排”。第一版必须明确保真程度：
 
-| 类型         | 策略                                                            |
-| ------------ | --------------------------------------------------------------- |
-| 语义保真     | 必须保证。标题、列表、链接、图片、代码块不能丢                  |
-| 文本保真     | 尽量保证。用户写的文字、代码、公式不变                          |
-| 格式保真     | 第一版不承诺 100%。例如空行数量、列表符号、表格对齐可能被规范化 |
-| 原始片段保留 | 对 front matter、未知 HTML、未知 fenced block 尽量原样保留      |
+| 类型 | 策略 |
+| :--- | :--- |
+| 语义保真 | 必须保证。标题、列表、链接、图片、代码块不能丢 |
+| 文本保真 | 尽量保证。用户写的文字、代码、公式不变 |
+| 格式保真 | 第一版不承诺 100%。例如空行数量、列表符号、表格对齐可能被规范化 |
+| 原始片段保留 | 对 front matter、未知 HTML、未知 fenced block 尽量原样保留 |
 
 建议在架构上保留 `sourceMap` 或 `rawBlock` 概念，为未来更高保真度做准备。
 
@@ -453,20 +453,20 @@ flowchart TD
 
 ### 9.3 主题范围
 
-| 区域               | 是否走 CSS 变量 |
-| ------------------ | --------------- |
-| 应用背景           | 是              |
-| 编辑区背景 / 文字  | 是              |
-| 标题 / 段落 / 链接 | 是              |
-| 引用块             | 是              |
-| 表格               | 是              |
-| 代码块             | 是              |
-| 行内代码           | 是              |
-| 选区               | 是              |
-| 光标               | 是              |
-| Mermaid 容器       | 是              |
-| KaTeX 容器         | 是              |
-| 浮动工具栏         | 是              |
+| 区域 | 是否走 CSS 变量 |
+| :--- | :--- |
+| 应用背景 | 是 |
+| 编辑区背景 / 文字 | 是 |
+| 标题 / 段落 / 链接 | 是 |
+| 引用块 | 是 |
+| 表格 | 是 |
+| 代码块 | 是 |
+| 行内代码 | 是 |
+| 选区 | 是 |
+| 光标 | 是 |
+| Mermaid 容器 | 是 |
+| KaTeX 容器 | 是 |
+| 浮动工具栏 | 是 |
 
 ---
 
@@ -474,15 +474,15 @@ flowchart TD
 
 ### 10.1 数据分层
 
-| 数据类型      | 主存储            | 说明                                       |
-| ------------- | ----------------- | ------------------------------------------ |
-| Markdown 正文 | 本地 `.md` 文件   | 项目的主数据，必须可脱离应用独立存在       |
-| 图片 / 附件   | 本地资源目录      | 默认与文档同级或工作区 `.assets` 目录      |
-| 文档元信息    | SQLite            | 最近打开、标题缓存、字数、修改时间、标签等 |
-| 搜索索引      | SQLite FTS        | 可选，用于全文搜索                         |
-| 渲染缓存      | SQLite / 文件缓存 | 代码高亮、图片尺寸、Mermaid 渲染状态等     |
-| 用户设置      | SQLite / JSON     | 主题、字体、快捷键、默认目录               |
-| 历史快照      | SQLite / 文件     | 可选，避免覆盖误保存                       |
+| 数据类型 | 主存储 | 说明 |
+| :--- | :--- | :--- |
+| Markdown 正文 | 本地  文件 | 项目的主数据，必须可脱离应用独立存在 |
+| 图片 / 附件 | 本地资源目录 | 默认与文档同级或工作区  目录 |
+| 文档元信息 | SQLite | 最近打开、标题缓存、字数、修改时间、标签等 |
+| 搜索索引 | SQLite FTS | 可选，用于全文搜索 |
+| 渲染缓存 | SQLite / 文件缓存 | 代码高亮、图片尺寸、Mermaid 渲染状态等 |
+| 用户设置 | SQLite / JSON | 主题、字体、快捷键、默认目录 |
+| 历史快照 | SQLite / 文件 | 可选，避免覆盖误保存 |
 
 ### 10.2 SQLite 表设计草案
 
@@ -639,19 +639,19 @@ editor-prosemirror/
 
 ### 12.2 插件优先级
 
-| 插件          | MVP 优先级 | 说明                                    |
-| ------------- | ---------- | --------------------------------------- |
-| history       | P0         | 撤销 / 重做                             |
-| keymap        | P0         | 快捷键                                  |
-| inputRules    | P0         | `#`、`-`、`>`、``` 等 Markdown 快捷输入 |
-| paste         | P0         | Markdown / HTML / plain text 粘贴       |
-| image         | P1         | 图片解析、预览、导入                    |
-| codeBlock     | P1         | 代码块语言、Shiki 高亮                  |
-| outline       | P1         | 标题提取                                |
-| table         | P1         | 基础表格                                |
-| math          | P1         | KaTeX                                   |
-| mermaid       | P1         | Mermaid 预览                            |
-| collaboration | 不做       | 轻量本地编辑器第一版不需要              |
+| 插件 | MVP 优先级 | 说明 |
+| :--- | :--- | :--- |
+| history | P0 | 撤销 / 重做 |
+| keymap | P0 | 快捷键 |
+| inputRules | P0 | 、、、``` 等 Markdown 快捷输入 |
+| paste | P0 | Markdown / HTML / plain text 粘贴 |
+| image | P1 | 图片解析、预览、导入 |
+| codeBlock | P1 | 代码块语言、Shiki 高亮 |
+| outline | P1 | 标题提取 |
+| table | P1 | 基础表格 |
+| math | P1 | KaTeX |
+| mermaid | P1 | Mermaid 预览 |
+| collaboration | 不做 | 轻量本地编辑器第一版不需要 |
 
 ---
 
@@ -659,37 +659,37 @@ editor-prosemirror/
 
 ### 13.1 第一版必须完成
 
-| 模块       | 功能                                                             |
-| ---------- | ---------------------------------------------------------------- |
-| 桌面壳     | 打开文件、保存文件、另存为、最近文件                             |
-| 编辑器     | ProseMirror 编辑、Markdown 解析 / 序列化、撤销重做               |
-| EditorCore | `getMarkdown`、`setMarkdown`、`execute`、`subscribe`、`destroy`  |
-| Markdown   | 标题、段落、列表、引用、链接、图片、代码块、粗体、斜体、行内代码 |
-| Svelte UI  | 编辑区、工具栏、状态栏、文件标题、dirty 状态                     |
-| 渲染       | 图片预览、基础代码高亮、CSS 变量主题                             |
-| 存储       | 本地文件主存储、SQLite 保存最近文件 / 设置                       |
-| 稳定性     | 中文 IME、复制粘贴、文件编码、异常提示                           |
+| 模块 | 功能 |
+| :--- | :--- |
+| 桌面壳 | 打开文件、保存文件、另存为、最近文件 |
+| 编辑器 | ProseMirror 编辑、Markdown 解析 / 序列化、撤销重做 |
+| EditorCore | 、、、、 |
+| Markdown | 标题、段落、列表、引用、链接、图片、代码块、粗体、斜体、行内代码 |
+| Svelte UI | 编辑区、工具栏、状态栏、文件标题、dirty 状态 |
+| 渲染 | 图片预览、基础代码高亮、CSS 变量主题 |
+| 存储 | 本地文件主存储、SQLite 保存最近文件 / 设置 |
+| 稳定性 | 中文 IME、复制粘贴、文件编码、异常提示 |
 
 ### 13.2 第一版建议完成
 
-| 模块     | 功能                                   |
-| -------- | -------------------------------------- |
+| 模块 | 功能 |
+| :--- | :--- |
 | Markdown | task list、基础表格、front matter 保留 |
-| 渲染     | KaTeX、Mermaid                         |
-| 导航     | Outline                                |
-| 体验     | 专注模式、打字机模式、字数统计         |
-| 图片     | 粘贴图片保存到 assets 目录             |
+| 渲染 | KaTeX、Mermaid |
+| 导航 | Outline |
+| 体验 | 专注模式、打字机模式、字数统计 |
+| 图片 | 粘贴图片保存到 assets 目录 |
 
 ### 13.3 第一版暂不做
 
-| 功能                 | 原因                                             |
-| -------------------- | ------------------------------------------------ |
-| 多人协作             | 与本地轻量定位不一致                             |
-| 云同步               | 可交给系统云盘 / Git，后续再做                   |
-| 插件市场             | 先内部模块化即可                                 |
-| 完整导出 docx / epub | 工程成本高                                       |
-| 自研完整编辑器内核   | 风险过高，先用 EditorCore 隔离                   |
-| AI 深度写作流        | 等 EditorCore command / transaction 稳定后再接入 |
+| 功能 | 原因 |
+| :--- | :--- |
+| 多人协作 | 与本地轻量定位不一致 |
+| 云同步 | 可交给系统云盘 / Git，后续再做 |
+| 插件市场 | 先内部模块化即可 |
+| 完整导出 docx / epub | 工程成本高 |
+| 自研完整编辑器内核 | 风险过高，先用 EditorCore 隔离 |
+| AI 深度写作流 | 等 EditorCore command / transaction 稳定后再接入 |
 
 ---
 
@@ -815,16 +815,16 @@ src-tauri/
 
 ## 16. 风险与对策
 
-| 风险                  | 表现                                                | 对策                                                |
-| --------------------- | --------------------------------------------------- | --------------------------------------------------- |
-| Markdown 序列化不保真 | 保存后空行、表格、列表格式变化                      | 明确保真等级；保留 raw block；增加测试用例          |
-| ProseMirror 侵入 UI   | Svelte 组件里到处使用 `view.state`                  | 所有调用必须走 EditorCore                           |
-| GFM 扩展复杂          | task、table、footnote 难以与 CommonMark schema 对齐 | 先做最常用子集，复杂能力后置                        |
-| 中文 IME 问题         | 输入时光标跳动、字符丢失                            | 单独做中文输入测试；避免在 composition 中强制重渲染 |
-| Shiki 异步性能        | 大代码块高亮卡顿                                    | 异步高亮、缓存、降级 plain text                     |
-| Mermaid 安全问题      | SVG / HTML 注入                                     | 使用安全模式、隔离容器、限制不可信内容              |
-| SQLite 过度设计       | 把文档主数据塞进数据库                              | 明确 `.md` 文件是主存储，SQLite 只做辅助            |
-| 自研内核诱惑          | 过早投入底层模型导致 MVP 延迟                       | 第一版只做封装层和实验，不替换 ProseMirror          |
+| 风险 | 表现 | 对策 |
+| :--- | :--- | :--- |
+| Markdown 序列化不保真 | 保存后空行、表格、列表格式变化 | 明确保真等级；保留 raw block；增加测试用例 |
+| ProseMirror 侵入 UI | Svelte 组件里到处使用 | 所有调用必须走 EditorCore |
+| GFM 扩展复杂 | task、table、footnote 难以与 CommonMark schema 对齐 | 先做最常用子集，复杂能力后置 |
+| 中文 IME 问题 | 输入时光标跳动、字符丢失 | 单独做中文输入测试；避免在 composition 中强制重渲染 |
+| Shiki 异步性能 | 大代码块高亮卡顿 | 异步高亮、缓存、降级 plain text |
+| Mermaid 安全问题 | SVG / HTML 注入 | 使用安全模式、隔离容器、限制不可信内容 |
+| SQLite 过度设计 | 把文档主数据塞进数据库 | 明确  文件是主存储，SQLite 只做辅助 |
+| 自研内核诱惑 | 过早投入底层模型导致 MVP 延迟 | 第一版只做封装层和实验，不替换 ProseMirror |
 
 ---
 
@@ -894,12 +894,13 @@ src-tauri/
 
 ## 19. 资料来源
 
-[1] Tauri 2 官方站点：https://v2.tauri.app/  
-[2] Svelte 官方站点：https://svelte.dev/  
-[3] prosemirror-markdown：https://github.com/ProseMirror/prosemirror-markdown  
-[4] Shiki 官方站点：https://shiki.style/  
-[5] KaTeX 官方站点：https://katex.org/  
-[6] Mermaid 官方站点：https://mermaid.js.org/  
-[7] SQLite 官方说明：https://sqlite.org/about.html  
-[8] DOMD GitHub 仓库：https://github.com/do-md/domd  
-[9] ProseMirror Markdown 示例：https://prosemirror.net/examples/markdown/
+\[1\] Tauri 2 官方站点：https://v2.tauri.app/\
+\[2\] Svelte 官方站点：https://svelte.dev/\
+\[3\] prosemirror-markdown：https://github.com/ProseMirror/prosemirror-markdown\
+\[4\] Shiki 官方站点：https://shiki.style/\
+\[5\] KaTeX 官方站点：https://katex.org/\
+\[6\] Mermaid 官方站点：https://mermaid.js.org/\
+\[7\] SQLite 官方说明：https://sqlite.org/about.html\
+\[8\] DOMD GitHub 仓库：https://github.com/do-md/domd\
+\[9\] ProseMirror Markdown 示例：https://prosemirror.net/examples/markdown/
+

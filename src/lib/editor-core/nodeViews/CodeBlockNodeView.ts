@@ -231,10 +231,8 @@ export class CodeBlockNodeView {
       this.enterEdit(clickLine);
     });
 
-    // 空代码块标记首次选中时自动进入编辑态（如 InputRule 从 ``` 创建）
-    if (!node.textContent.trim()) {
-      this.needsAutoEdit = true;
-    }
+    // 标记首次选中时自动进入编辑态（如 InputRule 从 ``` 创建 或快捷键插入）
+    this.needsAutoEdit = true;
 
     // 初始渲染展示态
     this.renderDisplay();
@@ -264,10 +262,10 @@ export class CodeBlockNodeView {
 
   selectNode(): void {
     this.dom.classList.add('ProseMirror-selectednode');
-    // 首次创建的空代码块自动进入编辑态
+    // 首次创建的代码块自动进入编辑态
     if (this.needsAutoEdit) {
       this.needsAutoEdit = false;
-      this.enterEdit();
+      this.enterEdit(0, 'start');
     }
   }
 
@@ -447,11 +445,21 @@ export class CodeBlockNodeView {
     clickLine: number,
     caret: 'start' | 'end',
   ): boolean {
+    // 精确匹配
     for (const instance of CodeBlockNodeView.instances) {
       if (instance.view !== view) continue;
-      if (instance.getPos() !== pos) continue;
-      instance.enterEdit(clickLine, caret);
-      return true;
+      if (instance.getPos() === pos) {
+        instance.enterEdit(clickLine, caret);
+        return true;
+      }
+    }
+    // 容差匹配（新节点的位置可能有小幅偏移）
+    for (const instance of CodeBlockNodeView.instances) {
+      if (instance.view !== view) continue;
+      if (Math.abs(instance.getPos() - pos) <= 2) {
+        instance.enterEdit(clickLine, caret);
+        return true;
+      }
     }
     return false;
   }

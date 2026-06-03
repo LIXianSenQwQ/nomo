@@ -2,8 +2,9 @@ import { setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
 import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
-import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { schema } from './schema';
 import {
   addTableColumnAfter,
@@ -356,7 +357,17 @@ function insertBlock(
 ): boolean {
   const content = text ? schema.text(text) : undefined;
   const node = type.create(attrs, content);
-  view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+  const { state } = view;
+  const tr = state.tr.replaceSelectionWith(node);
+  const newPos = tr.mapping.map(state.selection.from);
+  view.dispatch(tr.scrollIntoView());
+
+  // 代码块插入后自动进入编辑态
+  if (type.name === 'code_block') {
+    setTimeout(() => {
+      CodeBlockNodeView.enterEditAt(view, newPos, 0, 'start');
+    }, 0);
+  }
   return true;
 }
 

@@ -109,7 +109,7 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
         if (selection instanceof NodeSelection && selection.node.type.name === 'code_block') {
           event.preventDefault();
           if (event.key === 'ArrowDown') {
-            callback.enterEditAt(view, selection.from, 0, 'start');
+            callback.enterEditAt(view, selection.from, 0, 'end');
           } else {
             // ArrowUp：光标在末行末尾
             const code = selection.node.textContent;
@@ -128,7 +128,7 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
           const nextCodeBlock = findNextCodeBlock($from, isOnLastVisualLine(view, $from));
           if (nextCodeBlock) {
             event.preventDefault();
-            callback.enterEditAt(view, nextCodeBlock.pos, 0, 'start');
+            callback.enterEditAt(view, nextCodeBlock.pos, 0, 'end');
             return true;
           }
         } else {
