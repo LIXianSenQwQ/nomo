@@ -11,25 +11,25 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
     let mut file_menu_builder = SubmenuBuilder::new(app, "文件(&F)")
         .item(
             &MenuItemBuilder::with_id("new-file", "新建(&N)")
-                .accelerator("Ctrl+N")
+                .accelerator("Ctrl + N")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("new-window", "新建窗口(&W)")
-                .accelerator("Ctrl+Shift+N")
+                .accelerator("Ctrl + Shift + N")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("open-file", "打开(&O)...")
-                .accelerator("Ctrl+O")
+                .accelerator("Ctrl + O")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("open-directory", "打开文件夹...")
-                .accelerator("Ctrl+Shift+O")
+                .accelerator("Ctrl + Shift + O")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         );
@@ -65,20 +65,20 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
         .separator()
         .item(
             &MenuItemBuilder::with_id("save-file", "保存(&S)")
-                .accelerator("Ctrl+S")
+                .accelerator("Ctrl + S")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("save-file-as", "另存为(&A)...")
-                .accelerator("Ctrl+Shift+S")
+                .accelerator("Ctrl + Shift + S")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .separator()
         .item(
             &MenuItemBuilder::with_id("quit", "退出(&X)")
-                .accelerator("Alt+F4")
+                .accelerator("Alt + F4")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
@@ -88,13 +88,13 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
     let edit_menu = SubmenuBuilder::new(app, "编辑(&E)")
         .item(
             &MenuItemBuilder::with_id("undo", "撤销(&U)")
-                .accelerator("Ctrl+Z")
+                .accelerator("Ctrl + Z")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("redo", "重做(&R)")
-                .accelerator("Ctrl+Y")
+                .accelerator("Ctrl + Y")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
@@ -109,25 +109,25 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
     let format_menu = SubmenuBuilder::new(app, "格式(&O)")
         .item(
             &MenuItemBuilder::with_id("toggle-blockquote", "引用块")
-                .accelerator("Ctrl+Shift+Q")
+                .accelerator("Ctrl + Shift + Q")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("insert-table", "表格")
-                .accelerator("Ctrl+Shift+T")
+                .accelerator("Ctrl + Shift + T")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("insert-math-block", "公式块")
-                .accelerator("Ctrl+Shift+M")
+                .accelerator("Ctrl + Shift + M")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("insert-code-block", "代码块")
-                .accelerator("Ctrl+Shift+K")
+                .accelerator("Ctrl + Shift + K")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
@@ -137,19 +137,19 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
     let view_menu = SubmenuBuilder::new(app, "查看(&V)")
         .item(
             &MenuItemBuilder::with_id("toggle-source", "切换源码模式")
-                .accelerator("Ctrl+E")
+                .accelerator("Ctrl + E")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("toggle-theme", "切换主题")
-                .accelerator("Ctrl+Shift+L")
+                .accelerator("Ctrl + Shift + L")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
         .item(
             &MenuItemBuilder::with_id("toggle-focus", "切换专注模式")
-                .accelerator("Ctrl+Shift+F")
+                .accelerator("Ctrl + Shift + F")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )

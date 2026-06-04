@@ -160,6 +160,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  white-space: nowrap;
   transition:
     background 0.1s,
     color 0.1s;
@@ -182,6 +183,7 @@
   font-size: 10.5px;
   color: var(--md-editor-muted-fg, #888888);
   margin-left: 24px;
+  flex-shrink: 0;
 }
 
 .dropdown-menu button:hover .shortcut,
