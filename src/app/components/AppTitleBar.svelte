@@ -321,11 +321,11 @@
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
-              >提升标题级别 <span class="shortcut">Ctrl++</span></button
+              >提升标题层级 <span class="shortcut">Ctrl + =</span></button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
-              >降低标题级别 <span class="shortcut">Ctrl+-</span></button
+              >降低标题层级 <span class="shortcut">Ctrl + -</span></button
             >
             <div class="divider"></div>
             <button on:click={() => finish(openTablePicker, 'paragraph')}
