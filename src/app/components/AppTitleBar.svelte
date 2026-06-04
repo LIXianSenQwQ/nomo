@@ -319,10 +319,12 @@
             <button on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
               >段落 <span class="shortcut">Ctrl+0</span></button
             >
-            <button on:click={() => comingSoon('提升标题级别', 'paragraph')}
-              >提升标题级别 <span class="shortcut">Ctrl+=</span></button
+            <button
+              on:click={() => finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
+              >提升标题级别 <span class="shortcut">Ctrl++</span></button
             >
-            <button on:click={() => comingSoon('降低标题级别', 'paragraph')}
+            <button
+              on:click={() => finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
               >降低标题级别 <span class="shortcut">Ctrl+-</span></button
             >
             <div class="divider"></div>

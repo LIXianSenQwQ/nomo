@@ -258,6 +258,142 @@ describe('editorCommands', () => {
     target.remove();
   });
 
+  it('段落按 + 应变为 H1', () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create(null, schema.text('测试'))]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe('heading');
+    expect(view.state.doc.child(0).attrs.level).toBe(1);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('H1 按 + 应保持 H1 不变', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.heading.create({ level: 1 }, schema.text('标题')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(false);
+    expect(view.state.doc.child(0).attrs.level).toBe(1);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('H3 按 + 应变为 H2', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.heading.create({ level: 3 }, schema.text('标题')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(true);
+    expect(view.state.doc.child(0).attrs.level).toBe(2);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('H1 按 - 应变为 H2', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.heading.create({ level: 1 }, schema.text('标题')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe('heading');
+    expect(view.state.doc.child(0).attrs.level).toBe(2);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('H6 按 - 应保持 H6 不变', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.heading.create({ level: 6 }, schema.text('标题')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(false);
+    expect(view.state.doc.child(0).attrs.level).toBe(6);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('段落按 - 应不处理', () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create(null, schema.text('测试'))]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+
+    expect(result).toBe(false);
+    expect(view.state.doc.child(0).type.name).toBe('paragraph');
+
+    view.destroy();
+    target.remove();
+  });
+
   it('插入公式块和表格时，同样在非段落块后补空段落', () => {
     const mathDoc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
     const mathTarget = document.createElement('div');

@@ -62,9 +62,9 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'toggle-inline-code') {
     handlers.runCommand({ type: 'toggleCode' });
   } else if (command === 'menu-heading-up') {
-    handlers.showUnavailableFeature('提升标题级别');
+    handlers.runCommand({ type: 'increaseHeadingLevel' });
   } else if (command === 'menu-heading-down') {
-    handlers.showUnavailableFeature('降低标题级别');
+    handlers.runCommand({ type: 'decreaseHeadingLevel' });
   } else if (command === 'menu-insert-paragraph-before') {
     handlers.runCommand({ type: 'insertParagraphBefore' });
   } else if (command === 'menu-insert-paragraph-after') {
@@ -144,6 +144,12 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === '0') {
     event.preventDefault();
     handlers.runCommand({ type: 'setParagraph' });
+  } else if (key === '=' || key === '+') {
+    event.preventDefault();
+    handlers.runCommand({ type: 'increaseHeadingLevel' });
+  } else if (key === '-') {
+    event.preventDefault();
+    handlers.runCommand({ type: 'decreaseHeadingLevel' });
   }
   // Ctrl+Shift 快捷键：用 event.code 按物理按键匹配，避免 Shift 影响 event.key
   if (!event.shiftKey) return;

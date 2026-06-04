@@ -71,6 +71,58 @@ function toggleHeading(view: EditorView, level: number): boolean {
   return setBlockType(schema.nodes.heading, { level })(view.state, view.dispatch);
 }
 
+/**
+ * 提升标题重要性：+ 键
+ * 段落 → H1
+ * H6 → H5 → ... → H2 → H1（H1 保持不变）
+ */
+function increaseHeadingLevel(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  if (!dispatch) return false;
+  const { $from } = state.selection;
+  const currentNode = $from.parent;
+
+  // 段落转为 H1
+  if (currentNode.type === schema.nodes.paragraph) {
+    return setBlockType(schema.nodes.heading, { level: 1 })(state, dispatch);
+  }
+
+  // 标题提升重要性（数字减小）
+  if (currentNode.type === schema.nodes.heading) {
+    const currentLevel = currentNode.attrs.level as number;
+    // H1 已是最高重要性，保持不变
+    if (currentLevel <= 1) return false;
+    return setBlockType(schema.nodes.heading, { level: currentLevel - 1 })(state, dispatch);
+  }
+
+  return false;
+}
+
+/**
+ * 降低标题重要性：- 键
+ * H1 → H2 → H3 → ... → H6（H6 保持不变）
+ * 段落不处理
+ */
+function decreaseHeadingLevel(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  if (!dispatch) return false;
+  const { $from } = state.selection;
+  const currentNode = $from.parent;
+
+  // 段落不处理
+  if (currentNode.type === schema.nodes.paragraph) {
+    return false;
+  }
+
+  // 标题降低重要性（数字增大）
+  if (currentNode.type === schema.nodes.heading) {
+    const currentLevel = currentNode.attrs.level as number;
+    // H6 已是最低重要性，保持不变
+    if (currentLevel >= 6) return false;
+    return setBlockType(schema.nodes.heading, { level: currentLevel + 1 })(state, dispatch);
+  }
+
+  return false;
+}
+
 // 查找光标所在位置的父列表（bullet_list 或 ordered_list）
 function findParentList($pos: ResolvedPos): { listPos: number; listType: NodeType } | null {
   for (let d = $pos.depth; d >= 0; d--) {
@@ -345,6 +397,10 @@ export function executeEditorCommand(
       return insertParagraphAfterCurrentBlock(state, dispatch);
     case 'insertParagraphBefore':
       return insertParagraphBeforeCurrentBlock(state, dispatch);
+    case 'increaseHeadingLevel':
+      return increaseHeadingLevel(state, dispatch);
+    case 'decreaseHeadingLevel':
+      return decreaseHeadingLevel(state, dispatch);
     case 'undo':
       return run(undo);
     case 'redo':

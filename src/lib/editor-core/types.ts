@@ -73,6 +73,8 @@ export type EditorCommand =
   | { type: 'setTableColumnAlignment'; align: 'left' | 'center' | 'right' }
   | { type: 'insertParagraphAfter' }
   | { type: 'insertParagraphBefore' }
+  | { type: 'increaseHeadingLevel' }
+  | { type: 'decreaseHeadingLevel' }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'formatDocument' }
