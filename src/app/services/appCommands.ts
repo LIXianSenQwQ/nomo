@@ -68,7 +68,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-insert-paragraph-before') {
     handlers.showUnavailableFeature('在上方插入段落');
   } else if (command === 'menu-insert-paragraph-after') {
-    handlers.showUnavailableFeature('在下方插入段落');
+    handlers.runCommand({ type: 'insertParagraphAfter' });
   } else if (command === 'menu-chart') {
     handlers.showUnavailableFeature('图表');
   } else if (command === 'menu-footnote') {

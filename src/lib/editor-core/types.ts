@@ -71,6 +71,7 @@ export type EditorCommand =
   | { type: 'deleteTable' }
   | { type: 'toggleTableHeader' }
   | { type: 'setTableColumnAlignment'; align: 'left' | 'center' | 'right' }
+  | { type: 'insertParagraphAfter' }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'formatDocument' }

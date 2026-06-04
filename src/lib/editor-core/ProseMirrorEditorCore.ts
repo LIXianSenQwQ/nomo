@@ -12,7 +12,7 @@ import {
 import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { EditorState, NodeSelection, type Transaction } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
@@ -38,7 +38,7 @@ import {
   splitFrontMatter,
 } from './markdown';
 import { schema } from './schema';
-import { addTableRowAfter } from './tableCommands';
+import { addTableRowAfter, findTableContext } from './tableCommands';
 import type {
   EditorChangeEvent,
   EditorCommand,
@@ -253,7 +253,21 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-b': toggleMark(schema.marks.strong),
           'Mod-i': toggleMark(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
-          'Ctrl-Enter': addTableRowAfter(),
+          'Ctrl-Enter': (state, dispatch) => {
+            // 在表格内：下方插入新行
+            const context = findTableContext(state);
+            if (context) return addTableRowAfter()(state, dispatch);
+            // 其他块：在下方插入新段落
+            const { $from } = state.selection;
+            const afterPos = $from.after(1);
+            const emptyParagraph = schema.nodes.paragraph.create();
+            const tr = state.tr.insert(afterPos, emptyParagraph);
+            const newPos = afterPos + 1;
+            if (dispatch) {
+              dispatch(tr.setSelection(TextSelection.create(tr.doc, newPos)).scrollIntoView());
+            }
+            return true;
+          },
           Enter: chainCommands(
             // $$ 回车自动补全：段落内只有 $$ 时按回车，生成空 math_block 并自动进入编辑态
             (state, dispatch) => {

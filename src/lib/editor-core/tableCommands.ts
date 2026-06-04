@@ -150,7 +150,7 @@ function createTableRow(columns: number, rowIndex: number, header: boolean): Pro
   return schema.nodes.table_row.createChecked(null, cells);
 }
 
-function findTableContext(state: EditorState): TableContext | null {
+export function findTableContext(state: EditorState): TableContext | null {
   const { $from } = state.selection;
   let tableDepth = -1;
   let cellDepth = -1;
