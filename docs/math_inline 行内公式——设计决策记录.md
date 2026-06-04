@@ -165,17 +165,18 @@ math_inline: {
 
 ## 模块拆分
 
-| 模块                     | 位置                            | 职责                                    |
-| ------------------------ | ------------------------------- | --------------------------------------- |
-| markdown-it inline ruler | markdown.ts                     | 识别 `$...$` → `math_inline` token      |
-| math_inline Schema       | schema.ts                       | node spec 定义                          |
-| markdown 序列化/反序列化 | markdown.ts                     | token → PM node + node → `$tex$`        |
-| MathInlineNodeView       | nodeViews/MathInlineNodeView.ts | 渲染态/编辑态切换、input 管理、预览卡片 |
-| mathBlock 瘦身           | plugins/mathBlock.ts            | 移除 inline regex，仅保留 `$$...$$`     |
-| 样式                     | app/styles/editor-document.css  | 渲染态、input、预览卡片样式             |
+| 模块 | 位置 | 职责 |
+| :--- | :--- | :--- |
+| markdown-it inline ruler | markdown.ts | 识别  →  token |
+| math_inline Schema | schema.ts | node spec 定义 |
+| markdown 序列化/反序列化 | markdown.ts | token → PM node + node → |
+| MathInlineNodeView | nodeViews/MathInlineNodeView.ts | 渲染态/编辑态切换、input 管理、预览卡片 |
+| mathBlock 瘦身 | plugins/mathBlock.ts | 移除 inline regex，仅保留 |
+| 样式 | app/styles/editor-document.css | 渲染态、input、预览卡片样式 |
 
 ## 测试策略
 
 - **已覆盖**：markdown-it inline ruler 识别准确性、schema + markdown 往返一致性、边界场景（货币、代码块、转义、未闭合、display math）
 - **未覆盖**：MathInlineNodeView DOM 交互（需 jsdom + KaTeX mock，投入产出比低）；CSS 样式（视觉回归由人工审核）
 - **测试范式**：遵循现有 tableMarkdown.test.ts 模式，Vitest + jsdom
+

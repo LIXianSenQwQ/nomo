@@ -15,9 +15,11 @@
     Quote,
     Save,
     Sigma,
+    Strikethrough,
     Table2,
+    Underline,
   } from '@lucide/svelte';
-  import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+  import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
 
   export let mode: EditorMode;
@@ -28,6 +30,7 @@
   export let openFileDialog: () => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
+  export let pendingInlineMarks: InlinePendingMarks;
   export let tablePickerOpen: boolean;
   export let openTablePicker: () => void;
   export let closeTablePicker: () => void;
@@ -73,11 +76,37 @@
   <button title="标题" on:click={() => runCommand({ type: 'setHeading', level: 1 })}>
     <Heading1 size={17} />
   </button>
-  <button title="粗体" on:click={() => runCommand({ type: 'toggleBold' })}>
+  <button
+    title="粗体"
+    class:active={pendingInlineMarks.strong}
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleBold' })}
+  >
     <Bold size={17} />
   </button>
-  <button title="斜体" on:click={() => runCommand({ type: 'toggleItalic' })}>
+  <button
+    title="斜体"
+    class:active={pendingInlineMarks.em}
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleItalic' })}
+  >
     <Italic size={17} />
+  </button>
+  <button
+    title="删除线"
+    class:active={pendingInlineMarks.strikethrough}
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleStrikethrough' })}
+  >
+    <Strikethrough size={17} />
+  </button>
+  <button
+    title="下划线"
+    class:active={pendingInlineMarks.underline}
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleUnderline' })}
+  >
+    <Underline size={17} />
   </button>
   <button title="引用" on:click={() => runCommand({ type: 'toggleBlockquote' })}>
     <Quote size={17} />

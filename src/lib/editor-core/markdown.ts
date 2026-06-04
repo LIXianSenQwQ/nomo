@@ -13,7 +13,7 @@ import { classifyHtmlBlock } from './html/htmlClassifier';
 import { parseHtmlContent } from './html/htmlToPmLogic';
 import { serializeHtmlBlock } from './html/pmToHtml';
 
-const markdownIt = MarkdownIt('commonmark', { html: true }).enable('table');
+const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
 
 markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
   const src = state.src;
@@ -167,6 +167,9 @@ const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
+  s: { mark: 'strikethrough' },
+  s_open: { mark: 'strikethrough' },
+  s_close: { mark: 'strikethrough' },
   html_block: { ignore: true },
   html_inline: { ignore: true },
 });
@@ -221,6 +224,10 @@ const INLINE_MARK_MAP: Record<string, string> = {
   i: 'em',
   code: 'code',
   a: 'link',
+  s: 'strikethrough',
+  del: 'strikethrough',
+  strike: 'strikethrough',
+  u: 'underline',
 };
 
 const htmlInlineStack: Array<{ tag: string; markName: string }> = [];
@@ -353,7 +360,15 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.closeBlock(node);
     },
   },
-  defaultMarkdownSerializer.marks,
+  {
+    ...defaultMarkdownSerializer.marks,
+    strikethrough: {
+      open: '~~',
+      close: '~~',
+      mixable: true,
+      expelEnclosingWhitespace: true,
+    },
+  },
 );
 
 export function parseMarkdown(markdown: string): ProseMirrorNode {
@@ -455,6 +470,8 @@ function serializeInlineText(node: ProseMirrorNode): string {
     if (mark.type.name === 'strong') return `**${value}**`;
     if (mark.type.name === 'em') return `*${value}*`;
     if (mark.type.name === 'code') return `\`${value.replace(/`/g, '\\`')}\``;
+    if (mark.type.name === 'strikethrough') return `~~${value}~~`;
+    if (mark.type.name === 'underline') return `<u>${value}</u>`;
     if (mark.type.name === 'link') return `[${value}](${mark.attrs.href})`;
     return value;
   }, text);

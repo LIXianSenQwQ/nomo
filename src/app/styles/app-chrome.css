@@ -231,7 +231,8 @@
 .mode-switch button.active,
 .icon-button:hover,
 .icon-button.active,
-.toolbar button:hover {
+.toolbar button:hover,
+.toolbar button.active {
   background: var(--md-editor-surface);
   color: var(--md-editor-accent-strong);
 }

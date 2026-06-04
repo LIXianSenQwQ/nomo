@@ -32,6 +32,30 @@ describe('createEditorCore', () => {
     ]);
   });
 
+  it('emits pending inline mark snapshots for toolbar state', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const events: boolean[] = [];
+
+    editor.subscribe((event) => {
+      events.push(event.pendingInlineMarks.strong);
+    });
+
+    editor.execute({ type: 'toggleBold' });
+
+    expect(events).toEqual([false, true]);
+  });
+
+  it('does not enter pending inline marks in source mode', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+
+    editor.updateOptions({ mode: 'source' });
+
+    expect(editor.execute({ type: 'toggleBold' })).toBe(false);
+    expect(editor.isPendingMarkActive?.('strong')).toBe(false);
+  });
+
   it('serializes ProseMirror edits back to Markdown through EditorCore', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '# 标题\n\n正文', target });

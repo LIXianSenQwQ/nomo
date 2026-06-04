@@ -392,7 +392,7 @@
             <button on:click={() => finish(() => runCommand({ type: 'toggleItalic' }), 'format')}
               >斜体 <span class="shortcut">Ctrl + I</span></button
             >
-            <button on:click={() => comingSoon('下划线', 'format')}
+            <button on:click={() => finish(() => runCommand({ type: 'toggleUnderline' }), 'format')}
               >下划线 <span class="shortcut">Ctrl + U</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleCode' }), 'format')}
@@ -400,7 +400,7 @@
             >
             <button on:click={() => comingSoon('行公式', 'format')}>行公式</button>
             <div class="divider"></div>
-            <button on:click={() => comingSoon('删除线', 'format')}
+            <button on:click={() => finish(() => runCommand({ type: 'toggleStrikethrough' }), 'format')}
               >删除线 <span class="shortcut">Alt + Shift + 5</span></button
             >
             <button on:click={() => comingSoon('高亮', 'format')}>高亮</button>

@@ -61,6 +61,10 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.runCommand({ type: 'toggleItalic' });
   } else if (command === 'toggle-inline-code') {
     handlers.runCommand({ type: 'toggleCode' });
+  } else if (command === 'toggle-strikethrough') {
+    handlers.runCommand({ type: 'toggleStrikethrough' });
+  } else if (command === 'toggle-underline') {
+    handlers.runCommand({ type: 'toggleUnderline' });
   } else if (command === 'menu-heading-up') {
     handlers.runCommand({ type: 'increaseHeadingLevel' });
   } else if (command === 'menu-heading-down') {
@@ -80,11 +84,11 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-yaml-front-matter') {
     handlers.showUnavailableFeature('YAML Front Matter');
   } else if (command === 'menu-underline') {
-    handlers.showUnavailableFeature('下划线');
+    handlers.runCommand({ type: 'toggleUnderline' });
   } else if (command === 'menu-inline-math') {
     handlers.showUnavailableFeature('行公式');
   } else if (command === 'menu-strikethrough') {
-    handlers.showUnavailableFeature('删除线');
+    handlers.runCommand({ type: 'toggleStrikethrough' });
   } else if (command === 'menu-highlight') {
     handlers.showUnavailableFeature('高亮');
   } else if (command === 'menu-comment') {

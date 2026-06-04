@@ -27,6 +27,7 @@ import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
+import { pendingInlineMarkPlugin, toggleMarkPending, isPendingMarkActive } from './plugins/pendingInlineMark';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
@@ -45,6 +46,8 @@ import type {
   EditorCore,
   EditorCoreOptions,
   EditorListener,
+  InlinePendingMarkName,
+  InlinePendingMarks,
   EditorRuntimeOptions,
   EditorSnapshot,
   EditorThemeOptions,
@@ -178,7 +181,19 @@ export class ProseMirrorEditorCore implements EditorCore {
       return command.type === 'undo' || command.type === 'redo';
     }
 
+    if (this.runtime.mode !== 'semantic' && isPendingInlineMarkCommand(command)) {
+      return false;
+    }
+
     return true;
+  }
+
+  /** 判断指定行内格式是否处于 pending 状态（collapsed selection 下的待定标记） */
+  isPendingMarkActive(markName: InlinePendingMarkName): boolean {
+    if (!this.view) return false;
+    const markType = this.view.state.schema.marks[markName];
+    if (!markType) return false;
+    return isPendingMarkActive(this.view.state, markType);
   }
 
   updateTheme(theme: EditorThemeOptions): void {
@@ -225,6 +240,16 @@ export class ProseMirrorEditorCore implements EditorCore {
       mode: this.runtime.mode,
       readonly: this.runtime.readonly,
       reason,
+      pendingInlineMarks: this.createPendingInlineMarks(),
+    };
+  }
+
+  private createPendingInlineMarks(): InlinePendingMarks {
+    return {
+      strong: this.isPendingMarkActive('strong'),
+      em: this.isPendingMarkActive('em'),
+      strikethrough: this.isPendingMarkActive('strikethrough'),
+      underline: this.isPendingMarkActive('underline'),
     };
   }
 
@@ -243,6 +268,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
         trailingParagraphPlugin(),
+        pendingInlineMarkPlugin(),
         tableHtmlBlockPlugin(),
         tableControlsPlugin(),
         tableEditing({ allowTableNodeSelection: true }),
@@ -250,9 +276,11 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-z': undo,
           'Mod-y': redo,
           'Shift-Mod-z': redo,
-          'Mod-b': toggleMark(schema.marks.strong),
-          'Mod-i': toggleMark(schema.marks.em),
+          'Mod-b': toggleMarkPending(schema.marks.strong),
+          'Mod-i': toggleMarkPending(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
+          'Alt-Shift-5': toggleMarkPending(schema.marks.strikethrough),
+          'Mod-u': toggleMarkPending(schema.marks.underline),
           'Ctrl-Enter': (state, dispatch) => {
             // 在表格内：下方插入新行
             const context = findTableContext(state);
@@ -388,13 +416,13 @@ export class ProseMirrorEditorCore implements EditorCore {
     const nextState = this.view.state.apply(transaction);
     this.view.updateState(nextState);
 
-    if (!transaction.docChanged) {
-      return;
+    if (transaction.docChanged) {
+      this.markdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
+      this.dirty = true;
     }
 
-    this.markdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
+    // 每次事务都递增版本并通知（pending mark 状态切换、选区变化等需要及时反映到 UI）
     this.version += 1;
-    this.dirty = true;
     this.emit('transaction');
   }
 
@@ -442,4 +470,13 @@ export class ProseMirrorEditorCore implements EditorCore {
       throw new Error('EditorCore has been destroyed.');
     }
   }
+}
+
+function isPendingInlineMarkCommand(command: EditorCommand): boolean {
+  return (
+    command.type === 'toggleBold' ||
+    command.type === 'toggleItalic' ||
+    command.type === 'toggleStrikethrough' ||
+    command.type === 'toggleUnderline'
+  );
 }

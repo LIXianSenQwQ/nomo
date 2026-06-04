@@ -123,5 +123,26 @@ export const schema = new Schema({
         ],
       },
     }),
-  marks: markdownSchema.spec.marks,
+  marks: markdownSchema.spec.marks.append({
+    strikethrough: {
+      parseDOM: [
+        { tag: 's' },
+        { tag: 'del' },
+        { tag: 'strike' },
+        { style: 'text-decoration=line-through' },
+      ],
+      toDOM() {
+        return ['s', 0];
+      },
+    },
+    underline: {
+      parseDOM: [
+        { tag: 'u' },
+        { style: 'text-decoration=underline' },
+      ],
+      toDOM() {
+        return ['u', 0];
+      },
+    },
+  }),
 });

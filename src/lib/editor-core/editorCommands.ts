@@ -1,4 +1,5 @@
 import { setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
+import { toggleMarkPending } from './plugins/pendingInlineMark';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
 import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
@@ -301,11 +302,15 @@ export function executeEditorCommand(
 
   switch (command.type) {
     case 'toggleBold':
-      return run(toggleMark(schema.marks.strong));
+      return run(toggleMarkPending(schema.marks.strong));
     case 'toggleItalic':
-      return run(toggleMark(schema.marks.em));
+      return run(toggleMarkPending(schema.marks.em));
     case 'toggleCode':
       return run(toggleMark(schema.marks.code));
+    case 'toggleStrikethrough':
+      return run(toggleMarkPending(schema.marks.strikethrough));
+    case 'toggleUnderline':
+      return run(toggleMarkPending(schema.marks.underline));
     case 'setHeading':
       return toggleHeading(view, command.level);
     case 'setParagraph':

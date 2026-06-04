@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { RecentDocument } from '../../lib/desktop/tauriStorage';
-  import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+  import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
   import type { FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
@@ -65,6 +65,7 @@
   export let openRecentFile: (path: string) => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
+  export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
@@ -168,6 +169,7 @@
         {openFileDialog}
         {saveMarkdownFile}
         {runCommand}
+        {pendingInlineMarks}
         {tablePickerOpen}
         {openTablePicker}
         {closeTablePicker}

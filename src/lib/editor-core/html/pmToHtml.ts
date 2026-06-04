@@ -40,6 +40,12 @@ function wrapTextWithMarks(textNode: ProseMirrorNode): string {
       case 'code':
         text = `<code>${text}</code>`;
         break;
+      case 'strikethrough':
+        text = `<s>${text}</s>`;
+        break;
+      case 'underline':
+        text = `<u>${text}</u>`;
+        break;
       case 'link': {
         const href = mark.attrs.href ?? '';
         const title = mark.attrs.title ? ` title="${mark.attrs.title}"` : '';

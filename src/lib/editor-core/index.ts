@@ -10,6 +10,8 @@ export type {
   EditorCore,
   EditorCoreOptions,
   EditorError,
+  InlinePendingMarkName,
+  InlinePendingMarks,
   EditorListener,
   EditorMode,
   EditorRuntimeOptions,

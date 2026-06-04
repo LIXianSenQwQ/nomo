@@ -10,6 +10,10 @@ export const EDITABLE_INLINE_TAGS: ReadonlySet<string> = new Set([
   'em',
   'a',
   'code',
+  's',
+  'del',
+  'strike',
+  'u',
 ]);
 
 /** 允许保留的 HTML 属性 */
@@ -42,4 +46,8 @@ export const INLINE_TAG_TO_MARK: Record<string, string> = {
   i: 'em',
   code: 'code',
   a: 'link',
+  s: 'strikethrough',
+  del: 'strikethrough',
+  strike: 'strikethrough',
+  u: 'underline',
 };

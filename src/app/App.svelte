@@ -14,6 +14,7 @@
     setCodeBlockTokenizer,
     type EditorChangeEvent,
     type EditorCommand,
+    type InlinePendingMarks,
     type EditorMode,
   } from '../lib/editor-core';
   import {
@@ -101,6 +102,7 @@
   let expandedFolders = new Set<string>();
   let tablePickerOpen = false;
   let unavailableFeatureTimer: number | null = null;
+  let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -590,6 +592,7 @@
     dirty = event.dirty;
     version = event.version;
     mode = event.mode;
+    pendingInlineMarks = event.pendingInlineMarks;
     outline = extractOutline(event.markdown);
     if (!outline.some((item) => item.id === activeOutlineId))
       activeOutlineId = outline[0]?.id ?? '';
@@ -699,6 +702,15 @@
       markdown: editor.getMarkdown(),
     });
   }
+
+  function createEmptyPendingInlineMarks(): InlinePendingMarks {
+    return {
+      strong: false,
+      em: false,
+      strikethrough: false,
+      underline: false,
+    };
+  }
 </script>
 
 <svelte:head>
@@ -760,6 +772,7 @@
   {openRecentFile}
   {saveMarkdownFile}
   {runCommand}
+  {pendingInlineMarks}
   {openTablePicker}
   {showUnavailableFeature}
   {closeTablePicker}

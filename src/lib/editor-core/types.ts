@@ -1,4 +1,6 @@
 export type EditorMode = 'semantic' | 'source';
+export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline';
+export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
 
 export interface EditorThemeOptions {
   name: 'light' | 'dark';
@@ -34,6 +36,7 @@ export interface EditorChangeEvent {
   mode: EditorMode;
   readonly: boolean;
   reason: string;
+  pendingInlineMarks: InlinePendingMarks;
 }
 
 export interface EditorSelectionEvent {
@@ -50,6 +53,8 @@ export type EditorCommand =
   | { type: 'toggleBold' }
   | { type: 'toggleItalic' }
   | { type: 'toggleCode' }
+  | { type: 'toggleStrikethrough' }
+  | { type: 'toggleUnderline' }
   | { type: 'setHeading'; level: 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'setParagraph' }
   | { type: 'toggleBlockquote' }
@@ -107,4 +112,6 @@ export interface EditorCore {
   updateTheme(theme: EditorThemeOptions): void;
   updateOptions(options: Partial<EditorRuntimeOptions>): void;
   subscribe(listener: EditorListener): () => void;
+  /** 判断指定行内格式是否处于 pending 状态 */
+  isPendingMarkActive?(markName: InlinePendingMarkName): boolean;
 }
