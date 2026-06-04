@@ -267,6 +267,19 @@ export class MathBlockNodeView {
   private handleKeyDown(e: KeyboardEvent): void {
     if (!this.textarea) return;
 
+    // Shift+Ctrl+Enter：保存退出编辑态，并在上方插入新段落
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      const pos = this.getPos();
+      this.exitEdit(true, 'preserve');
+      // 在公式块上方插入空段落，光标移入
+      const paragraph = this.view.state.schema.nodes.paragraph.create();
+      const tr = this.view.state.tr.insert(pos, paragraph);
+      this.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, pos + 1)));
+      this.view.focus();
+      return;
+    }
+
     // Ctrl+Enter：保存退出编辑态，并在下方插入新段落
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();

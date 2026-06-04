@@ -66,7 +66,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-heading-down') {
     handlers.showUnavailableFeature('降低标题级别');
   } else if (command === 'menu-insert-paragraph-before') {
-    handlers.showUnavailableFeature('在上方插入段落');
+    handlers.runCommand({ type: 'insertParagraphBefore' });
   } else if (command === 'menu-insert-paragraph-after') {
     handlers.runCommand({ type: 'insertParagraphAfter' });
   } else if (command === 'menu-chart') {

@@ -23,6 +23,23 @@ function insertParagraphAfterCurrentBlock(state: EditorState, dispatch?: (tr: Tr
   dispatch(tr.scrollIntoView());
   return true;
 }
+
+/**
+ * 在当前块的上方插入一个新的空段落，并将光标移入。
+ * 逻辑：定位当前顶层块的起始位置，在该位置之前插入空段落节点。
+ */
+function insertParagraphBeforeCurrentBlock(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  if (!dispatch) return false;
+  const { $from } = state.selection;
+  const topDepth = 1;
+  const beforePos = $from.before(topDepth);
+  const emptyParagraph = schema.nodes.paragraph.create();
+  const tr = state.tr.insert(beforePos, emptyParagraph);
+  // 光标移到新段落的起始位置
+  tr.setSelection(TextSelection.create(tr.doc, beforePos + 1));
+  dispatch(tr.scrollIntoView());
+  return true;
+}
 import {
   addTableColumnAfter,
   addTableColumnBefore,
@@ -326,6 +343,8 @@ export function executeEditorCommand(
       return run(setTableColumnAlignment(command.align));
     case 'insertParagraphAfter':
       return insertParagraphAfterCurrentBlock(state, dispatch);
+    case 'insertParagraphBefore':
+      return insertParagraphBeforeCurrentBlock(state, dispatch);
     case 'undo':
       return run(undo);
     case 'redo':

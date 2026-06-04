@@ -72,6 +72,7 @@ export type EditorCommand =
   | { type: 'toggleTableHeader' }
   | { type: 'setTableColumnAlignment'; align: 'left' | 'center' | 'right' }
   | { type: 'insertParagraphAfter' }
+  | { type: 'insertParagraphBefore' }
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'formatDocument' }

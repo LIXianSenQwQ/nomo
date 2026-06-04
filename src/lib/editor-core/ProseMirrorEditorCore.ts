@@ -38,7 +38,7 @@ import {
   splitFrontMatter,
 } from './markdown';
 import { schema } from './schema';
-import { addTableRowAfter, findTableContext } from './tableCommands';
+import { addTableRowAfter, addTableRowBefore, findTableContext } from './tableCommands';
 import type {
   EditorChangeEvent,
   EditorCommand,
@@ -265,6 +265,20 @@ export class ProseMirrorEditorCore implements EditorCore {
             const newPos = afterPos + 1;
             if (dispatch) {
               dispatch(tr.setSelection(TextSelection.create(tr.doc, newPos)).scrollIntoView());
+            }
+            return true;
+          },
+          'Shift-Ctrl-Enter': (state, dispatch) => {
+            // 在表格内：上方插入新行
+            const context = findTableContext(state);
+            if (context) return addTableRowBefore()(state, dispatch);
+            // 其他块：在上方插入新段落
+            const { $from } = state.selection;
+            const beforePos = $from.before(1);
+            const emptyParagraph = schema.nodes.paragraph.create();
+            const tr = state.tr.insert(beforePos, emptyParagraph);
+            if (dispatch) {
+              dispatch(tr.setSelection(TextSelection.create(tr.doc, beforePos + 1)).scrollIntoView());
             }
             return true;
           },
