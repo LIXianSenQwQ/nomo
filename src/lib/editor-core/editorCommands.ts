@@ -286,8 +286,7 @@ export function executeEditorCommand(
       );
     case 'insertTable': {
       const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
-      view.dispatch(state.tr.replaceSelectionWith(tableNode).scrollIntoView());
-      return true;
+      return insertTable(view, tableNode);
     }
     case 'addTableRowBefore':
       return run(addTableRowBefore());
@@ -361,6 +360,47 @@ function insertInlineNode(
 
   view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
   return true;
+}
+
+function insertTable(view: EditorView, tableNode: PmNode): boolean {
+  const { state } = view;
+  const { $from, empty } = state.selection;
+
+  // 步骤1：空段落中插入表格时，替换整个段落，确保表格起点不会贴到下方旧表格。
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    const tablePos = $from.before(1);
+    const blockEnd = $from.after(1);
+    const tr = state.tr.replaceWith(tablePos, blockEnd, tableNode);
+    setSelectionInFirstTableCell(tr, tablePos);
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  const tr = state.tr.replaceSelectionWith(tableNode);
+  const tablePos = tr.mapping.map(state.selection.from, -1);
+  if (tr.doc.nodeAt(tablePos)?.type === schema.nodes.table) {
+    setSelectionInFirstTableCell(tr, tablePos);
+  }
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function setSelectionInFirstTableCell(tr: Transaction, tablePos: number): void {
+  const table = tr.doc.nodeAt(tablePos);
+  if (!table || table.type !== schema.nodes.table) return;
+
+  let textPos: number | null = null;
+  table.descendants((node, pos) => {
+    if (textPos === null && node.isTextblock) {
+      textPos = tablePos + 1 + pos + 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (textPos !== null) {
+    tr.setSelection(TextSelection.create(tr.doc, textPos));
+  }
 }
 
 function insertBlock(

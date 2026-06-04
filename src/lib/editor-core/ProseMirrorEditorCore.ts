@@ -345,6 +345,8 @@ export class ProseMirrorEditorCore implements EditorCore {
         codeBlockNavigationPlugin({
           enterEditAt: (view, pos, clickLine, caret) =>
             CodeBlockNodeView.enterEditAt(view, pos, clickLine, caret),
+          enterMathEditAt: (view, pos, caret) => MathBlockNodeView.enterEditAt(view, pos, caret),
+          prepareMathKeyboardEntry: (caret) => MathBlockNodeView.prepareKeyboardEntry(caret),
         }),
       ],
     });

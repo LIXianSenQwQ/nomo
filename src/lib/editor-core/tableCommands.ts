@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import type { Command, EditorState, Transaction } from 'prosemirror-state';
+import { TextSelection, type Command, type EditorState, type Transaction } from 'prosemirror-state';
 import {
   addColumnAfter,
   addColumnBefore,
@@ -38,7 +38,15 @@ export function addTableRowBefore(): Command {
 }
 
 export function addTableRowAfter(): Command {
-  return addRowAfter;
+  return (state, dispatch) => {
+    const context = findTableContext(state);
+    if (!context) return false;
+
+    return addRowAfter(state, (tr) => {
+      moveSelectionToInsertedRow(tr, context);
+      dispatch?.(tr.scrollIntoView());
+    });
+  };
 }
 
 export function addTableColumnBefore(): Command {
@@ -173,4 +181,29 @@ function findTableContext(state: EditorState): TableContext | null {
     columnIndex: rect.left,
     map,
   };
+}
+
+function moveSelectionToInsertedRow(tr: Transaction, context: TableContext): void {
+  const table = tr.doc.nodeAt(context.tableStart - 1);
+  if (!table || table.type !== schema.nodes.table) return;
+
+  const map = TableMap.get(table);
+  const targetRow = Math.min(context.rowIndex + 1, map.height - 1);
+  const targetColumn = Math.min(context.columnIndex, map.width - 1);
+  const cellPos = context.tableStart + map.positionAt(targetRow, targetColumn, table);
+  const cell = tr.doc.nodeAt(cellPos);
+  if (!cell) return;
+
+  let textPos: number | null = null;
+  cell.descendants((node, pos) => {
+    if (textPos === null && node.isTextblock) {
+      textPos = cellPos + 1 + pos + 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (textPos !== null) {
+    tr.setSelection(TextSelection.create(tr.doc, textPos));
+  }
 }

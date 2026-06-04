@@ -3,9 +3,9 @@ import type { Node as ProseMirrorNode, ResolvedPos } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 
 /**
- * codeBlockNavigation 插件 —— 处理代码块的上下方向键导航
+ * codeBlockNavigation 插件 —— 处理代码块 / 公式块的上下方向键导航
  *
- * ProseMirror 默认会跳过 atomic 节点（code_block），导致 ↓ 直接跳到代码块下方。
+ * ProseMirror 默认会跳过 atomic 节点（code_block / math_block），导致 ↓ 直接跳到块下方。
  * 本插件在 handleKeyDown（早于 keymap 和默认处理）中拦截：
  *   1. 光标在文本块边界且紧邻代码块 → 直接进入代码块编辑态
  *   2. 代码块已选中 → 进入编辑态
@@ -15,14 +15,20 @@ import type { EditorView } from 'prosemirror-view';
 export type CodeBlockNavCallback = {
   /** 阶段2：代码块已选中，调用 enterEdit 进入编辑态 */
   enterEditAt: (view: EditorView, pos: number, clickLine: number, caret: 'start' | 'end') => void;
+  /** 公式块已选中或相邻时，调用 enterEdit 进入编辑态 */
+  enterMathEditAt?: (view: EditorView, pos: number, caret: 'start' | 'end') => void;
+  /** Arrow 默认选中公式块时，NodeView 会消费该意图并立即进入编辑态 */
+  prepareMathKeyboardEntry?: (caret: 'start' | 'end') => void;
 };
 
 export const codeBlockNavigationKey = new PluginKey('codeBlockNavigation');
 
-type AdjacentCodeBlock = {
+type AdjacentEditableBlock = {
   node: ProseMirrorNode;
   pos: number;
 };
+
+const EDITABLE_BLOCK_NAMES = new Set(['code_block', 'math_block']);
 
 const VISUAL_LINE_TOLERANCE_PX = 4;
 
@@ -48,10 +54,10 @@ function isOnFirstVisualLine(view: EditorView, $from: ResolvedPos): boolean {
   return isSameVisualLine(view, $from.pos, textblockStart);
 }
 
-function findNextCodeBlock(
+function findNextEditableBlock(
   $from: ResolvedPos,
   canLeaveTextblock: boolean,
-): AdjacentCodeBlock | null {
+): AdjacentEditableBlock | null {
   if (!canLeaveTextblock) return null;
 
   for (let depth = $from.depth; depth > 0; depth--) {
@@ -62,7 +68,7 @@ function findNextCodeBlock(
 
     const nextPos = $from.after(depth);
     const nodeAfter = $from.doc.resolve(nextPos).nodeAfter;
-    if (nodeAfter?.type.name === 'code_block') {
+    if (nodeAfter && EDITABLE_BLOCK_NAMES.has(nodeAfter.type.name)) {
       return { node: nodeAfter, pos: nextPos };
     }
     if (nodeAfter) return null;
@@ -71,10 +77,10 @@ function findNextCodeBlock(
   return null;
 }
 
-function findPreviousCodeBlock(
+function findPreviousEditableBlock(
   $from: ResolvedPos,
   canLeaveTextblock: boolean,
-): AdjacentCodeBlock | null {
+): AdjacentEditableBlock | null {
   if (!canLeaveTextblock) return null;
 
   for (let depth = $from.depth; depth > 0; depth--) {
@@ -85,7 +91,7 @@ function findPreviousCodeBlock(
 
     const currentPos = $from.before(depth);
     const nodeBefore = $from.doc.resolve(currentPos).nodeBefore;
-    if (nodeBefore?.type.name === 'code_block') {
+    if (nodeBefore && EDITABLE_BLOCK_NAMES.has(nodeBefore.type.name)) {
       return { node: nodeBefore, pos: currentPos - nodeBefore.nodeSize };
     }
     if (nodeBefore) return null;
@@ -104,6 +110,7 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
         const view = _view;
         const state = view.state;
         const { selection } = state;
+        callback.prepareMathKeyboardEntry?.(event.key === 'ArrowDown' ? 'start' : 'end');
 
         // 代码块已选中（NodeSelection）→ 进入编辑态
         if (selection instanceof NodeSelection && selection.node.type.name === 'code_block') {
@@ -118,6 +125,16 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
           }
           return true;
         }
+        if (selection instanceof NodeSelection && selection.node.type.name === 'math_block') {
+          if (!callback.enterMathEditAt) return false;
+          event.preventDefault();
+          callback.enterMathEditAt(
+            view,
+            selection.from,
+            event.key === 'ArrowDown' ? 'start' : 'end',
+          );
+          return true;
+        }
 
         // 光标在文本块边界且紧邻代码块 → 直接进入代码块编辑态
         const { $from, empty } = selection;
@@ -125,18 +142,26 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
         if (!$from.parent.isTextblock) return false;
 
         if (event.key === 'ArrowDown') {
-          const nextCodeBlock = findNextCodeBlock($from, isOnLastVisualLine(view, $from));
-          if (nextCodeBlock) {
+          const nextBlock = findNextEditableBlock($from, isOnLastVisualLine(view, $from));
+          if (nextBlock) {
             event.preventDefault();
-            callback.enterEditAt(view, nextCodeBlock.pos, 0, 'end');
+            if (nextBlock.node.type.name === 'math_block') {
+              callback.enterMathEditAt?.(view, nextBlock.pos, 'start');
+            } else {
+              callback.enterEditAt(view, nextBlock.pos, 0, 'start');
+            }
             return true;
           }
         } else {
-          const previousCodeBlock = findPreviousCodeBlock($from, isOnFirstVisualLine(view, $from));
-          if (previousCodeBlock) {
+          const previousBlock = findPreviousEditableBlock($from, isOnFirstVisualLine(view, $from));
+          if (previousBlock) {
             event.preventDefault();
-            const lastLine = previousCodeBlock.node.textContent.split('\n').length - 1;
-            callback.enterEditAt(view, previousCodeBlock.pos, lastLine, 'end');
+            if (previousBlock.node.type.name === 'math_block') {
+              callback.enterMathEditAt?.(view, previousBlock.pos, 'end');
+            } else {
+              const lastLine = previousBlock.node.textContent.split('\n').length - 1;
+              callback.enterEditAt(view, previousBlock.pos, lastLine, 'end');
+            }
             return true;
           }
         }

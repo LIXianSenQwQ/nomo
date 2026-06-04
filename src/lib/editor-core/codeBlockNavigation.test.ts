@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { parseMarkdown } from './markdown';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
@@ -117,6 +117,64 @@ describe('codeBlockNavigationPlugin', () => {
     view.dom.dispatchEvent(createKeyboardEvent('ArrowUp'));
 
     expect(enterEditAt).toHaveBeenCalledWith(view, codeBlock.pos, 0, 'end');
+    view.destroy();
+    target.remove();
+  });
+
+  it('从公式块上方按下方向键会直接进入公式块编辑态', () => {
+    const doc = parseMarkdown('上方段落\n\n$$\nE = mc^2\n$$\n\n下方段落');
+    const paragraphs = findNodes(doc, 'paragraph');
+    const mathBlock = findNodes(doc, 'math_block')[0];
+    const enterMathEditAt = vi.fn();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(
+          doc,
+          paragraphs[0].pos + 1 + paragraphs[0].node.content.size,
+        ),
+        plugins: [
+          codeBlockNavigationPlugin({
+            enterEditAt: vi.fn(),
+            enterMathEditAt,
+          }),
+        ],
+      }),
+    });
+
+    view.dom.dispatchEvent(createKeyboardEvent('ArrowDown'));
+
+    expect(enterMathEditAt).toHaveBeenCalledWith(view, mathBlock.pos, 'start');
+    view.destroy();
+    target.remove();
+  });
+
+  it('公式块已选中时按下方向键会进入编辑态', () => {
+    const doc = parseMarkdown('$$\nE = mc^2\n$$');
+    const mathBlock = findNodes(doc, 'math_block')[0];
+    const enterMathEditAt = vi.fn();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: NodeSelection.create(doc, mathBlock.pos),
+        plugins: [
+          codeBlockNavigationPlugin({
+            enterEditAt: vi.fn(),
+            enterMathEditAt,
+          }),
+        ],
+      }),
+    });
+
+    view.dom.dispatchEvent(createKeyboardEvent('ArrowDown'));
+
+    expect(enterMathEditAt).toHaveBeenCalledWith(view, mathBlock.pos, 'start');
     view.destroy();
     target.remove();
   });

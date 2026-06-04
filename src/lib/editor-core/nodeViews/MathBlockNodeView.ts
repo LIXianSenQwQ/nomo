@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { getMathRenderer } from '../renderers';
 
@@ -12,6 +12,9 @@ import { getMathRenderer } from '../renderers';
  * 3. Ctrl+Enter 保存退出 / Esc 放弃退出
  */
 export class MathBlockNodeView {
+  private static instances = new Set<MathBlockNodeView>();
+  private static pendingKeyboardEntry: { caret: 'start' | 'end'; expiresAt: number } | null = null;
+
   dom: HTMLElement;
 
   private node: ProseMirrorNode;
@@ -24,6 +27,7 @@ export class MathBlockNodeView {
   private originalTex = '';
   private textarea: HTMLTextAreaElement | null = null;
   private previewEl: HTMLElement | null = null;
+  private suppressNextSelectAutoEdit = false;
   // 首次创建时自动进入编辑态（如 InputRule 从 $$ 创建的空公式块）
   private needsAutoEdit = false;
 
@@ -31,6 +35,7 @@ export class MathBlockNodeView {
     this.node = node;
     this.view = view;
     this.getPos = getPos;
+    MathBlockNodeView.instances.add(this);
 
     this.dom = document.createElement('div');
     this.dom.className = 'math-block';
@@ -67,17 +72,25 @@ export class MathBlockNodeView {
 
   selectNode(): void {
     this.dom.classList.add('ProseMirror-selectednode');
-    // 首次创建的空公式块自动进入编辑态
-    if (this.needsAutoEdit) {
-      this.needsAutoEdit = false;
-      this.enterEdit();
+    if (this.editing) {
+      this.dom.classList.remove('ProseMirror-selectednode');
+      return;
     }
+    if (this.suppressNextSelectAutoEdit) {
+      this.suppressNextSelectAutoEdit = false;
+      return;
+    }
+
+    // 公式块没有有意义的“只选中”中间态：键盘导航到达后立即进入编辑态，避免需要再按第二下。
+    this.needsAutoEdit = false;
+    const keyboardEntry = MathBlockNodeView.consumeKeyboardEntry();
+    this.enterEdit(keyboardEntry ?? 'start');
   }
 
   deselectNode(): void {
     this.dom.classList.remove('ProseMirror-selectednode');
     if (this.editing) {
-      this.exitEdit(true);
+      this.exitEdit(true, 'preserve');
     }
   }
 
@@ -95,6 +108,7 @@ export class MathBlockNodeView {
 
   destroy(): void {
     this.cleanupEdit();
+    MathBlockNodeView.instances.delete(this);
   }
 
   // ---- KaTeX 渲染 ----
@@ -133,7 +147,7 @@ export class MathBlockNodeView {
 
   // ---- 编辑态管理 ----
 
-  private enterEdit(): void {
+  private enterEdit(caret: 'start' | 'end' = 'start'): void {
     if (this.editing) return;
     this.editing = true;
     this.originalTex = this.node.attrs.tex as string;
@@ -174,10 +188,37 @@ export class MathBlockNodeView {
     requestAnimationFrame(() => {
       if (!this.textarea) return;
       this.textarea.focus({ preventScroll: true });
+      const pos = caret === 'end' ? this.textarea.value.length : 0;
+      this.textarea.setSelectionRange(pos, pos);
     });
   }
 
-  private exitEdit(save: boolean): void {
+  static enterEditAt(view: EditorView, pos: number, caret: 'start' | 'end' = 'start'): boolean {
+    for (const instance of MathBlockNodeView.instances) {
+      if (instance.view !== view) continue;
+      if (instance.getPos() === pos) {
+        instance.enterEdit(caret);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static prepareKeyboardEntry(caret: 'start' | 'end'): void {
+    MathBlockNodeView.pendingKeyboardEntry = {
+      caret,
+      expiresAt: Date.now() + 600,
+    };
+  }
+
+  private static consumeKeyboardEntry(): 'start' | 'end' | null {
+    const entry = MathBlockNodeView.pendingKeyboardEntry;
+    MathBlockNodeView.pendingKeyboardEntry = null;
+    if (!entry || entry.expiresAt < Date.now()) return null;
+    return entry.caret;
+  }
+
+  private exitEdit(save: boolean, selection: 'node' | 'before' | 'after' | 'preserve' = 'node'): void {
     if (!this.editing) return;
 
     const newTex = save && this.textarea ? this.textarea.value : this.originalTex;
@@ -192,9 +233,23 @@ export class MathBlockNodeView {
       tr = tr.setNodeMarkup(pos, null, { tex: newTex });
     }
 
-    // 恢复选中状态
-    tr = tr.setSelection(NodeSelection.create(tr.doc, pos));
-    this.view.dispatch(tr);
+    if (selection === 'before') {
+      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(pos), -1));
+    } else if (selection === 'after') {
+      const nextPos = Math.min(pos + this.node.nodeSize, tr.doc.content.size);
+      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(nextPos), 1));
+    } else if (selection === 'node') {
+      // 恢复选中状态
+      this.suppressNextSelectAutoEdit = true;
+      tr = tr.setSelection(NodeSelection.create(tr.doc, pos));
+    }
+
+    if (tr.docChanged || selection !== 'preserve') {
+      this.view.dispatch(tr);
+    }
+    if (selection === 'before' || selection === 'after') {
+      this.view.focus();
+    }
   }
 
   private cleanupEdit(): void {
@@ -224,6 +279,26 @@ export class MathBlockNodeView {
       e.preventDefault();
       this.exitEdit(false);
       return;
+    }
+
+    // ArrowDown：光标在最后一行时保存并跳出到公式块之后
+    if (e.key === 'ArrowDown' && !e.shiftKey) {
+      const { selectionStart, value } = this.textarea;
+      if (!value.slice(selectionStart).includes('\n')) {
+        e.preventDefault();
+        this.exitEdit(true, 'after');
+        return;
+      }
+    }
+
+    // ArrowUp：光标在第一行时保存并跳出到公式块之前
+    if (e.key === 'ArrowUp' && !e.shiftKey) {
+      const { selectionStart, value } = this.textarea;
+      if (!value.slice(0, selectionStart).includes('\n')) {
+        e.preventDefault();
+        this.exitEdit(true, 'before');
+        return;
+      }
     }
 
     // Enter 在 textarea 内正常换行（不退出编辑态）
