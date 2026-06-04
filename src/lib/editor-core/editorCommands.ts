@@ -4,7 +4,6 @@ import { liftListItem, wrapInList } from 'prosemirror-schema-list';
 import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { schema } from './schema';
 import {
   addTableColumnAfter,
@@ -253,14 +252,29 @@ export function executeEditorCommand(
     case 'insertMathBlock': {
       const tex = command.tex ?? 'E = mc^2';
       const node = schema.nodes.math_block.create({ tex });
-      const { $from } = state.selection;
-      // 如果光标在顶层（doc 直接子节点），用 replaceSelectionWith；
+      const { $from, empty } = state.selection;
+      // 如果光标在顶层（doc 直接子节点），精确选中新建的 math_block；
       // 否则（如在列表项内）追加到文档末尾，避免破坏嵌套结构。
       if ($from.depth <= 1) {
-        view.dispatch(state.tr.replaceSelectionWith(node).scrollIntoView());
+        if (empty && $from.parent.isTextblock && $from.parent.content.size === 0) {
+          const blockStart = $from.before(1);
+          const blockEnd = $from.after(1);
+          const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+          tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+          view.dispatch(tr.scrollIntoView());
+        } else {
+          const tr = state.tr.replaceSelectionWith(node);
+          const newPos = tr.mapping.map(state.selection.from, -1);
+          if (tr.doc.nodeAt(newPos)?.type === schema.nodes.math_block) {
+            tr.setSelection(NodeSelection.create(tr.doc, newPos));
+          }
+          view.dispatch(tr.scrollIntoView());
+        }
       } else {
         const endPos = state.doc.content.size;
-        view.dispatch(state.tr.insert(endPos, node).scrollIntoView());
+        const tr = state.tr.insert(endPos, node);
+        tr.setSelection(NodeSelection.create(tr.doc, endPos));
+        view.dispatch(tr.scrollIntoView());
       }
       return true;
     }
@@ -358,16 +372,27 @@ function insertBlock(
   const content = text ? schema.text(text) : undefined;
   const node = type.create(attrs, content);
   const { state } = view;
-  const tr = state.tr.replaceSelectionWith(node);
-  const newPos = tr.mapping.map(state.selection.from);
-  view.dispatch(tr.scrollIntoView());
+  const { $from, empty } = state.selection;
 
-  // 代码块插入后自动进入编辑态
-  if (type.name === 'code_block') {
-    setTimeout(() => {
-      CodeBlockNodeView.enterEditAt(view, newPos, 0, 'start');
-    }, 0);
+  // 步骤1：空段落插入块时，直接替换整个段落。
+  // 这样能拿到新节点的精确起点，避免相邻代码块之间用近似位置误进入旧块。
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    const blockStart = $from.before(1);
+    const blockEnd = $from.after(1);
+    const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+    if (type.name === 'code_block') {
+      tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+    }
+    view.dispatch(tr.scrollIntoView());
+    return true;
   }
+
+  const tr = state.tr.replaceSelectionWith(node);
+  const newPos = tr.mapping.map(state.selection.from, -1);
+  if (type.name === 'code_block' && tr.doc.nodeAt(newPos)?.type === type) {
+    tr.setSelection(NodeSelection.create(tr.doc, newPos));
+  }
+  view.dispatch(tr.scrollIntoView());
   return true;
 }
 

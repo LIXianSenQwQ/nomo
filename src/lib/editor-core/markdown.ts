@@ -94,7 +94,6 @@ markdownIt.block.ruler.after('fence', 'math_display', (state, startLine, endLine
   if (!foundClose) return false;
 
   const content = texLines.join('\n').trim();
-  if (!content) return false; // 公式内容不能为空
   if (silent) return true;
 
   const token = state.push('math_display', 'math', 0);

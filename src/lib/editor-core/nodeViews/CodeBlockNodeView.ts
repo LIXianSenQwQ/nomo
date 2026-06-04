@@ -453,14 +453,6 @@ export class CodeBlockNodeView {
         return true;
       }
     }
-    // 容差匹配（新节点的位置可能有小幅偏移）
-    for (const instance of CodeBlockNodeView.instances) {
-      if (instance.view !== view) continue;
-      if (Math.abs(instance.getPos() - pos) <= 2) {
-        instance.enterEdit(clickLine, caret);
-        return true;
-      }
-    }
     return false;
   }
 

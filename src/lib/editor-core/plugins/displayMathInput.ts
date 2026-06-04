@@ -69,10 +69,10 @@ function tryMatchDisplayMath(
 
   const firstText = first.node.textContent.trim();
 
-  // 单行 $$...$$ 形式
-  if (firstText.startsWith('$$') && firstText.endsWith('$$') && firstText.length > 4) {
+  // 单段文本 $$...$$ 形式。粘贴多行空公式块时，换行可能仍保留在同一段文本中。
+  if (firstText.startsWith('$$') && firstText.endsWith('$$') && firstText.length >= 4) {
     const tex = firstText.slice(2, -2).trim();
-    if (tex) {
+    if (tex || firstText.includes('\n')) {
       return {
         replacement: {
           from: first.pos,
@@ -106,7 +106,6 @@ function tryMatchDisplayMath(
   if (!foundClose) return null;
 
   const tex = texLines.join('\n').trim();
-  if (!tex) return null;
 
   const from = blocks[startIndex].pos;
   const to = blocks[closeIndex].pos + blocks[closeIndex].node.nodeSize;

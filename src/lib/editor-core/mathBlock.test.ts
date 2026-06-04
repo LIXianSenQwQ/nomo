@@ -79,18 +79,17 @@ describe('math_block markdown-it parser', () => {
     expect(found).toBe(false);
   });
 
-  it('does NOT generate math_block for empty content', () => {
-    // $$\n$$ — 两行之间没有内容
-    const doc = parseMarkdown('$$\n$$');
-    let found = false;
+  it('parses empty $$...$$ as an editable math_block placeholder', () => {
+    const doc = parseMarkdown('$$\n\n$$');
+    const blockTex: string[] = [];
     doc.descendants((node) => {
       if (node.type.name === 'math_block') {
-        found = true;
+        blockTex.push(node.attrs.tex as string);
         return false;
       }
       return true;
     });
-    expect(found).toBe(false);
+    expect(blockTex).toEqual(['']);
   });
 });
 
@@ -106,6 +105,11 @@ describe('math_block serialization', () => {
     const markdown = `$$\n${tex}\n$$`;
     const serialized = serializeMarkdown(parseMarkdown(markdown)).trim();
     expect(serialized).toBe(`$$\n${tex}\n$$`);
+  });
+
+  it('preserves empty math_block placeholders during serialization', () => {
+    const serialized = serializeMarkdown(parseMarkdown('$$\n\n$$')).trim();
+    expect(serialized).toBe('$$\n\n$$');
   });
 });
 
@@ -281,23 +285,23 @@ describe('displayMathInputPlugin — semantic input', () => {
     expect(found).toBe(false);
   });
 
-  it('does NOT convert empty $$...$$ into math_block', () => {
+  it('converts empty multi-line $$...$$ into an editable math_block placeholder', () => {
     let state = EditorState.create({
       doc: schema.node('doc', null, [schema.node('paragraph')]),
       plugins: [displayMathInputPlugin()],
     });
 
-    state = state.apply(state.tr.insertText('$$$$'));
+    state = state.apply(state.tr.insertText('$$\n\n$$'));
 
-    let found = false;
+    const blockTex: string[] = [];
     state.doc.descendants((node) => {
       if (node.type.name === 'math_block') {
-        found = true;
+        blockTex.push(node.attrs.tex as string);
         return false;
       }
       return true;
     });
 
-    expect(found).toBe(false);
+    expect(blockTex).toEqual(['']);
   });
 });
