@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { Node as PmNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { executeEditorCommand } from './editorCommands';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
+import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import { schema } from './schema';
 import { createTableNode } from './tableCommands';
 
@@ -178,4 +180,124 @@ describe('editorCommands', () => {
     view.destroy();
     target.remove();
   });
+
+  it('在文档中间插入代码块时，在新代码块后补空段落', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('上方')),
+      schema.nodes.paragraph.create(),
+      schema.nodes.code_block.create({ params: 'ts' }, schema.text('old')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, doc.child(0).nodeSize + 1),
+        plugins: [trailingParagraphPlugin()],
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertCodeBlock', language: 'ts' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual([
+      'paragraph',
+      'code_block',
+      'paragraph',
+      'code_block',
+    ]);
+    expect(view.state.doc.child(3).textContent).toBe('old');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('在文档底部插入代码块时，在代码块后补空段落', () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+        plugins: [trailingParagraphPlugin()],
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertCodeBlock', language: 'ts' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['code_block', 'paragraph']);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('代码块后方已有段落时，不重复追加空段落', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(),
+      schema.nodes.paragraph.create(null, schema.text('下方')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+        plugins: [trailingParagraphPlugin()],
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertCodeBlock', language: 'ts' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['code_block', 'paragraph']);
+    expect(view.state.doc.child(1).textContent).toBe('下方');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('插入公式块和表格时，同样在非段落块后补空段落', () => {
+    const mathDoc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const mathTarget = document.createElement('div');
+    document.body.appendChild(mathTarget);
+    const mathView = new EditorView(mathTarget, {
+      state: EditorState.create({
+        doc: mathDoc,
+        selection: TextSelection.create(mathDoc, 1),
+        plugins: [trailingParagraphPlugin()],
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertMathBlock', tex: '' }, mathView, '', () => undefined);
+    expect(getTopLevelNodeNames(mathView.state.doc)).toEqual(['math_block', 'paragraph']);
+    expect(mathView.state.selection).toBeInstanceOf(NodeSelection);
+
+    const tableDoc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const tableTarget = document.createElement('div');
+    document.body.appendChild(tableTarget);
+    const tableView = new EditorView(tableTarget, {
+      state: EditorState.create({
+        doc: tableDoc,
+        selection: TextSelection.create(tableDoc, 1),
+        plugins: [trailingParagraphPlugin()],
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertTable', rows: 1, columns: 2 }, tableView, '', () => undefined);
+    expect(getTopLevelNodeNames(tableView.state.doc)).toEqual(['table', 'paragraph']);
+    expect(tableView.state.selection.$from.parent.type.name).toBe('paragraph');
+
+    mathView.destroy();
+    mathTarget.remove();
+    tableView.destroy();
+    tableTarget.remove();
+  });
 });
+
+function getTopLevelNodeNames(doc: PmNode): string[] {
+  const names: string[] = [];
+  doc.forEach((node) => names.push(node.type.name));
+  return names;
+}
