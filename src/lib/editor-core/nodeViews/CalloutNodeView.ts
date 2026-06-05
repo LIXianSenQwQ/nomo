@@ -77,15 +77,6 @@ export class CalloutNodeView implements NodeView {
     });
     header.appendChild(this.typeBtn);
 
-    // 点击 header 标题区域也可以打开 picker，扩大可点击面积。
-    header.addEventListener('mousedown', (e) => {
-      if (!this.typeBtn.contains(e.target as Node)) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.togglePicker();
-      }
-    });
-
     this.dom.appendChild(header);
 
     // ---- body（可编辑，contentDOM）----

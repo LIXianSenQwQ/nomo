@@ -299,6 +299,7 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-blockquote-border);
+  pointer-events: none;
 }
 
 /* 经典样式：左边框 + 背景色 */
@@ -334,6 +335,7 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-callout-note-border);
+  pointer-events: none;
 }
 
 /* 经典样式：左边框 + 背景色 */
@@ -896,6 +898,7 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-blockquote-border);
+  pointer-events: none;
 }
 
 /* 经典样式：左边框 + 背景色 */
@@ -931,6 +934,7 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-callout-note-border);
+  pointer-events: none;
 }
 
 /* 经典样式：左边框 + 背景色 */
