@@ -103,7 +103,8 @@
     folderTree: FileTreeNode[] = [];
   let expandedFolders = new Set<string>();
   let tablePickerOpen = false;
-  let unavailableFeatureTimer: number | null = null;
+  let toastMessage = '';
+  let toastTimer: number | null = null;
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
@@ -587,7 +588,7 @@
   onDestroy(() => {
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
-    if (unavailableFeatureTimer !== null) window.clearTimeout(unavailableFeatureTimer);
+    if (toastTimer !== null) window.clearTimeout(toastTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
     sidebarResize.destroy();
     unsubscribe();
@@ -646,18 +647,13 @@
   }
 
   function showUnavailableFeature(featureName: string) {
-    if (unavailableFeatureTimer !== null) {
-      window.clearTimeout(unavailableFeatureTimer);
+    if (toastTimer !== null) {
+      window.clearTimeout(toastTimer);
     }
-
-    const previousMessage = statusMessage;
-    const nextMessage = `${featureName}功能开发中`;
-    statusMessage = nextMessage;
-    unavailableFeatureTimer = window.setTimeout(() => {
-      if (statusMessage === nextMessage) {
-        statusMessage = previousMessage;
-      }
-      unavailableFeatureTimer = null;
+    toastMessage = `${featureName}功能开发中`;
+    toastTimer = window.setTimeout(() => {
+      toastMessage = '';
+      toastTimer = null;
     }, 1500);
   }
 
@@ -819,3 +815,5 @@
   {closeSettings}
   saveSettings={handleSaveSettings}
 />
+
+<div class="app-toast" class:visible={toastMessage} role="status">{toastMessage}</div>

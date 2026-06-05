@@ -406,3 +406,27 @@
   background: var(--md-editor-surface);
   cursor: pointer;
 }
+
+.app-toast {
+  position: fixed;
+  bottom: 44px;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  z-index: 100;
+  padding: 8px 20px;
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-fg);
+  color: var(--md-editor-bg);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+
+.app-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
