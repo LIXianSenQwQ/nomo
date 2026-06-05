@@ -350,7 +350,7 @@
             <button
               on:click={() =>
                 finish(() => runCommand({ type: 'insertCallout' }), 'paragraph')}
-              >提示块</button
+              >提示块 <span class="shortcut">Ctrl + Shift + A</span></button
             >
             <button
               on:click={() =>
