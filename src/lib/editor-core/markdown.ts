@@ -20,7 +20,11 @@ markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
   const pos = state.pos;
   if (src.charCodeAt(pos) !== 0x24) return false;
   if (pos + 1 < src.length && src.charCodeAt(pos + 1) === 0x24) return false; // $$ display
-  if (pos > 0 && src.charCodeAt(pos - 1) === 0x24) return false; // 属于 $$ 的第二个 $
+  // 属于 $$ 的第二个 $：仅当 pos-1 和 pos-2 都是 $ 时才跳过（即 $$$ 三连），
+  // 避免误判相邻行内公式 $a$$b$ 的情况（pos-1 是前一个公式的闭合 $）
+  if (pos > 0 && src.charCodeAt(pos - 1) === 0x24) {
+    if (pos === 1 || src.charCodeAt(pos - 2) === 0x24) return false;
+  }
 
   let end = pos + 1;
   while (end < src.length) {
@@ -189,6 +193,8 @@ type MarkdownParserWithTokenHandlers = MarkdownParser & {
 const tableMarkdownParserWithHandlers =
   tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
 
+const ADJACENT_INLINE_CODE_SENTINEL = '<!-- md-adjacent-inline-code -->';
+
 // 覆盖 html_block token handler — 分类 HTML 后决定走可编辑节点还是 fallback paragraph
 tableMarkdownParserWithHandlers.tokenHandlers = {
   ...tableMarkdownParserWithHandlers.tokenHandlers,
@@ -241,6 +247,10 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
   tok: Token,
 ) => {
   const content = tok.content;
+  if (content === ADJACENT_INLINE_CODE_SENTINEL) {
+    return;
+  }
+
   const tagMatch = /^<\/?([a-zA-Z][a-zA-Z0-9]*)/.exec(content);
   if (!tagMatch) {
     // 注释、PI 等 — 原样输出
@@ -382,13 +392,13 @@ const tableMarkdownSerializer = new MarkdownSerializer(
 
 export function parseMarkdown(markdown: string): ProseMirrorNode {
   resetHtmlInlineStack();
+  const rawBody = splitFrontMatter(markdown).body;
+  const body = normalizeAdjacentInlineCode(rawBody);
   try {
-    return tableMarkdownParser.parse(splitFrontMatter(markdown).body);
+    return tableMarkdownParser.parse(body);
   } catch {
     resetHtmlInlineStack();
-    return schema.node('doc', null, [
-      schema.node('paragraph', null, [schema.text(splitFrontMatter(markdown).body)]),
-    ]);
+    return schema.node('doc', null, [schema.node('paragraph', null, [schema.text(rawBody)])]);
   }
 }
 
@@ -409,6 +419,86 @@ export function splitFrontMatter(markdown: string): { frontMatter: string; body:
   const frontMatter = markdown.slice(0, end + 5);
   const body = markdown.slice(frontMatter.length).replace(/^\s+/, '');
   return { frontMatter, body };
+}
+
+function normalizeAdjacentInlineCode(markdown: string): string {
+  let normalized = '';
+  let inFence = false;
+
+  for (const line of markdown.split(/(\r?\n)/)) {
+    if (line === '\n' || line === '\r\n') {
+      normalized += line;
+      continue;
+    }
+
+    if (/^\s*`{3,}/.test(line)) {
+      inFence = !inFence;
+      normalized += line;
+      continue;
+    }
+
+    normalized += inFence ? line : normalizeAdjacentInlineCodeLine(line);
+  }
+
+  return normalized;
+}
+
+function normalizeAdjacentInlineCodeLine(line: string): string {
+  let result = '';
+  let index = 0;
+
+  while (index < line.length) {
+    const firstStart = findUnescapedBacktick(line, index);
+    if (firstStart === -1) {
+      result += line.slice(index);
+      break;
+    }
+
+    const firstEnd = findUnescapedBacktick(line, firstStart + 1);
+    if (firstEnd === -1 || line[firstEnd + 1] !== '`') {
+      result += line.slice(index, firstStart + 1);
+      index = firstStart + 1;
+      continue;
+    }
+
+    const secondEnd = findUnescapedBacktick(line, firstEnd + 2);
+    if (secondEnd === -1) {
+      result += line.slice(index, firstEnd + 1);
+      index = firstEnd + 1;
+      continue;
+    }
+
+    const firstCode = line.slice(firstStart + 1, firstEnd).trim();
+    const secondCode = line.slice(firstEnd + 2, secondEnd).trim();
+    if (!firstCode || !secondCode) {
+      result += line.slice(index, firstEnd + 1);
+      index = firstEnd + 1;
+      continue;
+    }
+
+    result += line.slice(index, firstEnd + 1);
+    result += ADJACENT_INLINE_CODE_SENTINEL;
+    index = firstEnd + 1;
+  }
+
+  return result;
+}
+
+function findUnescapedBacktick(text: string, from: number): number {
+  for (let index = from; index < text.length; index++) {
+    if (text[index] === '`' && !isEscapedMarkdownChar(text, index)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function isEscapedMarkdownChar(text: string, charIndex: number): boolean {
+  let slashCount = 0;
+  for (let index = charIndex - 1; index >= 0 && text[index] === '\\'; index--) {
+    slashCount += 1;
+  }
+  return slashCount % 2 === 1;
 }
 
 export function createTableMarkdown(rows: number, columns: number): string {

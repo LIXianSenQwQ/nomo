@@ -52,6 +52,32 @@ describe('math_inline markdown-it parser', () => {
     });
     expect(count).toEqual(['x', 'y', 'z']);
   });
+
+  it('handles adjacent inline math without separator', () => {
+    const doc = parseMarkdown('$1111111$$aaaaaaaaaaaaa$');
+    const texValues: string[] = [];
+    doc.descendants((node) => {
+      if (node.type.name === 'math_inline') {
+        texValues.push(node.attrs.tex as string);
+        return false;
+      }
+      return true;
+    });
+    expect(texValues).toEqual(['1111111', 'aaaaaaaaaaaaa']);
+  });
+
+  it('handles adjacent inline math $a$$b$', () => {
+    const doc = parseMarkdown('$a$$b$');
+    const texValues: string[] = [];
+    doc.descendants((node) => {
+      if (node.type.name === 'math_inline') {
+        texValues.push(node.attrs.tex as string);
+        return false;
+      }
+      return true;
+    });
+    expect(texValues).toEqual(['a', 'b']);
+  });
 });
 
 describe('math_inline round-trip', () => {
