@@ -14,6 +14,7 @@ import { parseHtmlContent } from './html/htmlToPmLogic';
 import { serializeHtmlBlock } from './html/pmToHtml';
 import { transformCalloutTokens, calloutParserTokens } from './callout/calloutParser';
 import { serializeCallout } from './callout/calloutSerializer';
+import { TOC_END_MARKER, TOC_START_MARKER } from '../toc/tocService';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
 
@@ -112,8 +113,9 @@ markdownIt.block.ruler.after('fence', 'math_display', (state, startLine, endLine
 
 const parseMarkdownTokens = markdownIt.parse.bind(markdownIt);
 markdownIt.parse = (src, env) => {
+  const rawTokens = collapseTocTokens(parseMarkdownTokens(src, env), src);
   const normalized = [];
-  for (const token of parseMarkdownTokens(src, env)) {
+  for (const token of rawTokens) {
     if (['thead_open', 'thead_close', 'tbody_open', 'tbody_close'].includes(token.type)) {
       continue;
     }
@@ -169,6 +171,7 @@ markdownIt.parse = (src, env) => {
 
 const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   ...defaultMarkdownParser.tokens,
+  toc_block: { node: 'toc_block', getAttrs: (tok: Token) => ({ content: tok.content }) },
   table: { block: 'table' },
   tr: { block: 'table_row' },
   th: { block: 'table_header', getAttrs: getTableCellAttrs },
@@ -354,6 +357,16 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     html_block(state, node) {
       const html = serializeHtmlBlock(node);
       state.write(html);
+      state.closeBlock(node);
+    },
+    toc_block(state, node) {
+      state.ensureNewLine();
+      const content = String(node.attrs.content ?? '').trim();
+      state.write(`${TOC_START_MARKER}\n`);
+      if (content) {
+        state.write(`${content}\n`);
+      }
+      state.write(`${TOC_END_MARKER}\n`);
       state.closeBlock(node);
     },
     math_inline(state, node) {
@@ -672,6 +685,52 @@ function createMathInlineInputRule(): InputRule {
 function findLastIndex<T>(arr: T[], predicate: (value: T) => boolean): number {
   for (let i = arr.length - 1; i >= 0; i--) {
     if (predicate(arr[i])) return i;
+  }
+  return -1;
+}
+
+function collapseTocTokens(tokens: Token[], markdown: string): Token[] {
+  const result: Token[] = [];
+  const lines = markdown.split(/\r?\n/);
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (!isTocStartToken(token)) {
+      result.push(token);
+      continue;
+    }
+
+    const endIndex = findTocEndTokenIndex(tokens, index + 1);
+    if (endIndex === -1) {
+      result.push(token);
+      continue;
+    }
+
+    const startLine = token.map?.[0] ?? 0;
+    const endLine = tokens[endIndex].map?.[0] ?? startLine;
+    const tocToken = new Token('toc_block', '', 0);
+    tocToken.content = lines.slice(startLine + 1, endLine).join('\n').trim();
+    tocToken.map = [startLine, (tokens[endIndex].map?.[1] ?? endLine + 1)];
+    result.push(tocToken);
+    index = endIndex;
+  }
+
+  return result;
+}
+
+function isTocStartToken(token: Token): boolean {
+  return token.type === 'html_block' && /^<!--\s*toc\s*-->\s*$/i.test(token.content.trim());
+}
+
+function isTocEndToken(token: Token): boolean {
+  return token.type === 'html_block' && /^<!--\s*\/toc\s*-->\s*$/i.test(token.content.trim());
+}
+
+function findTocEndTokenIndex(tokens: Token[], from: number): number {
+  for (let index = from; index < tokens.length; index++) {
+    if (isTocEndToken(tokens[index])) {
+      return index;
+    }
   }
   return -1;
 }

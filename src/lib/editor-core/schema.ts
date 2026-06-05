@@ -101,6 +101,18 @@ export const schema = new Schema({
       },
       // 跨行公式块（display math）：$$...$$ 语法
       callout: calloutNodeSpec,
+      toc_block: {
+        atom: true,
+        selectable: true,
+        draggable: false,
+        group: 'block',
+        attrs: {
+          content: { default: '' },
+        },
+        toDOM(node) {
+          return ['div', { class: 'toc-block', 'data-content': node.attrs.content }, '目录'];
+        },
+      },
       math_block: {
         atom: true,
         selectable: true,

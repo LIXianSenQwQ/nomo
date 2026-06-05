@@ -3,5 +3,6 @@
 @import './editor-document.css';
 @import './editor-table-controls.css';
 @import './editor-source.css';
+@import './editor-toc.css';
 @import './editor-outline.css';
 @import './app-responsive.css';

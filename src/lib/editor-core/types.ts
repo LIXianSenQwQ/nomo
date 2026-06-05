@@ -69,6 +69,7 @@ export type EditorCommand =
   | { type: 'insertCodeBlock'; language?: string; code?: string }
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }
+  | { type: 'insertToc' }
   | { type: 'insertTable'; rows?: number; columns?: number }
   | { type: 'addTableRowBefore' }
   | { type: 'addTableRowAfter' }

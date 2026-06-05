@@ -22,6 +22,7 @@ import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { CalloutNodeView } from './nodeViews/CalloutNodeView';
+import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
@@ -47,6 +48,7 @@ import {
 } from './markdown';
 import { schema } from './schema';
 import { addTableRowAfter, addTableRowBefore, findTableContext } from './tableCommands';
+import { updateTocBlocks } from '../toc/tocService';
 import type {
   EditorChangeEvent,
   EditorCommand,
@@ -76,8 +78,8 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   constructor(private readonly options: EditorCoreOptions) {
     this.target = options.target ?? null;
-    this.markdown = options.markdown;
-    this.frontMatter = splitFrontMatter(options.markdown).frontMatter;
+    this.markdown = updateTocBlocks(options.markdown);
+    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
@@ -109,6 +111,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           new MathBlockNodeView(node, view, getPos as () => number),
         callout: (node, view, getPos) =>
           new CalloutNodeView(node, view, getPos as () => number),
+        toc_block: (node, view, getPos) =>
+          new TocBlockNodeView(node, view, getPos as () => number),
       },
     });
     this.refreshInitialEditableState();
@@ -129,15 +133,15 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
     this.assertActive();
-    this.markdown = markdown;
-    this.frontMatter = splitFrontMatter(markdown).frontMatter;
+    this.markdown = updateTocBlocks(markdown);
+    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.version += 1;
     this.dirty =
       options?.dirty ??
       (options?.reason !== 'open-file' &&
         options?.reason !== 'save-file' &&
         options?.reason !== 'switch-tab');
-    this.replaceViewState(markdown);
+    this.replaceViewState(this.markdown);
     this.emit(options?.reason ?? 'programmatic-update');
   }
 
@@ -154,10 +158,10 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   restoreSnapshot(snapshot: EditorSnapshot): void {
     this.assertActive();
-    this.markdown = snapshot.markdown;
+    this.markdown = updateTocBlocks(snapshot.markdown);
     this.version = snapshot.version;
     this.dirty = true;
-    this.replaceViewState(snapshot.markdown);
+    this.replaceViewState(this.markdown);
     this.emit('restore-snapshot');
   }
 
@@ -445,8 +449,12 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.view.updateState(nextState);
 
     if (transaction.docChanged) {
-      this.markdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
+      const serializedMarkdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
+      this.markdown = updateTocBlocks(serializedMarkdown);
       this.dirty = true;
+      if (this.markdown !== serializedMarkdown) {
+        this.replaceViewState(this.markdown);
+      }
     }
 
     // 每次事务都递增版本并通知（pending mark 状态切换、选区变化等需要及时反映到 UI）

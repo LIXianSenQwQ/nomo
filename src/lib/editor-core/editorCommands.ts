@@ -55,6 +55,7 @@ import {
 } from './tableCommands';
 import { insertCallout, toggleCalloutType, unwrapCallout } from './callout/calloutCommands';
 import type { EditorCommand, SetMarkdownOptions } from './types';
+import { createTocList } from '../toc/tocService';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
 
@@ -395,6 +396,8 @@ export function executeEditorCommand(
         setMarkdown,
         `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`,
       );
+    case 'insertToc':
+      return insertTocBlock(view, markdown);
     case 'insertTable': {
       const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
       return insertTable(view, tableNode);
@@ -434,6 +437,29 @@ export function executeEditorCommand(
     default:
       return false;
   }
+}
+
+function insertTocBlock(view: EditorView, markdown: string): boolean {
+  const node = schema.nodes.toc_block.create({ content: createTocList(markdown) });
+  const { state } = view;
+  const { $from, empty } = state.selection;
+
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    const blockStart = $from.before(1);
+    const blockEnd = $from.after(1);
+    const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+    tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  const tr = state.tr.replaceSelectionWith(node);
+  const nodePos = tr.mapping.map(state.selection.from, -1);
+  if (tr.doc.nodeAt(nodePos)?.type === schema.nodes.toc_block) {
+    tr.setSelection(NodeSelection.create(tr.doc, nodePos));
+  }
+  view.dispatch(tr.scrollIntoView());
+  return true;
 }
 
 function scrollToHeading(view: EditorView, headingIndex: number): boolean {
