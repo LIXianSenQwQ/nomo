@@ -111,6 +111,12 @@ describe('inline_code round-trip', () => {
     const serialized = serializeMarkdown(parseMarkdown(markdown)).trim();
     expect(serialized).toBe('`` code with ` backtick ``');
   });
+
+  it('round-trips adjacent inline code as separate nodes', () => {
+    const markdown = '`string asd = true``string ab12 = false`';
+    const serialized = serializeMarkdown(parseMarkdown(markdown)).trim();
+    expect(serialized).toBe(markdown);
+  });
 });
 
 describe('inline_code boundaries', () => {
@@ -320,5 +326,38 @@ describe('inline_code semantic input', () => {
     });
 
     expect(codeValues).toEqual(['code with ` backtick']);
+  });
+
+  it('parses adjacent inline code as separate nodes via markdown parser', () => {
+    const doc = parseMarkdown('`string asd = true``string ab12 = false`');
+    const codeValues: string[] = [];
+    doc.descendants((node) => {
+      if (node.type.name === 'inline_code') {
+        codeValues.push(node.attrs.code as string);
+        return false;
+      }
+      return true;
+    });
+    expect(codeValues).toEqual(['string asd = true', 'string ab12 = false']);
+  });
+
+  it('converts adjacent inline code as separate nodes via input plugin', () => {
+    let state = EditorState.create({
+      doc: schema.node('doc', null, [schema.node('paragraph')]),
+      plugins: [inlineCodeInputPlugin()],
+    });
+
+    state = state.apply(state.tr.insertText('`string asd = true``string ab12 = false`'));
+
+    const codeValues: string[] = [];
+    state.doc.descendants((node) => {
+      if (node.type.name === 'inline_code') {
+        codeValues.push(node.attrs.code as string);
+        return false;
+      }
+      return true;
+    });
+
+    expect(codeValues).toEqual(['string asd = true', 'string ab12 = false']);
   });
 });

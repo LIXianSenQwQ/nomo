@@ -97,14 +97,26 @@ function scanTextForInlineCode(text: string, absoluteTextPos: number): InlineCod
       continue;
     }
 
-    // 检查是否是双反引号
-    const isDoubleBacktick = start + 1 < text.length && text[start + 1] === '`';
+    // 检查是否是双反引号（且不是三反引号以上的代码块围栏）
+    const isTripleBacktick =
+      start + 2 < text.length && text[start + 1] === '`' && text[start + 2] === '`';
+    const isDoubleBacktick = !isTripleBacktick && start + 1 < text.length && text[start + 1] === '`';
+
+    if (isTripleBacktick) {
+      // 三反引号及以上是代码块围栏，跳过
+      let skipEnd = start + 3;
+      while (skipEnd < text.length && text[skipEnd] === '`') {
+        skipEnd++;
+      }
+      index = skipEnd;
+      continue;
+    }
 
     if (isDoubleBacktick) {
       // 双反引号模式：`` code ``
       const end = findClosingDoubleBacktick(text, start + 2);
       if (end === -1) {
-        index = start + 1;
+        index = start + 2;
         continue;
       }
 
@@ -142,21 +154,33 @@ function scanTextForInlineCode(text: string, absoluteTextPos: number): InlineCod
   return matches;
 }
 
-/** 查找闭合的单反引号 */
+/**
+ * 查找闭合的单反引号。
+ * 产品里更贴近实时输入心智：`a``b` 表示两个相邻的行内代码，
+ * 因此允许双反引号中的第一个作为前一个单反引号代码的闭合符。
+ */
 function findClosingBacktick(text: string, from: number): number {
   for (let index = from; index < text.length; index++) {
     if (text[index] !== '`') continue;
-    if (!isEscapedBacktick(text, index)) {
-      return index;
-    }
+    if (isEscapedBacktick(text, index)) continue;
+    return index;
   }
   return -1;
 }
 
-/** 查找闭合的双反引号 */
+/**
+ * 查找闭合的双反引号。
+ * 遵循 CommonMark 规范：反引号字符串必须是恰好 2 个反引号，
+ * 不能被第三个反引号跟随（否则属于代码块围栏 ```）。
+ */
 function findClosingDoubleBacktick(text: string, from: number): number {
   for (let index = from; index < text.length - 1; index++) {
     if (text[index] === '`' && text[index + 1] === '`') {
+      // 确保这是长度为 2 的反引号字符串：不被第三个反引号跟随
+      if (index + 2 < text.length && text[index + 2] === '`') {
+        index += 2; // 跳过 3+ 长度的反引号序列
+        continue;
+      }
       return index;
     }
   }
