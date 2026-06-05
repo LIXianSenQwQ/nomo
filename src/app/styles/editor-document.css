@@ -283,10 +283,22 @@
 .rich-markdown blockquote {
   margin: 18px 0;
   padding: 12px 16px;
-  border-left: 4px solid var(--md-editor-blockquote-border);
-  border-radius: var(--md-editor-radius-md);
+  border-left: none;
+  border-radius: 10px;
   background: var(--md-editor-blockquote-bg);
   color: var(--md-editor-blockquote-fg);
+  position: relative;
+}
+
+.rich-markdown blockquote::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--md-editor-blockquote-border);
 }
 
 /* ---- Callout 提示块（渲染态） ---- */
@@ -294,11 +306,23 @@
 .rich-markdown .callout-card {
   margin: 18px 0;
   border: 0;
-  border-left: 4px solid var(--md-editor-callout-note-border);
-  border-radius: var(--md-editor-radius-md);
+  border-left: none;
+  border-radius: 10px;
   background: var(--md-editor-callout-note-bg);
   color: var(--md-editor-callout-note-fg);
   overflow: hidden;
+  position: relative;
+}
+
+.rich-markdown .callout-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--md-editor-callout-note-border);
 }
 
 .rich-markdown .callout-card[data-callout-type='note'] {
@@ -306,25 +330,40 @@
   background: var(--md-editor-callout-note-bg);
   color: var(--md-editor-callout-note-fg);
 }
+.rich-markdown .callout-card[data-callout-type='note']::before {
+  background: var(--md-editor-callout-note-border);
+}
 .rich-markdown .callout-card[data-callout-type='tip'] {
   border-color: var(--md-editor-callout-tip-border);
   background: var(--md-editor-callout-tip-bg);
   color: var(--md-editor-callout-tip-fg);
+}
+.rich-markdown .callout-card[data-callout-type='tip']::before {
+  background: var(--md-editor-callout-tip-border);
 }
 .rich-markdown .callout-card[data-callout-type='important'] {
   border-color: var(--md-editor-callout-important-border);
   background: var(--md-editor-callout-important-bg);
   color: var(--md-editor-callout-important-fg);
 }
+.rich-markdown .callout-card[data-callout-type='important']::before {
+  background: var(--md-editor-callout-important-border);
+}
 .rich-markdown .callout-card[data-callout-type='warning'] {
   border-color: var(--md-editor-callout-warning-border);
   background: var(--md-editor-callout-warning-bg);
   color: var(--md-editor-callout-warning-fg);
 }
+.rich-markdown .callout-card[data-callout-type='warning']::before {
+  background: var(--md-editor-callout-warning-border);
+}
 .rich-markdown .callout-card[data-callout-type='caution'] {
   border-color: var(--md-editor-callout-caution-border);
   background: var(--md-editor-callout-caution-bg);
   color: var(--md-editor-callout-caution-fg);
+}
+.rich-markdown .callout-card[data-callout-type='caution']::before {
+  background: var(--md-editor-callout-caution-border);
 }
 
 .code-card {
@@ -797,10 +836,22 @@
 .prosemirror-host .ProseMirror blockquote {
   margin: 18px 0;
   padding: 8px 0 8px 16px;
-  border-left: 4px solid var(--md-editor-blockquote-border);
-  border-radius: var(--md-editor-radius-md);
+  border-left: none;
+  border-radius: 10px;
   background: var(--md-editor-blockquote-bg);
   color: var(--md-editor-blockquote-fg);
+  position: relative;
+}
+
+.prosemirror-host .ProseMirror blockquote::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--md-editor-blockquote-border);
 }
 
 /* ---- Callout 提示块 ---- */
@@ -809,11 +860,22 @@
   position: relative;
   margin: 18px 0;
   border: 0;
-  border-left: 4px solid var(--md-editor-callout-note-border);
-  border-radius: var(--md-editor-radius-md);
+  border-left: none;
+  border-radius: 10px;
   background: var(--md-editor-callout-note-bg);
   color: var(--md-editor-callout-note-fg);
   overflow: visible;
+}
+
+.prosemirror-host .ProseMirror .callout-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--md-editor-callout-note-border);
 }
 
 /* 5 种类型的颜色 */
@@ -822,25 +884,40 @@
   background: var(--md-editor-callout-note-bg);
   color: var(--md-editor-callout-note-fg);
 }
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='note']::before {
+  background: var(--md-editor-callout-note-border);
+}
 .prosemirror-host .ProseMirror .callout-card[data-callout-type='tip'] {
   border-color: var(--md-editor-callout-tip-border);
   background: var(--md-editor-callout-tip-bg);
   color: var(--md-editor-callout-tip-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='tip']::before {
+  background: var(--md-editor-callout-tip-border);
 }
 .prosemirror-host .ProseMirror .callout-card[data-callout-type='important'] {
   border-color: var(--md-editor-callout-important-border);
   background: var(--md-editor-callout-important-bg);
   color: var(--md-editor-callout-important-fg);
 }
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='important']::before {
+  background: var(--md-editor-callout-important-border);
+}
 .prosemirror-host .ProseMirror .callout-card[data-callout-type='warning'] {
   border-color: var(--md-editor-callout-warning-border);
   background: var(--md-editor-callout-warning-bg);
   color: var(--md-editor-callout-warning-fg);
 }
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='warning']::before {
+  background: var(--md-editor-callout-warning-border);
+}
 .prosemirror-host .ProseMirror .callout-card[data-callout-type='caution'] {
   border-color: var(--md-editor-callout-caution-border);
   background: var(--md-editor-callout-caution-bg);
   color: var(--md-editor-callout-caution-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='caution']::before {
+  background: var(--md-editor-callout-caution-border);
 }
 
 .callout-header {
@@ -852,7 +929,6 @@
   font-size: 14px;
   font-weight: 600;
   user-select: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
 }
 
 .callout-icon {
