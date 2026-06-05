@@ -78,7 +78,11 @@
     <Save size={17} />
   </button>
   <span class="divider"></span>
-  <button title="标题" on:click={() => runCommand({ type: 'setHeading', level: 1 })}>
+  <button
+    title="标题"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'setHeading', level: 1 })}
+  >
     <Heading1 size={17} />
   </button>
   <button
@@ -113,23 +117,24 @@
   >
     <Underline size={17} />
   </button>
-  <button title="引用" on:click={() => runCommand({ type: 'toggleBlockquote' })}>
+  <button title="引用" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleBlockquote' })}>
     <Quote size={17} />
   </button>
-  <button title="提示块" on:click={() => runCommand({ type: 'insertCallout' })}>
+  <button title="提示块" on:mousedown|preventDefault on:click={() => runCommand({ type: 'insertCallout' })}>
     <Info size={17} />
   </button>
-  <button title="列表" on:click={() => runCommand({ type: 'toggleBulletList' })}>
+  <button title="列表" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleBulletList' })}>
     <List size={17} />
   </button>
   <button
     title="插入目录"
     aria-label="插入目录"
+    on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertToc' })}
   >
     <ListTree size={17} />
   </button>
-  <button title="任务列表" on:click={() => runCommand({ type: 'toggleTaskList' })}>
+  <button title="任务列表" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleTaskList' })}>
     <CheckSquare size={17} />
   </button>
   <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>

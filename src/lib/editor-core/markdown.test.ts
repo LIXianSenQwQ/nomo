@@ -3,6 +3,42 @@ import { parseMarkdown, serializeMarkdown } from './markdown';
 import { schema } from './schema';
 
 describe('markdown serialization', () => {
+  it('preserves blank paragraphs between non-paragraph blocks', () => {
+    const input = '# 标题\n\n\n\n---\n\n\n\n## 下一节';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('preserves blank paragraphs around code and math blocks', () => {
+    const input = [
+      '```ts',
+      'const value = 1;',
+      '```',
+      '',
+      '',
+      '$$',
+      'E = mc^2',
+      '$$',
+      '',
+      '',
+      '<div>HTML</div>',
+    ].join('\n');
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('preserves blank paragraphs between list items', () => {
+    const input = '- 第一项\n\n\n\n- 第二项';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('preserves blank paragraphs between different list blocks', () => {
+    const input = '- 第一项\n\n\n\n1. 第二项';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
   it('does not escape manual inline mark trigger characters in plain text', () => {
     const serialized = serializeMarkdown(parseMarkdown('use * and ~ manually')).trim();
 

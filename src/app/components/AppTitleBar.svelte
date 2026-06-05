@@ -286,45 +286,53 @@
               >
               <div class="dropdown-menu nested">
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 1 }), 'paragraph')}
                   >一级标题 <span class="shortcut">Ctrl + 1</span></button
                 >
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 2 }), 'paragraph')}
                   >二级标题 <span class="shortcut">Ctrl + 2</span></button
                 >
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 3 }), 'paragraph')}
                   >三级标题 <span class="shortcut">Ctrl + 3</span></button
                 >
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 4 }), 'paragraph')}
                   >四级标题 <span class="shortcut">Ctrl + 4</span></button
                 >
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 5 }), 'paragraph')}
                   >五级标题 <span class="shortcut">Ctrl + 5</span></button
                 >
                 <button
+                  on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 6 }), 'paragraph')}
                   >六级标题 <span class="shortcut">Ctrl + 6</span></button
                 >
               </div>
             </div>
-            <button on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
+            <button on:mousedown|preventDefault on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
               >段落 <span class="shortcut">Ctrl + 0</span></button
             >
             <button
+              on:mousedown|preventDefault
               on:click={() => finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
               >提升标题 <span class="shortcut">Ctrl + =</span></button
             >
             <button
+              on:mousedown|preventDefault
               on:click={() => finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
               >降低标题 <span class="shortcut">Ctrl + -</span></button
             >

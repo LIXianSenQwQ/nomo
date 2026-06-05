@@ -129,40 +129,7 @@ markdownIt.parse = (src, env) => {
     }
   }
 
-  // 检测连续段落间的多余空白行，插入空段落 token
-  // markdown-it 把连续空行视为段落分隔符，不产生空段落节点，
-  // 这里通过分析 token 的行号映射来恢复空段落，保证 round-trip 不丢失
-  const result: Token[] = [];
-  let lastParaEnd = -1;
-
-  for (const token of normalized) {
-    if (token.type === 'paragraph_open' && token.map) {
-      if (lastParaEnd >= 0) {
-        const gap = token.map[0] - lastParaEnd - 1;
-        // 每个多余的空白行对应一个空段落
-        for (let j = 0; j < gap; j++) {
-          const line = lastParaEnd + 1 + j;
-          const emptyOpen = new Token('paragraph_open', 'p', 1);
-          emptyOpen.map = [line, line + 1];
-          const emptyInline = new Token('inline', '', 0);
-          emptyInline.content = '';
-          emptyInline.children = [];
-          emptyInline.map = [line, line + 1];
-          const emptyClose = new Token('paragraph_close', 'p', -1);
-          result.push(emptyOpen, emptyInline, emptyClose);
-        }
-      }
-      lastParaEnd = token.map[1];
-    } else if (
-      (token.nesting === 1 && token.type !== 'paragraph_open') ||
-      ['fence', 'code_block', 'hr', 'html_block'].includes(token.type)
-    ) {
-      // 遇到非段落的块级元素时重置跟踪，避免跨块元素误插空段落
-      lastParaEnd = -1;
-    }
-
-    result.push(token);
-  }
+  const result = restoreBlankParagraphTokens(normalized);
 
   // 将匹配 [!TYPE] 的 blockquote 改写为 callout
   transformCalloutTokens(result);
@@ -330,9 +297,8 @@ const tableMarkdownSerializer = new MarkdownSerializer(
         return;
       }
       if (node.content.size === 0) {
-        // 空段落需要调用 write() 触发 flushClose，
-        // 否则前一个 closeBlock 会被覆盖导致空段落在序列化时丢失
-        state.write();
+        // 空段落只需要触发前一个块落盘；不写入当前列表缩进，避免保存成带空格的“空行”。
+        flushPendingClosedBlock(state);
       } else {
         state.renderInline(node);
       }
@@ -494,6 +460,143 @@ function normalizeAdjacentInlineCodeLine(line: string): string {
   }
 
   return result;
+}
+
+function restoreBlankParagraphTokens(tokens: Token[]): Token[] {
+  // markdown-it 会把连续空行当作块分隔符丢弃；这里按顶层块的行号映射恢复空段落。
+  const result: Token[] = [];
+  let previousTopLevelBlockEnd = -1;
+  const listItemStack: ListItemBlankParagraphContext[] = [];
+
+  for (const token of tokens) {
+    const listItemContext = getCurrentListItemContext(listItemStack);
+    const listItemChildRange = listItemContext
+      ? getDirectListItemChildBlockRange(token, listItemContext)
+      : null;
+    if (listItemContext && listItemChildRange) {
+      if (listItemContext.previousChildBlockEnd >= 0) {
+        appendBlankParagraphTokens(
+          result,
+          listItemContext.previousChildBlockEnd,
+          listItemChildRange[0],
+        );
+      }
+      listItemContext.previousChildBlockEnd = listItemChildRange[1];
+    }
+
+    if (token.type === 'list_item_close') {
+      const context = listItemStack.pop();
+      if (context && context.previousChildBlockEnd >= 0) {
+        appendBlankParagraphTokens(result, context.previousChildBlockEnd, context.endLine);
+      }
+    }
+
+    const blockRange = getTopLevelBlockRange(token);
+    if (blockRange) {
+      if (previousTopLevelBlockEnd >= 0) {
+        appendBlankParagraphTokens(result, previousTopLevelBlockEnd, blockRange[0]);
+      }
+      previousTopLevelBlockEnd = blockRange[1];
+    }
+
+    result.push(token);
+
+    const newListItemContext = createListItemBlankParagraphContext(token);
+    if (newListItemContext) {
+      listItemStack.push(newListItemContext);
+    }
+  }
+
+  return result;
+}
+
+function flushPendingClosedBlock(state: unknown): void {
+  (state as { flushClose(): void }).flushClose();
+}
+
+type ListItemBlankParagraphContext = {
+  childLevel: number;
+  endLine: number;
+  previousChildBlockEnd: number;
+};
+
+function createListItemBlankParagraphContext(
+  token: Token,
+): ListItemBlankParagraphContext | null {
+  if (token.type !== 'list_item_open' || !token.map) {
+    return null;
+  }
+  return {
+    childLevel: token.level + 1,
+    endLine: token.map[1],
+    previousChildBlockEnd: -1,
+  };
+}
+
+function getCurrentListItemContext(
+  stack: ListItemBlankParagraphContext[],
+): ListItemBlankParagraphContext | null {
+  return stack.length > 0 ? stack[stack.length - 1] : null;
+}
+
+function getDirectListItemChildBlockRange(
+  token: Token,
+  context: ListItemBlankParagraphContext,
+): [number, number] | null {
+  if (token.level !== context.childLevel || !token.map) {
+    return null;
+  }
+  if (token.nesting === -1 || token.type === 'inline' || token.type === 'list_item_open') {
+    return null;
+  }
+  return [token.map[0], token.map[1]];
+}
+
+function getTopLevelBlockRange(token: Token): [number, number] | null {
+  if (token.level !== 0 || !token.map) {
+    return null;
+  }
+  if (token.nesting === -1) {
+    return null;
+  }
+  if (token.type === 'inline') {
+    return null;
+  }
+  return [token.map[0], token.map[1]];
+}
+
+function appendBlankParagraphTokens(
+  result: Token[],
+  previousEndLine: number,
+  nextStartLine: number,
+) {
+  const gap = nextStartLine - previousEndLine - 1;
+  for (let index = 0; index < gap; index++) {
+    const line = previousEndLine + 1 + index;
+    result.push(
+      createEmptyParagraphOpen(line),
+      createEmptyInlineToken(line),
+      createEmptyParagraphClose(),
+    );
+  }
+}
+
+function createEmptyParagraphOpen(line: number): Token {
+  const emptyOpen = new Token('paragraph_open', 'p', 1);
+  emptyOpen.map = [line, line + 1];
+  return emptyOpen;
+}
+
+function createEmptyInlineToken(line: number): Token {
+  const emptyInline = new Token('inline', '', 0);
+  emptyInline.content = '';
+  emptyInline.children = [];
+  emptyInline.map = [line, line + 1];
+  return emptyInline;
+}
+
+function createEmptyParagraphClose(): Token {
+  return new Token('paragraph_close', 'p', -1);
 }
 
 function findUnescapedBacktick(text: string, from: number): number {

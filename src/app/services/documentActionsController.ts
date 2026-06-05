@@ -22,6 +22,7 @@ interface DocumentActionsOptions {
   getDesktopEnabled(): boolean;
   getDirty(): boolean;
   getNativePath(): string | null;
+  setMarkdown(value: string): void;
   setNativePath(value: string | null): void;
   getFileName(): string;
   setFileName(value: string): void;
@@ -30,6 +31,8 @@ interface DocumentActionsOptions {
   getLastKnownModifiedAt(): number;
   setLastKnownModifiedAt(value: number): void;
   setDirty(value: boolean): void;
+  setLargeDocumentMode(value: boolean): void;
+  setReadonlyDocumentMode(value: boolean): void;
   getCurrentFolderPath(): string;
   getFileInput(): HTMLInputElement;
   getEditor(): EditorCore;
@@ -143,7 +146,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       }
       if (document) {
         localStorage.removeItem(options.recoveryKey);
-        await applyNativeDocument(document, '已通过 Tauri 保存 Markdown 文件', true);
+        await applySavedNativeDocument(document, markdownToSave, '已通过 Tauri 保存 Markdown 文件');
       }
       return;
     }
@@ -151,7 +154,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
     exportMarkdownInBrowser(markdownToSave, options.getFileName());
     options.setStatusMessage('已导出 Markdown 文件');
-    options.getEditor().setMarkdown(markdownToSave, { reason: 'save-file' });
+    options.setMarkdown(markdownToSave);
+    options.setDirty(false);
   }
 
   async function openRecentFile(path: string) {
@@ -210,6 +214,68 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
     options.setStatusMessage(message);
     await rememberNativeDocument(document, calculateDocumentStats(document.markdown).words);
+    await refreshRecentFiles();
+    if (isLargeDocument) {
+      options.setStatusMessage('大文件已用只读源码模式打开，避免语义解析阻塞界面');
+    }
+
+    const parentDir = getDirectoryLabel(document.path);
+    if (parentDir && parentDir !== '当前文件夹') {
+      if (!options.getCurrentFolderPath()) {
+        options.loadFolder(parentDir).catch(() => undefined);
+      } else {
+        options.expandAncestors(document.path, options.getCurrentFolderPath());
+      }
+    }
+  }
+
+  async function applySavedNativeDocument(
+    document: NativeDocument,
+    markdownToSave: string,
+    message: string,
+  ) {
+    const isLargeDocument =
+      document.markdown.length > options.largeDocumentLimit ||
+      document.sizeBytes > options.largeDocumentLimit;
+    const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
+
+    options.saveActiveTabState();
+
+    const nativeDocumentTarget = getNativeDocumentTargetTab(
+      options.getTabs(),
+      options.getActiveTabId(),
+      existingTab,
+      true,
+    );
+    options.setTabs(nativeDocumentTarget.tabs);
+    options.setActiveTabId(nativeDocumentTarget.activeTabId);
+    const targetTab = nativeDocumentTarget.targetTab;
+
+    targetTab.fileName = document.fileName;
+    targetTab.filePath = document.path;
+    targetTab.nativePath = document.path;
+    targetTab.markdown = markdownToSave;
+    targetTab.dirty = false;
+    targetTab.lastKnownModifiedAt = document.modifiedAt;
+    targetTab.largeDocumentMode = isLargeDocument;
+    targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
+    targetTab.externalFileWarning = document.readonly
+      ? '当前文件是只读文件，建议使用另存为保存修改'
+      : '';
+
+    options.setFileName(targetTab.fileName);
+    options.setFilePath(targetTab.filePath);
+    options.setNativePath(targetTab.nativePath);
+    options.setMarkdown(markdownToSave);
+    options.setDirty(false);
+    options.setLastKnownModifiedAt(targetTab.lastKnownModifiedAt);
+    options.setLargeDocumentMode(targetTab.largeDocumentMode);
+    options.setReadonlyDocumentMode(targetTab.readonlyDocumentMode);
+    options.setExternalFileWarning(targetTab.externalFileWarning);
+    options.setTabs([...options.getTabs()]);
+
+    options.setStatusMessage(message);
+    await rememberNativeDocument(document, calculateDocumentStats(markdownToSave).words);
     await refreshRecentFiles();
     if (isLargeDocument) {
       options.setStatusMessage('大文件已用只读源码模式打开，避免语义解析阻塞界面');

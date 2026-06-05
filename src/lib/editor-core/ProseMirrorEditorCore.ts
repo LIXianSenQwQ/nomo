@@ -13,6 +13,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
@@ -456,7 +457,10 @@ export class ProseMirrorEditorCore implements EditorCore {
       this.markdown = updateTocBlocks(serializedMarkdown);
       this.dirty = true;
       if (this.markdown !== serializedMarkdown) {
-        this.replaceViewState(this.markdown);
+        this.replaceViewState(this.markdown, {
+          anchor: nextState.selection.anchor,
+          head: nextState.selection.head,
+        });
       }
     }
 
@@ -465,7 +469,10 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.emit('transaction');
   }
 
-  private replaceViewState(markdown: string): void {
+  private replaceViewState(
+    markdown: string,
+    selection?: { anchor: number; head: number },
+  ): void {
     if (!this.view) {
       return;
     }
@@ -473,7 +480,23 @@ export class ProseMirrorEditorCore implements EditorCore {
       return;
     }
 
-    this.view.updateState(this.createState(markdown));
+    const nextState = this.createState(markdown);
+    this.view.updateState(selection ? this.restoreSelection(nextState, selection) : nextState);
+  }
+
+  private restoreSelection(
+    state: EditorState,
+    selection: { anchor: number; head: number },
+  ): EditorState {
+    const anchor = clampDocPosition(state.doc, selection.anchor);
+    const head = clampDocPosition(state.doc, selection.head);
+
+    try {
+      return state.apply(state.tr.setSelection(TextSelection.create(state.doc, anchor, head)));
+    } catch {
+      const fallback = TextSelection.near(state.doc.resolve(head));
+      return state.apply(state.tr.setSelection(fallback));
+    }
   }
 
   private isEditable(): boolean {
@@ -518,4 +541,8 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
     command.type === 'toggleStrikethrough' ||
     command.type === 'toggleUnderline'
   );
+}
+
+function clampDocPosition(doc: ProseMirrorNode, position: number): number {
+  return Math.max(0, Math.min(position, doc.content.size));
 }
