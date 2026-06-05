@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 
 /**
  * 行内代码 NodeView：展示态 + 编辑态
@@ -20,6 +21,7 @@ export class InlineCodeNodeView {
   private editing = false;
   private originalCode = '';
   private pendingPointerRatio: number | null = null;
+  private activeEditExitFn: (() => void) | null = null;
 
   // 编辑态 DOM 引用
   private input: HTMLInputElement | null = null;
@@ -142,7 +144,11 @@ export class InlineCodeNodeView {
 
   private enterEdit(): void {
     if (this.editing) return;
+
     this.editing = true;
+    this.activeEditExitFn = () => this.exitEdit(true);
+    registerActiveEdit(this.activeEditExitFn);
+
     this.originalCode = this.node.attrs.code as string;
     this.dom.classList.add('is-editing');
     this.dom.classList.remove('ProseMirror-selectednode');
@@ -196,10 +202,17 @@ export class InlineCodeNodeView {
     const bias = cursorSide === 'before' ? -1 : 1;
     tr = tr.setSelection(TextSelection.near(tr.doc.resolve(cursorPos), bias));
     this.view.dispatch(tr);
+
+    // 恢复编辑器焦点，否则光标不可见
+    this.view.focus();
   }
 
   private cleanupEdit(): void {
     this.editing = false;
+    if (this.activeEditExitFn) {
+      unregisterActiveEdit(this.activeEditExitFn);
+      this.activeEditExitFn = null;
+    }
     this.dom.classList.remove('is-editing');
     this.input = null;
 

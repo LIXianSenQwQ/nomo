@@ -2,6 +2,7 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { getMathRenderer } from '../renderers';
+import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 
 export class MathInlineNodeView {
   private static nextKeyboardCursorSide: 'start' | 'end' | null = null;
@@ -17,6 +18,7 @@ export class MathInlineNodeView {
   private renderId = 0;
   private previewRenderId = 0;
   private pendingPointerRatio: number | null = null;
+  private activeEditExitFn: (() => void) | null = null;
 
   // 编辑态 DOM 引用
   private input: HTMLInputElement | null = null;
@@ -144,7 +146,11 @@ export class MathInlineNodeView {
 
   private enterEdit(): void {
     if (this.editing) return;
+
     this.editing = true;
+    this.activeEditExitFn = () => this.exitEdit(true);
+    registerActiveEdit(this.activeEditExitFn);
+
     this.originalTex = this.node.attrs.tex as string;
     this.dom.classList.add('is-editing');
     this.dom.classList.remove('ProseMirror-selectednode');
@@ -172,10 +178,11 @@ export class MathInlineNodeView {
     this.previewContent = document.createElement('div');
     this.previewContent.className = 'math-inline-preview-content';
     this.previewCard.appendChild(this.previewContent);
+    this.previewCard.style.visibility = 'hidden'; // 定位前隐藏，避免闪烁
     document.body.appendChild(this.previewCard);
 
-    // 步骤3：定位预览卡片
-    this.updatePreviewPosition();
+    // 步骤3：定位预览卡片（延迟一帧，等 DOM 布局稳定后再定位，
+    // 避免从前一个编辑态退出时的 DOM 回流导致坐标偏移）
     this.positionHandler = () => this.updatePreviewPosition();
     window.addEventListener('scroll', this.positionHandler, true);
     window.addEventListener('resize', this.positionHandler);
@@ -201,13 +208,19 @@ export class MathInlineNodeView {
     // 步骤5：初始预览渲染
     this.updatePreview();
 
-    // 步骤6：聚焦 input
+    // 步骤6：聚焦 input + 定位预览卡片
     requestAnimationFrame(() => {
       if (!this.input) return;
       this.input.focus({ preventScroll: true });
       const cursorPos = this.resolveInitialCursorPos();
       this.input.setSelectionRange(cursorPos, cursorPos);
       this.pendingPointerRatio = null;
+
+      // DOM 布局已稳定，此时定位预览卡片坐标准确
+      this.updatePreviewPosition();
+      if (this.previewCard) {
+        this.previewCard.style.visibility = '';
+      }
     });
   }
 
@@ -230,10 +243,17 @@ export class MathInlineNodeView {
     const bias = cursorSide === 'before' ? -1 : 1;
     tr = tr.setSelection(TextSelection.near(tr.doc.resolve(cursorPos), bias));
     this.view.dispatch(tr);
+
+    // 恢复编辑器焦点，否则光标不可见
+    this.view.focus();
   }
 
   private cleanupEdit(): void {
     this.editing = false;
+    if (this.activeEditExitFn) {
+      unregisterActiveEdit(this.activeEditExitFn);
+      this.activeEditExitFn = null;
+    }
     this.dom.classList.remove('is-editing');
 
     if (this.positionHandler) {
