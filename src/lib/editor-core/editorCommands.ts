@@ -1,4 +1,4 @@
-import { setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
+import { lift, setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
 import { toggleMarkPending } from './plugins/pendingInlineMark';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
@@ -290,6 +290,18 @@ export function toggleTaskListAtCursor(
   return true;
 }
 
+/** 切换引用：已在引用内则取消（lift），否则包裹 */
+function toggleBlockquote(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  const { $from } = state.selection;
+  // 向上查找是否已在 blockquote 内
+  for (let d = $from.depth; d >= 0; d--) {
+    if ($from.node(d).type === schema.nodes.blockquote) {
+      return lift(state, dispatch);
+    }
+  }
+  return wrapIn(schema.nodes.blockquote)(state, dispatch);
+}
+
 export function executeEditorCommand(
   command: EditorCommand,
   view: EditorView,
@@ -316,7 +328,7 @@ export function executeEditorCommand(
     case 'setParagraph':
       return run(setBlockType(schema.nodes.paragraph));
     case 'toggleBlockquote':
-      return run(wrapIn(schema.nodes.blockquote));
+      return run(toggleBlockquote);
     case 'toggleBulletList':
       return toggleList(state, dispatch, schema.nodes.bullet_list);
     case 'toggleOrderedList':
