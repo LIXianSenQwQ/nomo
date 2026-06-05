@@ -6,6 +6,7 @@ export interface PersistedEditorSettings {
   fontSize?: number;
   lineHeight?: number;
   contentWidthPercent?: number;
+  blockStyle?: 'classic' | 'modern';
 }
 
 export async function loadPersistedEditorSettings(
@@ -25,6 +26,8 @@ export async function loadPersistedEditorSettings(
     parseSetting<number>(settings, 'contentWidthPercent') ??
       localStorage.getItem('new-md-content-width-percent'),
   );
+  const savedBlockStyle =
+    parseSetting<string>(settings, 'blockStyle') ?? localStorage.getItem('new-md-block-style');
 
   return {
     theme: savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : undefined,
@@ -42,6 +45,9 @@ export async function loadPersistedEditorSettings(
       savedContentWidthPercent <= 90
         ? savedContentWidthPercent
         : undefined,
+    blockStyle: savedBlockStyle === 'classic' || savedBlockStyle === 'modern'
+      ? savedBlockStyle
+      : undefined,
   };
 }
 
@@ -68,6 +74,10 @@ export function applyEditorLayoutSettings(contentWidthPercent: number) {
     '--md-editor-content-width-percent',
     String(contentWidthPercent),
   );
+}
+
+export function applyBlockStyleSetting(blockStyle: 'classic' | 'modern') {
+  document.documentElement.dataset.blockStyle = blockStyle;
 }
 
 function parseSetting<T>(settings: Map<string, string>, key: string): T | null {

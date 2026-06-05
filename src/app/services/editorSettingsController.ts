@@ -1,5 +1,6 @@
 import type { EditorCore } from '../../lib/editor-core';
 import {
+  applyBlockStyleSetting,
   applyEditorLayoutSettings,
   applyThemeSetting,
   applyTypographySettings,
@@ -20,6 +21,8 @@ interface EditorSettingsControllerOptions {
   setLineHeight(value: number): void;
   getContentWidthPercent(): number;
   setContentWidthPercent(value: number): void;
+  getBlockStyle(): 'classic' | 'modern';
+  setBlockStyle(value: 'classic' | 'modern'): void;
 }
 
 export function createEditorSettingsController(options: EditorSettingsControllerOptions) {
@@ -42,6 +45,10 @@ export function createEditorSettingsController(options: EditorSettingsController
     if (settings.contentWidthPercent) {
       options.setContentWidthPercent(settings.contentWidthPercent);
       applyEditorLayoutSettings(options.getContentWidthPercent());
+    }
+    if (settings.blockStyle) {
+      options.setBlockStyle(settings.blockStyle);
+      applyBlockStyleSetting(settings.blockStyle);
     }
   }
 
@@ -78,6 +85,13 @@ export function createEditorSettingsController(options: EditorSettingsController
     applyEditorLayoutSettings(options.getContentWidthPercent());
   }
 
+  function updateBlockStyle(blockStyle: 'classic' | 'modern') {
+    options.setBlockStyle(blockStyle);
+    localStorage.setItem('new-md-block-style', blockStyle);
+    persistSetting('blockStyle', blockStyle);
+    applyBlockStyleSetting(blockStyle);
+  }
+
   function persistSetting(key: string, value: unknown) {
     persistEditorSetting(options.getDesktopEnabled(), key, value);
   }
@@ -88,5 +102,6 @@ export function createEditorSettingsController(options: EditorSettingsController
     updateFontSize,
     updateLineHeight,
     updateContentWidth,
+    updateBlockStyle,
   };
 }

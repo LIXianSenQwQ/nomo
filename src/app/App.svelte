@@ -50,6 +50,7 @@
     getNextActiveMenu,
   } from './services/appUiState';
   import { createEditorSettingsController } from './services/editorSettingsController';
+  import { applyBlockStyleSetting } from './services/settings';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
@@ -85,7 +86,8 @@
   let fontSize = 16,
     lineHeight = 1.75,
     contentWidthPercent = 68,
-    focusMode = false;
+    focusMode = false,
+    blockStyle: 'classic' | 'modern' = 'modern';
   let editorHost: HTMLDivElement,
     fileInput: HTMLInputElement,
     sourceTextarea: HTMLTextAreaElement,
@@ -287,6 +289,10 @@
     setContentWidthPercent: (value) => {
       contentWidthPercent = value;
     },
+    getBlockStyle: () => blockStyle,
+    setBlockStyle: (value) => {
+      blockStyle = value;
+    },
   });
   let isSettingsOpen = false;
 
@@ -411,6 +417,7 @@
   const updateFontSize = editorSettings.updateFontSize;
   const updateLineHeight = editorSettings.updateLineHeight;
   const updateContentWidth = editorSettings.updateContentWidth;
+  const updateBlockStyle = editorSettings.updateBlockStyle;
   const toggleOutlineVisible = outlineInteraction.toggleOutlineVisible;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
@@ -557,6 +564,8 @@
 
     editor.mount(editorHost);
     await loadPersistedSettings();
+    // 确保 blockStyle 默认值写入 DOM（loadPersistedSettings 可能跳过）
+    applyBlockStyleSetting(blockStyle);
     await refreshRecentFiles();
     await setupDesktopEvents();
     window.addEventListener('keydown', handleGlobalShortcut);
@@ -745,6 +754,7 @@
   {activeTabId}
   {fontSize}
   {lineHeight}
+  {blockStyle}
   {markdown}
   {readonlyDocumentMode}
   {externalFileWarning}
@@ -788,6 +798,7 @@
   {updateFontSize}
   {updateLineHeight}
   {updateContentWidth}
+  {updateBlockStyle}
   {updateMarkdown}
   {updateActiveOutlineFromSourceScroll}
   {updateActiveOutlineFromSemanticScroll}

@@ -12,6 +12,7 @@
     Info,
     PanelRightClose,
     PanelRightOpen,
+    Palette,
     Pilcrow,
     Quote,
     Save,
@@ -39,6 +40,8 @@
   export let updateFontSize: (event: Event) => void;
   export let updateLineHeight: (event: Event) => void;
   export let updateContentWidth: (event: Event) => void;
+  export let blockStyle: 'classic' | 'modern';
+  export let updateBlockStyle: (blockStyle: 'classic' | 'modern') => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
@@ -219,6 +222,14 @@
       on:input={updateContentWidth}
     />
   </label>
+  <button
+    class="icon-button"
+    title={blockStyle === 'classic' ? '经典样式（左边框+背景色）' : '现代样式（竖条+透明背景）'}
+    aria-label="切换引用和提示块样式"
+    on:click={() => updateBlockStyle(blockStyle === 'classic' ? 'modern' : 'classic')}
+  >
+    <Palette size={18} />
+  </button>
   <span class="toolbar-spacer"></span>
   <div class="mode-switch" aria-label="编辑模式">
     <button class:active={mode === 'semantic'} on:click={() => setMode('semantic')}>语义</button>

@@ -37,6 +37,7 @@
   export let activeTabId: string;
   export let fontSize: number;
   export let lineHeight: number;
+  export let blockStyle: 'classic' | 'modern';
   export let markdown: string;
   export let readonlyDocumentMode: boolean;
   export let externalFileWarning: string;
@@ -82,6 +83,7 @@
   export let updateFontSize: (event: Event) => void;
   export let updateLineHeight: (event: Event) => void;
   export let updateContentWidth: (event: Event) => void;
+  export let updateBlockStyle: (blockStyle: 'classic' | 'modern') => void;
   export let updateMarkdown: (event: Event) => void;
   export let updateActiveOutlineFromSourceScroll: () => void;
   export let updateActiveOutlineFromSemanticScroll: () => void;
@@ -165,6 +167,7 @@
         {fontSize}
         {lineHeight}
         {contentWidthPercent}
+        {blockStyle}
         {outlineVisible}
         {openFileDialog}
         {saveMarkdownFile}
@@ -177,6 +180,7 @@
         {updateFontSize}
         {updateLineHeight}
         {updateContentWidth}
+        {updateBlockStyle}
         {setMode}
         {toggleOutlineVisible}
         {toggleFocusMode}

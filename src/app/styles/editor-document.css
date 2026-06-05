@@ -301,6 +301,17 @@
   background: var(--md-editor-blockquote-border);
 }
 
+/* 经典样式：左边框 + 背景色 */
+[data-block-style='classic'] .rich-markdown blockquote {
+  border-left: 4px solid var(--md-editor-blockquote-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-blockquote-bg-classic);
+}
+
+[data-block-style='classic'] .rich-markdown blockquote::before {
+  display: none;
+}
+
 /* ---- Callout 提示块（渲染态） ---- */
 
 .rich-markdown .callout-card {
@@ -323,6 +334,17 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-callout-note-border);
+}
+
+/* 经典样式：左边框 + 背景色 */
+[data-block-style='classic'] .rich-markdown .callout-card {
+  border-left: 4px solid var(--md-editor-callout-note-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-callout-note-bg-classic);
+}
+
+[data-block-style='classic'] .rich-markdown .callout-card::before {
+  display: none;
 }
 
 .rich-markdown .callout-card[data-callout-type='note'] {
@@ -364,6 +386,28 @@
 }
 .rich-markdown .callout-card[data-callout-type='caution']::before {
   background: var(--md-editor-callout-caution-border);
+}
+
+/* 经典样式：5 种类型的颜色覆盖 */
+[data-block-style='classic'] .rich-markdown .callout-card[data-callout-type='note'] {
+  border-left-color: var(--md-editor-callout-note-border);
+  background: var(--md-editor-callout-note-bg-classic);
+}
+[data-block-style='classic'] .rich-markdown .callout-card[data-callout-type='tip'] {
+  border-left-color: var(--md-editor-callout-tip-border);
+  background: var(--md-editor-callout-tip-bg-classic);
+}
+[data-block-style='classic'] .rich-markdown .callout-card[data-callout-type='important'] {
+  border-left-color: var(--md-editor-callout-important-border);
+  background: var(--md-editor-callout-important-bg-classic);
+}
+[data-block-style='classic'] .rich-markdown .callout-card[data-callout-type='warning'] {
+  border-left-color: var(--md-editor-callout-warning-border);
+  background: var(--md-editor-callout-warning-bg-classic);
+}
+[data-block-style='classic'] .rich-markdown .callout-card[data-callout-type='caution'] {
+  border-left-color: var(--md-editor-callout-caution-border);
+  background: var(--md-editor-callout-caution-bg-classic);
 }
 
 .code-card {
@@ -854,6 +898,17 @@
   background: var(--md-editor-blockquote-border);
 }
 
+/* 经典样式：左边框 + 背景色 */
+[data-block-style='classic'] .prosemirror-host .ProseMirror blockquote {
+  border-left: 4px solid var(--md-editor-blockquote-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-blockquote-bg-classic);
+}
+
+[data-block-style='classic'] .prosemirror-host .ProseMirror blockquote::before {
+  display: none;
+}
+
 /* ---- Callout 提示块 ---- */
 
 .prosemirror-host .ProseMirror .callout-card {
@@ -876,6 +931,17 @@
   width: 4px;
   border-radius: 2px;
   background: var(--md-editor-callout-note-border);
+}
+
+/* 经典样式：左边框 + 背景色 */
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card {
+  border-left: 4px solid var(--md-editor-callout-note-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-callout-note-bg-classic);
+}
+
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card::before {
+  display: none;
 }
 
 /* 5 种类型的颜色 */
@@ -920,6 +986,28 @@
   background: var(--md-editor-callout-caution-border);
 }
 
+/* 经典样式：5 种类型的颜色覆盖 */
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card[data-callout-type='note'] {
+  border-left-color: var(--md-editor-callout-note-border);
+  background: var(--md-editor-callout-note-bg-classic);
+}
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card[data-callout-type='tip'] {
+  border-left-color: var(--md-editor-callout-tip-border);
+  background: var(--md-editor-callout-tip-bg-classic);
+}
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card[data-callout-type='important'] {
+  border-left-color: var(--md-editor-callout-important-border);
+  background: var(--md-editor-callout-important-bg-classic);
+}
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card[data-callout-type='warning'] {
+  border-left-color: var(--md-editor-callout-warning-border);
+  background: var(--md-editor-callout-warning-bg-classic);
+}
+[data-block-style='classic'] .prosemirror-host .ProseMirror .callout-card[data-callout-type='caution'] {
+  border-left-color: var(--md-editor-callout-caution-border);
+  background: var(--md-editor-callout-caution-bg-classic);
+}
+
 .callout-header {
   position: relative;
   display: flex;
@@ -929,6 +1017,11 @@
   font-size: 14px;
   font-weight: 600;
   user-select: none;
+}
+
+/* 经典样式：callout-header 底部分割线 */
+[data-block-style='classic'] .callout-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
 }
 
 .callout-icon {
