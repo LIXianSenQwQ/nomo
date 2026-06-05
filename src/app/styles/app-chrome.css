@@ -259,6 +259,11 @@
   display: inline-grid;
 }
 
+.diagram-picker-anchor {
+  position: relative;
+  display: inline-grid;
+}
+
 .table-picker-popover {
   position: absolute;
   top: calc(100% + 8px);
@@ -271,6 +276,44 @@
   background: var(--md-editor-surface);
   box-shadow: var(--md-editor-shadow);
   animation: table-picker-in 160ms ease-out;
+}
+
+.diagram-picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-surface);
+  box-shadow: var(--md-editor-shadow);
+  animation: table-picker-in 160ms ease-out;
+}
+
+.diagram-picker-header {
+  padding: 6px 8px 8px;
+  color: var(--md-editor-muted-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolbar .diagram-picker-popover button {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  color: var(--md-editor-fg);
+}
+
+.toolbar .diagram-picker-popover button small {
+  color: var(--md-editor-muted-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: 11px;
 }
 
 .table-picker-header {

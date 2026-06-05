@@ -22,6 +22,7 @@ import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
 import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
+import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { CalloutNodeView } from './nodeViews/CalloutNodeView';
 import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
@@ -111,6 +112,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           new MathInlineNodeView(node, view, getPos as () => number),
         math_block: (node, view, getPos) =>
           new MathBlockNodeView(node, view, getPos as () => number),
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
         callout: (node, view, getPos) =>
           new CalloutNodeView(node, view, getPos as () => number),
         horizontal_rule: (node, view, getPos) =>
@@ -438,6 +441,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           enterEditAt: (view, pos, clickLine, caret) =>
             CodeBlockNodeView.enterEditAt(view, pos, clickLine, caret),
           enterMathEditAt: (view, pos, caret) => MathBlockNodeView.enterEditAt(view, pos, caret),
+          enterMermaidEditAt: (view, pos, caret) =>
+            MermaidBlockNodeView.enterEditAt(view, pos, caret),
           prepareMathKeyboardEntry: (caret) => MathBlockNodeView.prepareKeyboardEntry(caret),
         }),
       ],

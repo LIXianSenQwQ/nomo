@@ -15,6 +15,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
+  const tauriMenuSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/menu.rs'),
+    'utf-8',
+  );
   const outlineInteractionSource = readFileSync(
     resolve(__dirname, 'services/outlineInteractionController.ts'),
     'utf-8',
@@ -108,6 +112,20 @@ describe('App outline layout', () => {
     expect(tocNodeViewSource).toContain("this.dom.className = 'toc-block'");
     expect(tocNodeViewSource).toContain("deleteButton.setAttribute('aria-label', '删除目录')");
     expect(tocNodeViewSource).toContain("textContent = '当前文档还没有标题'");
+  });
+
+  it('wires Mermaid diagram insertion through toolbar, titlebar and native menu', () => {
+    expect(toolbarSource).toContain('DIAGRAM_TEMPLATES');
+    expect(toolbarSource).toContain("type: 'insertDiagramBlock'");
+    expect(toolbarSource).toContain('aria-label="插入图表"');
+    expect(titleBarSource).toContain('DIAGRAM_TEMPLATES');
+    expect(titleBarSource).toContain('insertDiagram(template.type');
+    expect(titleBarSource).not.toContain("comingSoon('图表'");
+    expect(appCommandsSource).toContain("command.startsWith('menu-chart:')");
+    expect(appCommandsSource).toContain("type: 'insertDiagramBlock'");
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "图表")');
+    expect(tauriMenuSource).toContain('menu-chart:flowchart');
+    expect(tauriMenuSource).toContain('menu-chart:erDiagram');
   });
 
   it('wires YAML Front Matter to the semantic metadata card flow', () => {

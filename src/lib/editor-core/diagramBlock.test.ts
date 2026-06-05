@@ -1,0 +1,115 @@
+import { describe, expect, it } from 'vitest';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
+import { createEditorCore, setCodeBlockDiagramRenderer } from './createEditorCore';
+import { DIAGRAM_TEMPLATES } from './diagramTemplates';
+import { parseMarkdown, serializeMarkdown } from './markdown';
+import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
+import { schema } from './schema';
+
+describe('mermaid_block markdown', () => {
+  it('parses mermaid fenced code block as mermaid_block node', () => {
+    const doc = parseMarkdown('```mermaid\nflowchart TD\n  A --> B\n```');
+    const mermaidBlock = findFirstNode(doc, 'mermaid_block');
+
+    expect(mermaidBlock?.attrs.code).toBe('flowchart TD\n  A --> B');
+  });
+
+  it('serializes mermaid_block back to standard mermaid fence', () => {
+    const node = schema.nodes.mermaid_block.create({ code: 'sequenceDiagram\n  A->>B: Hi' });
+    const doc = schema.nodes.doc.create(null, [node]);
+
+    expect(serializeMarkdown(doc)).toContain('```mermaid\nsequenceDiagram\n  A->>B: Hi\n```');
+  });
+
+  it('keeps non-mermaid fenced code blocks as code_block', () => {
+    const doc = parseMarkdown('```ts\nconst ok = true;\n```');
+
+    expect(findFirstNode(doc, 'code_block')?.textContent).toBe('const ok = true;');
+    expect(findFirstNode(doc, 'mermaid_block')).toBeNull();
+  });
+});
+
+describe('diagram templates', () => {
+  it('inserts all first-phase diagram templates as mermaid markdown', () => {
+    for (const template of DIAGRAM_TEMPLATES) {
+      const target = document.createElement('div');
+      const editor = createEditorCore({ markdown: '', target });
+
+      expect(editor.execute({ type: 'insertDiagramBlock', diagramType: template.type })).toBe(true);
+      expect(editor.getMarkdown()).toContain('```mermaid');
+      expect(editor.getMarkdown()).toContain(template.code.split('\n')[0]);
+
+      editor.destroy();
+      target.remove();
+    }
+  });
+
+  it('keeps legacy insertMermaidBlock command working', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+
+    expect(editor.execute({ type: 'insertMermaidBlock', code: 'flowchart TD\n  A --> B' })).toBe(
+      true,
+    );
+    expect(editor.getMarkdown()).toContain('```mermaid\nflowchart TD\n  A --> B\n```');
+
+    editor.destroy();
+    target.remove();
+  });
+});
+
+describe('MermaidBlockNodeView', () => {
+  it('renders display mode and enters edit mode with source above preview', async () => {
+    setCodeBlockDiagramRenderer({
+      async renderMermaid(code) {
+        return { svg: `<svg data-code="${code.split('\n')[0]}"></svg>` };
+      },
+    });
+
+    const node = schema.nodes.mermaid_block.create({ code: 'flowchart TD\n  A --> B' });
+    const doc = schema.nodes.doc.create(null, [node]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: NodeSelection.create(doc, 0),
+      }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    await Promise.resolve();
+    expect(target.querySelector('.mermaid-block svg')).not.toBeNull();
+
+    target.querySelector<HTMLElement>('.mermaid-block')?.click();
+
+    const textarea = target.querySelector('.mermaid-block-textarea');
+    const preview = target.querySelector('.mermaid-block-preview');
+    expect(textarea).not.toBeNull();
+    expect(preview).not.toBeNull();
+    expect(textarea!.compareDocumentPosition(preview!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    view.destroy();
+    target.remove();
+  });
+});
+
+function findFirstNode(doc: ProseMirrorNode, name: string): ProseMirrorNode | null {
+  let found: ProseMirrorNode | null = null;
+  doc.descendants((node) => {
+    if (node.type.name === name) {
+      found = node;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}

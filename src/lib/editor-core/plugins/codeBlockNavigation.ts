@@ -17,6 +17,8 @@ export type CodeBlockNavCallback = {
   enterEditAt: (view: EditorView, pos: number, clickLine: number, caret: 'start' | 'end') => void;
   /** 公式块已选中或相邻时，调用 enterEdit 进入编辑态 */
   enterMathEditAt?: (view: EditorView, pos: number, caret: 'start' | 'end') => void;
+  /** Mermaid 图表块已选中或相邻时，调用 enterEdit 进入编辑态 */
+  enterMermaidEditAt?: (view: EditorView, pos: number, caret: 'start' | 'end') => void;
   /** Arrow 默认选中公式块时，NodeView 会消费该意图并立即进入编辑态 */
   prepareMathKeyboardEntry?: (caret: 'start' | 'end') => void;
 };
@@ -28,7 +30,7 @@ type AdjacentEditableBlock = {
   pos: number;
 };
 
-const EDITABLE_BLOCK_NAMES = new Set(['code_block', 'math_block']);
+const EDITABLE_BLOCK_NAMES = new Set(['code_block', 'math_block', 'mermaid_block']);
 
 const VISUAL_LINE_TOLERANCE_PX = 4;
 
@@ -135,6 +137,16 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
           );
           return true;
         }
+        if (selection instanceof NodeSelection && selection.node.type.name === 'mermaid_block') {
+          if (!callback.enterMermaidEditAt) return false;
+          event.preventDefault();
+          callback.enterMermaidEditAt(
+            view,
+            selection.from,
+            event.key === 'ArrowDown' ? 'start' : 'end',
+          );
+          return true;
+        }
 
         // 光标在文本块边界且紧邻代码块 → 直接进入代码块编辑态
         const { $from, empty } = selection;
@@ -147,6 +159,8 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
             event.preventDefault();
             if (nextBlock.node.type.name === 'math_block') {
               callback.enterMathEditAt?.(view, nextBlock.pos, 'start');
+            } else if (nextBlock.node.type.name === 'mermaid_block') {
+              callback.enterMermaidEditAt?.(view, nextBlock.pos, 'start');
             } else {
               callback.enterEditAt(view, nextBlock.pos, 0, 'start');
             }
@@ -158,6 +172,8 @@ export function codeBlockNavigationPlugin(callback: CodeBlockNavCallback): Plugi
             event.preventDefault();
             if (previousBlock.node.type.name === 'math_block') {
               callback.enterMathEditAt?.(view, previousBlock.pos, 'end');
+            } else if (previousBlock.node.type.name === 'mermaid_block') {
+              callback.enterMermaidEditAt?.(view, previousBlock.pos, 'end');
             } else {
               const lastLine = previousBlock.node.textContent.split('\n').length - 1;
               callback.enterEditAt(view, previousBlock.pos, lastLine, 'end');

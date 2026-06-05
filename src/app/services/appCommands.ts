@@ -1,4 +1,4 @@
-import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+import { isDiagramType, type EditorCommand, type EditorMode } from '../../lib/editor-core';
 
 export interface AppCommandHandlers {
   createNewFile: () => void;
@@ -42,6 +42,11 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.runCommand({ type: 'insertMathBlock', tex: '' });
   } else if (command === 'insert-code-block') {
     handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
+  } else if (command.startsWith('insert-diagram:')) {
+    const diagramType = command.slice('insert-diagram:'.length);
+    if (isDiagramType(diagramType)) {
+      handlers.runCommand({ type: 'insertDiagramBlock', diagramType });
+    }
   } else if (command === 'set-heading-1') {
     handlers.runCommand({ type: 'setHeading', level: 1 });
   } else if (command === 'set-heading-2') {
@@ -75,7 +80,12 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-insert-paragraph-after') {
     handlers.runCommand({ type: 'insertParagraphAfter' });
   } else if (command === 'menu-chart') {
-    handlers.showUnavailableFeature('图表');
+    handlers.runCommand({ type: 'insertDiagramBlock', diagramType: 'flowchart' });
+  } else if (command.startsWith('menu-chart:')) {
+    const diagramType = command.slice('menu-chart:'.length);
+    if (isDiagramType(diagramType)) {
+      handlers.runCommand({ type: 'insertDiagramBlock', diagramType });
+    }
   } else if (command === 'menu-footnote') {
     handlers.showUnavailableFeature('脚注');
   } else if (command === 'menu-horizontal-rule') {

@@ -10,6 +10,7 @@
   } from '../lib/desktop/tauriStorage';
   import {
     createEditorCore,
+    setCodeBlockDiagramRenderer,
     setCodeBlockMathRenderer,
     setCodeBlockTokenizer,
     type EditorChangeEvent,
@@ -62,6 +63,7 @@
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
+  import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
   import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
@@ -69,6 +71,7 @@
   const initialMarkdown = createRichMarkdownSample();
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
+  setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
   setCodeBlockMathRenderer(createKatexMathRenderer());
 
   let markdown = initialMarkdown,

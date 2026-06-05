@@ -136,6 +136,28 @@ export const schema = new Schema({
           },
         ],
       },
+      mermaid_block: {
+        atom: true,
+        selectable: true,
+        draggable: false,
+        group: 'block',
+        attrs: {
+          code: { default: '' },
+        },
+        toDOM(node) {
+          const code = node.attrs.code as string;
+          return ['div', { class: 'mermaid-block', 'data-code': code }, code];
+        },
+        parseDOM: [
+          {
+            tag: 'div.mermaid-block',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              return { code: el.getAttribute('data-code') ?? el.textContent ?? '' };
+            },
+          },
+        ],
+      },
     }),
   marks: markdownSchema.spec.marks.append({
     strikethrough: {

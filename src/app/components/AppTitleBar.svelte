@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { Moon, Sun } from '@lucide/svelte';
   import type { RecentDocument } from '../../lib/desktop/tauriStorage';
-  import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+  import { DIAGRAM_TEMPLATES, type DiagramType, type EditorCommand, type EditorMode } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
 
   export let theme: 'light' | 'dark';
@@ -122,6 +122,11 @@
 
   function comingSoon(featureName: string, menu: string) {
     showUnavailableFeature(featureName);
+    closeMenu(menu);
+  }
+
+  function insertDiagram(diagramType: DiagramType, menu: string) {
+    runCommand({ type: 'insertDiagramBlock', diagramType });
     closeMenu(menu);
   }
 </script>
@@ -383,7 +388,24 @@
               >下插段落 <span class="shortcut">Ctrl + Enter</span></button
             >
             <div class="divider"></div>
-            <button on:click={() => comingSoon('图表', 'paragraph')}>图表</button>
+            <div class="nested-trigger">
+              <span>图表</span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+                ><path
+                  d="M3 1l4 4-4 4"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              >
+              <div class="dropdown-menu nested">
+                {#each DIAGRAM_TEMPLATES as template}
+                  <button on:click={() => insertDiagram(template.type, 'paragraph')}>
+                    {template.label} <span class="shortcut">{template.type}</span>
+                  </button>
+                {/each}
+              </div>
+            </div>
             <button on:click={() => comingSoon('脚注', 'paragraph')}>脚注</button>
             <button on:click={() => finish(() => runCommand({ type: 'insertHorizontalRule' }), 'paragraph')}
               >水平分割线 <span class="shortcut">Ctrl + Shift + H</span></button

@@ -1,3 +1,5 @@
+import type { DiagramType } from './diagramTemplates';
+
 export type EditorMode = 'semantic' | 'source';
 export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline';
 export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
@@ -69,6 +71,7 @@ export type EditorCommand =
   | { type: 'insertCodeBlock'; language?: string; code?: string }
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }
+  | { type: 'insertDiagramBlock'; diagramType: DiagramType }
   | { type: 'insertToc' }
   | { type: 'insertFrontMatter' }
   | { type: 'insertTable'; rows?: number; columns?: number }

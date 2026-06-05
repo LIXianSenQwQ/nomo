@@ -1,5 +1,6 @@
 import { listAppSettings, updateAppSetting } from '../../lib/desktop/tauriStorage';
 import { CodeBlockNodeView } from '../../lib/editor-core/nodeViews/CodeBlockNodeView';
+import { MermaidBlockNodeView } from '../../lib/editor-core/nodeViews/MermaidBlockNodeView';
 
 export interface PersistedEditorSettings {
   theme?: 'light' | 'dark';
@@ -62,6 +63,7 @@ export function applyThemeSetting(theme: 'light' | 'dark') {
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
   // 通知代码块更新语法高亮主题
   CodeBlockNodeView.updateTheme();
+  MermaidBlockNodeView.updateTheme();
 }
 
 export function applyTypographySettings(fontSize: number, lineHeight: number) {

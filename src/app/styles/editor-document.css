@@ -1684,9 +1684,82 @@
   color: #ff7b72;
 }
 
-[data-theme='dark'] .mermaid-block {
+[data-theme='dark'] .mermaid-block:not(.is-editing) {
   filter: invert(0.9) hue-rotate(180deg);
   background: #fcfcfc; /* 翻转后变成深色，确保文字可见 */
+}
+
+/* ---- Mermaid 图表 mermaid_block ---- */
+
+.mermaid-block {
+  cursor: pointer;
+  border: none;
+  transition:
+    background-color 0.15s,
+    outline-color 0.15s;
+}
+
+.mermaid-block:hover {
+  background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+}
+
+.prosemirror-host .ProseMirror .mermaid-block.ProseMirror-selectednode {
+  background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+  outline: 2px solid var(--md-editor-accent, #5a8cdc);
+  outline-offset: 2px;
+}
+
+.mermaid-block.is-editing {
+  cursor: default;
+  background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
+  outline: 2px solid var(--md-editor-accent, #5a8cdc) !important;
+  outline-offset: 2px;
+}
+
+.mermaid-block-textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm, 3px);
+  background: var(--md-editor-surface, #fff);
+  color: var(--md-editor-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.mermaid-block-textarea:focus {
+  border-color: var(--md-editor-accent, #5a8cdc);
+}
+
+.mermaid-block-preview {
+  min-height: 48px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.mermaid-block-preview.is-error,
+.mermaid-block-error {
+  color: var(--md-editor-warning, #9a6700);
+  font-family: var(--md-editor-font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.mermaid-block-source {
+  margin: 10px 0 0;
+  overflow-x: auto;
+  color: var(--md-editor-muted-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
 }
 
 /* ---- 行内格式编辑态的灰色语法提示 ---- */

@@ -6,6 +6,7 @@ import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirro
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { schema } from './schema';
+import { getDiagramTemplate } from './diagramTemplates';
 
 /**
  * 在当前块的下方插入一个新的空段落，并将光标移入。
@@ -446,6 +447,8 @@ export function executeEditorCommand(
         setMarkdown,
         `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`,
       );
+    case 'insertDiagramBlock':
+      return insertMermaidBlock(view, getDiagramTemplate(command.diagramType).code);
     case 'insertToc':
       return insertTocBlock(view, markdown);
     case 'insertFrontMatter':
@@ -627,7 +630,7 @@ function insertBlock(
     const blockStart = $from.before(1);
     const blockEnd = $from.after(1);
     const tr = state.tr.replaceWith(blockStart, blockEnd, node);
-    if (type.name === 'code_block') {
+    if (type.name === 'code_block' || type.name === 'mermaid_block') {
       tr.setSelection(NodeSelection.create(tr.doc, blockStart));
     }
     view.dispatch(tr.scrollIntoView());
@@ -636,11 +639,18 @@ function insertBlock(
 
   const tr = state.tr.replaceSelectionWith(node);
   const newPos = tr.mapping.map(state.selection.from, -1);
-  if (type.name === 'code_block' && tr.doc.nodeAt(newPos)?.type === type) {
+  if (
+    (type.name === 'code_block' || type.name === 'mermaid_block') &&
+    tr.doc.nodeAt(newPos)?.type === type
+  ) {
     tr.setSelection(NodeSelection.create(tr.doc, newPos));
   }
   view.dispatch(tr.scrollIntoView());
   return true;
+}
+
+function insertMermaidBlock(view: EditorView, code: string): boolean {
+  return insertBlock(view, schema.nodes.mermaid_block, '', { code });
 }
 
 function insertMarkdownSnippet(

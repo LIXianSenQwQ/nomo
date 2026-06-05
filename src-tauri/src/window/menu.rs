@@ -106,6 +106,45 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
         .build()
         .map_err(|e| e.to_string())?;
 
+    let diagram_menu = SubmenuBuilder::new(app, "图表")
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:flowchart", "流程图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:sequenceDiagram", "时序图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:classDiagram", "类图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:stateDiagram", "状态图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:pie", "饼图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:gantt", "甘特图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-chart:erDiagram", "ER 图")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .build()
+        .map_err(|e| e.to_string())?;
+
     let format_menu = SubmenuBuilder::new(app, "格式(&O)")
         .item(
             &MenuItemBuilder::with_id("toggle-blockquote", "引用块")
@@ -131,6 +170,7 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
+        .item(&diagram_menu)
         .item(
             &MenuItemBuilder::with_id("menu-horizontal-rule", "水平分割线")
                 .accelerator("Ctrl + Shift + H")

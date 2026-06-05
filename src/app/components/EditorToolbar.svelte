@@ -22,7 +22,13 @@
     Table2,
     Underline,
   } from '@lucide/svelte';
-  import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
+  import {
+    DIAGRAM_TEMPLATES,
+    type DiagramType,
+    type EditorCommand,
+    type EditorMode,
+    type InlinePendingMarks,
+  } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
 
   export let mode: EditorMode;
@@ -51,6 +57,7 @@
   const tableColumns = [1, 2, 3, 4, 5, 6];
   let previewRows = 3;
   let previewColumns = 4;
+  let diagramPickerOpen = false;
 
   function toggleTablePicker() {
     if (tablePickerOpen) {
@@ -66,6 +73,22 @@
     if (event.key === 'Escape') {
       event.preventDefault();
       closeTablePicker();
+    }
+  }
+
+  function closeDiagramPicker() {
+    diagramPickerOpen = false;
+  }
+
+  function insertDiagram(diagramType: DiagramType) {
+    runCommand({ type: 'insertDiagramBlock', diagramType });
+    closeDiagramPicker();
+  }
+
+  function handleDiagramPickerKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDiagramPicker();
     }
   }
 </script>
@@ -202,12 +225,40 @@
   >
     <Image size={17} />
   </button>
-  <button
-    title="Mermaid 占位"
-    on:click={() => runCommand({ type: 'insertMermaidBlock', code: 'flowchart TD\\n  A --> B' })}
-  >
-    <Braces size={17} />
-  </button>
+  <div class="diagram-picker-anchor" use:clickOutside={closeDiagramPicker}>
+    <button
+      title="图表"
+      aria-haspopup="menu"
+      aria-expanded={diagramPickerOpen}
+      class:active={diagramPickerOpen}
+      on:click|stopPropagation={() => {
+        diagramPickerOpen = !diagramPickerOpen;
+      }}
+    >
+      <Braces size={17} />
+    </button>
+    {#if diagramPickerOpen}
+      <div
+        class="diagram-picker-popover"
+        role="menu"
+        aria-label="插入图表"
+        tabindex="-1"
+        on:keydown={handleDiagramPickerKeydown}
+      >
+        <div class="diagram-picker-header">图表</div>
+        {#each DIAGRAM_TEMPLATES as template}
+          <button
+            type="button"
+            role="menuitem"
+            on:click={() => insertDiagram(template.type)}
+          >
+            <span>{template.label}</span>
+            <small>{template.type}</small>
+          </button>
+        {/each}
+      </div>
+    {/if}
+  </div>
   <span class="divider"></span>
   <label class="range-control" title="字号">
     <span>{fontSize}px</span>

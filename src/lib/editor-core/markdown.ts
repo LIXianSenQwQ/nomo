@@ -171,10 +171,21 @@ const tableMarkdownParserWithHandlers =
   tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
 
 const ADJACENT_INLINE_CODE_SENTINEL = '<!-- md-adjacent-inline-code -->';
+const defaultFenceTokenHandler = tableMarkdownParserWithHandlers.tokenHandlers.fence;
 
 // 覆盖 html_block token handler — 分类 HTML 后决定走可编辑节点还是 fallback paragraph
 tableMarkdownParserWithHandlers.tokenHandlers = {
   ...tableMarkdownParserWithHandlers.tokenHandlers,
+  fence: (state: HtmlMarkdownParseState, tok: Token) => {
+    const language = tok.info.trim().split(/\s+/)[0]?.toLowerCase();
+    if (language === 'mermaid') {
+      state.openNode(schema.nodes.mermaid_block, { code: tok.content.replace(/\n$/, '') });
+      state.closeNode();
+      return;
+    }
+
+    defaultFenceTokenHandler(state, tok);
+  },
   html_block: (state: HtmlMarkdownParseState, tok: Token) => {
     const classification = classifyHtmlBlock(tok.content);
     if (classification.editable) {
@@ -356,6 +367,13 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.write('$$\n');
       state.write(node.attrs.tex as string);
       state.write('\n$$\n');
+      state.closeBlock(node);
+    },
+    mermaid_block(state, node) {
+      state.ensureNewLine();
+      state.write('```mermaid\n');
+      state.write(node.attrs.code as string);
+      state.write('\n```\n');
       state.closeBlock(node);
     },
     callout(state, node) {
