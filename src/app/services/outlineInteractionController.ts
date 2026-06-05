@@ -66,7 +66,7 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
       const sourceTextarea = options.getSourceTextarea();
       const selection = getSourceHeadingSelection(options.getMarkdown(), item);
       sourceTextarea.focus();
-      sourceTextarea.setSelectionRange(selection.start, selection.end);
+      sourceTextarea.setSelectionRange(selection.end, selection.end);
       const lineHeightPx = getSourceLineHeight();
       options
         .getSourcePane()

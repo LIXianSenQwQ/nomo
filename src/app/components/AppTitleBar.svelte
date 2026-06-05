@@ -377,7 +377,9 @@
             <button on:click={() => comingSoon('图表', 'paragraph')}>图表</button>
             <button on:click={() => comingSoon('脚注', 'paragraph')}>脚注</button>
             <button on:click={() => comingSoon('水平分割线', 'paragraph')}>水平分割线</button>
-            <button on:click={() => comingSoon('内容目录', 'paragraph')}>内容目录</button>
+            <button on:click={() => finish(() => runCommand({ type: 'insertToc' }), 'paragraph')}
+              >正文目录</button
+            >
             <button on:click={() => comingSoon('YAML Front Matter', 'paragraph')}>YAML Front Matter</button>
           </div>
         {/if}

@@ -89,6 +89,54 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toContain('```mermaid');
   });
 
+  it('inserts a toc block as Markdown at the semantic selection', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# 标题1\n\n## 标题2', target });
+
+    expect(editor.execute({ type: 'insertToc' })).toBe(true);
+    expect(editor.getMarkdown()).toContain('<!-- toc -->');
+    expect(editor.getMarkdown()).toContain('- [标题1](#标题1)');
+    expect(editor.getMarkdown()).toContain('  - [标题2](#标题2)');
+    expect(target.querySelector('.toc-block')).not.toBeNull();
+  });
+
+  it('updates toc block content when headings change', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '<!-- toc -->\n- [旧标题](#旧标题)\n<!-- /toc -->\n\n# 新标题',
+      target,
+    });
+
+    expect(editor.getMarkdown()).toContain('- [新标题](#新标题)');
+    expect(editor.getMarkdown()).not.toContain('旧标题');
+  });
+
+  it('renders an empty toc placeholder when no headings exist', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+
+    editor.execute({ type: 'insertToc' });
+
+    expect(editor.getMarkdown()).toContain('<!-- toc -->\n<!-- /toc -->');
+    expect(target.querySelector('.toc-empty')?.textContent).toContain('当前文档还没有标题');
+  });
+
+  it('jumps to the heading matched by toc link id instead of row position only', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '<!-- toc -->\n<!-- /toc -->\n\n# Same\n\n## Same',
+      target,
+    });
+
+    const secondTocLink = target.querySelectorAll<HTMLButtonElement>('.toc-link')[1];
+    secondTocLink.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    editor.execute({ type: 'setHeading', level: 3 });
+
+    expect(editor.getMarkdown()).toContain('# Same\n\n### Same');
+    expect(editor.getMarkdown()).not.toContain('### Same\n\n## Same');
+  });
+
+
   it('toggles bullet and ordered lists back to plain paragraphs', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '列表项', target });

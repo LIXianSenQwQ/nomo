@@ -80,7 +80,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-horizontal-rule') {
     handlers.showUnavailableFeature('水平分割线');
   } else if (command === 'menu-content-directory') {
-    handlers.showUnavailableFeature('内容目录');
+    handlers.runCommand({ type: 'insertToc' });
   } else if (command === 'menu-yaml-front-matter') {
     handlers.showUnavailableFeature('YAML Front Matter');
   } else if (command === 'menu-underline') {

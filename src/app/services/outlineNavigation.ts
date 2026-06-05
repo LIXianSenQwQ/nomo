@@ -1,4 +1,5 @@
 import type { OutlineItem } from '../../lib/outline/outlineService';
+import { slugifyHeading } from '../../lib/toc/tocService';
 import { getOutlineItemAtLine } from './outlineState';
 
 export interface OutlineScrollAnchor {
@@ -90,52 +91,48 @@ export function getActiveOutlineIdFromSemantic(
     return '';
   }
 
-  const headings = Array.from(
-    semanticPane.querySelectorAll(
-      '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
-    ),
-  );
-  if (headings.length === 0) {
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  if (headingAnchors.length === 0) {
     return outline[0]?.id ?? '';
   }
 
   const viewportTop = semanticPane.getBoundingClientRect().top;
   const threshold = viewportTop + 96;
   let activeIndex = 0;
-  headings.forEach((heading, index) => {
-    if (heading.getBoundingClientRect().top <= threshold) {
+  headingAnchors.forEach(({ element }, index) => {
+    if (element.getBoundingClientRect().top <= threshold) {
       activeIndex = index;
     }
   });
-  return outline[Math.min(activeIndex, outline.length - 1)]?.id ?? '';
+  return headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? '';
 }
 
 export function getSemanticScrollAnchor(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
 ): OutlineScrollAnchor | null {
-  const headings = getSemanticHeadings(semanticPane);
-  if (!outline.length || !semanticPane || headings.length === 0) {
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  if (!outline.length || !semanticPane || headingAnchors.length === 0) {
     return null;
   }
 
   const visibleTop = semanticPane.scrollTop;
   let activeIndex = 0;
-  headings.forEach((heading, index) => {
-    if (getElementTopInScrollContainer(heading, semanticPane) <= visibleTop + 24) {
+  headingAnchors.forEach(({ element }, index) => {
+    if (getElementTopInScrollContainer(element, semanticPane) <= visibleTop + 24) {
       activeIndex = index;
     }
   });
 
-  const currentTop = getElementTopInScrollContainer(headings[activeIndex], semanticPane);
-  const nextTop = headings[activeIndex + 1]
-    ? getElementTopInScrollContainer(headings[activeIndex + 1], semanticPane)
+  const currentTop = getElementTopInScrollContainer(headingAnchors[activeIndex].element, semanticPane);
+  const nextTop = headingAnchors[activeIndex + 1]
+    ? getElementTopInScrollContainer(headingAnchors[activeIndex + 1].element, semanticPane)
     : semanticPane.scrollHeight;
   const sectionHeight = Math.max(1, nextTop - currentTop);
   const sectionProgress = clamp((visibleTop - currentTop) / sectionHeight, 0, 1);
 
   return {
-    outlineId: outline[Math.min(activeIndex, outline.length - 1)]?.id ?? outline[0].id,
+    outlineId: headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? outline[0].id,
     sectionProgress,
   };
 }
@@ -145,22 +142,27 @@ export function scrollSemanticToAnchor(
   semanticPane: HTMLElement | undefined,
   anchor: OutlineScrollAnchor | null,
 ) {
-  const headings = getSemanticHeadings(semanticPane);
-  if (!semanticPane || !anchor || headings.length === 0) {
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  if (!semanticPane || !anchor || headingAnchors.length === 0) {
     return;
   }
 
-  const currentIndex = outline.findIndex((item) => item.id === anchor.outlineId);
-  if (currentIndex === -1 || !headings[currentIndex]) {
+  const currentIndex = headingAnchors.findIndex((item) => item.id === anchor.outlineId);
+  if (currentIndex === -1 || !headingAnchors[currentIndex]) {
     return;
   }
 
-  const currentTop = getElementTopInScrollContainer(headings[currentIndex], semanticPane);
-  const nextTop = headings[currentIndex + 1]
-    ? getElementTopInScrollContainer(headings[currentIndex + 1], semanticPane)
+  const currentTop = getElementTopInScrollContainer(headingAnchors[currentIndex].element, semanticPane);
+  const nextTop = headingAnchors[currentIndex + 1]
+    ? getElementTopInScrollContainer(headingAnchors[currentIndex + 1].element, semanticPane)
     : semanticPane.scrollHeight;
   const sectionHeight = Math.max(1, nextTop - currentTop);
-  semanticPane.scrollTop = Math.max(0, currentTop + sectionHeight * anchor.sectionProgress);
+  const top = Math.max(0, currentTop + sectionHeight * anchor.sectionProgress - 32);
+  if (typeof semanticPane.scrollTo === 'function') {
+    semanticPane.scrollTo({ top, behavior: 'smooth' });
+  } else {
+    semanticPane.scrollTop = top;
+  }
 }
 
 function getSemanticHeadings(semanticPane: HTMLElement | undefined) {
@@ -172,6 +174,21 @@ function getSemanticHeadings(semanticPane: HTMLElement | undefined) {
       '.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6',
     ),
   );
+}
+
+function getSemanticHeadingAnchors(semanticPane: HTMLElement | undefined) {
+  const headings = getSemanticHeadings(semanticPane);
+  const usedIds = new Map<string, number>();
+  return headings.map((element, index) => {
+    const title = element.textContent?.trim() ?? '';
+    const baseId = slugifyHeading(title) || `heading-${index + 1}`;
+    const seen = usedIds.get(baseId) ?? 0;
+    usedIds.set(baseId, seen + 1);
+    return {
+      id: seen === 0 ? baseId : `${baseId}-${seen + 1}`,
+      element,
+    };
+  });
 }
 
 function getElementTopInScrollContainer(element: HTMLElement, scrollContainer: HTMLElement) {

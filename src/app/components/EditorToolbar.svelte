@@ -9,6 +9,7 @@
     Image,
     Italic,
     List,
+    ListTree,
     Info,
     PanelRightClose,
     PanelRightOpen,
@@ -120,6 +121,13 @@
   </button>
   <button title="列表" on:click={() => runCommand({ type: 'toggleBulletList' })}>
     <List size={17} />
+  </button>
+  <button
+    title="插入目录"
+    aria-label="插入目录"
+    on:click={() => runCommand({ type: 'insertToc' })}
+  >
+    <ListTree size={17} />
   </button>
   <button title="任务列表" on:click={() => runCommand({ type: 'toggleTaskList' })}>
     <CheckSquare size={17} />

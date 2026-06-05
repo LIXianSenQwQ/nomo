@@ -1,6 +1,7 @@
 import { tick } from 'svelte';
 import type { EditorCommand, EditorCore, EditorMode } from '../../lib/editor-core';
 import type { OutlineItem } from '../../lib/outline/outlineService';
+import { createTocBlock } from '../../lib/toc/tocService';
 import {
   getSemanticScrollAnchor,
   getSourceScrollAnchor,
@@ -70,8 +71,37 @@ export function createEditorInteractionController(options: EditorInteractionOpti
   }
 
   function runCommand(command: EditorCommand) {
+    if (command.type === 'insertToc' && options.getMode() === 'source') {
+      insertTocAtSourceSelection();
+      return;
+    }
+
     options.getEditor().execute(command);
     options.getEditor().focus();
+  }
+
+  function insertTocAtSourceSelection() {
+    const sourceTextarea = options.getSourceTextarea();
+    const markdown = options.getEditor().getMarkdown();
+    const start = sourceTextarea?.selectionStart ?? markdown.length;
+    const end = sourceTextarea?.selectionEnd ?? start;
+    const tocBlock = createTocBlock(markdown);
+    const prefix = markdown.slice(0, start);
+    const suffix = markdown.slice(end);
+    const before = prefix.endsWith('\n') || prefix.length === 0 ? '' : '\n\n';
+    const after = suffix.startsWith('\n') || suffix.length === 0 ? '' : '\n\n';
+    const nextMarkdown = `${prefix}${before}${tocBlock}${after}${suffix}`;
+    const nextSelection = prefix.length + before.length + tocBlock.length;
+
+    options.getEditor().setMarkdown(nextMarkdown);
+    requestAnimationFrame(() => {
+      if (!sourceTextarea) {
+        return;
+      }
+      sourceTextarea.focus();
+      sourceTextarea.setSelectionRange(nextSelection, nextSelection);
+      syncSourceTextareaHeight();
+    });
   }
 
   function syncSourceTextareaHeight(

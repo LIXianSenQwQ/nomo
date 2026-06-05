@@ -8,7 +8,30 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/EditorWorkspace.svelte'),
     'utf-8',
   );
-  const styles = readFileSync(resolve(__dirname, 'styles/app.css'), 'utf-8');
+  const toolbarSource = readFileSync(resolve(__dirname, 'components/EditorToolbar.svelte'), 'utf-8');
+  const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
+  const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
+  const outlineInteractionSource = readFileSync(
+    resolve(__dirname, 'services/outlineInteractionController.ts'),
+    'utf-8',
+  );
+  const editorInteractionSource = readFileSync(
+    resolve(__dirname, 'services/editorInteractionController.ts'),
+    'utf-8',
+  );
+  const tocNodeViewSource = readFileSync(
+    resolve(__dirname, '../lib/editor-core/nodeViews/TocBlockNodeView.ts'),
+    'utf-8',
+  );
+  const styles = [
+    'styles/app.css',
+    'styles/app-layout.css',
+    'styles/app-chrome.css',
+    'styles/editor-document.css',
+    'styles/editor-outline.css',
+  ]
+    .map((path) => readFileSync(resolve(__dirname, path), 'utf-8'))
+    .join('\n');
 
   it('keeps the document outline out of the document layout flow', () => {
     const documentLayouts =
@@ -27,7 +50,7 @@ describe('App outline layout', () => {
   });
 
   it('sizes the document content as a percentage of the editor shell', () => {
-    expect(appSource).toContain('let contentWidthPercent = 68;');
+    expect(appSource).toContain('contentWidthPercent = 68');
     expect(appSource).toContain('{contentWidthPercent}');
     expect(styles).toMatch(
       /grid-template-columns:\s*minmax\(0,\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\)\);/,
@@ -35,26 +58,28 @@ describe('App outline layout', () => {
   });
 
   it('keeps outline navigation in the current editor mode', () => {
-    const jumpStart = appSource.indexOf('function jumpToOutlineItem');
-    const jumpEnd = appSource.indexOf('function updateActiveOutlineFromSourceScroll');
-    const jumpSource = appSource.slice(jumpStart, jumpEnd);
+    const jumpStart = outlineInteractionSource.indexOf('function jumpToOutlineItem');
+    const jumpEnd = outlineInteractionSource.indexOf('function updateActiveOutlineFromSourceScroll');
+    const jumpSource = outlineInteractionSource.slice(jumpStart, jumpEnd);
 
     expect(jumpSource).not.toContain("setMode('source')");
-    expect(jumpSource).toContain('activeOutlineId = item.id;');
-    expect(jumpSource).toContain('scrollSemanticToAnchor(outline, semanticPane');
+    expect(jumpSource).toContain('options.setActiveOutlineId(item.id);');
+    expect(jumpSource).toContain('scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane()');
   });
 
   it('keeps source typing from normalizing content or resetting scroll', () => {
-    const updateStart = appSource.indexOf('function updateMarkdown');
-    const updateEnd = appSource.indexOf('function runCommand');
-    const updateSource = appSource.slice(updateStart, updateEnd);
+    const updateStart = editorInteractionSource.indexOf('function updateMarkdown');
+    const updateEnd = editorInteractionSource.indexOf('function runCommand');
+    const updateSource = editorInteractionSource.slice(updateStart, updateEnd);
 
     expect(updateSource).not.toContain('normalizeMarkdownForSave');
-    expect(updateSource).toContain('pendingSourceScrollTop = sourcePane?.scrollTop ?? null;');
     expect(updateSource).toContain(
-      'editor.setMarkdown((event.currentTarget as HTMLTextAreaElement).value);',
+      'options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);',
     );
-    expect(appSource).toContain('sourcePane.scrollTop = restoreScrollTop;');
+    expect(updateSource).toContain(
+      'options.getEditor().setMarkdown((event.currentTarget as HTMLTextAreaElement).value);',
+    );
+    expect(editorInteractionSource).toContain('options.getSourcePane().scrollTop = restoreScrollTop;');
   });
 
   it('renders one shared outline panel with expandable items', () => {
@@ -67,5 +92,17 @@ describe('App outline layout', () => {
     expect(editorSource).toContain('visibleOutlineIds.has(item.id)');
     expect(editorSource).toContain('handleOutlineToggle(event, item)');
     expect(editorSource).toContain('{#each outline as item, index (item.id)}');
+  });
+
+  it('exposes toc insertion and deletion as accessible UI actions', () => {
+    expect(toolbarSource).toContain("runCommand({ type: 'insertToc' })");
+    expect(toolbarSource).toContain('aria-label="插入目录"');
+    expect(titleBarSource).toContain("runCommand({ type: 'insertToc' })");
+    expect(titleBarSource).not.toContain("comingSoon('正文目录'");
+    expect(appCommandsSource).toContain("command === 'menu-content-directory'");
+    expect(appCommandsSource).toContain("handlers.runCommand({ type: 'insertToc' });");
+    expect(tocNodeViewSource).toContain("this.dom.className = 'toc-block'");
+    expect(tocNodeViewSource).toContain("deleteButton.setAttribute('aria-label', '删除目录')");
+    expect(tocNodeViewSource).toContain("textContent = '当前文档还没有标题'");
   });
 });
