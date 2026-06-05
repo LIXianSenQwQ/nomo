@@ -283,10 +283,48 @@
 .rich-markdown blockquote {
   margin: 18px 0;
   padding: 12px 16px;
-  border-left: 3px solid var(--md-editor-blockquote-border);
-  border-radius: 0 var(--md-editor-radius-md) var(--md-editor-radius-md) 0;
+  border-left: 4px solid var(--md-editor-blockquote-border);
+  border-radius: var(--md-editor-radius-md);
   background: var(--md-editor-blockquote-bg);
   color: var(--md-editor-blockquote-fg);
+}
+
+/* ---- Callout 提示块（渲染态） ---- */
+
+.rich-markdown .callout-card {
+  margin: 18px 0;
+  border: 0;
+  border-left: 4px solid var(--md-editor-callout-note-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-callout-note-bg);
+  color: var(--md-editor-callout-note-fg);
+  overflow: hidden;
+}
+
+.rich-markdown .callout-card[data-callout-type='note'] {
+  border-color: var(--md-editor-callout-note-border);
+  background: var(--md-editor-callout-note-bg);
+  color: var(--md-editor-callout-note-fg);
+}
+.rich-markdown .callout-card[data-callout-type='tip'] {
+  border-color: var(--md-editor-callout-tip-border);
+  background: var(--md-editor-callout-tip-bg);
+  color: var(--md-editor-callout-tip-fg);
+}
+.rich-markdown .callout-card[data-callout-type='important'] {
+  border-color: var(--md-editor-callout-important-border);
+  background: var(--md-editor-callout-important-bg);
+  color: var(--md-editor-callout-important-fg);
+}
+.rich-markdown .callout-card[data-callout-type='warning'] {
+  border-color: var(--md-editor-callout-warning-border);
+  background: var(--md-editor-callout-warning-bg);
+  color: var(--md-editor-callout-warning-fg);
+}
+.rich-markdown .callout-card[data-callout-type='caution'] {
+  border-color: var(--md-editor-callout-caution-border);
+  background: var(--md-editor-callout-caution-bg);
+  color: var(--md-editor-callout-caution-fg);
 }
 
 .code-card {
@@ -758,10 +796,168 @@
 
 .prosemirror-host .ProseMirror blockquote {
   margin: 18px 0;
-  padding: 2px 0 2px 16px;
-  border-left: 3px solid var(--md-editor-blockquote-border);
+  padding: 8px 0 8px 16px;
+  border-left: 4px solid var(--md-editor-blockquote-border);
+  border-radius: var(--md-editor-radius-md);
   background: var(--md-editor-blockquote-bg);
   color: var(--md-editor-blockquote-fg);
+}
+
+/* ---- Callout 提示块 ---- */
+
+.prosemirror-host .ProseMirror .callout-card {
+  position: relative;
+  margin: 18px 0;
+  border: 0;
+  border-left: 4px solid var(--md-editor-callout-note-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-callout-note-bg);
+  color: var(--md-editor-callout-note-fg);
+  overflow: visible;
+}
+
+/* 5 种类型的颜色 */
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='note'] {
+  border-color: var(--md-editor-callout-note-border);
+  background: var(--md-editor-callout-note-bg);
+  color: var(--md-editor-callout-note-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='tip'] {
+  border-color: var(--md-editor-callout-tip-border);
+  background: var(--md-editor-callout-tip-bg);
+  color: var(--md-editor-callout-tip-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='important'] {
+  border-color: var(--md-editor-callout-important-border);
+  background: var(--md-editor-callout-important-bg);
+  color: var(--md-editor-callout-important-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='warning'] {
+  border-color: var(--md-editor-callout-warning-border);
+  background: var(--md-editor-callout-warning-bg);
+  color: var(--md-editor-callout-warning-fg);
+}
+.prosemirror-host .ProseMirror .callout-card[data-callout-type='caution'] {
+  border-color: var(--md-editor-callout-caution-border);
+  background: var(--md-editor-callout-caution-bg);
+  color: var(--md-editor-callout-caution-fg);
+}
+
+.callout-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 7px;
+  font-size: 14px;
+  font-weight: 600;
+  user-select: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
+}
+
+.callout-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.callout-title {
+  flex: 0 0 auto;
+}
+
+.callout-type-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 12px;
+  padding: 0;
+  border-radius: var(--md-editor-radius-sm);
+  background: transparent;
+  color: currentColor;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.callout-type-btn[aria-expanded='true'] {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.callout-type-btn:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.callout-body {
+  padding: 11px 16px 13px 12px;
+}
+
+.callout-body > :first-child {
+  margin-top: 0;
+}
+
+.callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* 类型切换面板 */
+.callout-type-picker {
+  position: absolute;
+  top: 38px;
+  left: 34px;
+  z-index: 1000;
+  display: none;
+  min-width: 156px;
+  padding: 4px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-surface);
+  box-shadow: var(--md-editor-shadow);
+}
+
+.callout-card.is-picker-open > .callout-type-picker {
+  display: block;
+}
+
+.callout-type-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--md-editor-radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--md-editor-fg);
+  transition: background 0.1s;
+}
+
+.callout-type-picker-item:hover {
+  background: var(--md-editor-selection-bg);
+}
+
+.callout-type-picker-item.is-active {
+  background: color-mix(in srgb, var(--md-editor-accent) 15%, transparent);
+  font-weight: 600;
+}
+
+.callout-type-picker-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.callout-type-picker-label {
+  flex: 1;
+}
+
+/* 选中态 */
+.prosemirror-host .ProseMirror .callout-card.ProseMirror-selectednode {
+  outline: 2px solid var(--md-editor-accent);
+  outline-offset: 2px;
 }
 
 .prosemirror-host .ProseMirror code {

@@ -53,6 +53,7 @@ import {
   setTableColumnAlignment,
   toggleFirstTableRowHeader,
 } from './tableCommands';
+import { insertCallout, toggleCalloutType, unwrapCallout } from './callout/calloutCommands';
 import type { EditorCommand, SetMarkdownOptions } from './types';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
@@ -329,6 +330,12 @@ export function executeEditorCommand(
       return run(setBlockType(schema.nodes.paragraph));
     case 'toggleBlockquote':
       return run(toggleBlockquote);
+    case 'insertCallout':
+      return insertCallout(state, dispatch, command.calloutType ?? 'note');
+    case 'toggleCalloutType':
+      return toggleCalloutType(state, dispatch, command.calloutType);
+    case 'unwrapCallout':
+      return unwrapCallout(state, dispatch);
     case 'toggleBulletList':
       return toggleList(state, dispatch, schema.nodes.bullet_list);
     case 'toggleOrderedList':

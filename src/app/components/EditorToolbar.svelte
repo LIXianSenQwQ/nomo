@@ -9,6 +9,7 @@
     Image,
     Italic,
     List,
+    Info,
     PanelRightClose,
     PanelRightOpen,
     Pilcrow,
@@ -110,6 +111,9 @@
   </button>
   <button title="引用" on:click={() => runCommand({ type: 'toggleBlockquote' })}>
     <Quote size={17} />
+  </button>
+  <button title="提示块" on:click={() => runCommand({ type: 'insertCallout' })}>
+    <Info size={17} />
   </button>
   <button title="列表" on:click={() => runCommand({ type: 'toggleBulletList' })}>
     <List size={17} />

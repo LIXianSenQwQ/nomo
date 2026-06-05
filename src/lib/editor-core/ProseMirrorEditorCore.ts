@@ -21,6 +21,7 @@ import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
 import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
+import { CalloutNodeView } from './nodeViews/CalloutNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
@@ -36,6 +37,7 @@ import {
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
+import { createCalloutPlugin } from './callout/calloutPlugin';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import {
   createMarkdownInputRules,
@@ -105,6 +107,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           new MathInlineNodeView(node, view, getPos as () => number),
         math_block: (node, view, getPos) =>
           new MathBlockNodeView(node, view, getPos as () => number),
+        callout: (node, view, getPos) =>
+          new CalloutNodeView(node, view, getPos as () => number),
       },
     });
     this.refreshInitialEditableState();
@@ -278,6 +282,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         tableHtmlBlockPlugin(),
         tableControlsPlugin(),
         tableEditing({ allowTableNodeSelection: true }),
+        createCalloutPlugin(),
         keymap({
           'Mod-z': undo,
           'Mod-y': redo,
@@ -291,6 +296,19 @@ export class ProseMirrorEditorCore implements EditorCore {
             // 在表格内：下方插入新行
             const context = findTableContext(state);
             if (context) return addTableRowAfter()(state, dispatch);
+            // 在 callout 内：跳出 callout，在下方插入段落
+            const { $from: $fromCtrl } = state.selection;
+            for (let d = $fromCtrl.depth; d >= 0; d--) {
+              if ($fromCtrl.node(d).type.name === 'callout') {
+                const calloutEnd = $fromCtrl.after(d + 1);
+                const emptyParagraph = schema.nodes.paragraph.create();
+                const tr = state.tr.insert(calloutEnd, emptyParagraph);
+                if (dispatch) {
+                  dispatch(tr.setSelection(TextSelection.create(tr.doc, calloutEnd + 1)).scrollIntoView());
+                }
+                return true;
+              }
+            }
             // 其他块：在下方插入新段落
             const { $from } = state.selection;
             const afterPos = $from.after(1);
@@ -351,6 +369,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Shift-Ctrl-x': (state, dispatch) => toggleTaskListAtCursor(state, dispatch),
           'Shift-Ctrl-q': (_state, _dispatch, view) =>
             this.runProseMirrorCommand({ type: 'toggleBlockquote' }),
+          'Shift-Ctrl-a': (_state, _dispatch, view) =>
+            this.runProseMirrorCommand({ type: 'insertCallout' }),
           'Shift-Ctrl-m': (_state, _dispatch, view) =>
             this.runProseMirrorCommand({ type: 'insertMathBlock', tex: '' }),
           'Shift-Ctrl-k': (_state, _dispatch, view) =>

@@ -12,6 +12,8 @@ import { schema, type TableColumnAlignment } from './schema';
 import { classifyHtmlBlock } from './html/htmlClassifier';
 import { parseHtmlContent } from './html/htmlToPmLogic';
 import { serializeHtmlBlock } from './html/pmToHtml';
+import { transformCalloutTokens, calloutParserTokens } from './callout/calloutParser';
+import { serializeCallout } from './callout/calloutSerializer';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
 
@@ -159,6 +161,9 @@ markdownIt.parse = (src, env) => {
     result.push(token);
   }
 
+  // 将匹配 [!TYPE] 的 blockquote 改写为 callout
+  transformCalloutTokens(result);
+
   return result;
 };
 
@@ -171,6 +176,7 @@ const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
+  ...calloutParserTokens,
   s: { mark: 'strikethrough' },
   s_open: { mark: 'strikethrough' },
   s_close: { mark: 'strikethrough' },
@@ -371,6 +377,9 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.write(node.attrs.tex as string);
       state.write('\n$$\n');
       state.closeBlock(node);
+    },
+    callout(state, node) {
+      serializeCallout(state, node);
     },
   },
   {

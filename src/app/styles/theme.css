@@ -16,9 +16,26 @@
   --md-editor-accent-strong: #174e45;
   --md-editor-warning: #9a6700;
   --md-editor-danger: #b42318;
-  --md-editor-blockquote-border: #9ab7b0;
-  --md-editor-blockquote-fg: #4a5b58;
+  --md-editor-blockquote-border: #7f9f97;
+  --md-editor-blockquote-fg: #465753;
   --md-editor-blockquote-bg: #f2f4f5;
+
+  /* Callout 提示块颜色（亮色） */
+  --md-editor-callout-note-border: #3b82f6;
+  --md-editor-callout-note-bg: #f2f4f5;
+  --md-editor-callout-note-fg: #1e40af;
+  --md-editor-callout-tip-border: #22c55e;
+  --md-editor-callout-tip-bg: #f2f4f5;
+  --md-editor-callout-tip-fg: #166534;
+  --md-editor-callout-important-border: #a855f7;
+  --md-editor-callout-important-bg: #f2f4f5;
+  --md-editor-callout-important-fg: #6b21a8;
+  --md-editor-callout-warning-border: #f59e0b;
+  --md-editor-callout-warning-bg: #f2f4f5;
+  --md-editor-callout-warning-fg: #92400e;
+  --md-editor-callout-caution-border: #ef4444;
+  --md-editor-callout-caution-bg: #f2f4f5;
+  --md-editor-callout-caution-fg: #991b1b;
   --md-editor-code-bg: #f5f6f8;
   --md-editor-code-fg: #383a42;
   --md-editor-code-border: #e0e2e6;
@@ -58,9 +75,26 @@
   --md-editor-accent-strong: #9fd8c7;
   --md-editor-warning: #d4a72c;
   --md-editor-danger: #ff8a7a;
-  --md-editor-blockquote-border: #597d75;
-  --md-editor-blockquote-fg: #c4d4d0;
+  --md-editor-blockquote-border: #6f938b;
+  --md-editor-blockquote-fg: #c8d8d4;
   --md-editor-blockquote-bg: #1a1e23;
+
+  /* Callout 提示块颜色（暗色） */
+  --md-editor-callout-note-border: #3b82f6;
+  --md-editor-callout-note-bg: #1a1e23;
+  --md-editor-callout-note-fg: #93c5fd;
+  --md-editor-callout-tip-border: #22c55e;
+  --md-editor-callout-tip-bg: #1a1e23;
+  --md-editor-callout-tip-fg: #86efac;
+  --md-editor-callout-important-border: #a855f7;
+  --md-editor-callout-important-bg: #1a1e23;
+  --md-editor-callout-important-fg: #d8b4fe;
+  --md-editor-callout-warning-border: #f59e0b;
+  --md-editor-callout-warning-bg: #1a1e23;
+  --md-editor-callout-warning-fg: #fcd34d;
+  --md-editor-callout-caution-border: #ef4444;
+  --md-editor-callout-caution-bg: #1a1e23;
+  --md-editor-callout-caution-fg: #fca5a5;
   --md-editor-code-bg: #11151a;
   --md-editor-code-fg: #edf3f6;
   --md-editor-code-border: #2b333d;

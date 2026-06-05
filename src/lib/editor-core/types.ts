@@ -58,6 +58,9 @@ export type EditorCommand =
   | { type: 'setHeading'; level: 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'setParagraph' }
   | { type: 'toggleBlockquote' }
+  | { type: 'insertCallout'; calloutType?: 'note' | 'tip' | 'important' | 'warning' | 'caution' }
+  | { type: 'toggleCalloutType'; calloutType?: 'note' | 'tip' | 'important' | 'warning' | 'caution' }
+  | { type: 'unwrapCallout' }
   | { type: 'toggleBulletList' }
   | { type: 'toggleOrderedList' }
   | { type: 'toggleTaskList' }

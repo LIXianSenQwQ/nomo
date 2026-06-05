@@ -1,6 +1,7 @@
 import { Schema } from 'prosemirror-model';
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { tableNodes } from 'prosemirror-tables';
+import { calloutNodeSpec } from './callout/calloutSchema';
 
 export type TableColumnAlignment = 'left' | 'center' | 'right';
 
@@ -99,6 +100,7 @@ export const schema = new Schema({
         ],
       },
       // 跨行公式块（display math）：$$...$$ 语法
+      callout: calloutNodeSpec,
       math_block: {
         atom: true,
         selectable: true,
