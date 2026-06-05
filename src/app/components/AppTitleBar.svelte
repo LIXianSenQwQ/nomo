@@ -349,6 +349,11 @@
             >
             <button
               on:click={() =>
+                finish(() => runCommand({ type: 'insertCallout' }), 'paragraph')}
+              >提示块</button
+            >
+            <button
+              on:click={() =>
                 finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
               >有序列表 <span class="shortcut">Ctrl + Shift + [</span></button
             >
