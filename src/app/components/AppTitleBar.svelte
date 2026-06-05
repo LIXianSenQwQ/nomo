@@ -376,7 +376,9 @@
             <div class="divider"></div>
             <button on:click={() => comingSoon('图表', 'paragraph')}>图表</button>
             <button on:click={() => comingSoon('脚注', 'paragraph')}>脚注</button>
-            <button on:click={() => comingSoon('水平分割线', 'paragraph')}>水平分割线</button>
+            <button on:click={() => finish(() => runCommand({ type: 'insertHorizontalRule' }), 'paragraph')}
+              >水平分割线 <span class="shortcut">Ctrl + Shift + H</span></button
+            >
             <button on:click={() => finish(() => runCommand({ type: 'insertToc' }), 'paragraph')}
               >正文目录</button
             >

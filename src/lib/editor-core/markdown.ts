@@ -661,6 +661,7 @@ export function createMarkdownInputRules() {
       order: Number(match[1]),
     })),
     textblockTypeInputRule(/^```$/, schema.nodes.code_block),
+    createHorizontalRuleInputRule(),
   ];
 }
 
@@ -679,6 +680,17 @@ function createMathInlineInputRule(): InputRule {
 
     // 步骤2：用语义公式节点替换源码标记，并把光标放到公式后面继续写正文。
     return state.tr.replaceWith(mathStart, end, node);
+  });
+}
+
+/**
+ * 输入 ---、___ 或 *** 后回车，自动转为水平分割线
+ */
+function createHorizontalRuleInputRule(): InputRule {
+  return new InputRule(/^([-*_]{3})$/, (state, match, start, end) => {
+    const hrNode = schema.nodes.horizontal_rule.create();
+    const emptyParagraph = schema.nodes.paragraph.create();
+    return state.tr.replaceWith(start, end, [hrNode, emptyParagraph]);
   });
 }
 

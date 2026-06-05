@@ -87,6 +87,7 @@ export type EditorCommand =
   | { type: 'undo' }
   | { type: 'redo' }
   | { type: 'formatDocument' }
+  | { type: 'insertHorizontalRule' }
   | { type: 'scrollToHeading'; headingIndex: number; text: string; level: number };
 
 export type EditorListener = (event: EditorChangeEvent) => void;

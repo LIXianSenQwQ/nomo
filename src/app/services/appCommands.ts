@@ -78,7 +78,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-footnote') {
     handlers.showUnavailableFeature('脚注');
   } else if (command === 'menu-horizontal-rule') {
-    handlers.showUnavailableFeature('水平分割线');
+    handlers.runCommand({ type: 'insertHorizontalRule' });
   } else if (command === 'menu-content-directory') {
     handlers.runCommand({ type: 'insertToc' });
   } else if (command === 'menu-yaml-front-matter') {
@@ -187,5 +187,9 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
     // Ctrl+Shift+K → 代码块
     event.preventDefault();
     handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
+  } else if (code === 'KeyH') {
+    // Ctrl+Shift+H → 水平分割线
+    event.preventDefault();
+    handlers.runCommand({ type: 'insertHorizontalRule' });
   }
 }

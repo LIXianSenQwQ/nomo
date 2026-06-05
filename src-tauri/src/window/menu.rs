@@ -131,6 +131,12 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
+        .item(
+            &MenuItemBuilder::with_id("menu-horizontal-rule", "水平分割线")
+                .accelerator("Ctrl + Shift + H")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
         .build()
         .map_err(|e| e.to_string())?;
 

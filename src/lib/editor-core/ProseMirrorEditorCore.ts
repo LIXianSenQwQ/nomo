@@ -22,6 +22,7 @@ import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { CalloutNodeView } from './nodeViews/CalloutNodeView';
+import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
@@ -111,6 +112,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           new MathBlockNodeView(node, view, getPos as () => number),
         callout: (node, view, getPos) =>
           new CalloutNodeView(node, view, getPos as () => number),
+        horizontal_rule: (node, view, getPos) =>
+          new HorizontalRuleNodeView(node, view, getPos as () => number),
         toc_block: (node, view, getPos) =>
           new TocBlockNodeView(node, view, getPos as () => number),
       },

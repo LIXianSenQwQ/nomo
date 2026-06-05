@@ -428,6 +428,8 @@ export function executeEditorCommand(
       return increaseHeadingLevel(state, dispatch);
     case 'decreaseHeadingLevel':
       return decreaseHeadingLevel(state, dispatch);
+    case 'insertHorizontalRule':
+      return insertHorizontalRule(view);
     case 'undo':
       return run(undo);
     case 'redo':
@@ -588,5 +590,32 @@ function insertMarkdownSnippet(
 ): boolean {
   const separator = markdown.endsWith('\n') ? '\n' : '\n\n';
   setMarkdown(`${markdown}${separator}${snippet}`, { reason: 'programmatic-update' });
+  return true;
+}
+
+/**
+ * 插入水平分割线并在下方新建空段落聚焦
+ */
+function insertHorizontalRule(view: EditorView): boolean {
+  const { state, dispatch } = view;
+  const { $from, empty } = state.selection;
+  const hrNode = schema.nodes.horizontal_rule.create();
+  const emptyParagraph = schema.nodes.paragraph.create();
+
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    // 当前是空段落：替换为 HR + 空段落
+    const blockStart = $from.before(1);
+    const blockEnd = $from.after(1);
+    const tr = state.tr.replaceWith(blockStart, blockEnd, [hrNode, emptyParagraph]);
+    tr.setSelection(TextSelection.create(tr.doc, blockStart + hrNode.nodeSize + 1));
+    dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  // 在当前位置后插入 HR + 空段落
+  const insertPos = $from.after(1);
+  const tr = state.tr.insert(insertPos, [hrNode, emptyParagraph]);
+  tr.setSelection(TextSelection.create(tr.doc, insertPos + hrNode.nodeSize + 1));
+  dispatch(tr.scrollIntoView());
   return true;
 }

@@ -1511,3 +1511,21 @@
 .pm-mark-delimiter-widget[data-edge='close'] {
   margin-left: 0.08em;
 }
+
+/* 水平分割线 */
+.ProseMirror .horizontal-rule-node {
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.ProseMirror .horizontal-rule-node hr {
+  border: none;
+  border-top: 1px solid var(--md-editor-border);
+  margin: 0;
+}
+
+.ProseMirror .horizontal-rule-node.ProseMirror-selectednode {
+  outline: 2px solid var(--md-selection, #68cef8);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
