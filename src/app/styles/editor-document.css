@@ -1119,39 +1119,26 @@
 }
 
 /* ---- 行内格式编辑态的灰色语法提示 ---- */
+/*
+ * 架构：Mark 负责语义 → Decoration 判断哪些需要提示 → WidgetDecoration 渲染。
+ *
+ * 标签是不可编辑的真实占位节点，`**` / `~~` / `<u>` 作为一个整体参与排版。
+ */
 
-.pm-inline-mark-edit-delimiter,
-.pm-pending-mark-delimiter {
+.pm-mark-delimiter-widget {
+  display: inline-block;
   color: color-mix(in srgb, var(--md-editor-muted-fg) 55%, transparent);
   font-family: var(--md-editor-font-mono);
   font-size: 0.88em;
-  pointer-events: none;
+  line-height: 1;
   user-select: none;
+  white-space: pre;
 }
 
-.pm-inline-mark-edit-range::before,
-.pm-inline-mark-edit-range::after {
-  color: color-mix(in srgb, var(--md-editor-muted-fg) 55%, transparent);
-  font-family: var(--md-editor-font-mono);
-  font-size: 0.88em;
-  pointer-events: none;
-  position: absolute;
-  top: 0;
-  user-select: none;
+.pm-mark-delimiter-widget[data-edge='open'] {
+  margin-right: 0.08em;
 }
 
-.pm-inline-mark-edit-range {
-  padding-left: max(0.58em, calc(var(--pm-inline-mark-open-ch, 0) * 0.56em));
-  padding-right: max(0.58em, calc(var(--pm-inline-mark-close-ch, 0) * 0.56em));
-  position: relative;
-}
-
-.pm-inline-mark-edit-range::before {
-  content: attr(data-open);
-  left: 0;
-}
-
-.pm-inline-mark-edit-range::after {
-  content: attr(data-close);
-  right: 0;
+.pm-mark-delimiter-widget[data-edge='close'] {
+  margin-left: 0.08em;
 }

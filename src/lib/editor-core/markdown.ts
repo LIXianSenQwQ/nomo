@@ -352,6 +352,9 @@ const tableMarkdownSerializer = new MarkdownSerializer(
         state.write(`\`${code}\``);
       }
     },
+    text(state, node) {
+      state.text(escapeMarkdownTextWithoutManualInlineMarkers(node.text ?? ''), false);
+    },
     math_block(state, node) {
       state.ensureNewLine();
       state.write('$$\n');
@@ -365,6 +368,12 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     strikethrough: {
       open: '~~',
       close: '~~',
+      mixable: true,
+      expelEnclosingWhitespace: true,
+    },
+    underline: {
+      open: '<u>',
+      close: '</u>',
       mixable: true,
       expelEnclosingWhitespace: true,
     },
@@ -501,6 +510,18 @@ function splitTaskParagraph(
 
 function escapeTableText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+}
+
+function escapeMarkdownTextWithoutManualInlineMarkers(text: string): string {
+  return text.replace(/[`\\[\]_]/g, (match, index) =>
+    match === '_' &&
+    index > 0 &&
+    index + 1 < text.length &&
+    /\w/.test(text[index - 1] ?? '') &&
+    /\w/.test(text[index + 1] ?? '')
+      ? match
+      : `\\${match}`,
+  );
 }
 
 function readColumnAlignment(

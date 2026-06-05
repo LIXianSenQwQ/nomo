@@ -27,7 +27,12 @@ import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
-import { pendingInlineMarkPlugin, toggleMarkPending, isPendingMarkActive } from './plugins/pendingInlineMark';
+import { inlineMarkdownMarkInputPlugin } from './plugins/inlineMarkdownMarkInput';
+import {
+  pendingInlineMarkPlugin,
+  toggleMarkPending,
+  isPendingMarkActive,
+} from './plugins/pendingInlineMark';
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
@@ -264,6 +269,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         taskListPlugin(),
         inlineCodeInputPlugin(),
         mathInlineInputPlugin(),
+        inlineMarkdownMarkInputPlugin(),
         codeHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
@@ -306,7 +312,9 @@ export class ProseMirrorEditorCore implements EditorCore {
             const emptyParagraph = schema.nodes.paragraph.create();
             const tr = state.tr.insert(beforePos, emptyParagraph);
             if (dispatch) {
-              dispatch(tr.setSelection(TextSelection.create(tr.doc, beforePos + 1)).scrollIntoView());
+              dispatch(
+                tr.setSelection(TextSelection.create(tr.doc, beforePos + 1)).scrollIntoView(),
+              );
             }
             return true;
           },

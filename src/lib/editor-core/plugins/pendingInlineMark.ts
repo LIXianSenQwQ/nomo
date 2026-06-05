@@ -14,7 +14,12 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  * 行内格式编辑态插件：
  * 当 selection collapsed 时点击加粗/斜体/删除线/下划线，
  * 不直接插入 Markdown 字符，而是进入 pending mark 状态。
- * 语义模式下用 WidgetDecoration 显示灰色语法提示（**|**），模拟 Typora / Typedown 的编辑态。
+ *
+ * 架构：
+ * - Mark 负责语义（strong、em、strikethrough、underline）
+ * - Decoration 负责判断当前哪些 mark 需要显示语法提示
+ * - WidgetDecoration 渲染不可编辑的灰色占位标签
+ *
  * 用户继续输入时，新内容自动带对应 mark；退出条件：
  * - 再次点击相同按钮
  * - 按 Esc
@@ -135,7 +140,7 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
 
         if (ranges.length === 0) return DecorationSet.empty;
 
-        return DecorationSet.create(state.doc, createDelimiterDecorations(state, ranges));
+        return DecorationSet.create(state.doc, createInlineDecorations(state, ranges));
       },
 
       handleDOMEvents: {
@@ -171,18 +176,40 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
             exitPending(view.dispatch, view.state);
             // 不 return true，让 ProseMirror 正常处理光标移动
           }
+          if (handleMarkBoundaryArrowKey(view.state, view.dispatch, event.key)) {
+            return true;
+          }
         }
         return false;
       },
+
+      handleTextInput(view, from, to, text) {
+        if (from !== to || !view.state.selection.empty) return false;
+
+        const markTypeNames = getMarkTypeNamesEndingAtCursor(view.state);
+        if (!markTypeNames || isCursorOnMarkedSide(view.state, from, markTypeNames)) return false;
+
+        view.dispatch(
+          view.state.tr.setStoredMarks([]).insertText(text, from, to).setStoredMarks([]),
+        );
+        return true;
+      },
+    },
+
+    appendTransaction(transactions, _oldState, newState) {
+      if (!transactions.some((tr) => tr.docChanged)) return null;
+      if (!newState.selection.empty || newState.storedMarks) return null;
+
+      const markTypeNames = getMarkTypeNamesEndingAtCursor(newState);
+      if (!markTypeNames || markTypeNames.length === 0) return null;
+
+      return newState.tr.setStoredMarks(createMarks(newState, markTypeNames));
     },
   });
 }
 
 /** 退出 pending mark 状态，清除 storedMarks */
-function exitPending(
-  dispatch: (tr: Transaction) => void,
-  state: EditorState,
-): void {
+function exitPending(dispatch: (tr: Transaction) => void, state: EditorState): void {
   const tr = state.tr;
   // 清除所有 storedMarks，防止后续输入意外带格式
   const storedMarks = state.storedMarks;
@@ -193,6 +220,46 @@ function exitPending(
   }
   tr.setMeta(pendingInlineMarkKey, { action: 'exit' });
   dispatch(tr);
+}
+
+function handleMarkBoundaryArrowKey(
+  state: EditorState,
+  dispatch: (tr: Transaction) => void,
+  key: 'ArrowLeft' | 'ArrowRight',
+): boolean {
+  if (!state.selection.empty) return false;
+
+  const markTypeNames =
+    key === 'ArrowRight'
+      ? getMarkTypeNamesStartingAtCursor(state) || getMarkTypeNamesEndingAtCursor(state)
+      : getMarkTypeNamesEndingAtCursor(state) || getMarkTypeNamesStartingAtCursor(state);
+  if (!markTypeNames || markTypeNames.length === 0) return false;
+
+  const pos = state.selection.from;
+  const atOpeningBoundary = Boolean(getMarkTypeNamesStartingAtCursor(state));
+  const currentlyInside = isCursorOnMarkedSide(state, pos, markTypeNames);
+
+  if (key === 'ArrowRight' && atOpeningBoundary && !currentlyInside) {
+    dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
+    return true;
+  }
+
+  if (key === 'ArrowLeft' && atOpeningBoundary && currentlyInside) {
+    dispatch(state.tr.setStoredMarks([]));
+    return true;
+  }
+
+  if (key === 'ArrowRight' && !atOpeningBoundary && currentlyInside) {
+    dispatch(state.tr.setStoredMarks([]));
+    return true;
+  }
+
+  if (key === 'ArrowLeft' && !atOpeningBoundary && !currentlyInside) {
+    dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -226,6 +293,13 @@ export function toggleMarkPending(markType: MarkType): Command {
       return true;
     }
 
+    if (isMarkActiveAtCursor(state, markType)) {
+      if (dispatch) {
+        dispatch(removeActiveMarkAtCursor(state, markType));
+      }
+      return true;
+    }
+
     // 不同 mark 或无 pending → 叠加新的 pending 状态
     if (dispatch) {
       const tr = state.tr;
@@ -240,21 +314,34 @@ export function toggleMarkPending(markType: MarkType): Command {
   };
 }
 
+function isMarkActiveAtCursor(state: EditorState, markType: MarkType): boolean {
+  if (!state.selection.empty) return false;
+
+  const storedMarks = state.storedMarks;
+  if (storedMarks) return storedMarks.some((mark) => mark.type === markType);
+
+  return markType.isInSet(state.selection.$from.marks()) != null;
+}
+
+function removeActiveMarkAtCursor(state: EditorState, markType: MarkType): Transaction {
+  const range = findMarkRangeAtCursor(state.selection.$from, markType);
+  const marks = state.storedMarks ?? state.selection.$from.marks();
+  const tr = state.tr.setStoredMarks(marks.filter((mark) => mark.type !== markType));
+  if (range) tr.removeMark(range.from, range.to, markType);
+  return tr;
+}
+
 function uniqueMarkTypeNames(markTypeNames: string[]): string[] {
   return Array.from(new Set(markTypeNames.filter((name) => MARK_SYNTAX[name])));
 }
 
-function createDelimiterElement(text: string, markTypeName: string): HTMLElement {
-  const el = document.createElement('span');
-  el.className = 'pm-inline-mark-edit-delimiter pm-pending-mark-delimiter';
-  el.setAttribute('data-mark', markTypeName);
-  el.textContent = text;
-  // 不可选中，避免干扰光标定位和复制
-  el.contentEditable = 'false';
-  return el;
-}
-
-function createDelimiterDecorations(
+/**
+ * 创建语法提示装饰。
+ *
+ * 标签使用 WidgetDecoration 渲染成真实占位节点，但节点本身不可编辑。
+ * 这样 `**` / `~~` / `<u>` 作为一个整体参与排版，不会被光标插入到内部。
+ */
+function createInlineDecorations(
   state: EditorState,
   ranges: readonly MarkEditRange[],
 ): Decoration[] {
@@ -262,53 +349,251 @@ function createDelimiterDecorations(
   const decorations: Decoration[] = [];
 
   for (const range of groupMarkEditRanges(ranges)) {
-    const openPos = clampDocPos(range.from, docSize);
-    const closePos = clampDocPos(range.to, docSize);
-    const openText = range.markTypeNames.map((markTypeName) => MARK_SYNTAX[markTypeName]?.open ?? '').join('');
-    const closeText = [...range.markTypeNames]
+    const from = clampDocPos(range.from, docSize);
+    const to = clampDocPos(range.to, docSize);
+    const markTypeNames = range.markTypeNames;
+
+    // 计算开闭语法文本（按 markTypeNames 顺序拼接 open，逆序拼接 close）
+    const openText = markTypeNames.map((name) => MARK_SYNTAX[name]?.open ?? '').join('');
+    const closeText = [...markTypeNames]
       .reverse()
-      .map((markTypeName) => MARK_SYNTAX[markTypeName]?.close ?? '')
+      .map((name) => MARK_SYNTAX[name]?.close ?? '')
       .join('');
 
-    if (openPos < closePos) {
+    if (from < to) {
       decorations.push(
-        Decoration.inline(
-          openPos,
-          closePos,
+        Decoration.inline(from, to, {
+          class: 'pm-mark-delimiter-range',
+          'data-mark': markTypeNames[0],
+          'data-marks': markTypeNames.join(' '),
+          'data-from': String(from),
+          'data-to': String(to),
+        }),
+        Decoration.widget(
+          from,
+          () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
           {
-            class: 'pm-inline-mark-edit-range',
-            'data-mark': range.markTypeNames[0],
-            'data-marks': range.markTypeNames.join(' '),
-            'data-from': String(openPos),
-            'data-to': String(closePos),
-            'data-open': openText,
-            'data-close': closeText,
-            style: `--pm-inline-mark-open-ch: ${openText.length}; --pm-inline-mark-close-ch: ${closeText.length};`,
+            side: getOpenDelimiterSide(state, from, markTypeNames),
+            marks: [],
           },
+        ),
+        Decoration.widget(
+          to,
+          () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
           {
-            inclusiveStart: false,
-            inclusiveEnd: false,
+            side: getCloseDelimiterSide(state, to, markTypeNames),
+            marks: [],
           },
         ),
       );
-      continue;
+    } else {
+      decorations.push(
+        Decoration.widget(
+          from,
+          () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
+          {
+            side: getOpenDelimiterSide(state, from, markTypeNames),
+            marks: [],
+          },
+        ),
+        Decoration.widget(
+          from,
+          () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
+          {
+            side: getCloseDelimiterSide(state, from, markTypeNames),
+            marks: [],
+          },
+        ),
+      );
     }
-
-    decorations.push(
-      Decoration.widget(openPos, () => createDelimiterElement(openText, range.markTypeNames[0]), {
-        // 空 pending 没有可包裹的范围，用 widget 作为临时占位；让真实光标停在两个标记之间。
-        side: -1,
-        marks: [],
-      }),
-      Decoration.widget(closePos, () => createDelimiterElement(closeText, range.markTypeNames[0]), {
-        side: 1,
-        marks: [],
-      }),
-    );
   }
 
   return decorations;
 }
+
+function getOpenDelimiterSide(
+  state: EditorState,
+  pos: number,
+  markTypeNames: readonly string[],
+): number {
+  return isCursorOnMarkedSide(state, pos, markTypeNames) ? -1 : 1;
+}
+
+function getCloseDelimiterSide(
+  state: EditorState,
+  pos: number,
+  markTypeNames: readonly string[],
+): number {
+  return isCursorOnMarkedSide(state, pos, markTypeNames) ? 1 : -1;
+}
+
+function isCursorOnMarkedSide(
+  state: EditorState,
+  pos: number,
+  markTypeNames: readonly string[],
+): boolean {
+  if (!state.selection.empty || state.selection.from !== pos) return false;
+  const storedMarks = state.storedMarks;
+  if (!storedMarks) return false;
+  return markTypeNames.every((markTypeName) =>
+    storedMarks.some((mark) => mark.type.name === markTypeName),
+  );
+}
+
+function createMarks(state: EditorState, markTypeNames: readonly string[]): Mark[] {
+  return markTypeNames
+    .map((markTypeName) => state.schema.marks[markTypeName])
+    .filter((markType): markType is MarkType => Boolean(markType))
+    .map((markType) => markType.create());
+}
+
+function getMarkTypeNamesStartingAtCursor(state: EditorState): string[] | null {
+  return getBoundaryMarkTypeNames(state, 'start');
+}
+
+function getMarkTypeNamesEndingAtCursor(state: EditorState): string[] | null {
+  return getBoundaryMarkTypeNames(state, 'end');
+}
+
+function getBoundaryMarkTypeNames(state: EditorState, boundary: 'start' | 'end'): string[] | null {
+  if (!state.selection.empty) return null;
+
+  const $cursor = state.selection.$from;
+  if (!$cursor.parent.isTextblock) return null;
+
+  const cursorOffset = $cursor.parentOffset;
+  let markTypeNames: string[] | null = null;
+
+  $cursor.parent.forEach((child, childOffset) => {
+    if (markTypeNames || !child.isInline) return;
+    const childEnd = childOffset + child.nodeSize;
+    const isBoundary =
+      boundary === 'start' ? cursorOffset === childOffset : cursorOffset === childEnd;
+    if (!isBoundary) return;
+
+    const names = child.marks
+      .map((mark) => mark.type.name)
+      .filter((markTypeName) => MARK_SYNTAX[markTypeName]);
+    if (names.length > 0) markTypeNames = uniqueMarkTypeNames(names);
+  });
+
+  return markTypeNames;
+}
+
+function createDelimiterWidget(
+  text: string,
+  edge: 'open' | 'close',
+  markTypeNames: readonly string[],
+  from: number,
+  to: number,
+): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'pm-mark-delimiter-widget';
+  el.textContent = text;
+  el.contentEditable = 'false';
+  el.dataset.edge = edge;
+  el.dataset.mark = markTypeNames[0] ?? '';
+  el.dataset.marks = markTypeNames.join(' ');
+  el.dataset.from = String(from);
+  el.dataset.to = String(to);
+  return el;
+}
+
+/**
+ * 处理灰色语法提示边界点击。
+ *
+ * 灰色标签是不可编辑的整体占位节点。点击标签左半边表示落到标签前，
+ * 点击右半边表示落到标签后，从而区分 `b后 / 1前`、`6后 / c前`。
+ */
+function handleEditRangeBoundaryMouseDown(
+  view: {
+    state: EditorState;
+    dispatch: (tr: Transaction) => void;
+    focus: () => void;
+    dom: HTMLElement;
+  },
+  event: MouseEvent,
+): boolean {
+  const rangeHit = findDelimiterWidgetHit(event);
+  if (!rangeHit) return false;
+
+  const { edge, widgetElement } = rangeHit;
+  const markTypeNames = widgetElement.dataset.marks?.split(/\s+/).filter(Boolean) ?? [
+    widgetElement.dataset.mark ?? '',
+  ];
+  const from = Number(widgetElement.dataset.from);
+  const to = Number(widgetElement.dataset.to);
+  const markTypes = markTypeNames
+    .map((markTypeName) => view.state.schema.marks[markTypeName])
+    .filter((markType): markType is MarkType => Boolean(markType));
+  if (markTypes.length === 0 || !Number.isFinite(from) || !Number.isFinite(to)) return false;
+
+  event.preventDefault();
+
+  if (edge === 'open-before') {
+    const tr = view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, from))
+      .setStoredMarks([]);
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  }
+
+  if (edge === 'open-after') {
+    const tr = view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, from))
+      .setStoredMarks(markTypes.map((markType) => markType.create()));
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  }
+
+  if (edge === 'close-before') {
+    const tr = view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, to))
+      .setStoredMarks(markTypes.map((markType) => markType.create()));
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  }
+
+  const tr = view.state.tr
+    .setSelection(TextSelection.create(view.state.doc, to))
+    .setStoredMarks([]);
+  view.dispatch(tr);
+  view.focus();
+  return true;
+}
+
+function findDelimiterWidgetHit(
+  event: MouseEvent,
+): { edge: MarkBoundaryEdge; widgetElement: HTMLElement } | null {
+  const target = event.target;
+  const widgetElement =
+    target instanceof Element ? target.closest<HTMLElement>('.pm-mark-delimiter-widget') : null;
+  if (!widgetElement) return null;
+
+  const rect = widgetElement.getBoundingClientRect();
+  const middle = rect.left + rect.width / 2;
+  const widgetEdge = widgetElement.dataset.edge;
+  if (widgetEdge === 'open') {
+    return {
+      edge: event.clientX < middle ? 'open-before' : 'open-after',
+      widgetElement,
+    };
+  }
+
+  if (widgetEdge === 'close') {
+    return {
+      edge: event.clientX < middle ? 'close-before' : 'close-after',
+      widgetElement,
+    };
+  }
+
+  return null;
+}
+
+type MarkBoundaryEdge = 'open-before' | 'open-after' | 'close-before' | 'close-after';
 
 function groupMarkEditRanges(ranges: readonly MarkEditRange[]): GroupedMarkEditRange[] {
   const groups = new Map<string, GroupedMarkEditRange>();
@@ -348,126 +633,6 @@ function findMarkEditRangesAtCursor(state: EditorState): MarkEditRange[] {
   }
 
   return ranges;
-}
-
-function handleEditRangeBoundaryMouseDown(
-  view: {
-    state: EditorState;
-    dispatch: (tr: Transaction) => void;
-    focus: () => void;
-    dom: HTMLElement;
-  },
-  event: MouseEvent,
-): boolean {
-  const rangeHit = findEditRangeBoundaryHit(view.dom, event);
-  if (!rangeHit) return false;
-
-  const { edge, rangeElement } = rangeHit;
-  const markTypeNames =
-    rangeElement.dataset.marks?.split(/\s+/).filter(Boolean) ??
-    [rangeElement.dataset.mark ?? ''];
-  const from = Number(rangeElement.dataset.from);
-  const to = Number(rangeElement.dataset.to);
-  const markTypes = markTypeNames
-    .map((markTypeName) => view.state.schema.marks[markTypeName])
-    .filter((markType): markType is MarkType => Boolean(markType));
-  if (markTypes.length === 0 || !Number.isFinite(from) || !Number.isFinite(to)) return false;
-
-  if (edge === 'open') {
-    event.preventDefault();
-    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, from));
-    for (const markType of markTypes) tr.addStoredMark(markType.create());
-    view.dispatch(tr);
-    view.focus();
-    return true;
-  }
-
-  if (edge === 'close') {
-    event.preventDefault();
-    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, to));
-    for (const markType of markTypes) tr.removeStoredMark(markType);
-    view.dispatch(tr);
-    view.focus();
-    return true;
-  }
-
-  return false;
-}
-
-function findEditRangeBoundaryHit(
-  root: HTMLElement,
-  event: MouseEvent,
-): { edge: 'open' | 'close'; rangeElement: HTMLElement } | null {
-  const target = event.target;
-  const targetRange =
-    target instanceof Element ? target.closest<HTMLElement>('.pm-inline-mark-edit-range') : null;
-  const ranges = targetRange
-    ? [targetRange]
-    : Array.from(root.querySelectorAll<HTMLElement>('.pm-inline-mark-edit-range'));
-
-  let nearest: { edge: 'open' | 'close'; rangeElement: HTMLElement; distance: number } | null =
-    null;
-
-  for (const rangeElement of ranges) {
-    const hit = getBoundaryHitForElement(rangeElement, event);
-    if (!hit) continue;
-
-    if (!nearest || hit.distance < nearest.distance) {
-      nearest = { ...hit, rangeElement };
-    }
-  }
-
-  if (!nearest) return null;
-  return { edge: nearest.edge, rangeElement: nearest.rangeElement };
-}
-
-function getBoundaryHitForElement(
-  rangeElement: HTMLElement,
-  event: MouseEvent,
-): { edge: 'open' | 'close'; distance: number } | null {
-  const rect = rangeElement.getBoundingClientRect();
-  const verticalSlop = Math.max(4, rect.height * 0.35);
-  if (event.clientY < rect.top - verticalSlop || event.clientY > rect.bottom + verticalSlop) {
-    return null;
-  }
-
-  const openWidth = estimateDelimiterWidth(rangeElement.dataset.open ?? '', rangeElement);
-  const closeWidth = estimateDelimiterWidth(rangeElement.dataset.close ?? '', rangeElement);
-  const openStart = rect.left;
-  const openEnd = rect.left + openWidth;
-  const closeStart = rect.right - closeWidth;
-  const closeEnd = rect.right;
-  const outsideSlop = 6;
-
-  if (event.clientX >= openStart - outsideSlop && event.clientX <= openEnd) {
-    return {
-      edge: 'open',
-      distance: distanceToSegment(event.clientX, openStart, openEnd),
-    };
-  }
-
-  if (event.clientX >= closeStart && event.clientX <= closeEnd + outsideSlop) {
-    return {
-      edge: 'close',
-      distance: distanceToSegment(event.clientX, closeStart, closeEnd),
-    };
-  }
-
-  return null;
-}
-
-function distanceToSegment(value: number, from: number, to: number): number {
-  if (value < from) return from - value;
-  if (value > to) return value - to;
-  return 0;
-}
-
-function estimateDelimiterWidth(text: string, element: HTMLElement): number {
-  if (!text) return 0;
-
-  const fontSize = Number.parseFloat(getComputedStyle(element).fontSize);
-  const charWidth = Number.isFinite(fontSize) ? fontSize * 0.56 : 8;
-  return Math.max(8, text.length * charWidth);
 }
 
 function findMarkRangeAtCursor(
