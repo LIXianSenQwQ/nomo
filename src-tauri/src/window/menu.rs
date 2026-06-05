@@ -137,6 +137,16 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )
+        .item(
+            &MenuItemBuilder::with_id("menu-content-directory", "正文目录")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-yaml-front-matter", "文档元数据")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
         .build()
         .map_err(|e| e.to_string())?;
 

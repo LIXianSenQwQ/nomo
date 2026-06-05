@@ -56,6 +56,200 @@
   background: transparent;
 }
 
+.front-matter-card {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 84%, var(--md-editor-accent) 16%);
+  border-radius: var(--md-editor-radius-md);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--md-editor-accent) 8%, transparent),
+      transparent 34%
+    ),
+    color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-table-header-bg) 4%);
+  box-shadow: 0 10px 24px rgba(24, 38, 52, 0.06);
+  color: var(--md-editor-fg);
+  text-align: left;
+}
+
+.front-matter-card {
+  align-items: start;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.front-matter-card:hover {
+  border-color: color-mix(in srgb, var(--md-editor-accent) 55%, var(--md-editor-border));
+  box-shadow: 0 12px 30px rgba(24, 38, 52, 0.1);
+}
+
+.front-matter-card button:focus-visible,
+.front-matter-card textarea:focus-visible {
+  outline: 2px solid var(--md-editor-accent);
+  outline-offset: 2px;
+}
+
+.front-matter-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-accent) 12%, var(--md-editor-surface));
+  color: var(--md-editor-accent-strong);
+}
+
+.front-matter-main {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.front-matter-kicker,
+.front-matter-meta,
+.front-matter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.front-matter-kicker {
+  color: var(--md-editor-muted-fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.front-matter-title {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--md-editor-heading-fg);
+  font-size: 16px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.front-matter-status,
+.front-matter-tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 70%, var(--md-editor-accent) 30%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--md-editor-accent) 8%, transparent);
+  color: var(--md-editor-accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.front-matter-meta {
+  color: var(--md-editor-muted-fg);
+  font-size: 12px;
+}
+
+.front-matter-warning {
+  margin: 0;
+  color: var(--md-editor-warning);
+  font-size: 12px;
+}
+
+.front-matter-edit-hint {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--md-editor-muted-fg);
+}
+
+.front-matter-actions {
+  display: grid;
+  grid-template-columns: auto;
+  justify-items: end;
+  gap: 6px;
+}
+
+.front-matter-delete {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--md-editor-radius-sm);
+  background: transparent;
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.front-matter-delete:hover,
+.front-matter-delete.confirming {
+  background: color-mix(in srgb, var(--md-editor-danger) 12%, transparent);
+  color: var(--md-editor-danger);
+}
+
+.front-matter-delete span {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.front-matter-main:disabled,
+.front-matter-delete:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.front-matter-card.is-editing {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+}
+
+.front-matter-editor-shell {
+  display: grid;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 78%, var(--md-editor-accent) 22%);
+  border-radius: var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-code-bg) 86%, var(--md-editor-surface) 14%);
+  font-family: var(--md-editor-font-mono);
+}
+
+.front-matter-editor-shell textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 0;
+  background: transparent;
+  color: var(--md-editor-fg);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.front-matter-editor-shell textarea:focus {
+  outline: none;
+}
+
 .rich-markdown {
   grid-column: 1;
   width: 100%;

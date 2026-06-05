@@ -121,6 +121,20 @@ describe('createEditorCore', () => {
     expect(target.querySelector('.toc-empty')?.textContent).toContain('当前文档还没有标题');
   });
 
+  it('inserts default YAML front matter without duplicating existing metadata', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# 正文', target });
+
+    expect(editor.execute({ type: 'insertFrontMatter' })).toBe(true);
+    expect(editor.getMarkdown()).toContain('title: 文档标题');
+    expect(editor.getMarkdown()).toContain('tags:\n  - 笔记\n  - Markdown');
+    expect(editor.getMarkdown()).toContain('# 正文');
+
+    const withFrontMatter = editor.getMarkdown();
+    expect(editor.execute({ type: 'insertFrontMatter' })).toBe(true);
+    expect(editor.getMarkdown()).toBe(withFrontMatter);
+  });
+
   it('jumps to the heading matched by toc link id instead of row position only', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({

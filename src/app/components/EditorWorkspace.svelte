@@ -1,10 +1,14 @@
 <script lang="ts">
   import { ChevronDown } from '@lucide/svelte';
   import type { EditorMode } from '../../lib/editor-core';
+  import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
+  import FrontMatterCard from './FrontMatterCard.svelte';
 
   export let mode: EditorMode;
   export let markdown: string;
+  export let frontMatter: FrontMatterBlock | null;
+  export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
   export let externalFileWarning: string;
   export let outlineVisible: boolean;
@@ -18,6 +22,10 @@
   export let editorHost: HTMLDivElement;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let updateMarkdown: (event: Event) => void;
+  export let enterFrontMatterEdit: () => void;
+  export let leaveFrontMatterEdit: () => void;
+  export let updateFrontMatterContent: (content: string) => void;
+  export let deleteFrontMatter: () => void;
   export let updateActiveOutlineFromSourceScroll: () => void;
   export let updateActiveOutlineFromSemanticScroll: () => void;
   export let handleEditorPaste: (event: ClipboardEvent) => void;
@@ -72,6 +80,17 @@
     on:dragover|preventDefault
   >
     <div class="document-layout">
+      {#if frontMatter}
+        <FrontMatterCard
+          {frontMatter}
+          editing={frontMatterEditing}
+          readonly={readonlyDocumentMode}
+          enterEdit={enterFrontMatterEdit}
+          leaveEdit={leaveFrontMatterEdit}
+          updateContent={updateFrontMatterContent}
+          {deleteFrontMatter}
+        />
+      {/if}
       <div bind:this={editorHost} class="prosemirror-host"></div>
     </div>
   </section>

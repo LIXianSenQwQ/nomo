@@ -70,6 +70,7 @@ export type EditorCommand =
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }
   | { type: 'insertToc' }
+  | { type: 'insertFrontMatter' }
   | { type: 'insertTable'; rows?: number; columns?: number }
   | { type: 'addTableRowBefore' }
   | { type: 'addTableRowAfter' }

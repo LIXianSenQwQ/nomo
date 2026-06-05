@@ -56,6 +56,7 @@ import {
 import { insertCallout, toggleCalloutType, unwrapCallout } from './callout/calloutCommands';
 import type { EditorCommand, SetMarkdownOptions } from './types';
 import { createTocList } from '../toc/tocService';
+import { ensureFrontMatter } from '../markdown/frontMatter';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
 
@@ -447,6 +448,8 @@ export function executeEditorCommand(
       );
     case 'insertToc':
       return insertTocBlock(view, markdown);
+    case 'insertFrontMatter':
+      return insertFrontMatterBlock(markdown, setMarkdown);
     case 'insertTable': {
       const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
       return insertTable(view, tableNode);
@@ -488,6 +491,14 @@ export function executeEditorCommand(
     default:
       return false;
   }
+}
+
+function insertFrontMatterBlock(markdown: string, setMarkdown: MarkdownSetter): boolean {
+  const nextMarkdown = ensureFrontMatter(markdown);
+  if (nextMarkdown !== markdown) {
+    setMarkdown(nextMarkdown, { reason: 'programmatic-update' });
+  }
+  return true;
 }
 
 function insertTocBlock(view: EditorView, markdown: string): boolean {

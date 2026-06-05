@@ -10,6 +10,10 @@ describe('App outline layout', () => {
   );
   const toolbarSource = readFileSync(resolve(__dirname, 'components/EditorToolbar.svelte'), 'utf-8');
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
+  const frontMatterCardSource = readFileSync(
+    resolve(__dirname, 'components/FrontMatterCard.svelte'),
+    'utf-8',
+  );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
   const outlineInteractionSource = readFileSync(
     resolve(__dirname, 'services/outlineInteractionController.ts'),
@@ -104,5 +108,28 @@ describe('App outline layout', () => {
     expect(tocNodeViewSource).toContain("this.dom.className = 'toc-block'");
     expect(tocNodeViewSource).toContain("deleteButton.setAttribute('aria-label', '删除目录')");
     expect(tocNodeViewSource).toContain("textContent = '当前文档还没有标题'");
+  });
+
+  it('wires YAML Front Matter to the semantic metadata card flow', () => {
+    expect(editorSource).toContain('FrontMatterCard');
+    expect(editorSource).toContain('frontMatterEditing');
+    expect(appSource).toContain('replaceFrontMatterContent');
+    expect(appSource).toContain("editor.execute({ type: 'insertFrontMatter' })");
+    expect(titleBarSource).toContain('finish(editFrontMatter,');
+    expect(titleBarSource).not.toContain("comingSoon('YAML Front Matter'");
+    expect(titleBarSource).toContain('文档元数据');
+    expect(appCommandsSource).toContain("command === 'menu-yaml-front-matter'");
+    expect(appCommandsSource).toContain('handlers.editFrontMatter();');
+    expect(frontMatterCardSource).toContain('aria-label="文档元数据编辑态"');
+    expect(frontMatterCardSource).toContain("'编辑文档元数据'");
+    expect(frontMatterCardSource).toContain("'查看文档元数据'");
+    expect(frontMatterCardSource).not.toContain('YAML Front Matter');
+    expect(frontMatterCardSource).toContain('readonly={readonly}');
+    expect(frontMatterCardSource).toContain('on:focus={enterEdit}');
+    expect(frontMatterCardSource).toContain('on:focusout={handleFocusOut}');
+    expect(frontMatterCardSource).toContain('on:input={handleInput}');
+    expect(frontMatterCardSource).toContain('deleteFrontMatter');
+    expect(frontMatterCardSource).toContain('确认删除');
+    expect(frontMatterCardSource).toContain('frontMatter.fields.parseWarning');
   });
 });

@@ -9,6 +9,7 @@ export interface AppCommandHandlers {
   saveMarkdownFile: (saveAs?: boolean) => void;
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
+  editFrontMatter: () => void;
   showUnavailableFeature: (featureName: string) => void;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
@@ -82,7 +83,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-content-directory') {
     handlers.runCommand({ type: 'insertToc' });
   } else if (command === 'menu-yaml-front-matter') {
-    handlers.showUnavailableFeature('YAML Front Matter');
+    handlers.editFrontMatter();
   } else if (command === 'menu-underline') {
     handlers.runCommand({ type: 'toggleUnderline' });
   } else if (command === 'menu-inline-math') {

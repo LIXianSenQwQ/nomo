@@ -15,6 +15,7 @@ import { serializeHtmlBlock } from './html/pmToHtml';
 import { transformCalloutTokens, calloutParserTokens } from './callout/calloutParser';
 import { serializeCallout } from './callout/calloutSerializer';
 import { TOC_END_MARKER, TOC_START_MARKER } from '../toc/tocService';
+import { splitFrontMatterBlock } from '../markdown/frontMatter';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
 
@@ -429,18 +430,7 @@ export function serializeMarkdown(doc: ProseMirrorNode): string {
 }
 
 export function splitFrontMatter(markdown: string): { frontMatter: string; body: string } {
-  if (!markdown.startsWith('---\n')) {
-    return { frontMatter: '', body: markdown };
-  }
-
-  const end = markdown.indexOf('\n---\n', 4);
-  if (end === -1) {
-    return { frontMatter: '', body: markdown };
-  }
-
-  const frontMatter = markdown.slice(0, end + 5);
-  const body = markdown.slice(frontMatter.length).replace(/^\s+/, '');
-  return { frontMatter, body };
+  return splitFrontMatterBlock(markdown);
 }
 
 function normalizeAdjacentInlineCode(markdown: string): string {

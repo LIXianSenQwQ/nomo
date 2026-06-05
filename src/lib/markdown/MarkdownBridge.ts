@@ -1,3 +1,5 @@
+import { extractFrontMatterBlock } from './frontMatter';
+
 export interface MarkdownDocument {
   markdown: string;
   frontMatter?: string;
@@ -29,14 +31,5 @@ export function createMarkdownBridge(): MarkdownBridge {
 }
 
 function extractFrontMatter(markdown: string): string | undefined {
-  if (!markdown.startsWith('---\n')) {
-    return undefined;
-  }
-
-  const end = markdown.indexOf('\n---\n', 4);
-  if (end === -1) {
-    return undefined;
-  }
-
-  return markdown.slice(0, end + 5);
+  return extractFrontMatterBlock(markdown)?.raw;
 }

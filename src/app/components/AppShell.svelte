@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { RecentDocument } from '../../lib/desktop/tauriStorage';
   import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
+  import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
   import type { FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
@@ -39,6 +40,8 @@
   export let lineHeight: number;
   export let blockStyle: 'classic' | 'modern';
   export let markdown: string;
+  export let frontMatter: FrontMatterBlock | null;
+  export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
   export let externalFileWarning: string;
   export let outline: OutlineItem[];
@@ -68,6 +71,7 @@
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
+  export let editFrontMatter: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
@@ -85,6 +89,10 @@
   export let updateContentWidth: (event: Event) => void;
   export let updateBlockStyle: (blockStyle: 'classic' | 'modern') => void;
   export let updateMarkdown: (event: Event) => void;
+  export let enterFrontMatterEdit: () => void;
+  export let leaveFrontMatterEdit: () => void;
+  export let updateFrontMatterContent: (content: string) => void;
+  export let deleteFrontMatter: () => void;
   export let updateActiveOutlineFromSourceScroll: () => void;
   export let updateActiveOutlineFromSemanticScroll: () => void;
   export let handleEditorPaste: (event: ClipboardEvent) => void;
@@ -131,6 +139,7 @@
     {saveMarkdownFile}
     {runCommand}
     {openTablePicker}
+    {editFrontMatter}
     {showUnavailableFeature}
     {setMode}
     {toggleOutlineVisible}
@@ -193,6 +202,8 @@
         bind:editorHost
         {mode}
         {markdown}
+        {frontMatter}
+        {frontMatterEditing}
         {readonlyDocumentMode}
         {externalFileWarning}
         {outlineVisible}
@@ -202,6 +213,10 @@
         {visibleOutlineIds}
         {saveMarkdownFile}
         {updateMarkdown}
+        {enterFrontMatterEdit}
+        {leaveFrontMatterEdit}
+        {updateFrontMatterContent}
+        {deleteFrontMatter}
         {updateActiveOutlineFromSourceScroll}
         {updateActiveOutlineFromSemanticScroll}
         {handleEditorPaste}

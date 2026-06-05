@@ -25,6 +25,7 @@
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let openTablePicker: () => void;
+  export let editFrontMatter: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
@@ -382,7 +383,7 @@
             <button on:click={() => finish(() => runCommand({ type: 'insertToc' }), 'paragraph')}
               >正文目录</button
             >
-            <button on:click={() => comingSoon('YAML Front Matter', 'paragraph')}>YAML Front Matter</button>
+            <button on:click={() => finish(editFrontMatter, 'paragraph')}>文档元数据</button>
           </div>
         {/if}
       </div>

@@ -24,6 +24,12 @@
     type OutlineItem,
   } from '../lib/outline/outlineService';
   import { createRichMarkdownSample } from '../lib/markdown/sample';
+  import {
+    extractFrontMatterBlock,
+    removeFrontMatter,
+    replaceFrontMatterContent,
+    type FrontMatterBlock,
+  } from '../lib/markdown/frontMatter';
   import AppShell from './components/AppShell.svelte';
   import SettingsDrawer from './components/SettingsDrawer.svelte';
   import type { FileTreeNode, Tab, WorkspaceState } from './types';
@@ -106,6 +112,8 @@
   let toastMessage = '';
   let toastTimer: number | null = null;
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
+  let frontMatterEditing = false;
+  let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -247,6 +255,7 @@
     saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs),
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
+    editFrontMatter: () => editFrontMatter(),
     showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
     setMode: (nextMode) => setMode(nextMode),
     getMode: () => mode,
@@ -646,6 +655,45 @@
     closeTablePicker();
   }
 
+  function editFrontMatter() {
+    if (readonlyDocumentMode) {
+      statusMessage = '当前文档只读，无法编辑元数据';
+      return;
+    }
+    if (!extractFrontMatterBlock(editor.getMarkdown())) {
+      editor.execute({ type: 'insertFrontMatter' });
+    }
+    frontMatterEditing = true;
+  }
+
+  function enterFrontMatterEdit() {
+    if (readonlyDocumentMode) {
+      statusMessage = '当前文档只读，无法编辑元数据';
+      return;
+    }
+    frontMatterEditing = true;
+  }
+
+  function leaveFrontMatterEdit() {
+    frontMatterEditing = false;
+  }
+
+  function updateFrontMatterContent(content: string) {
+    if (readonlyDocumentMode) {
+      return;
+    }
+    editor.setMarkdown(replaceFrontMatterContent(editor.getMarkdown(), content));
+  }
+
+  function deleteFrontMatter() {
+    if (readonlyDocumentMode) {
+      statusMessage = '当前文档只读，无法删除元数据';
+      return;
+    }
+    frontMatterEditing = false;
+    editor.setMarkdown(removeFrontMatter(editor.getMarkdown()));
+  }
+
   function showUnavailableFeature(featureName: string) {
     if (toastTimer !== null) {
       window.clearTimeout(toastTimer);
@@ -662,6 +710,11 @@
       .filter((_item, index) => getOutlineItemVisible(outline, collapsedOutlineIds, index))
       .map((item) => item.id),
   );
+
+  $: frontMatter = extractFrontMatterBlock(markdown);
+  $: if (!frontMatter) {
+    frontMatterEditing = false;
+  }
 
   async function setupDesktopEvents() {
     if (!desktopEnabled) {
@@ -752,6 +805,8 @@
   {lineHeight}
   {blockStyle}
   {markdown}
+  {frontMatter}
+  {frontMatterEditing}
   {readonlyDocumentMode}
   {externalFileWarning}
   {outline}
@@ -780,6 +835,7 @@
   {runCommand}
   {pendingInlineMarks}
   {openTablePicker}
+  {editFrontMatter}
   {showUnavailableFeature}
   {closeTablePicker}
   {insertTableWithSize}
@@ -796,6 +852,10 @@
   {updateContentWidth}
   {updateBlockStyle}
   {updateMarkdown}
+  {enterFrontMatterEdit}
+  {leaveFrontMatterEdit}
+  {updateFrontMatterContent}
+  {deleteFrontMatter}
   {updateActiveOutlineFromSourceScroll}
   {updateActiveOutlineFromSemanticScroll}
   {handleEditorPaste}
