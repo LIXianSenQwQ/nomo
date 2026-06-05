@@ -55,6 +55,16 @@ const LANGUAGES: Array<{ label: string; value: string; aliases: string[] }> = [
 ];
 
 const MIN_VISIBLE_LINES = 3;
+const EDIT_HIGHLIGHT_DEBOUNCE_MS = 240;
+const EDIT_HIGHLIGHT_MAX_CHARS = 20_000;
+const DISPLAY_HIGHLIGHT_MAX_CHARS = 80_000;
+
+/** 根据语言 value 获取对应的 label（大驼峰显示名），不在列表中则原样返回 */
+function getLangLabel(value: string): string {
+  if (!value) return 'code';
+  const found = LANGUAGES.find((l) => l.value === value || l.aliases.includes(value));
+  return found ? found.label : value;
+}
 const MAX_VISIBLE_LINES = 24;
 const EDIT_LINE_HEIGHT_PX = 18;
 
@@ -77,6 +87,24 @@ function tokensToHtml(tokenLines: CodeTokenLine[]): string {
 
 function getHighlightLanguage(params: string): string {
   return params.trim().split(/\s+/)[0] ?? '';
+}
+
+function countLines(text: string): number {
+  let lines = 1;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) === 10) lines += 1;
+  }
+  return lines;
+}
+
+function runWhenIdle(callback: () => void, timeout = 500): () => void {
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(callback, { timeout });
+    return () => window.cancelIdleCallback(id);
+  }
+
+  const id = setTimeout(callback, 0);
+  return () => clearTimeout(id);
 }
 
 function createCopyIcon(): SVGSVGElement {
@@ -154,6 +182,7 @@ export class CodeBlockNodeView {
   private editArea: HTMLElement | null = null;
   private needsAutoEdit = false;
   private highlightTimer: ReturnType<typeof setTimeout> | null = null;
+  private cancelPendingHighlight: (() => void) | null = null;
   private langSelector: HTMLElement | null = null;
   private copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -171,7 +200,7 @@ export class CodeBlockNodeView {
     // header：语言标签 + 操作按钮
     const header = document.createElement('header');
     this.langLabel = document.createElement('span');
-    this.langLabel.textContent = this.language || 'code';
+    this.langLabel.textContent = getLangLabel(this.language);
     this.langLabel.style.cursor = 'pointer';
     this.langLabel.title = '选择语言';
     this.langLabel.addEventListener('click', (event) => {
@@ -242,7 +271,11 @@ export class CodeBlockNodeView {
     for (const instance of CodeBlockNodeView.instances) {
       instance.renderDisplay();
       if (instance.editing && instance.textarea && instance.highlightLayer) {
-        void instance.renderHighlightFor(instance.textarea.value, instance.language, instance.highlightLayer);
+        void instance.renderHighlightFor(
+          instance.textarea.value,
+          instance.language,
+          instance.highlightLayer,
+        );
       }
     }
   }
@@ -253,7 +286,7 @@ export class CodeBlockNodeView {
     if (node.type !== this.node.type) return false;
     this.node = node;
     this.language = node.attrs.params ?? '';
-    this.langLabel.textContent = this.language || 'code';
+    this.langLabel.textContent = getLangLabel(this.language);
     if (!this.editing) {
       this.renderDisplay();
     }
@@ -290,7 +323,7 @@ export class CodeBlockNodeView {
 
   destroy(): void {
     CodeBlockNodeView.instances.delete(this);
-    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.cancelScheduledHighlight();
     if (this.copyFeedbackTimer) clearTimeout(this.copyFeedbackTimer);
     this.cleanupEdit();
   }
@@ -298,12 +331,12 @@ export class CodeBlockNodeView {
   // ---- 展示态渲染 ----
 
   private renderDisplay(): void {
-    this.updateLineNumbers(this.node.textContent);
-    this.renderHighlightFor(this.node.textContent, this.language, this.codeDisplay);
+    const code = this.node.textContent;
+    this.updateLineNumbers(countLines(code));
+    this.renderHighlightFor(code, this.language, this.codeDisplay, DISPLAY_HIGHLIGHT_MAX_CHARS);
   }
 
-  private updateLineNumbers(code: string): void {
-    const lineCount = code.split('\n').length;
+  private updateLineNumbers(lineCount: number): void {
     const currentCount = this.lineNumbersWrapper.children.length;
     if (currentCount !== lineCount) {
       this.lineNumbersWrapper.innerHTML = '';
@@ -331,13 +364,19 @@ export class CodeBlockNodeView {
     code: string,
     language: string,
     container: HTMLElement,
+    richHighlightMaxChars = DISPLAY_HIGHLIGHT_MAX_CHARS,
   ): Promise<void> {
     const id = ++this.renderId;
     const codeEl = container.querySelector('code') ?? container;
+    if (code.length > richHighlightMaxChars) {
+      codeEl.textContent = code;
+      return;
+    }
+
     const codeTokenizer = getCodeTokenizer();
     if (!codeTokenizer) {
       // 无 tokenizer 时降级为纯文本
-      codeEl.innerHTML = escapeHtml(code);
+      codeEl.textContent = code;
       return;
     }
     // 根据当前主题选择 Shiki 主题
@@ -353,7 +392,7 @@ export class CodeBlockNodeView {
       codeEl.innerHTML = tokensToHtml(result.tokens);
     } catch {
       if (id !== this.renderId) return;
-      codeEl.innerHTML = escapeHtml(code);
+      codeEl.textContent = code;
     }
   }
 
@@ -391,7 +430,8 @@ export class CodeBlockNodeView {
     this.textarea = document.createElement('textarea');
     this.textarea.className = 'code-input';
     this.textarea.value = this.originalCode;
-    this.syncTextareaRows(this.originalCode);
+    const initialLineCount = countLines(this.originalCode);
+    this.syncTextareaRows(initialLineCount);
     this.textarea.spellcheck = false;
     this.textarea.setAttribute('autocorrect', 'off');
     this.textarea.setAttribute('autocapitalize', 'off');
@@ -412,8 +452,13 @@ export class CodeBlockNodeView {
     });
 
     // 步骤3：初始高亮渲染 + 行号
-    this.updateLineNumbers(this.originalCode);
-    this.renderHighlightFor(this.originalCode, this.language, this.highlightLayer);
+    this.updateLineNumbers(initialLineCount);
+    this.renderHighlightFor(
+      this.originalCode,
+      this.language,
+      this.highlightLayer,
+      EDIT_HIGHLIGHT_MAX_CHARS,
+    );
 
     // 初始同步行号栏宽度（updateLineNumbers 可能未触发 syncGutterWidth，这里兜底）
     this.syncGutterWidth();
@@ -476,10 +521,8 @@ export class CodeBlockNodeView {
       CodeBlockNodeView.activeEditingView = null;
     }
     this.dom.classList.remove('is-editing');
-    if (this.highlightTimer) {
-      clearTimeout(this.highlightTimer);
-      this.highlightTimer = null;
-    }
+    this.dom.classList.remove('is-highlight-pending');
+    this.cancelScheduledHighlight();
     this.hideLangSelector();
     if (this.editArea) {
       this.editArea.remove();
@@ -501,15 +544,44 @@ export class CodeBlockNodeView {
   private handleInput(): void {
     if (!this.textarea) return;
     const code = this.textarea.value;
-    this.syncTextareaRows(code);
-    this.updateLineNumbers(code);
-    // 防抖高亮渲染（避免每次击键都 tokenize）
-    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    const lineCount = countLines(code);
+    this.syncTextareaRows(lineCount);
+    this.updateLineNumbers(lineCount);
+    this.dom.classList.add('is-highlight-pending');
+    this.scheduleEditHighlight(code);
+  }
+
+  private scheduleEditHighlight(code: string): void {
+    this.cancelScheduledHighlight();
+
     this.highlightTimer = setTimeout(() => {
-      if (this.highlightLayer && this.editing) {
-        this.renderHighlightFor(code, this.language, this.highlightLayer);
-      }
-    }, 120);
+      this.highlightTimer = null;
+      this.cancelPendingHighlight = runWhenIdle(() => {
+        this.cancelPendingHighlight = null;
+        if (!this.highlightLayer || !this.editing) return;
+        void this.renderHighlightFor(
+          code,
+          this.language,
+          this.highlightLayer,
+          EDIT_HIGHLIGHT_MAX_CHARS,
+        ).finally(() => {
+          if (this.editing && this.textarea?.value === code) {
+            this.dom.classList.remove('is-highlight-pending');
+          }
+        });
+      });
+    }, EDIT_HIGHLIGHT_DEBOUNCE_MS);
+  }
+
+  private cancelScheduledHighlight(): void {
+    if (this.highlightTimer) {
+      clearTimeout(this.highlightTimer);
+      this.highlightTimer = null;
+    }
+    if (this.cancelPendingHighlight) {
+      this.cancelPendingHighlight();
+      this.cancelPendingHighlight = null;
+    }
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -548,6 +620,40 @@ export class CodeBlockNodeView {
     if (e.key === 'Escape') {
       e.preventDefault();
       this.exitEdit(false);
+      return;
+    }
+
+    // Shift+Ctrl+K：代码块开关——取消代码块，恢复为段落
+    if (e.key === 'K' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      const cbPos = this.getPos();
+      const code = this.textarea.value;
+      const view = this.view;
+      this.exitEdit(true);
+
+      const doc = view.state.doc;
+      const cbNode = doc.nodeAt(cbPos);
+      if (!cbNode || cbNode.type.name !== 'code_block') return;
+
+      const lines = code.split('\n');
+      const paragraphs: ProseMirrorNode[] = [];
+      const paraType = view.state.schema.nodes.paragraph;
+      for (const line of lines) {
+        paragraphs.push(
+          line ? paraType.create({}, view.state.schema.text(line)) : paraType.create(),
+        );
+      }
+
+      const cbEnd = cbPos + cbNode.nodeSize;
+      const tr = view.state.tr.replaceWith(cbPos, cbEnd, paragraphs);
+      if (code) {
+        const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+        tr.setSelection(TextSelection.create(tr.doc, cbPos, cbPos + fragSize));
+      } else {
+        tr.setSelection(TextSelection.near(tr.doc.resolve(cbPos), 1));
+      }
+      view.dispatch(tr.scrollIntoView());
+      view.focus();
       return;
     }
 
@@ -632,13 +738,27 @@ export class CodeBlockNodeView {
       }
     }
 
-    // Tab：插入 2 个空格
+    // 格式化快捷键：退出编辑态，转发给 ProseMirror keymap
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && /^[biu`]$/i.test(e.key)) {
+      e.preventDefault();
+      this.exitEdit(true);
+      this.view.focus();
+      this.view.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: e.key,
+          code: e.code,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          bubbles: true,
+        }),
+      );
+      return;
+    }
+
+    // Tab：插入 2 个空格（用 execCommand 保留浏览器 undo 栈）
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      const { selectionStart, selectionEnd, value } = this.textarea;
-      this.textarea.value = value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd);
-      this.textarea.selectionStart = this.textarea.selectionEnd = selectionStart + 2;
-      this.handleInput();
+      document.execCommand('insertText', false, '  ');
       return;
     }
 
@@ -648,12 +768,8 @@ export class CodeBlockNodeView {
       const { selectionStart, value } = this.textarea;
       const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
       if (value.slice(lineStart, lineStart + 2) === '  ') {
-        this.textarea.value = value.slice(0, lineStart) + value.slice(lineStart + 2);
-        this.textarea.selectionStart = this.textarea.selectionEnd = Math.max(
-          lineStart,
-          selectionStart - 2,
-        );
-        this.handleInput();
+        this.textarea.setSelectionRange(lineStart, lineStart + 2);
+        document.execCommand('insertText', false, '');
       }
       return;
     }
@@ -669,9 +785,8 @@ export class CodeBlockNodeView {
     this.lineNumbersWrapper.style.transform = `translateY(-${this.textarea.scrollTop}px)`;
   }
 
-  private syncTextareaRows(code: string): void {
+  private syncTextareaRows(lineCount: number): void {
     if (!this.textarea) return;
-    const lineCount = code.split('\n').length;
     this.textarea.rows = Math.min(Math.max(lineCount, MIN_VISIBLE_LINES), MAX_VISIBLE_LINES);
   }
 
@@ -787,7 +902,7 @@ export class CodeBlockNodeView {
   private applyLanguage(lang: string): void {
     if (!lang) return;
     this.language = lang;
-    this.langLabel.textContent = lang || 'code';
+    this.langLabel.textContent = getLangLabel(lang);
     // 更新节点 attrs.params
     const pos = this.getPos();
     const node = this.view.state.doc.nodeAt(pos);
@@ -796,7 +911,12 @@ export class CodeBlockNodeView {
     }
     // 重新高亮
     if (this.editing && this.textarea && this.highlightLayer) {
-      this.renderHighlightFor(this.textarea.value, lang, this.highlightLayer);
+      this.renderHighlightFor(
+        this.textarea.value,
+        lang,
+        this.highlightLayer,
+        EDIT_HIGHLIGHT_MAX_CHARS,
+      );
     } else {
       this.renderDisplay();
     }

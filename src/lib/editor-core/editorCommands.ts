@@ -352,13 +352,62 @@ export function executeEditorCommand(
         alt: command.alt ?? null,
         title: command.title ?? null,
       });
-    case 'insertCodeBlock':
-      return insertBlock(
-        view,
-        schema.nodes.code_block,
-        command.code ?? '',
-        command.language ? { params: command.language } : undefined,
-      );
+    case 'insertCodeBlock': {
+      // 开关逻辑：已在代码块内则取消（恢复为段落），否则插入新代码块
+      const { selection } = state;
+
+      // 检查1：NodeSelection 直接选中了代码块
+      if (selection instanceof NodeSelection && selection.node.type === schema.nodes.code_block) {
+        const cbPos = selection.from;
+        const cbNode = selection.node;
+        const cbEnd = cbPos + cbNode.nodeSize;
+        const text = cbNode.textContent;
+        const lines = text.split('\n');
+        const paragraphs: PmNode[] = [];
+        const paraType = schema.nodes.paragraph;
+        for (const line of lines) {
+          paragraphs.push(line ? paraType.create({}, schema.text(line)) : paraType.create());
+        }
+        const tr = state.tr.replaceWith(cbPos, cbEnd, paragraphs);
+        if (text) {
+          const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+          tr.setSelection(TextSelection.create(tr.doc, cbPos, cbPos + fragSize));
+        } else {
+          tr.setSelection(TextSelection.near(tr.doc.resolve(cbPos), 1));
+        }
+        dispatch(tr.scrollIntoView());
+        return true;
+      }
+
+      // 检查2：光标在代码块内部（通过 depth walk）
+      const { $from: cbFrom } = state.selection;
+      for (let d = cbFrom.depth; d >= 0; d--) {
+        if (cbFrom.node(d).type === schema.nodes.code_block) {
+          const cbPos = cbFrom.before(d + 1);
+          const cbNode = cbFrom.node(d);
+          const cbEnd = cbPos + cbNode.nodeSize;
+          const text = cbNode.textContent;
+          const lines = text.split('\n');
+          const paragraphs: PmNode[] = [];
+          const paraType = schema.nodes.paragraph;
+          for (const line of lines) {
+            paragraphs.push(line ? paraType.create({}, schema.text(line)) : paraType.create());
+          }
+          const tr = state.tr.replaceWith(cbPos, cbEnd, paragraphs);
+          if (text) {
+            const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+            tr.setSelection(TextSelection.create(tr.doc, cbPos, cbPos + fragSize));
+          } else {
+            tr.setSelection(TextSelection.near(tr.doc.resolve(cbPos), 1));
+          }
+          dispatch(tr.scrollIntoView());
+          return true;
+        }
+      }
+      // 不在代码块内 → 正常插入（有选中文本时放入代码块）
+      const selectedText = state.selection.empty ? '' : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+      return insertBlock(view, schema.nodes.code_block, selectedText);
+    }
     case 'toggleTaskList':
       return toggleTaskListAtCursor(state, dispatch);
     case 'insertMathBlock': {

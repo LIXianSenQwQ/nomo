@@ -381,7 +381,7 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Shift-Ctrl-m': (_state, _dispatch, view) =>
             this.runProseMirrorCommand({ type: 'insertMathBlock', tex: '' }),
           'Shift-Ctrl-k': (_state, _dispatch, view) =>
-            this.runProseMirrorCommand({ type: 'insertCodeBlock', language: 'ts' }),
+            this.runProseMirrorCommand({ type: 'insertCodeBlock' }),
           ArrowRight: (state, dispatch) => {
             const { $from, empty } = state.selection;
             if (!empty) return false;

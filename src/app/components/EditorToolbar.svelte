@@ -181,7 +181,7 @@
   <button
     title="代码块"
     on:click={() =>
-      runCommand({ type: 'insertCodeBlock', language: 'ts', code: 'console.log(\"NewMd\");' })}
+      runCommand({ type: 'insertCodeBlock' })}
   >
     <Code2 size={17} />
   </button>

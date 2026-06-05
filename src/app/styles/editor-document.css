@@ -698,6 +698,14 @@
   z-index: 1; /* 确保在高亮层之上，光标可见 */
 }
 
+.prosemirror-host .ProseMirror .code-card.is-highlight-pending .code-highlight-layer {
+  visibility: hidden;
+}
+
+.prosemirror-host .ProseMirror .code-card.is-highlight-pending .code-input {
+  color: var(--md-editor-fg);
+}
+
 .code-card.is-editing .line-numbers-gutter {
   position: absolute; /* 脱离 flex 流，不让 wrapper 内容撑开 code-body */
   top: 0;
