@@ -7,6 +7,7 @@ import { EditorState, NodeSelection, TextSelection, type Transaction } from 'pro
 import type { EditorView } from 'prosemirror-view';
 import { schema } from './schema';
 import { getDiagramTemplate } from './diagramTemplates';
+import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 
 /**
  * 在当前块的下方插入一个新的空段落，并将光标移入。
@@ -416,38 +417,95 @@ export function executeEditorCommand(
       }
       // 不在代码块内 → 正常插入（有选中文本时放入代码块）
       const selectedText = state.selection.empty
-        ? ''
+        ? (command.code ?? '')
         : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
-      return insertBlock(view, schema.nodes.code_block, selectedText);
+      return insertBlock(view, schema.nodes.code_block, selectedText, {
+        params: command.language ?? '',
+      });
     }
     case 'toggleTaskList':
       return toggleTaskListAtCursor(state, dispatch);
     case 'insertMathBlock': {
-      const tex = command.tex ?? 'E = mc^2';
-      const node = schema.nodes.math_block.create({ tex });
-      const { $from, empty } = state.selection;
-      // 如果光标在顶层（doc 直接子节点），精确选中新建的 math_block；
-      // 否则（如在列表项内）追加到文档末尾，避免破坏嵌套结构。
-      if ($from.depth <= 1) {
-        if (empty && $from.parent.isTextblock && $from.parent.content.size === 0) {
-          const blockStart = $from.before(1);
-          const blockEnd = $from.after(1);
-          const tr = state.tr.replaceWith(blockStart, blockEnd, node);
-          tr.setSelection(NodeSelection.create(tr.doc, blockStart));
-          view.dispatch(tr.scrollIntoView());
-        } else {
-          const tr = state.tr.replaceSelectionWith(node);
-          const newPos = tr.mapping.map(state.selection.from, -1);
-          if (tr.doc.nodeAt(newPos)?.type === schema.nodes.math_block) {
-            tr.setSelection(NodeSelection.create(tr.doc, newPos));
-          }
-          view.dispatch(tr.scrollIntoView());
+      // 开关逻辑：已在公式块内则取消（恢复为段落），否则插入新公式块
+      const { selection } = state;
+
+      // 检查1：NodeSelection 直接选中了公式块
+      if (selection instanceof NodeSelection && selection.node.type === schema.nodes.math_block) {
+        const mbPos = selection.from;
+        const mbNode = selection.node;
+        const mbEnd = mbPos + mbNode.nodeSize;
+        const tex = mbNode.attrs.tex || '';
+        const lines = tex.split('\n');
+        const paragraphs: PmNode[] = [];
+        const paraType = schema.nodes.paragraph;
+        for (const line of lines) {
+          paragraphs.push(line ? paraType.create({}, schema.text(line)) : paraType.create());
         }
+        const tr = state.tr.replaceWith(mbPos, mbEnd, paragraphs);
+        if (tex) {
+          const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+          tr.setSelection(TextSelection.create(tr.doc, mbPos, mbPos + fragSize));
+        } else {
+          tr.setSelection(TextSelection.near(tr.doc.resolve(mbPos), 1));
+        }
+        dispatch(tr.scrollIntoView());
+        return true;
+      }
+
+      // 检查2：光标在公式块内部（通过 depth walk）
+      const { $from: mbFrom } = state.selection;
+      for (let d = mbFrom.depth; d >= 0; d--) {
+        if (mbFrom.node(d).type === schema.nodes.math_block) {
+          const mbPos = mbFrom.before(d + 1);
+          const mbNode = mbFrom.node(d);
+          const mbEnd = mbPos + mbNode.nodeSize;
+          const tex = mbNode.attrs.tex || '';
+          const lines = tex.split('\n');
+          const paragraphs: PmNode[] = [];
+          const paraType = schema.nodes.paragraph;
+          for (const line of lines) {
+            paragraphs.push(line ? paraType.create({}, schema.text(line)) : paraType.create());
+          }
+          const tr = state.tr.replaceWith(mbPos, mbEnd, paragraphs);
+          if (tex) {
+            const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+            tr.setSelection(TextSelection.create(tr.doc, mbPos, mbPos + fragSize));
+          } else {
+            tr.setSelection(TextSelection.near(tr.doc.resolve(mbPos), 1));
+          }
+          dispatch(tr.scrollIntoView());
+          return true;
+        }
+      }
+
+      // 不在公式块内 → 正常插入（有选中文本时作为 tex 内容）
+      const { $from, $to, empty } = state.selection;
+      const selectedTex = empty
+        ? (command.tex ?? 'E = mc^2')
+        : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+      const node = schema.nodes.math_block.create({ tex: selectedTex });
+      if ($from.depth <= 1) {
+        if (empty && $from.parent.isTextblock && $from.parent.content.size > 0) {
+          const insertPos = $from.after(1);
+          const tr = state.tr.insert(insertPos, node);
+          tr.setSelection(NodeSelection.create(tr.doc, insertPos));
+          view.dispatch(tr.scrollIntoView());
+          MathBlockNodeView.scheduleEnterEditAt(view, insertPos, 'start');
+          return true;
+        }
+
+        const blockStart = $from.before(1);
+        const blockEnd = $to.after(1);
+        const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+        tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+        view.dispatch(tr.scrollIntoView());
+        MathBlockNodeView.scheduleEnterEditAt(view, blockStart, 'start');
       } else {
         const endPos = state.doc.content.size;
         const tr = state.tr.insert(endPos, node);
         tr.setSelection(NodeSelection.create(tr.doc, endPos));
         view.dispatch(tr.scrollIntoView());
+        MathBlockNodeView.scheduleEnterEditAt(view, endPos, 'start');
       }
       return true;
     }
@@ -672,6 +730,18 @@ function insertBlock(
     const tr = state.tr.replaceWith(blockStart, blockEnd, node);
     if (type.name === 'code_block' || type.name === 'mermaid_block') {
       tr.setSelection(NodeSelection.create(tr.doc, blockStart));
+    }
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  // 步骤2：正文段落中空选区插入块时，保留当前正文，把新块插到当前顶层块下方。
+  // 这样工具栏插入代码块不会误删用户正在写的段落内容。
+  if (empty && $from.depth === 1 && $from.parent.isTextblock) {
+    const insertPos = $from.after(1);
+    const tr = state.tr.insert(insertPos, node);
+    if (type.name === 'code_block' || type.name === 'mermaid_block') {
+      tr.setSelection(NodeSelection.create(tr.doc, insertPos));
     }
     view.dispatch(tr.scrollIntoView());
     return true;

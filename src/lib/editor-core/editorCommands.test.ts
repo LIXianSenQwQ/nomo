@@ -8,6 +8,7 @@ import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
 import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
+import { setCodeBlockMathRenderer } from './renderers';
 import { schema } from './schema';
 import { createTableNode } from './tableCommands';
 
@@ -73,6 +74,111 @@ describe('editorCommands', () => {
     expect(editingBlocks).toHaveLength(1);
     expect(editingBlocks[0]).toBe(mathBlocks[0]);
     expect(editingBlocks[0].querySelector('.math-block-textarea')).not.toBeNull();
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('选中文本插入公式块后立即进入公式块编辑态', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('E = mc^2')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1, 9),
+      }),
+      nodeViews: {
+        math_block: (node, view, getPos) =>
+          new MathBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    executeEditorCommand({ type: 'insertMathBlock', tex: '' }, view, '', () => undefined);
+
+    const textarea = target.querySelector<HTMLTextAreaElement>('.math-block-textarea');
+    expect(view.state.selection).toBeInstanceOf(NodeSelection);
+    expect(textarea).not.toBeNull();
+    expect(textarea!.value).toBe('E = mc^2');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('公式异步渲染返回后不覆盖已进入编辑态的 textarea', async () => {
+    setCodeBlockMathRenderer({
+      async render(tex) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { html: `<span>${tex}</span>` };
+      },
+    });
+
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('E = mc^2')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1, 9),
+      }),
+      nodeViews: {
+        math_block: (node, view, getPos) =>
+          new MathBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    executeEditorCommand({ type: 'insertMathBlock', tex: '' }, view, '', () => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const mathBlock = target.querySelector<HTMLElement>('.math-block');
+    const textarea = target.querySelector<HTMLTextAreaElement>('.math-block-textarea');
+    expect(mathBlock?.classList.contains('is-editing')).toBe(true);
+    expect(textarea).not.toBeNull();
+    expect(textarea!.value).toBe('E = mc^2');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('在正文段落中插入公式块时保留正文并在下方进入编辑态', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('正文内容')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 3),
+        plugins: [trailingParagraphPlugin()],
+      }),
+      nodeViews: {
+        math_block: (node, view, getPos) =>
+          new MathBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    executeEditorCommand({ type: 'insertMathBlock', tex: '' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual([
+      'paragraph',
+      'math_block',
+      'paragraph',
+    ]);
+    expect(view.state.doc.child(0).textContent).toBe('正文内容');
+
+    const mathBlock = target.querySelector<HTMLElement>('.math-block');
+    const textarea = target.querySelector<HTMLTextAreaElement>('.math-block-textarea');
+    expect(mathBlock?.classList.contains('is-editing')).toBe(true);
+    expect(textarea).not.toBeNull();
+    expect(textarea!.value).toBe('');
 
     view.destroy();
     target.remove();
@@ -209,6 +315,41 @@ describe('editorCommands', () => {
       'code_block',
     ]);
     expect(view.state.doc.child(3).textContent).toBe('old');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('在正文段落中插入代码块时保留正文并在下方进入编辑态', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('正文内容')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 3),
+        plugins: [trailingParagraphPlugin()],
+      }),
+      nodeViews: {
+        code_block: (node, view, getPos) =>
+          new CodeBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    executeEditorCommand({ type: 'insertCodeBlock', language: 'ts' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual([
+      'paragraph',
+      'code_block',
+      'paragraph',
+    ]);
+    expect(view.state.doc.child(0).textContent).toBe('正文内容');
+    expect(view.state.doc.child(1).attrs.params).toBe('ts');
+    expect(target.querySelector('.code-card.is-editing')).not.toBeNull();
+    expect(target.querySelector('.code-input')).not.toBeNull();
 
     view.destroy();
     target.remove();

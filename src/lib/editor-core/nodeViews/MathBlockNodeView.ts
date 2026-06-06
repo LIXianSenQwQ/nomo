@@ -12,6 +12,7 @@ import { getMathRenderer } from '../renderers';
  * 3. Ctrl+Enter 保存退出 / Esc 放弃退出
  */
 export class MathBlockNodeView {
+  private static activeEditingView: MathBlockNodeView | null = null;
   private static instances = new Set<MathBlockNodeView>();
   private static pendingKeyboardEntry: { caret: 'start' | 'end'; expiresAt: number } | null = null;
 
@@ -118,6 +119,8 @@ export class MathBlockNodeView {
     const tex = this.node.attrs.tex as string;
     this.dom.setAttribute('data-tex', tex);
 
+    if (this.editing) return;
+
     if (!tex) {
       this.dom.textContent = '';
       return;
@@ -131,7 +134,7 @@ export class MathBlockNodeView {
 
     try {
       const result = await mathRenderer.render(tex, { displayMode: true });
-      if (id !== this.renderId) return; // 放弃过期渲染
+      if (id !== this.renderId || this.editing) return; // 放弃过期渲染
       if (result.error) {
         this.dom.textContent = `$$\n${tex}\n$$`;
         this.dom.style.color = 'var(--md-editor-warning, #9a6700)';
@@ -140,7 +143,7 @@ export class MathBlockNodeView {
         this.dom.style.color = '';
       }
     } catch {
-      if (id !== this.renderId) return;
+      if (id !== this.renderId || this.editing) return;
       this.dom.textContent = `$$\n${tex}\n$$`;
     }
   }
@@ -149,7 +152,14 @@ export class MathBlockNodeView {
 
   private enterEdit(caret: 'start' | 'end' = 'start'): void {
     if (this.editing) return;
+
+    if (MathBlockNodeView.activeEditingView && MathBlockNodeView.activeEditingView !== this) {
+      MathBlockNodeView.activeEditingView.exitEdit(true, 'preserve');
+    }
+
     this.editing = true;
+    this.renderId += 1;
+    MathBlockNodeView.activeEditingView = this;
     this.originalTex = this.node.attrs.tex as string;
     this.dom.classList.add('is-editing');
     this.dom.classList.remove('ProseMirror-selectednode');
@@ -204,6 +214,30 @@ export class MathBlockNodeView {
     return false;
   }
 
+  static scheduleEnterEditAt(
+    view: EditorView,
+    pos: number,
+    caret: 'start' | 'end' = 'start',
+  ): void {
+    const schedule =
+      typeof requestAnimationFrame === 'function'
+        ? requestAnimationFrame
+        : (callback: FrameRequestCallback) => window.setTimeout(callback, 0);
+
+    const attempt = (remaining: number) => {
+      schedule(() => {
+        const node = view.state.doc.nodeAt(pos);
+        if (!node || node.type.name !== 'math_block') return;
+        if (MathBlockNodeView.enterEditAt(view, pos, caret)) return;
+        if (remaining > 0) {
+          attempt(remaining - 1);
+        }
+      });
+    };
+
+    attempt(4);
+  }
+
   static prepareKeyboardEntry(caret: 'start' | 'end'): void {
     MathBlockNodeView.pendingKeyboardEntry = {
       caret,
@@ -254,6 +288,9 @@ export class MathBlockNodeView {
 
   private cleanupEdit(): void {
     this.editing = false;
+    if (MathBlockNodeView.activeEditingView === this) {
+      MathBlockNodeView.activeEditingView = null;
+    }
     this.dom.classList.remove('is-editing');
     this.textarea = null;
     this.previewEl = null;
@@ -300,6 +337,40 @@ export class MathBlockNodeView {
     if (e.key === 'Escape') {
       e.preventDefault();
       this.exitEdit(false);
+      return;
+    }
+
+    // Shift+Ctrl+M：公式块开关——取消公式块，恢复为段落
+    if (e.key === 'M' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+      e.preventDefault();
+      const mbPos = this.getPos();
+      const tex = this.textarea.value;
+      const view = this.view;
+      this.exitEdit(true);
+
+      const doc = view.state.doc;
+      const mbNode = doc.nodeAt(mbPos);
+      if (!mbNode || mbNode.type.name !== 'math_block') return;
+
+      const lines = tex.split('\n');
+      const paragraphs: ProseMirrorNode[] = [];
+      const paraType = view.state.schema.nodes.paragraph;
+      for (const line of lines) {
+        paragraphs.push(
+          line ? paraType.create({}, view.state.schema.text(line)) : paraType.create(),
+        );
+      }
+
+      const mbEnd = mbPos + mbNode.nodeSize;
+      const tr = view.state.tr.replaceWith(mbPos, mbEnd, paragraphs);
+      if (tex) {
+        const fragSize = paragraphs.reduce((s, p) => s + p.nodeSize, 0);
+        tr.setSelection(TextSelection.create(tr.doc, mbPos, mbPos + fragSize));
+      } else {
+        tr.setSelection(TextSelection.near(tr.doc.resolve(mbPos), 1));
+      }
+      view.dispatch(tr.scrollIntoView());
+      view.focus();
       return;
     }
 
