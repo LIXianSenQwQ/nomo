@@ -289,7 +289,7 @@ pub(crate) fn build_window_menu<R: Runtime>(
                 .map_err(|e| e.to_string())?,
         )
         .item(
-            &MenuItemBuilder::with_id("toggle-focus", "切换专注模式")
+            &MenuItemBuilder::with_id("toggle-focus", "显示/隐藏资源管理器")
                 .accelerator("Ctrl + Shift + F")
                 .build(app)
                 .map_err(|e| e.to_string())?,

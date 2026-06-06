@@ -200,8 +200,8 @@
 
 .mode-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(50px, 1fr));
-  min-width: 104px;
+  grid-template-columns: repeat(2, 34px);
+  flex-shrink: 0;
   padding: 2px;
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
@@ -222,10 +222,9 @@
 }
 
 .mode-switch button {
-  padding: 0 10px;
+  min-width: 34px;
+  padding: 0;
   color: var(--md-editor-muted-fg);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .mode-switch button.active,
@@ -486,11 +485,19 @@
   display: inline-grid;
   grid-template-columns: 40px 72px;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-height: 34px;
   color: var(--md-editor-muted-fg);
   font-family: var(--md-editor-font-mono);
   font-size: 12px;
+}
+
+.range-control svg {
+  color: var(--md-editor-muted-fg);
+}
+
+.range-control span {
+  text-align: right;
 }
 
 .range-control input {
@@ -499,7 +506,8 @@
 }
 
 .width-control {
-  grid-template-columns: 52px 88px;
+  grid-template-columns: 18px 34px 88px;
+  gap: 4px;
 }
 
 .width-control input {

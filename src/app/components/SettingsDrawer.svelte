@@ -8,22 +8,38 @@
   } from '../../lib/services/render';
   import { normalizeImageSettings } from '../services/settings';
 
+  interface EditorAppearanceSettings {
+    fontSize: number;
+    lineHeight: number;
+    blockStyle: 'classic' | 'modern';
+  }
+
   export let isOpen: boolean;
   export let currentWorkspaceDir: string;
   export let imageSettings: ImageHandlingSettings;
+  export let fontSize: number;
+  export let lineHeight: number;
+  export let blockStyle: 'classic' | 'modern';
   export let closeSettings: () => void;
   export let saveSettings: (
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
+    nextAppearanceSettings: EditorAppearanceSettings,
   ) => void;
 
   let selectedDir: string = currentWorkspaceDir;
   let draftImageSettings: ImageHandlingSettings = normalizeImageSettings(imageSettings);
+  let draftFontSize: number = fontSize;
+  let draftLineHeight: number = lineHeight;
+  let draftBlockStyle: 'classic' | 'modern' = blockStyle;
 
   // Whenever the drawer opens, reset the selected path to the current one
   $: if (isOpen) {
     selectedDir = currentWorkspaceDir;
     draftImageSettings = normalizeImageSettings(imageSettings);
+    draftFontSize = fontSize;
+    draftLineHeight = lineHeight;
+    draftBlockStyle = blockStyle;
   }
 
   async function browseFolder() {
@@ -43,7 +59,11 @@
   }
 
   function handleSave() {
-    saveSettings(selectedDir, normalizeImageSettings(draftImageSettings));
+    saveSettings(selectedDir, normalizeImageSettings(draftImageSettings), {
+      fontSize: draftFontSize,
+      lineHeight: draftLineHeight,
+      blockStyle: draftBlockStyle,
+    });
   }
 
   function setImageStrategy(strategy: ImageInsertStrategy) {
@@ -80,6 +100,18 @@
       picgoCoreConfigPath: (event.currentTarget as HTMLInputElement).value,
     };
   }
+
+  function updateDraftFontSize(event: Event) {
+    draftFontSize = Number((event.currentTarget as HTMLInputElement).value);
+  }
+
+  function updateDraftLineHeight(event: Event) {
+    draftLineHeight = Number((event.currentTarget as HTMLInputElement).value);
+  }
+
+  function setDraftBlockStyle(nextBlockStyle: 'classic' | 'modern') {
+    draftBlockStyle = nextBlockStyle;
+  }
 </script>
 
 {#if isOpen}
@@ -115,6 +147,70 @@
           </div>
           <p class="setting-desc">这是存放所有 Markdown 文件和分组的根目录。</p>
         </div>
+
+        <section
+          class="setting-group appearance-setting-group"
+          aria-labelledby="appearanceSettingsTitle"
+        >
+          <div class="setting-heading">
+            <h3 id="appearanceSettingsTitle">编辑器外观</h3>
+            <p>调整正文阅读尺度，以及引用和提示块的显示风格。</p>
+          </div>
+
+          <div class="setting-field">
+            <label for="editorFontSize">字号</label>
+            <div class="range-setting">
+              <input
+                id="editorFontSize"
+                type="range"
+                min="14"
+                max="22"
+                step="1"
+                value={draftFontSize}
+                on:input={updateDraftFontSize}
+              />
+              <output for="editorFontSize">{draftFontSize}px</output>
+            </div>
+          </div>
+
+          <div class="setting-field">
+            <label for="editorLineHeight">行高</label>
+            <div class="range-setting">
+              <input
+                id="editorLineHeight"
+                type="range"
+                min="1.4"
+                max="2.1"
+                step="0.05"
+                value={draftLineHeight}
+                on:input={updateDraftLineHeight}
+              />
+              <output for="editorLineHeight">{draftLineHeight.toFixed(2)}</output>
+            </div>
+          </div>
+
+          <div class="setting-field">
+            <span class="setting-label">提示块样式</span>
+            <div class="segmented-control" role="group" aria-label="提示块样式">
+              <button
+                type="button"
+                class:active={draftBlockStyle === 'classic'}
+                aria-pressed={draftBlockStyle === 'classic'}
+                on:click={() => setDraftBlockStyle('classic')}
+              >
+                经典
+              </button>
+              <button
+                type="button"
+                class:active={draftBlockStyle === 'modern'}
+                aria-pressed={draftBlockStyle === 'modern'}
+                on:click={() => setDraftBlockStyle('modern')}
+              >
+                现代
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section class="setting-group image-setting-group" aria-labelledby="imageSettingsTitle">
           <div class="setting-heading">
@@ -298,6 +394,7 @@
     gap: 8px;
   }
 
+  .appearance-setting-group,
   .image-setting-group {
     margin-top: 24px;
     padding-top: 22px;
@@ -327,6 +424,25 @@
   .setting-field {
     display: grid;
     gap: 8px;
+  }
+
+  .range-setting {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 54px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .range-setting input {
+    width: 100%;
+    accent-color: var(--md-editor-accent);
+  }
+
+  .range-setting output {
+    color: var(--md-editor-muted-fg);
+    font-family: var(--md-editor-font-mono);
+    font-size: 12px;
+    text-align: right;
   }
 
   .setting-group label {
@@ -375,6 +491,7 @@
   }
 
   .setting-input:focus-visible,
+  .range-setting input:focus-visible,
   .path-input:focus-visible {
     border-color: var(--md-editor-accent);
     outline: 2px solid color-mix(in srgb, var(--md-editor-accent) 34%, transparent);

@@ -61,20 +61,26 @@ export function createEditorSettingsController(options: EditorSettingsController
     options.getEditor().updateTheme({ name: nextTheme });
   }
 
-  function updateFontSize(event: Event) {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
+  function updateFontSizeValue(value: number) {
     options.setFontSize(value);
     localStorage.setItem('new-md-font-size', String(value));
     persistSetting('fontSize', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
   }
 
-  function updateLineHeight(event: Event) {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
+  function updateFontSize(event: Event) {
+    updateFontSizeValue(Number((event.currentTarget as HTMLInputElement).value));
+  }
+
+  function updateLineHeightValue(value: number) {
     options.setLineHeight(value);
     localStorage.setItem('new-md-line-height', String(value));
     persistSetting('lineHeight', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
+  }
+
+  function updateLineHeight(event: Event) {
+    updateLineHeightValue(Number((event.currentTarget as HTMLInputElement).value));
   }
 
   function updateContentWidth(event: Event) {
@@ -100,7 +106,9 @@ export function createEditorSettingsController(options: EditorSettingsController
     loadPersistedSettings,
     toggleTheme,
     updateFontSize,
+    updateFontSizeValue,
     updateLineHeight,
+    updateLineHeightValue,
     updateContentWidth,
     updateBlockStyle,
   };

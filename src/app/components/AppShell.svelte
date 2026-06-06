@@ -37,9 +37,6 @@
   export let sidebarWidth: number;
   export let tabs: Tab[];
   export let activeTabId: string;
-  export let fontSize: number;
-  export let lineHeight: number;
-  export let blockStyle: 'classic' | 'modern';
   export let markdown: string;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
@@ -97,10 +94,7 @@
   export let startResize: (event: MouseEvent) => void;
   export let switchTab: (tabId: string) => void;
   export let closeTab: (tabId: string, event?: Event) => void;
-  export let updateFontSize: (event: Event) => void;
-  export let updateLineHeight: (event: Event) => void;
   export let updateContentWidth: (event: Event) => void;
-  export let updateBlockStyle: (blockStyle: 'classic' | 'modern') => void;
   export let updateMarkdown: (event: Event) => void;
   export let enterFrontMatterEdit: () => void;
   export let leaveFrontMatterEdit: () => void;
@@ -187,13 +181,9 @@
 
       <EditorToolbar
         {mode}
-        {fontSize}
-        {lineHeight}
+        {focusMode}
         {contentWidthPercent}
-        {blockStyle}
         {outlineVisible}
-        {openFileDialog}
-        {saveMarkdownFile}
         {runCommand}
         {pendingInlineMarks}
         {tablePickerOpen}
@@ -201,10 +191,7 @@
         {closeTablePicker}
         {openLinkPicker}
         {insertTableWithSize}
-        {updateFontSize}
-        {updateLineHeight}
         {updateContentWidth}
-        {updateBlockStyle}
         {setMode}
         {toggleOutlineVisible}
         {toggleFocusMode}

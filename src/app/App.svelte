@@ -84,6 +84,11 @@
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
   const initialMarkdown = createRichMarkdownSample();
+  type EditorAppearanceSettings = {
+    fontSize: number;
+    lineHeight: number;
+    blockStyle: 'classic' | 'modern';
+  };
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
@@ -352,6 +357,7 @@
   async function handleSaveSettings(
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
+    nextAppearanceSettings: EditorAppearanceSettings,
   ) {
     if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
       await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
@@ -360,6 +366,9 @@
     }
     imageSettings = nextImageSettings;
     persistImageSettings(desktopEnabled, imageSettings);
+    updateFontSizeValue(nextAppearanceSettings.fontSize);
+    updateLineHeightValue(nextAppearanceSettings.lineHeight);
+    updateBlockStyle(nextAppearanceSettings.blockStyle);
     closeSettings();
   }
 
@@ -490,8 +499,8 @@
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
   const toggleTheme = editorSettings.toggleTheme;
-  const updateFontSize = editorSettings.updateFontSize;
-  const updateLineHeight = editorSettings.updateLineHeight;
+  const updateFontSizeValue = editorSettings.updateFontSizeValue;
+  const updateLineHeightValue = editorSettings.updateLineHeightValue;
   const updateContentWidth = editorSettings.updateContentWidth;
   const updateBlockStyle = editorSettings.updateBlockStyle;
   const toggleOutlineVisible = outlineInteraction.toggleOutlineVisible;
@@ -1040,9 +1049,6 @@
   {sidebarWidth}
   {tabs}
   {activeTabId}
-  {fontSize}
-  {lineHeight}
-  {blockStyle}
   {markdown}
   {frontMatter}
   {frontMatterEditing}
@@ -1098,10 +1104,7 @@
   {startResize}
   {switchTab}
   {closeTab}
-  {updateFontSize}
-  {updateLineHeight}
   {updateContentWidth}
-  {updateBlockStyle}
   {updateMarkdown}
   {enterFrontMatterEdit}
   {leaveFrontMatterEdit}
@@ -1124,6 +1127,9 @@
   isOpen={isSettingsOpen}
   currentWorkspaceDir={currentFolderPath}
   {imageSettings}
+  {fontSize}
+  {lineHeight}
+  {blockStyle}
   {closeSettings}
   saveSettings={handleSaveSettings}
 />

@@ -12,6 +12,10 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/EditorToolbar.svelte'),
     'utf-8',
   );
+  const settingsDrawerSource = readFileSync(
+    resolve(__dirname, 'components/SettingsDrawer.svelte'),
+    'utf-8',
+  );
   const linkQuickEditorSource = readFileSync(
     resolve(__dirname, 'components/LinkQuickEditor.svelte'),
     'utf-8',
@@ -118,6 +122,7 @@ describe('App outline layout', () => {
   it('exposes toc insertion and deletion as accessible UI actions', () => {
     expect(toolbarSource).toContain("runCommand({ type: 'insertToc' })");
     expect(toolbarSource).toContain('aria-label="插入目录"');
+    expect(toolbarSource).toContain('TableOfContents');
     expect(titleBarSource).toContain("runCommand({ type: 'insertToc' })");
     expect(titleBarSource).not.toContain("comingSoon('正文目录'");
     expect(appCommandsSource).toContain("command === 'menu-content-directory'");
@@ -225,5 +230,53 @@ describe('App outline layout', () => {
     expect(frontMatterCardSource).toContain('deleteFrontMatter');
     expect(frontMatterCardSource).toContain('确认删除');
     expect(frontMatterCardSource).toContain('frontMatter.fields.parseWarning');
+  });
+
+  it('keeps the editor toolbar focused on editing and view controls', () => {
+    expect(toolbarSource).not.toContain('FolderOpen');
+    expect(toolbarSource).not.toContain('Save');
+    expect(toolbarSource).not.toContain('Image');
+    expect(toolbarSource).not.toContain('Palette');
+    expect(toolbarSource).not.toContain('Pilcrow');
+    expect(toolbarSource).not.toContain('title="打开 Markdown"');
+    expect(toolbarSource).not.toContain('title="导出保存"');
+    expect(toolbarSource).not.toContain('title="图片"');
+    expect(toolbarSource).not.toContain('title="字号"');
+    expect(toolbarSource).not.toContain('title="行高"');
+    expect(toolbarSource).not.toContain('aria-label="切换引用和提示块样式"');
+    expect(toolbarSource).toContain('width-control');
+    expect(toolbarSource).toContain('AlignHorizontalSpaceAround');
+    expect(toolbarSource).toContain('contentWidthPercent');
+  });
+
+  it('uses semantic icons for mode, outline, toc, and explorer sidebar controls', () => {
+    expect(toolbarSource).toContain('BookOpenText');
+    expect(toolbarSource).toContain('CodeXml');
+    expect(toolbarSource).toContain('aria-label="切换到语义编辑"');
+    expect(toolbarSource).toContain('aria-label="切换到源码模式"');
+    expect(toolbarSource).toContain("setMode('semantic')");
+    expect(toolbarSource).toContain("setMode('source')");
+    expect(toolbarSource).toContain('ListTree size={18}');
+    expect(toolbarSource).toContain('TableOfContents size={17}');
+    expect(toolbarSource).toContain('PanelLeftClose');
+    expect(toolbarSource).toContain('PanelLeftOpen');
+    expect(toolbarSource).toContain('资源管理器侧边栏');
+  });
+
+  it('moves editor appearance controls into the settings drawer draft flow', () => {
+    expect(settingsDrawerSource).toContain('编辑器外观');
+    expect(settingsDrawerSource).toContain('export let fontSize');
+    expect(settingsDrawerSource).toContain('export let lineHeight');
+    expect(settingsDrawerSource).toContain("export let blockStyle: 'classic' | 'modern'");
+    expect(settingsDrawerSource).toContain('draftFontSize = fontSize');
+    expect(settingsDrawerSource).toContain('draftLineHeight = lineHeight');
+    expect(settingsDrawerSource).toContain('draftBlockStyle = blockStyle');
+    expect(settingsDrawerSource).toContain(
+      'saveSettings(selectedDir, normalizeImageSettings(draftImageSettings), {',
+    );
+    expect(settingsDrawerSource).toContain('aria-label="提示块样式"');
+    expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
+    expect(appSource).toContain('updateLineHeightValue(nextAppearanceSettings.lineHeight)');
+    expect(appSource).toContain('updateBlockStyle(nextAppearanceSettings.blockStyle)');
   });
 });

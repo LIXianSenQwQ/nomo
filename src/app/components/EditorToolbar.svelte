@@ -1,29 +1,28 @@
 <script lang="ts">
   import {
+    AlignHorizontalSpaceAround,
     Bold,
+    BookOpenText,
     Braces,
     CheckSquare,
     Code2,
-    FolderOpen,
+    CodeXml,
     Heading1,
     Highlighter,
-    Image,
     Italic,
     Link,
     List,
     ListTree,
     MessageSquare,
     Info,
-    PanelRightClose,
-    PanelRightOpen,
-    Palette,
-    Pilcrow,
+    PanelLeftClose,
+    PanelLeftOpen,
     Quote,
-    Save,
     Sigma,
     Strikethrough,
     Superscript,
     Table2,
+    TableOfContents,
     Underline,
   } from '@lucide/svelte';
   import {
@@ -36,12 +35,9 @@
   import { clickOutside } from '../actions/clickOutside';
 
   export let mode: EditorMode;
-  export let fontSize: number;
-  export let lineHeight: number;
+  export let focusMode: boolean;
   export let contentWidthPercent: number;
   export let outlineVisible: boolean;
-  export let openFileDialog: () => void;
-  export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let tablePickerOpen: boolean;
@@ -49,11 +45,7 @@
   export let closeTablePicker: () => void;
   export let openLinkPicker: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
-  export let updateFontSize: (event: Event) => void;
-  export let updateLineHeight: (event: Event) => void;
   export let updateContentWidth: (event: Event) => void;
-  export let blockStyle: 'classic' | 'modern';
-  export let updateBlockStyle: (blockStyle: 'classic' | 'modern') => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
@@ -99,15 +91,9 @@
 </script>
 
 <div class="toolbar" aria-label="格式工具">
-  <button title="打开 Markdown" on:click={openFileDialog}>
-    <FolderOpen size={17} />
-  </button>
-  <button title="导出保存" on:click={() => saveMarkdownFile()}>
-    <Save size={17} />
-  </button>
-  <span class="divider"></span>
   <button
     title="标题"
+    aria-label="设置为一级标题"
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'setHeading', level: 1 })}
   >
@@ -115,6 +101,7 @@
   </button>
   <button
     title="粗体"
+    aria-label="切换粗体"
     class:active={pendingInlineMarks.strong}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBold' })}
@@ -123,6 +110,7 @@
   </button>
   <button
     title="斜体"
+    aria-label="切换斜体"
     class:active={pendingInlineMarks.em}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleItalic' })}
@@ -131,6 +119,7 @@
   </button>
   <button
     title="删除线"
+    aria-label="切换删除线"
     class:active={pendingInlineMarks.strikethrough}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleStrikethrough' })}
@@ -139,6 +128,7 @@
   </button>
   <button
     title="下划线"
+    aria-label="切换下划线"
     class:active={pendingInlineMarks.underline}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleUnderline' })}
@@ -147,6 +137,7 @@
   </button>
   <button
     title="高亮"
+    aria-label="切换高亮"
     class:active={pendingInlineMarks.highlight}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleHighlight' })}
@@ -171,6 +162,7 @@
   </button>
   <button
     title="引用"
+    aria-label="切换引用"
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBlockquote' })}
   >
@@ -178,6 +170,7 @@
   </button>
   <button
     title="提示块"
+    aria-label="插入提示块"
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertCallout' })}
   >
@@ -185,29 +178,15 @@
   </button>
   <button
     title="列表"
+    aria-label="切换列表"
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBulletList' })}
   >
     <List size={17} />
   </button>
   <button
-    title="插入目录"
-    aria-label="插入目录"
-    on:mousedown|preventDefault
-    on:click={() => runCommand({ type: 'insertToc' })}
-  >
-    <ListTree size={17} />
-  </button>
-  <button
-    title="插入脚注"
-    aria-label="插入脚注"
-    on:mousedown|preventDefault
-    on:click={() => runCommand({ type: 'insertFootnote' })}
-  >
-    <Superscript size={17} />
-  </button>
-  <button
     title="任务列表"
+    aria-label="切换任务列表"
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleTaskList' })}
   >
@@ -218,6 +197,7 @@
       title="表格"
       aria-haspopup="dialog"
       aria-expanded={tablePickerOpen}
+      aria-label="插入表格"
       class:active={tablePickerOpen}
       on:click|stopPropagation={toggleTablePicker}
     >
@@ -259,26 +239,26 @@
       </div>
     {/if}
   </div>
-  <button title="代码块" on:click={() => runCommand({ type: 'insertCodeBlock' })}>
+  <button
+    title="代码块"
+    aria-label="插入代码块"
+    on:click={() => runCommand({ type: 'insertCodeBlock' })}
+  >
     <Code2 size={17} />
   </button>
   <button
     title="数学公式"
+    aria-label="插入数学公式"
     on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}
   >
     <Sigma size={17} />
-  </button>
-  <button
-    title="图片"
-    on:click={() => runCommand({ type: 'insertImage', src: './assets/image.png', alt: 'image' })}
-  >
-    <Image size={17} />
   </button>
   <div class="diagram-picker-anchor" use:clickOutside={closeDiagramPicker}>
     <button
       title="图表"
       aria-haspopup="menu"
       aria-expanded={diagramPickerOpen}
+      aria-label="插入图表"
       class:active={diagramPickerOpen}
       on:click|stopPropagation={() => {
         diagramPickerOpen = !diagramPickerOpen;
@@ -304,23 +284,26 @@
       </div>
     {/if}
   </div>
+  <button
+    title="插入脚注"
+    aria-label="插入脚注"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'insertFootnote' })}
+  >
+    <Superscript size={17} />
+  </button>
+  <button
+    title="插入正文目录"
+    aria-label="插入目录"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'insertToc' })}
+  >
+    <TableOfContents size={17} />
+  </button>
   <span class="divider"></span>
-  <label class="range-control" title="字号">
-    <span>{fontSize}px</span>
-    <input type="range" min="14" max="22" step="1" value={fontSize} on:input={updateFontSize} />
-  </label>
-  <label class="range-control" title="行高">
-    <span>{lineHeight.toFixed(2)}</span>
-    <input
-      type="range"
-      min="1.4"
-      max="2.1"
-      step="0.05"
-      value={lineHeight}
-      on:input={updateLineHeight}
-    />
-  </label>
+  <span class="toolbar-spacer"></span>
   <label class="range-control width-control" title="内容宽度">
+    <AlignHorizontalSpaceAround size={16} aria-hidden="true" />
     <span>{contentWidthPercent}%</span>
     <input
       type="range"
@@ -331,18 +314,25 @@
       on:input={updateContentWidth}
     />
   </label>
-  <button
-    class="icon-button"
-    title={blockStyle === 'classic' ? '经典样式（左边框+背景色）' : '现代样式（竖条+透明背景）'}
-    aria-label="切换引用和提示块样式"
-    on:click={() => updateBlockStyle(blockStyle === 'classic' ? 'modern' : 'classic')}
-  >
-    <Palette size={18} />
-  </button>
-  <span class="toolbar-spacer"></span>
   <div class="mode-switch" aria-label="编辑模式">
-    <button class:active={mode === 'semantic'} on:click={() => setMode('semantic')}>语义</button>
-    <button class:active={mode === 'source'} on:click={() => setMode('source')}>源码</button>
+    <button
+      title="语义编辑"
+      aria-label="切换到语义编辑"
+      aria-pressed={mode === 'semantic'}
+      class:active={mode === 'semantic'}
+      on:click={() => setMode('semantic')}
+    >
+      <BookOpenText size={17} />
+    </button>
+    <button
+      title="源码模式"
+      aria-label="切换到源码模式"
+      aria-pressed={mode === 'source'}
+      class:active={mode === 'source'}
+      on:click={() => setMode('source')}
+    >
+      <CodeXml size={17} />
+    </button>
   </div>
   <button
     class="icon-button"
@@ -352,13 +342,19 @@
     aria-pressed={outlineVisible}
     on:click={toggleOutlineVisible}
   >
-    {#if outlineVisible}
-      <PanelRightClose size={18} />
-    {:else}
-      <PanelRightOpen size={18} />
-    {/if}
+    <ListTree size={18} />
   </button>
-  <button class="icon-button" title="专注模式" on:click={toggleFocusMode}>
-    <Pilcrow size={18} />
+  <button
+    class="icon-button"
+    title={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
+    aria-label={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
+    aria-pressed={!focusMode}
+    on:click={toggleFocusMode}
+  >
+    {#if focusMode}
+      <PanelLeftOpen size={18} />
+    {:else}
+      <PanelLeftClose size={18} />
+    {/if}
   </button>
 </div>

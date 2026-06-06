@@ -511,7 +511,7 @@
               >切换主题 <span class="shortcut">Ctrl + Shift + L</span></button
             >
             <button on:click={() => finish(toggleFocusMode, 'view')}
-              >切换专注模式 <span class="shortcut">Ctrl + Shift + F</span></button
+              >显示/隐藏资源管理器 <span class="shortcut">Ctrl + Shift + F</span></button
             >
           </div>
         {/if}
