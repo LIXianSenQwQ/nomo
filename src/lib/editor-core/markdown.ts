@@ -118,6 +118,40 @@ markdownIt.block.ruler.before('reference', 'footnote_def', (state, startLine, _e
   return true;
 });
 
+// ——— 图片属性解析：支持 ![alt](src){align=center width=60%} 语法 ———
+
+// 1. 行内规则：在 image token 后方检测 {key=value ...} 属性块
+markdownIt.inline.ruler.after('image', 'image_attrs', (state, silent) => {
+  const pos = state.pos;
+  if (state.src.charCodeAt(pos) !== 0x7b) return false; // '{'
+
+  // 前一个 token 必须是 image
+  const prevToken = state.tokens[state.tokens.length - 1];
+  if (!prevToken || prevToken.type !== 'image') return false;
+
+  const closeBrace = state.src.indexOf('}', pos + 1);
+  if (closeBrace === -1) return false;
+
+  const attrsStr = state.src.slice(pos + 1, closeBrace).trim();
+  if (!attrsStr) return false;
+
+  const attrs: Record<string, string> = {};
+  for (const part of attrsStr.split(/\s+/)) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    attrs[part.slice(0, eq)] = part.slice(eq + 1);
+  }
+
+  if (silent) return true;
+
+  // 回写到 image token 的 attrs 中（attrs 是 [name, value] 数组，需用 attrSet）
+  if (attrs.align) prevToken.attrSet('align', attrs.align);
+  if (attrs.width) prevToken.attrSet('width', attrs.width);
+
+  state.pos = closeBrace + 1;
+  return true;
+});
+
 // 注册 markdown-it block rule 识别 $$...$$ 跨行公式
 markdownIt.block.ruler.after('fence', 'math_display', (state, startLine, endLine, silent) => {
   const startPos = state.bMarks[startLine] + state.tShift[startLine];
@@ -215,6 +249,16 @@ const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
+  image: {
+    node: 'image',
+    getAttrs: (tok: Token) => ({
+      src: tok.attrGet('src'),
+      title: tok.attrGet('title') || null,
+      alt: tok.children?.[0]?.content || null,
+      align: tok.attrGet('align') || null,
+      width: tok.attrGet('width') || null,
+    }),
+  },
   ...calloutParserTokens,
   s: { mark: 'strikethrough' },
   s_open: { mark: 'strikethrough' },
@@ -387,6 +431,17 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
   }
 };
 
+// 覆盖 image token handler — 从 tok.attrs 读取 align/width 写入 node
+// 需要在 tableMarkdownParserWithHandlers 定义之后执行
+const defaultImageTokenHandler = tableMarkdownParserWithHandlers.tokenHandlers.image;
+tableMarkdownParserWithHandlers.tokenHandlers.image = (state, tok) => {
+  if (defaultImageTokenHandler) {
+    // image_attrs 行内规则已将 align/width 写入 tok.attrs，
+    // 这里确保它们作为 ProseMirror node attrs 传递
+    defaultImageTokenHandler(state, tok);
+  }
+};
+
 const tableMarkdownSerializer = new MarkdownSerializer(
   {
     ...defaultMarkdownSerializer.nodes,
@@ -442,6 +497,21 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       }
       state.write(`${TOC_END_MARKER}\n`);
       state.closeBlock(node);
+    },
+    image(state, node) {
+      const src = state.esc(node.attrs.src || '');
+      const alt = state.esc(node.attrs.alt || '', false);
+      const title = node.attrs.title ? ` "${state.esc(node.attrs.title, false)}"` : '';
+      const align = node.attrs.align as string | null;
+      const width = node.attrs.width as string | null;
+      let attrs = '';
+      if (align || width) {
+        const parts: string[] = [];
+        if (align) parts.push(`align=${align}`);
+        if (width) parts.push(`width=${width}`);
+        attrs = `{${parts.join(' ')}}`;
+      }
+      state.write(`![${alt}](${src}${title})${attrs}`);
     },
     math_inline(state, node) {
       state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);

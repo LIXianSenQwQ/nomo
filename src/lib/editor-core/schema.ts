@@ -11,6 +11,13 @@ const imageNodeSpec = {
   ...markdownImageNodeSpec,
   selectable: false,
   draggable: false,
+  attrs: {
+    ...(markdownImageNodeSpec.attrs as Record<string, unknown>),
+    /** 图片对齐方式：null=跟随段落，left/center/right */
+    align: { default: null },
+    /** 图片宽度：如 "60%" 或 "600"（px），null=原始尺寸 */
+    width: { default: null },
+  },
 };
 
 function readCellAlignment(dom: HTMLElement): TableColumnAlignment | null {

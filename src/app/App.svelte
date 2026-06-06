@@ -64,6 +64,8 @@ import { readMarkdownFromPath } from './services/documentFiles';
     getNextActiveMenu,
   } from './services/appUiState';
   import { createEditorSettingsController } from './services/editorSettingsController';
+  import ContextMenu from './components/ContextMenu.svelte';
+  import type { ContextMenuOpenEvent, ContextMenuItem } from '../lib/editor-core/plugins/contextMenu';
   import {
     applyBlockStyleSetting,
     loadPersistedImageSettings,
@@ -150,6 +152,12 @@ import { readMarkdownFromPath } from './services/documentFiles';
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
   let frontMatterEditing = false;
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
+
+  // 上下文菜单状态
+  let contextMenuX = 0;
+  let contextMenuY = 0;
+  let contextMenuItems: ContextMenuItem[] = [];
+  let contextMenuOpen = false;
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -312,6 +320,33 @@ import { readMarkdownFromPath } from './services/documentFiles';
   }
   let fileCheckTimer: number | null = null;
 
+  function handleContextMenuOpen(event: ContextMenuOpenEvent) {
+    contextMenuX = event.x;
+    contextMenuY = event.y;
+    contextMenuItems = event.items;
+    contextMenuOpen = true;
+  }
+
+  /**
+   * 监听 ImageNodeView 通过自定义 DOM 事件传递的右键菜单。
+   * 由于 NodeView.stopEvent 拦截了原生 contextmenu，
+   * 菜单数据通过 image-context-menu 自定义事件冒泡到此。
+   */
+  function handleImageContextMenu(event: Event) {
+    const customEvent = event as CustomEvent;
+    const detail = customEvent.detail;
+    if (!detail?.items) return;
+    contextMenuX = detail.x;
+    contextMenuY = detail.y;
+    contextMenuItems = detail.items;
+    contextMenuOpen = true;
+  }
+
+  function closeContextMenu() {
+    contextMenuOpen = false;
+    contextMenuItems = [];
+  }
+
   const editor = createEditorCore({
     markdown,
     mode,
@@ -321,6 +356,7 @@ import { readMarkdownFromPath } from './services/documentFiles';
     onOpenLink: (href) => openLinkFromEditor(href),
     getImageContext: () => getImageContext(),
     onImagesDeleted: (event) => handleDeletedImageResources(event),
+    onContextMenuOpen: handleContextMenuOpen,
   });
   const editorSettings = createEditorSettingsController({
     getDesktopEnabled: () => desktopEnabled,
@@ -758,6 +794,8 @@ import { readMarkdownFromPath } from './services/documentFiles';
     }
 
     editor.mount(editorHost);
+    // 监听图片右键菜单自定义事件（冒泡自 ImageNodeView）
+    editorHost.addEventListener('image-context-menu', handleImageContextMenu);
     await loadPersistedSettings();
     imageSettings = await loadPersistedImageSettings(desktopEnabled);
     // 确保 blockStyle 默认值写入 DOM（loadPersistedSettings 可能跳过）
@@ -1257,4 +1295,13 @@ import { readMarkdownFromPath } from './services/documentFiles';
     <span class="link-opening-spinner" aria-hidden="true"></span>
     <span>正在打开链接</span>
   </div>
+{/if}
+
+{#if contextMenuOpen}
+  <ContextMenu
+    x={contextMenuX}
+    y={contextMenuY}
+    items={contextMenuItems}
+    onClose={closeContextMenu}
+  />
 {/if}

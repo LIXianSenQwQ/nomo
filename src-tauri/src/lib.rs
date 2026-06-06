@@ -52,7 +52,8 @@ pub fn run() {
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,
             crate::file_system::get_folder_tree,
-            crate::external_link::open_external_link
+            crate::external_link::open_external_link,
+            crate::external_link::reveal_in_explorer
         ])
         .run(tauri::generate_context!())
         .expect("error while running NewMd");

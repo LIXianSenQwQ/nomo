@@ -222,4 +222,39 @@ describe('markdown serialization', () => {
     expect(doc.child(0).type.name).toBe('toc_block');
     expect(doc.child(0).attrs.content).toBe('- [标题](#标题)');
   });
+
+  it('parses image with align and width attributes', () => {
+    const input = '![demo](./assets/demo.png){align=center width=60%}';
+    const doc = parseMarkdown(input);
+    const img = doc.child(0).child(0);
+
+    expect(img.type.name).toBe('image');
+    expect(img.attrs.src).toBe('./assets/demo.png');
+    expect(img.attrs.align).toBe('center');
+    expect(img.attrs.width).toBe('60%');
+  });
+
+  it('round-trips image with attributes', () => {
+    const input = '![demo](./assets/demo.png){align=center width=60%}';
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('parses image with px width', () => {
+    const input = '![pic](./a.png){align=left width=600}';
+    const doc = parseMarkdown(input);
+    const img = doc.child(0).child(0);
+
+    expect(img.attrs.align).toBe('left');
+    expect(img.attrs.width).toBe('600');
+  });
+
+  it('parses image without attributes', () => {
+    const input = '![plain](./plain.png)';
+    const doc = parseMarkdown(input);
+    const img = doc.child(0).child(0);
+
+    expect(img.attrs.src).toBe('./plain.png');
+    expect(img.attrs.align).toBeNull();
+    expect(img.attrs.width).toBeNull();
+  });
 });

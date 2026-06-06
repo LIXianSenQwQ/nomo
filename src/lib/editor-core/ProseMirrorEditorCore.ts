@@ -51,6 +51,7 @@ import { taskListPlugin } from './plugins/taskList';
 import { createCalloutPlugin } from './callout/calloutPlugin';
 import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
+import { contextMenuPlugin } from './plugins/contextMenu';
 import {
   createMarkdownInputRules,
   parseMarkdown,
@@ -544,6 +545,9 @@ export class ProseMirrorEditorCore implements EditorCore {
           enterMermaidEditAt: (view, pos, caret) =>
             MermaidBlockNodeView.enterEditAt(view, pos, caret),
           prepareMathKeyboardEntry: (caret) => MathBlockNodeView.prepareKeyboardEntry(caret),
+        }),
+        contextMenuPlugin({
+          onOpen: (event) => this.options.onContextMenuOpen?.(event),
         }),
       ],
     });

@@ -1,5 +1,6 @@
 import type { DiagramType } from './diagramTemplates';
 import type { ImageContext } from '../services/render';
+import type { ContextMenuOpenEvent } from './plugins/contextMenu';
 
 export type EditorMode = 'semantic' | 'source';
 export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline' | 'highlight';
@@ -141,6 +142,8 @@ export interface EditorCoreOptions {
   onOpenLink?: (href: string) => void;
   getImageContext?: () => ImageContext;
   onImagesDeleted?: (event: EditorImageDeletionEvent) => void;
+  /** 上下文菜单打开回调（NodeView 右键） */
+  onContextMenuOpen?: (event: ContextMenuOpenEvent) => void;
 }
 
 export interface EditorCore {
