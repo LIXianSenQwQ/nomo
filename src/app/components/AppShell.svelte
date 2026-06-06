@@ -37,6 +37,7 @@
   export let sidebarWidth: number;
   export let tabs: Tab[];
   export let activeTabId: string;
+  export let previewTabId: string | null;
   export let markdown: string;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
@@ -71,6 +72,7 @@
   export let openFileDialog: () => void;
   export let openFolderDialog: () => void;
   export let openRecentFile: (path: string) => void;
+  export let openPreviewFile: (path: string) => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
@@ -94,6 +96,7 @@
   export let startResize: (event: MouseEvent) => void;
   export let switchTab: (tabId: string) => void;
   export let closeTab: (tabId: string, event?: Event) => void;
+  export let pinPreviewTab: () => void;
   export let updateContentWidth: (event: Event) => void;
   export let updateMarkdown: (event: Event) => void;
   export let enterFrontMatterEdit: () => void;
@@ -172,13 +175,15 @@
       {toggleRootFolder}
       {toggleFolderCollapse}
       {openRecentFile}
+      {openPreviewFile}
+      previewNativePath={previewTabId ? tabs.find((t) => t.id === previewTabId)?.nativePath ?? null : null}
       {startResize}
       on:createNode
       on:renameNode
     />
 
     <section class="editor-shell" aria-label="编辑器">
-      <DocumentTabs {tabs} {activeTabId} {switchTab} {closeTab} {createNewFile} />
+      <DocumentTabs {tabs} {activeTabId} {previewTabId} {switchTab} {closeTab} {pinPreviewTab} {createNewFile} {currentFolderPath} />
 
       <EditorToolbar
         {mode}

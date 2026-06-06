@@ -56,7 +56,8 @@
   import { createDesktopImageLoader } from './services/desktopImageLoader';
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
-  import { createDefaultTab, writeActiveTabState } from './services/tabs';
+  import { createBlankTab, createDefaultTab, writeActiveTabState } from './services/tabs';
+import { readMarkdownFromPath } from './services/documentFiles';
   import {
     closeActiveMenu,
     createSidebarResizeHandlers,
@@ -152,6 +153,7 @@
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
+  let previewTabId: string | null = null;
 
   function persistWorkspaceState() {
     if (desktopEnabled) {
@@ -372,6 +374,82 @@
     closeSettings();
   }
 
+  // 打开预览标签页（文件树单击）
+  async function openPreviewFile(path: string) {
+    if (!desktopEnabled) return;
+
+    // 已有固定标签页打开此文件 → 切换到它
+    const existingFixedTab = tabs.find((t) => t.nativePath === path && t.id !== previewTabId);
+    if (existingFixedTab) {
+      if (activeTabId !== previewTabId) {
+        saveActiveTabState();
+      }
+      switchTab(existingFixedTab.id);
+      return;
+    }
+
+    const { document, error } = await readMarkdownFromPath(path, '预览打开失败');
+    if (error) {
+      statusMessage = error;
+      return;
+    }
+    if (!document) return;
+
+    // 保存当前固定标签页状态（如果当前不是预览）
+    if (activeTabId !== previewTabId) {
+      saveActiveTabState();
+    }
+
+    // 复用现有预览标签页或新建
+    let targetTab: Tab;
+    const existingPreview = previewTabId ? tabs.find((t) => t.id === previewTabId) : undefined;
+
+    if (existingPreview) {
+      targetTab = existingPreview;
+    } else {
+      targetTab = createBlankTab('', '');
+      tabs = [...tabs, targetTab];
+      previewTabId = targetTab.id;
+    }
+
+    const isLargeDocument =
+      document.markdown.length > LARGE_DOCUMENT_LIMIT ||
+      document.sizeBytes > LARGE_DOCUMENT_LIMIT;
+
+    targetTab.fileName = document.fileName;
+    targetTab.filePath = document.path;
+    targetTab.nativePath = document.path;
+    targetTab.markdown = document.markdown;
+    targetTab.dirty = false;
+    targetTab.lastKnownModifiedAt = document.modifiedAt;
+    targetTab.largeDocumentMode = isLargeDocument;
+    targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
+    targetTab.externalFileWarning = document.readonly
+      ? '当前文件是只读文件，建议使用另存为保存修改'
+      : '';
+    targetTab.version = 0;
+
+    tabs = [...tabs];
+    activeTabId = targetTab.id;
+    loadTabState(targetTab);
+
+    const parentDir = getDirectoryLabel(document.path);
+    if (parentDir && parentDir !== '当前文件夹') {
+      if (!currentFolderPath) {
+        loadFolder(parentDir).catch(() => undefined);
+      } else {
+        expandAncestors(document.path, currentFolderPath);
+      }
+    }
+  }
+
+  // 手动固定当前预览标签页（双击标签页标题）
+  function pinPreviewTab() {
+    if (previewTabId && previewTabId === activeTabId) {
+      previewTabId = null;
+    }
+  }
+
   const documentActions = createDocumentActionsController({
     largeDocumentLimit: LARGE_DOCUMENT_LIMIT,
     recoveryKey: RECOVERY_KEY,
@@ -515,9 +593,39 @@
   const openRecentFile = documentActions.openRecentFile;
   const openFolderDialog = folderExplorer.openFolderDialog;
   const createNewFile = documentActions.createNewFile;
-  const closeTab = documentActions.closeTab;
+  const _documentCloseTab = documentActions.closeTab;
   const refreshRecentFiles = documentActions.refreshRecentFiles;
   const checkExternalFileChange = documentActions.checkExternalFileChange;
+
+  // 包装 closeTab：预览标签页直接关闭无需确认
+  function closeTab(tabId: string, event?: Event) {
+    event?.stopPropagation();
+
+    if (tabId === previewTabId) {
+      const wasActive = activeTabId === tabId;
+      const index = tabs.findIndex((t) => t.id === tabId);
+      tabs = tabs.filter((t) => t.id !== tabId);
+      previewTabId = null;
+
+      if (wasActive) {
+        if (tabs.length > 0) {
+          const newActiveIndex = Math.min(index, tabs.length - 1);
+          activeTabId = tabs[newActiveIndex].id;
+          loadTabState(tabs[newActiveIndex]);
+        } else {
+          const newTab = createBlankTab();
+          tabs = [newTab];
+          activeTabId = newTab.id;
+          loadTabState(newTab);
+        }
+        updateWindowTitle();
+      }
+      persistWorkspaceState();
+      return;
+    }
+
+    _documentCloseTab(tabId, event);
+  }
   const jumpToOutlineItem = outlineInteraction.jumpToOutlineItem;
   const updateActiveOutlineFromSourceScroll =
     outlineInteraction.updateActiveOutlineFromSourceScroll;
@@ -685,6 +793,11 @@
 
   function syncFromEditor(event: EditorChangeEvent) {
     if (isSwitchingTab) return;
+
+    // 预览标签页开始编辑 → 自动固定
+    if (previewTabId && previewTabId === activeTabId && event.dirty) {
+      previewTabId = null;
+    }
 
     markdown = event.markdown;
     dirty = event.dirty;
@@ -1049,6 +1162,7 @@
   {sidebarWidth}
   {tabs}
   {activeTabId}
+  {previewTabId}
   {markdown}
   {frontMatter}
   {frontMatterEditing}
@@ -1082,6 +1196,7 @@
   {openFileDialog}
   {openFolderDialog}
   {openRecentFile}
+  {openPreviewFile}
   {saveMarkdownFile}
   {runCommand}
   {pendingInlineMarks}
@@ -1104,6 +1219,7 @@
   {startResize}
   {switchTab}
   {closeTab}
+  {pinPreviewTab}
   {updateContentWidth}
   {updateMarkdown}
   {enterFrontMatterEdit}

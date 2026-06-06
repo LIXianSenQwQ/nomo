@@ -166,6 +166,11 @@
   font-weight: 700;
 }
 
+/* 预览中的文件在文件树中显示斜体 */
+.tree-file.preview span {
+  font-style: italic;
+}
+
 .tree-indent {
   width: 14px;
 }

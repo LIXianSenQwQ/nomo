@@ -17,6 +17,8 @@
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (path: string) => void;
   export let openRecentFile: (path: string) => void;
+  export let openPreviewFile: (path: string) => void;
+  export let previewNativePath: string | null;
   export let startResize: (event: MouseEvent) => void;
 
   const dispatch = createEventDispatcher();
@@ -29,6 +31,35 @@
   let renamingPath: string | null = null;
   let renamingValue = '';
   let renamingInputRef: HTMLInputElement | null = null;
+
+  // 文件树双击检测状态（单击预览 / 双击固定）
+  let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingClickPath: string | null = null;
+
+  function handleFileClick(path: string) {
+    // 取消任何待处理的单击（跨文件单击直接替换）
+    if (pendingClickTimer) {
+      clearTimeout(pendingClickTimer);
+      pendingClickTimer = null;
+      pendingClickPath = null;
+    }
+
+    pendingClickPath = path;
+    pendingClickTimer = setTimeout(() => {
+      pendingClickTimer = null;
+      pendingClickPath = null;
+      openPreviewFile(path);
+    }, 250);
+  }
+
+  function handleFileDblClick(path: string) {
+    if (pendingClickTimer && pendingClickPath === path) {
+      clearTimeout(pendingClickTimer);
+      pendingClickTimer = null;
+      pendingClickPath = null;
+    }
+    openRecentFile(path);
+  }
 
   function startCreating(parentPath: string, type: 'folder' | 'file', event: MouseEvent) {
     event.stopPropagation();
@@ -185,9 +216,11 @@
             type="button"
             class="tree-file"
             class:active={nativePath === node.path}
+            class:preview={previewNativePath === node.path}
             style="padding-left: {34 + depth * 12}px"
             title={node.path}
-            on:click={() => openRecentFile(node.path)}
+            on:click={() => handleFileClick(node.path)}
+            on:dblclick={() => handleFileDblClick(node.path)}
           >
             <FileText size={13} />
             <span>{node.name}</span>

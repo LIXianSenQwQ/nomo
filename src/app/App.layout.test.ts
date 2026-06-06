@@ -292,9 +292,12 @@ describe('App outline layout', () => {
     expect(containerEnd).toBeGreaterThan(addButtonIndex);
     expect(documentTabsSource).not.toContain('class="tab-actions"');
     expect(documentTabsSource).toContain('{#if showAddButton}');
-    expect(documentTabsSource).toContain('tabsWidth + addButtonWidth <= tabsContainer.clientWidth');
+    expect(documentTabsSource).toContain('measureAndComputeVisible');
+    expect(documentTabsSource).toContain('showDropdown');
     expect(styles).not.toContain('.tab-actions');
     expect(styles).toMatch(/\.tab-add\s*\{[\s\S]*?flex-shrink:\s*0;/);
+    expect(styles).toContain('.tab-overflow-dropdown');
+    expect(styles).toContain('.tab-dropdown-menu');
   });
 
   it('moves editor appearance controls into the settings drawer draft flow', () => {
