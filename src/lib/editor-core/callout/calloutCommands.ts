@@ -156,6 +156,38 @@ export function unwrapCallout(
 }
 
 /**
+ * 在空 callout 内按 Backspace 时，移除 callout 外壳并保留一个普通空段落。
+ * 删除最后一个字符产生空 callout 时不触发本命令，必须在已经为空时再次按 Backspace。
+ */
+export function removeEmptyCalloutOnBackspace(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { $from, empty } = state.selection;
+  if (!empty || $from.parentOffset !== 0) return false;
+  if ($from.parent.type !== state.schema.nodes.paragraph || $from.parent.content.size !== 0) {
+    return false;
+  }
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type !== state.schema.nodes.callout) continue;
+    if (!isEmptyCallout(node)) return false;
+
+    if (dispatch) {
+      const calloutStart = $from.before(depth);
+      const calloutEnd = $from.after(depth);
+      const paragraph = state.schema.nodes.paragraph.create();
+      const tr = state.tr.replaceWith(calloutStart, calloutEnd, paragraph);
+      dispatch(tr.setSelection(TextSelection.create(tr.doc, calloutStart + 1)).scrollIntoView());
+    }
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * 检查当前选区是否在 callout 内。
  */
 export function isInCallout(state: EditorState): boolean {
@@ -181,4 +213,10 @@ export function getCalloutNode(state: EditorState): PmNode | null {
     }
   }
   return null;
+}
+
+function isEmptyCallout(node: PmNode): boolean {
+  if (node.childCount !== 1) return false;
+  const firstChild = node.firstChild;
+  return firstChild?.type.name === 'paragraph' && firstChild.content.size === 0;
 }

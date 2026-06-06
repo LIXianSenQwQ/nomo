@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { EditorState } from 'prosemirror-state';
 import { createEditorCore } from './createEditorCore';
 import { parseMarkdown, serializeMarkdown } from './markdown';
+import { createCalloutPlugin } from './callout/calloutPlugin';
+import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 
 describe('callout', () => {
   it('parses GitHub alert syntax into a callout node', () => {
@@ -27,6 +30,30 @@ describe('callout', () => {
 
     editor.destroy();
     target.remove();
+  });
+
+  it('keeps the callout after deleting the last character and removes it on the next Backspace', () => {
+    const doc = parseMarkdown('> [!NOTE]\n> A');
+    const textPos = 2;
+    let state = EditorState.create({
+      doc,
+      plugins: [createCalloutPlugin()],
+    });
+
+    state = state.apply(state.tr.delete(textPos, textPos + 1));
+
+    expect(state.doc.child(0).type.name).toBe('callout');
+    expect(state.doc.child(0).textContent).toBe('');
+    expect(state.doc.child(0).childCount).toBe(1);
+
+    const didRemove = removeEmptyCalloutOnBackspace(state, (tr) => {
+      state = state.apply(tr);
+    });
+
+    expect(didRemove).toBe(true);
+    expect(state.doc.child(0).type.name).toBe('paragraph');
+    expect(state.doc.child(0).textContent).toBe('');
+    expect(state.doc.childCount).toBe(1);
   });
 
   it('opens the type picker and applies the selected callout type', () => {

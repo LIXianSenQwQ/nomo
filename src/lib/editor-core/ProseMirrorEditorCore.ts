@@ -42,6 +42,7 @@ import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
 import { createCalloutPlugin } from './callout/calloutPlugin';
+import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import {
   createMarkdownInputRules,
@@ -370,7 +371,12 @@ export class ProseMirrorEditorCore implements EditorCore {
             liftEmptyBlock,
             splitBlock,
           ),
-          Backspace: chainCommands(deleteSelection, joinBackward, selectNodeBackward),
+          Backspace: chainCommands(
+            deleteSelection,
+            removeEmptyCalloutOnBackspace,
+            joinBackward,
+            selectNodeBackward,
+          ),
           Tab: chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
           'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
           'Shift-Ctrl-[': (state, dispatch) =>

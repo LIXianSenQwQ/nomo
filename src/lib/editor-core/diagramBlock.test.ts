@@ -62,8 +62,10 @@ describe('diagram templates', () => {
 
 describe('MermaidBlockNodeView', () => {
   it('renders display mode and enters edit mode with source above preview', async () => {
+    const renderCalls: string[] = [];
     setCodeBlockDiagramRenderer({
       async renderMermaid(code) {
+        renderCalls.push(code);
         return { svg: `<svg data-code="${code.split('\n')[0]}"></svg>` };
       },
     });
@@ -91,11 +93,123 @@ describe('MermaidBlockNodeView', () => {
 
     const textarea = target.querySelector('.mermaid-block-textarea');
     const preview = target.querySelector('.mermaid-block-preview');
+    const editSurface = target.querySelector('.mermaid-block-edit-surface');
+    const previewSnapshot = target.querySelector('.mermaid-block-preview-snapshot');
+    expect(editSurface).not.toBeNull();
+    expect(previewSnapshot).not.toBeNull();
     expect(textarea).not.toBeNull();
     expect(preview).not.toBeNull();
     expect(textarea!.compareDocumentPosition(preview!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect(renderCalls).toHaveLength(1);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('keeps a stale display render from overwriting edit mode', async () => {
+    const pendingRenders: Array<(value: { svg: string }) => void> = [];
+    setCodeBlockDiagramRenderer({
+      renderMermaid() {
+        return new Promise<{ svg: string }>((resolve) => {
+          pendingRenders.push(resolve);
+        });
+      },
+    });
+
+    const node = schema.nodes.mermaid_block.create({ code: 'flowchart TD\n  A --> B' });
+    const doc = schema.nodes.doc.create(null, [node]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: NodeSelection.create(doc, 0),
+      }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    const block = target.querySelector<HTMLElement>('.mermaid-block');
+    expect(block).not.toBeNull();
+    block?.click();
+    expect(target.querySelector('.mermaid-block-textarea')).not.toBeNull();
+
+    pendingRenders[0]?.({ svg: '<svg data-stale-display-render="true"></svg>' });
+    await Promise.resolve();
+
+    expect(target.querySelector('.mermaid-block-textarea')).not.toBeNull();
+    expect(target.querySelector('[data-stale-display-render="true"]')).toBeNull();
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('opens rendered Mermaid diagrams in a fullscreen preview', async () => {
+    setCodeBlockDiagramRenderer({
+      async renderMermaid() {
+        return { svg: '<svg data-fullscreen-source="diagram"></svg>' };
+      },
+    });
+
+    const node = schema.nodes.mermaid_block.create({ code: 'flowchart TD\n  A --> B' });
+    const doc = schema.nodes.doc.create(null, [node]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    await Promise.resolve();
+
+    const button = target.querySelector<HTMLButtonElement>('.mermaid-block-fullscreen-button');
+    expect(button).not.toBeNull();
+    button?.click();
+
+    const overlay = document.body.querySelector('.mermaid-fullscreen-overlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay?.querySelector('[data-fullscreen-source="diagram"]')).not.toBeNull();
+    expect(overlay?.querySelector('.mermaid-fullscreen-header')).toBeNull();
+    expect(overlay?.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('125%');
+    expect(overlay?.textContent).not.toContain('图表预览');
+    expect(target.querySelector('.mermaid-block-textarea')).toBeNull();
+
+    overlay?.querySelector('.mermaid-fullscreen-viewport')?.dispatchEvent(
+      new WheelEvent('wheel', {
+        ctrlKey: true,
+        deltaY: -100,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(overlay?.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('135%');
+
+    overlay
+      ?.querySelector('.mermaid-fullscreen-viewport')
+      ?.dispatchEvent(createPointerLikeEvent('pointerdown', 1));
+    expect(overlay?.querySelector('.mermaid-fullscreen-viewport')?.className).toContain(
+      'is-dragging',
+    );
+    overlay
+      ?.querySelector('.mermaid-fullscreen-viewport')
+      ?.dispatchEvent(createPointerLikeEvent('pointerup', 1));
+    expect(overlay?.querySelector('.mermaid-fullscreen-viewport')?.className).not.toContain(
+      'is-dragging',
+    );
+
+    document.body
+      .querySelector<HTMLButtonElement>('.mermaid-fullscreen-close-button')
+      ?.click();
+    expect(document.body.querySelector('.mermaid-fullscreen-overlay')).toBeNull();
 
     view.destroy();
     target.remove();
@@ -112,4 +226,16 @@ function findFirstNode(doc: ProseMirrorNode, name: string): ProseMirrorNode | nu
     return true;
   });
   return found;
+}
+
+function createPointerLikeEvent(type: string, pointerId: number): MouseEvent {
+  const event = new MouseEvent(type, {
+    button: 0,
+    clientX: 120,
+    clientY: 120,
+    bubbles: true,
+    cancelable: true,
+  });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  return event;
 }
