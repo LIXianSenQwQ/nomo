@@ -292,6 +292,102 @@
   animation: table-picker-in 160ms ease-out;
 }
 
+.quick-link-popover {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  width: min(392px, calc(100vw - 24px));
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-accent) 28%, var(--md-editor-border));
+  border-radius: var(--md-editor-radius-md);
+  background: color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-accent) 4%);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.18);
+  color: var(--md-editor-fg);
+  animation: table-picker-in 140ms ease-out;
+}
+
+.quick-link-popover::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--md-editor-accent) 28%, var(--md-editor-border));
+  border-left: 1px solid color-mix(in srgb, var(--md-editor-accent) 28%, var(--md-editor-border));
+  background: inherit;
+  transform: rotate(45deg);
+}
+
+.quick-link-popover form {
+  display: grid;
+  gap: 6px;
+}
+
+.quick-link-url-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px 32px;
+  gap: 6px;
+  align-items: center;
+}
+
+.quick-link-popover form.has-remove .quick-link-url-row {
+  grid-template-columns: minmax(0, 1fr) 32px 32px 32px;
+}
+
+.quick-link-popover input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-bg);
+  color: var(--md-editor-fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.quick-link-popover input:focus {
+  border-color: var(--md-editor-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-editor-accent) 14%, transparent);
+}
+
+.quick-link-popover input[aria-invalid='true'] {
+  border-color: var(--md-editor-danger);
+}
+
+.quick-link-popover button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-chrome);
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+}
+
+.quick-link-popover button:hover {
+  border-color: var(--md-editor-accent);
+  color: var(--md-editor-accent-strong);
+}
+
+.quick-link-popover .quick-link-primary {
+  border-color: var(--md-editor-accent);
+  background: var(--md-editor-accent);
+  color: var(--md-editor-surface);
+}
+
+.quick-link-error {
+  margin: 0 2px;
+  color: var(--md-editor-danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .diagram-picker-header {
   padding: 6px 8px 8px;
   color: var(--md-editor-muted-fg);
@@ -472,4 +568,50 @@
 .app-toast.visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.link-opening-indicator {
+  position: fixed;
+  right: 18px;
+  bottom: 44px;
+  z-index: 100;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-accent) 24%, var(--md-editor-border));
+  border-radius: var(--md-editor-radius-md);
+  background: color-mix(in srgb, var(--md-editor-surface) 94%, var(--md-editor-accent) 6%);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  color: var(--md-editor-fg);
+  font-size: 12.5px;
+  pointer-events: none;
+  animation: link-opening-in 140ms ease-out;
+}
+
+.link-opening-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--md-editor-accent) 25%, transparent);
+  border-top-color: var(--md-editor-accent-strong);
+  border-radius: 50%;
+  animation: link-opening-spin 700ms linear infinite;
+}
+
+@keyframes link-opening-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes link-opening-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

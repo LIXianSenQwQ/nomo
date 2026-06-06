@@ -131,6 +131,41 @@ describe('markdown serialization', () => {
     expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
   });
 
+  it('round trips Markdown links with optional titles', () => {
+    const plain = '[链接](https://example.com)';
+    const titled = '[链接](https://example.com "说明")';
+
+    expect(serializeMarkdown(parseMarkdown(plain)).trim()).toBe(plain);
+    expect(serializeMarkdown(parseMarkdown(titled)).trim()).toBe(titled);
+  });
+
+  it('allows common safe link targets', () => {
+    const input = [
+      '[相对](../docs/readme.md)',
+      '[锚点](#标题)',
+      '[邮件](mailto:user@example.com)',
+    ].join(' ');
+
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(
+      '[相对](../docs/readme.md) [锚点](#%E6%A0%87%E9%A2%98) [邮件](mailto:user@example.com)',
+    );
+  });
+
+  it('does not create link marks for dangerous link protocols', () => {
+    const doc = parseMarkdown(
+      '[危险](javascript:alert(1)) [data](data:text/html,<script></script>)',
+    );
+    let hasLink = false;
+
+    doc.descendants((node) => {
+      if (!node.isText) return true;
+      hasLink = node.marks.some((mark) => mark.type === schema.marks.link);
+      return !hasLink;
+    });
+
+    expect(hasLink).toBe(false);
+  });
+
   it('preserves non-numeric footnote ids', () => {
     const input = '正文[^note]\n\n[^note]: 说明';
 

@@ -24,6 +24,24 @@ export interface EditorSelectionSnapshot {
   head: number;
 }
 
+export interface EditorLinkSnapshot {
+  href: string;
+  title: string | null;
+  text: string;
+  from: number;
+  to: number;
+  active: boolean;
+}
+
+export interface EditorAnchorRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
 export interface EditorSnapshot {
   markdown: string;
   version: number;
@@ -72,6 +90,7 @@ export type EditorCommand =
   | { type: 'toggleOrderedList' }
   | { type: 'toggleTaskList' }
   | { type: 'insertLink'; href: string; title?: string; text?: string }
+  | { type: 'removeLink' }
   | { type: 'insertImage'; src: string; alt?: string; title?: string }
   | { type: 'insertFootnote' }
   | { type: 'insertCodeBlock'; language?: string; code?: string }
@@ -111,6 +130,8 @@ export interface EditorCoreOptions {
   onChange?: (event: EditorChangeEvent) => void;
   onSelectionChange?: (event: EditorSelectionEvent) => void;
   onError?: (error: EditorError) => void;
+  onLinkShortcut?: () => void;
+  onOpenLink?: (href: string) => void;
 }
 
 export interface EditorCore {
@@ -122,6 +143,8 @@ export interface EditorCore {
   restoreSnapshot(snapshot: EditorSnapshot): void;
   focus(): void;
   blur(): void;
+  getActiveLink(): EditorLinkSnapshot | null;
+  getSelectionAnchorRect(): EditorAnchorRect | null;
   execute(command: EditorCommand): boolean;
   canExecute(command: EditorCommand): boolean;
   updateTheme(theme: EditorThemeOptions): void;

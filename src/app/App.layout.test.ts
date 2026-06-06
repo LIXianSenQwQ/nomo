@@ -8,7 +8,14 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/EditorWorkspace.svelte'),
     'utf-8',
   );
-  const toolbarSource = readFileSync(resolve(__dirname, 'components/EditorToolbar.svelte'), 'utf-8');
+  const toolbarSource = readFileSync(
+    resolve(__dirname, 'components/EditorToolbar.svelte'),
+    'utf-8',
+  );
+  const linkQuickEditorSource = readFileSync(
+    resolve(__dirname, 'components/LinkQuickEditor.svelte'),
+    'utf-8',
+  );
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
   const frontMatterCardSource = readFileSync(
     resolve(__dirname, 'components/FrontMatterCard.svelte'),
@@ -67,12 +74,16 @@ describe('App outline layout', () => {
 
   it('keeps outline navigation in the current editor mode', () => {
     const jumpStart = outlineInteractionSource.indexOf('function jumpToOutlineItem');
-    const jumpEnd = outlineInteractionSource.indexOf('function updateActiveOutlineFromSourceScroll');
+    const jumpEnd = outlineInteractionSource.indexOf(
+      'function updateActiveOutlineFromSourceScroll',
+    );
     const jumpSource = outlineInteractionSource.slice(jumpStart, jumpEnd);
 
     expect(jumpSource).not.toContain("setMode('source')");
     expect(jumpSource).toContain('options.setActiveOutlineId(item.id);');
-    expect(jumpSource).toContain('scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane()');
+    expect(jumpSource).toContain(
+      'scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane()',
+    );
   });
 
   it('keeps source typing from normalizing content or resetting scroll', () => {
@@ -87,7 +98,9 @@ describe('App outline layout', () => {
     expect(updateSource).toContain(
       'options.getEditor().setMarkdown((event.currentTarget as HTMLTextAreaElement).value);',
     );
-    expect(editorInteractionSource).toContain('options.getSourcePane().scrollTop = restoreScrollTop;');
+    expect(editorInteractionSource).toContain(
+      'options.getSourcePane().scrollTop = restoreScrollTop;',
+    );
   });
 
   it('renders one shared outline panel with expandable items', () => {
@@ -136,6 +149,27 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command === 'menu-highlight'");
     expect(appCommandsSource).toContain("handlers.runCommand({ type: 'toggleHighlight' });");
     expect(tauriMenuSource).toContain('with_id("menu-highlight", "高亮")');
+  });
+
+  it('wires link editing through toolbar, titlebar and shortcuts', () => {
+    expect(toolbarSource).toContain('Link');
+    expect(toolbarSource).toContain('aria-label="编辑超链接"');
+    expect(linkQuickEditorSource).toContain('role="dialog"');
+    expect(linkQuickEditorSource).toContain('role="alert"');
+    expect(linkQuickEditorSource).toContain('placeholder="标题（显示文字）"');
+    expect(linkQuickEditorSource).toContain('placeholder="https://example.com"');
+    expect(appSource).toContain('getLinkPickerPositionStyle(editor.getSelectionAnchorRect())');
+    expect(titleBarSource).toContain('finish(openLinkPicker,');
+    expect(titleBarSource).not.toContain("comingSoon('超链接'");
+    expect(appCommandsSource).toContain("command === 'menu-link'");
+    expect(appCommandsSource).toContain('handlers.openLinkPicker();');
+    expect(appCommandsSource).toContain("key === 'k' && !event.shiftKey");
+    expect(tauriMenuSource).toContain('with_id("menu-link", "超链接")');
+    expect(appSource).toContain('editor.getActiveLink()');
+    expect(appSource).toContain("type: 'insertLink'");
+    expect(appSource).toContain('text: linkText');
+    expect(appSource).toContain("type: 'removeLink'");
+    expect(appSource).toContain('updateLinkText');
   });
 
   it('forwards native menu events to desktop command handlers', () => {

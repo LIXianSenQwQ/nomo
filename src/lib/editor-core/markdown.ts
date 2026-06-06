@@ -12,12 +12,19 @@ import { schema, type TableColumnAlignment } from './schema';
 import { classifyHtmlBlock } from './html/htmlClassifier';
 import { parseHtmlContent } from './html/htmlToPmLogic';
 import { serializeHtmlBlock } from './html/pmToHtml';
+import {
+  createLinkAttrs,
+  normalizeLinkHref,
+  serializeMarkdownLinkDestination,
+  serializeMarkdownLinkTitle,
+} from './link';
 import { transformCalloutTokens, calloutParserTokens } from './callout/calloutParser';
 import { serializeCallout } from './callout/calloutSerializer';
 import { TOC_END_MARKER, TOC_START_MARKER } from '../toc/tocService';
 import { splitFrontMatterBlock } from '../markdown/frontMatter';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
+markdownIt.validateLink = (url: string) => normalizeLinkHref(url) !== null;
 
 markdownIt.inline.ruler.before('link', 'footnote_ref', (state, silent) => {
   const src = state.src;
@@ -191,6 +198,11 @@ markdownIt.parse = (src, env) => {
 const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   ...defaultMarkdownParser.tokens,
   toc_block: { node: 'toc_block', getAttrs: (tok: Token) => ({ content: tok.content }) },
+  link_open: {
+    mark: 'link',
+    getAttrs: (tok: Token) =>
+      createLinkAttrs(tok.attrGet('href'), tok.attrGet('title')) ?? { href: '', title: null },
+  },
   table: { block: 'table' },
   tr: { block: 'table_row' },
   th: { block: 'table_header', getAttrs: getTableCellAttrs },
@@ -339,10 +351,15 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
     const markType = schema.marks[markName];
     let attrs: Record<string, unknown> | null = null;
     if (markName === 'link') {
-      attrs = {
-        href: extractAttr(content, 'href') ?? '',
-        title: extractAttr(content, 'title') ?? null,
-      };
+      const linkAttrs = createLinkAttrs(
+        extractAttr(content, 'href'),
+        extractAttr(content, 'title'),
+      );
+      attrs = linkAttrs ? { ...linkAttrs } : null;
+      if (!attrs) {
+        state.addText(content);
+        return;
+      }
     }
     const mark = markType.create(attrs);
     htmlInlineStack.push({ tag, markName });
@@ -465,6 +482,17 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       close: '</mark>',
       mixable: true,
       expelEnclosingWhitespace: true,
+    },
+    link: {
+      open: '[',
+      close(_state, mark) {
+        const href = serializeMarkdownLinkDestination(String(mark.attrs.href ?? ''));
+        const title = mark.attrs.title
+          ? ` "${serializeMarkdownLinkTitle(String(mark.attrs.title))}"`
+          : '';
+        return `](${href}${title})`;
+      },
+      mixable: true,
     },
   },
 );
@@ -775,7 +803,13 @@ function serializeInlineText(node: ProseMirrorNode): string {
     if (mark.type.name === 'strikethrough') return `~~${value}~~`;
     if (mark.type.name === 'underline') return `<u>${value}</u>`;
     if (mark.type.name === 'highlight') return `<mark>${value}</mark>`;
-    if (mark.type.name === 'link') return `[${value}](${mark.attrs.href})`;
+    if (mark.type.name === 'link') {
+      const href = serializeMarkdownLinkDestination(String(mark.attrs.href ?? ''));
+      const title = mark.attrs.title
+        ? ` "${serializeMarkdownLinkTitle(String(mark.attrs.title))}"`
+        : '';
+      return `[${value}](${href}${title})`;
+    }
     return value;
   }, text);
 }

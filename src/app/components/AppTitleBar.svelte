@@ -30,6 +30,7 @@
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let openTablePicker: () => void;
+  export let openLinkPicker: () => void;
   export let editFrontMatter: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let setMode: (mode: EditorMode) => void;
@@ -470,7 +471,7 @@
             >
             <button on:click={() => comingSoon('注释', 'format')}>注释</button>
             <div class="divider"></div>
-            <button on:click={() => comingSoon('超链接', 'format')}
+            <button on:click={() => finish(openLinkPicker, 'format')}
               >超链接 <span class="shortcut">Ctrl + K</span></button
             >
             <button on:click={() => comingSoon('图像', 'format')}>图像</button>

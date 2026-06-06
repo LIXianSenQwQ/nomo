@@ -1,4 +1,5 @@
 mod database;
+mod external_link;
 mod file_system;
 mod models;
 mod window;
@@ -45,7 +46,8 @@ pub fn run() {
             crate::window::commands::minimize_window,
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,
-            crate::file_system::get_folder_tree
+            crate::file_system::get_folder_tree,
+            crate::external_link::open_external_link
         ])
         .run(tauri::generate_context!())
         .expect("error while running NewMd");

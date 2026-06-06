@@ -14,6 +14,7 @@ import type { EditorView } from 'prosemirror-view';
 import { schema } from './schema';
 import { getDiagramTemplate } from './diagramTemplates';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
+import { createLinkAttrs } from './link';
 
 /**
  * 在当前块的下方插入一个新的空段落，并将光标移入。
@@ -89,6 +90,15 @@ type InlineAtomReplacement = {
   from: number;
   to: number;
   text: string;
+};
+
+export type ActiveLinkRange = {
+  from: number;
+  to: number;
+  href: string;
+  title: string | null;
+  text: string;
+  active: boolean;
 };
 
 /** 如果当前已是同级标题，则取消为正文；否则设为对应级别 */
@@ -651,10 +661,9 @@ export function executeEditorCommand(
     case 'toggleOrderedList':
       return toggleList(state, dispatch, schema.nodes.ordered_list);
     case 'insertLink':
-      return insertTextWithOptionalMark(view, command.text ?? command.href, schema.marks.link, {
-        href: command.href,
-        title: command.title ?? null,
-      });
+      return applyLinkMark(view, command.href, command.title, command.text);
+    case 'removeLink':
+      return removeLinkMark(state, dispatch);
     case 'insertImage':
       return insertInlineNode(view, schema.nodes.image, {
         src: command.src,
@@ -915,19 +924,6 @@ function scrollToHeading(view: EditorView, headingIndex: number): boolean {
   return true;
 }
 
-function insertTextWithOptionalMark(
-  view: EditorView,
-  text: string,
-  markType: MarkType,
-  attrs: Record<string, unknown>,
-): boolean {
-  const mark = markType.create(attrs);
-  view.dispatch(
-    view.state.tr.replaceSelectionWith(schema.text(text, [mark]), false).scrollIntoView(),
-  );
-  return true;
-}
-
 function insertInlineNode(
   view: EditorView,
   type: NodeType,
@@ -937,6 +933,150 @@ function insertInlineNode(
   if (!node) return false;
 
   view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+  return true;
+}
+
+export function findActiveLinkRange(state: EditorState): ActiveLinkRange | null {
+  const markType = state.schema.marks.link;
+  if (!markType) return null;
+
+  const { selection } = state;
+  if (!selection.empty) {
+    const selectedText = state.doc.textBetween(selection.from, selection.to, '\n');
+    const firstLink = findFirstLinkMarkInRange(state, selection.from, selection.to);
+    if (firstLink) {
+      return {
+        ...firstLink,
+        from: selection.from,
+        to: selection.to,
+        text: selectedText,
+        active: true,
+      };
+    }
+    return {
+      from: selection.from,
+      to: selection.to,
+      href: '',
+      title: null,
+      text: selectedText,
+      active: false,
+    };
+  }
+
+  const cursor = selection.from;
+  const marks = [
+    ...(state.storedMarks ?? selection.$from.marks()),
+    ...(selection.$from.nodeAfter?.marks ?? []),
+    ...(selection.$from.nodeBefore?.marks ?? []),
+  ];
+  const linkMark = marks.find((mark) => mark.type === markType);
+  if (!linkMark) {
+    return {
+      from: cursor,
+      to: cursor,
+      href: '',
+      title: null,
+      text: '',
+      active: false,
+    };
+  }
+
+  const range = findMarkRangeNearPosition(state, cursor, linkMark);
+  if (!range) {
+    return {
+      from: cursor,
+      to: cursor,
+      href: String(linkMark.attrs.href ?? ''),
+      title: linkMark.attrs.title ? String(linkMark.attrs.title) : null,
+      text: '',
+      active: true,
+    };
+  }
+
+  return {
+    ...range,
+    href: String(linkMark.attrs.href ?? ''),
+    title: linkMark.attrs.title ? String(linkMark.attrs.title) : null,
+    text: state.doc.textBetween(range.from, range.to, '\n'),
+    active: true,
+  };
+}
+
+function findFirstLinkMarkInRange(
+  state: EditorState,
+  from: number,
+  to: number,
+): Pick<ActiveLinkRange, 'href' | 'title'> | null {
+  let found: Pick<ActiveLinkRange, 'href' | 'title'> | null = null;
+  state.doc.nodesBetween(from, to, (node) => {
+    if (found || !node.isText) return true;
+    const link = node.marks.find((mark) => mark.type === state.schema.marks.link);
+    if (link) {
+      found = {
+        href: String(link.attrs.href ?? ''),
+        title: link.attrs.title ? String(link.attrs.title) : null,
+      };
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+function applyLinkMark(view: EditorView, href: string, title?: string, text?: string): boolean {
+  const attrs = createLinkAttrs(href, title);
+  if (!attrs) return false;
+
+  const { state } = view;
+  const linkMark = state.schema.marks.link.create(attrs);
+  const activeLink = findActiveLinkRange(state);
+  const targetText = text?.trim();
+
+  if (activeLink?.active) {
+    const replacementText = targetText || activeLink.text || attrs.href;
+    const tr = state.tr.removeMark(activeLink.from, activeLink.to, state.schema.marks.link);
+    if (replacementText !== activeLink.text) {
+      tr.replaceWith(activeLink.from, activeLink.to, schema.text(replacementText, [linkMark]));
+      tr.setSelection(
+        TextSelection.create(tr.doc, activeLink.from, activeLink.from + replacementText.length),
+      );
+    } else {
+      tr.addMark(activeLink.from, activeLink.to, linkMark);
+      tr.setSelection(TextSelection.create(tr.doc, activeLink.from, activeLink.to));
+    }
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  if (!state.selection.empty) {
+    const selectedText = state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+    const replacementText = targetText || selectedText || attrs.href;
+    const tr = state.tr.replaceSelectionWith(schema.text(replacementText, [linkMark]), false);
+    const from = tr.selection.from - replacementText.length;
+    tr.setSelection(TextSelection.create(tr.doc, from, from + replacementText.length));
+    view.dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  const replacementText = targetText || attrs.href;
+  const tr = state.tr.replaceSelectionWith(schema.text(replacementText, [linkMark]), false);
+  const from = tr.selection.from - replacementText.length;
+  tr.setSelection(TextSelection.create(tr.doc, from, from + replacementText.length));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function removeLinkMark(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  const activeLink = findActiveLinkRange(state);
+  if (!activeLink?.active) return false;
+  if (dispatch) {
+    const tr = state.tr.removeMark(activeLink.from, activeLink.to, state.schema.marks.link);
+    dispatch(
+      tr
+        .setSelection(TextSelection.create(tr.doc, activeLink.from, activeLink.to))
+        .scrollIntoView(),
+    );
+  }
   return true;
 }
 

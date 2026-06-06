@@ -202,6 +202,12 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                 .map_err(|e| e.to_string())?,
         )
         .item(
+            &MenuItemBuilder::with_id("menu-link", "超链接")
+                .accelerator("Ctrl + K")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
             &MenuItemBuilder::with_id("menu-clear-format", "清除样式")
                 .accelerator("Ctrl + \\")
                 .build(app)

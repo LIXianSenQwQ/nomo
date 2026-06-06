@@ -1598,6 +1598,30 @@
 
 .prosemirror-host .ProseMirror a {
   color: var(--md-editor-link-fg);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease,
+    text-decoration-color 120ms ease;
+}
+
+.prosemirror-host .ProseMirror a.is-modifier-open-target {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--md-editor-accent) 13%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
+  color: var(--md-editor-accent-strong);
+  cursor: pointer;
+  text-decoration-color: currentColor;
+}
+
+.prosemirror-host .ProseMirror a.is-link-opening {
+  cursor: progress;
+}
+
+.prosemirror-host .ProseMirror.has-modifier-link-hover {
+  cursor: pointer;
 }
 
 .prosemirror-host .ProseMirror img {

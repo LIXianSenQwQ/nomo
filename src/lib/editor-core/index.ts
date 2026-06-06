@@ -12,6 +12,8 @@ export type {
   EditorCore,
   EditorCoreOptions,
   EditorError,
+  EditorAnchorRect,
+  EditorLinkSnapshot,
   InlinePendingMarkName,
   InlinePendingMarks,
   EditorListener,

@@ -1,4 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { createLinkAttrs } from '../link';
 
 /**
  * 将 html_block ProseMirror 节点序列化为 HTML 字符串。
@@ -47,9 +48,10 @@ function wrapTextWithMarks(textNode: ProseMirrorNode): string {
         text = `<u>${text}</u>`;
         break;
       case 'link': {
-        const href = mark.attrs.href ?? '';
-        const title = mark.attrs.title ? ` title="${mark.attrs.title}"` : '';
-        text = `<a href="${href}"${title}>${text}</a>`;
+        const attrs = createLinkAttrs(mark.attrs.href, mark.attrs.title);
+        if (!attrs) break;
+        const title = attrs.title ? ` title="${escapeHtmlAttr(attrs.title)}"` : '';
+        text = `<a href="${escapeHtmlAttr(attrs.href)}"${title}>${text}</a>`;
         break;
       }
     }
@@ -59,4 +61,8 @@ function wrapTextWithMarks(textNode: ProseMirrorNode): string {
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeHtmlAttr(text: string): string {
+  return escapeHtml(text).replace(/"/g, '&quot;');
 }

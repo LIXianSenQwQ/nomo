@@ -91,6 +91,21 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toContain('##');
   });
 
+  it('exposes the active link snapshot through EditorCore', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '[链接](https://example.com "说明")',
+      target,
+    });
+
+    expect(editor.getActiveLink()).toMatchObject({
+      href: 'https://example.com',
+      title: '说明',
+      text: '链接',
+      active: true,
+    });
+  });
+
   it('keeps front matter when semantic edits serialize Markdown', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '---\ntitle: Demo\n---\n# 标题', target });

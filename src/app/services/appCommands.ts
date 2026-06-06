@@ -9,6 +9,7 @@ export interface AppCommandHandlers {
   saveMarkdownFile: (saveAs?: boolean) => void;
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
+  openLinkPicker: () => void;
   editFrontMatter: () => void;
   showUnavailableFeature: (featureName: string) => void;
   setMode: (mode: EditorMode) => void;
@@ -107,7 +108,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-comment') {
     handlers.showUnavailableFeature('注释');
   } else if (command === 'menu-link') {
-    handlers.showUnavailableFeature('超链接');
+    handlers.openLinkPicker();
   } else if (command === 'menu-image') {
     handlers.showUnavailableFeature('图像');
   } else if (command === 'menu-clear-format') {
@@ -146,6 +147,9 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === 's') {
     event.preventDefault();
     handlers.saveMarkdownFile(event.shiftKey);
+  } else if (key === 'k' && !event.shiftKey) {
+    event.preventDefault();
+    handlers.openLinkPicker();
   } else if (key === 'e') {
     event.preventDefault();
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');

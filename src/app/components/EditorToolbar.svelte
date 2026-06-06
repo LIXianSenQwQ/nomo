@@ -9,6 +9,7 @@
     Highlighter,
     Image,
     Italic,
+    Link,
     List,
     ListTree,
     Info,
@@ -45,6 +46,7 @@
   export let tablePickerOpen: boolean;
   export let openTablePicker: () => void;
   export let closeTablePicker: () => void;
+  export let openLinkPicker: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
   export let updateFontSize: (event: Event) => void;
   export let updateLineHeight: (event: Event) => void;
@@ -149,6 +151,14 @@
     on:click={() => runCommand({ type: 'toggleHighlight' })}
   >
     <Highlighter size={17} />
+  </button>
+  <button
+    title="超链接"
+    aria-label="编辑超链接"
+    on:mousedown|preventDefault
+    on:click={openLinkPicker}
+  >
+    <Link size={17} />
   </button>
   <button
     title="引用"

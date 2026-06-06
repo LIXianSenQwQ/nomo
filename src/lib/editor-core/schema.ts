@@ -2,6 +2,7 @@ import { Schema } from 'prosemirror-model';
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { tableNodes } from 'prosemirror-tables';
 import { calloutNodeSpec } from './callout/calloutSchema';
+import { createLinkAttrs } from './link';
 
 export type TableColumnAlignment = 'left' | 'center' | 'right';
 
@@ -208,29 +209,56 @@ export const schema = new Schema({
         ],
       },
     }),
-  marks: markdownSchema.spec.marks.append({
-    strikethrough: {
+  marks: markdownSchema.spec.marks
+    .update('link', {
+      attrs: {
+        href: {},
+        title: { default: null },
+      },
+      inclusive: false,
       parseDOM: [
-        { tag: 's' },
-        { tag: 'del' },
-        { tag: 'strike' },
-        { style: 'text-decoration=line-through' },
+        {
+          tag: 'a[href]',
+          getAttrs(dom) {
+            const el = dom as HTMLElement;
+            return createLinkAttrs(el.getAttribute('href'), el.getAttribute('title')) ?? false;
+          },
+        },
       ],
-      toDOM() {
-        return ['s', 0];
+      toDOM(mark) {
+        const attrs = createLinkAttrs(mark.attrs.href, mark.attrs.title);
+        const domAttrs: Record<string, string> = {
+          href: attrs?.href ?? '',
+        };
+        if (attrs?.title) {
+          domAttrs.title = attrs.title;
+        }
+        return ['a', domAttrs, 0];
       },
-    },
-    underline: {
-      parseDOM: [{ tag: 'u' }, { style: 'text-decoration=underline' }],
-      toDOM() {
-        return ['u', 0];
+    })
+    .append({
+      strikethrough: {
+        parseDOM: [
+          { tag: 's' },
+          { tag: 'del' },
+          { tag: 'strike' },
+          { style: 'text-decoration=line-through' },
+        ],
+        toDOM() {
+          return ['s', 0];
+        },
       },
-    },
-    highlight: {
-      parseDOM: [{ tag: 'mark' }],
-      toDOM() {
-        return ['mark', 0];
+      underline: {
+        parseDOM: [{ tag: 'u' }, { style: 'text-decoration=underline' }],
+        toDOM() {
+          return ['u', 0];
+        },
       },
-    },
-  }),
+      highlight: {
+        parseDOM: [{ tag: 'mark' }],
+        toDOM() {
+          return ['mark', 0];
+        },
+      },
+    }),
 });

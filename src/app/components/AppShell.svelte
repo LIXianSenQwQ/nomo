@@ -9,6 +9,7 @@
   import EditorToolbar from './EditorToolbar.svelte';
   import EditorWorkspace from './EditorWorkspace.svelte';
   import ExplorerSidebar from './ExplorerSidebar.svelte';
+  import LinkQuickEditor from './LinkQuickEditor.svelte';
   import StatusBar from './StatusBar.svelte';
 
   export let focusMode: boolean;
@@ -52,6 +53,12 @@
   export let version: number;
   export let stats: DocumentStats;
   export let tablePickerOpen: boolean;
+  export let linkPickerOpen: boolean;
+  export let linkText: string;
+  export let linkHref: string;
+  export let linkError: string;
+  export let linkCanRemove: boolean;
+  export let linkPickerPositionStyle: string;
 
   export let getCompactPath: (path: string) => string;
   export let getFolderName: (path: string) => string;
@@ -71,9 +78,15 @@
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
+  export let openLinkPicker: () => void;
   export let editFrontMatter: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
+  export let closeLinkPicker: () => void;
+  export let updateLinkText: (event: Event) => void;
+  export let updateLinkHref: (event: Event) => void;
+  export let applyLink: () => void;
+  export let removeLink: () => void;
   export let insertTableWithSize: (rows: number, columns: number) => void;
   export let openSettings: () => void;
   export let setMode: (mode: EditorMode) => void;
@@ -139,6 +152,7 @@
     {saveMarkdownFile}
     {runCommand}
     {openTablePicker}
+    {openLinkPicker}
     {editFrontMatter}
     {showUnavailableFeature}
     {setMode}
@@ -185,6 +199,7 @@
         {tablePickerOpen}
         {openTablePicker}
         {closeTablePicker}
+        {openLinkPicker}
         {insertTableWithSize}
         {updateFontSize}
         {updateLineHeight}
@@ -224,6 +239,20 @@
         {isOutlineItemExpandable}
         {toggleOutlineItemExpanded}
         {jumpToOutlineItem}
+      />
+
+      <LinkQuickEditor
+        open={linkPickerOpen}
+        text={linkText}
+        href={linkHref}
+        error={linkError}
+        canRemove={linkCanRemove}
+        positionStyle={linkPickerPositionStyle}
+        updateText={updateLinkText}
+        updateHref={updateLinkHref}
+        {applyLink}
+        {removeLink}
+        {closeLinkPicker}
       />
 
       <StatusBar {dirty} {statusMessage} {version} {stats} {mode} {readonlyDocumentMode} />

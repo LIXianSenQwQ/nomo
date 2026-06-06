@@ -71,9 +71,7 @@ describe('editorCommands', () => {
   it('选中文本切换高亮样式', () => {
     const view = createMarkdownCommandView('重点', paragraphContentSelection);
 
-    expect(executeEditorCommand({ type: 'toggleHighlight' }, view, '', () => undefined)).toBe(
-      true,
-    );
+    expect(executeEditorCommand({ type: 'toggleHighlight' }, view, '', () => undefined)).toBe(true);
     expect(currentMarkdown(view)).toBe('<mark>重点</mark>');
 
     destroyView(view);
@@ -86,6 +84,67 @@ describe('editorCommands', () => {
     );
 
     expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('链接');
+
+    destroyView(view);
+  });
+
+  it('选中文本执行超链接命令后写入 Markdown link mark', () => {
+    const view = createMarkdownCommandView('链接文字', paragraphContentSelection);
+
+    expect(
+      executeEditorCommand(
+        { type: 'insertLink', href: 'https://example.com', title: '说明' },
+        view,
+        '',
+        () => undefined,
+      ),
+    ).toBe(true);
+    expect(currentMarkdown(view)).toBe('[链接文字](https://example.com "说明")');
+
+    destroyView(view);
+  });
+
+  it('光标位于已有超链接内时更新整段链接属性', () => {
+    const view = createMarkdownCommandView('[旧链接](https://old.example)', (doc) =>
+      TextSelection.create(doc, 2),
+    );
+
+    expect(
+      executeEditorCommand(
+        { type: 'insertLink', href: 'https://new.example', title: '新说明' },
+        view,
+        '',
+        () => undefined,
+      ),
+    ).toBe(true);
+    expect(currentMarkdown(view)).toBe('[旧链接](https://new.example "新说明")');
+
+    destroyView(view);
+  });
+
+  it('无选区执行超链接命令时插入链接文字', () => {
+    const view = createMarkdownCommandView('', (doc) => TextSelection.create(doc, 1));
+
+    expect(
+      executeEditorCommand(
+        { type: 'insertLink', href: 'https://example.com', text: '官网' },
+        view,
+        '',
+        () => undefined,
+      ),
+    ).toBe(true);
+    expect(currentMarkdown(view)).toBe('[官网](https://example.com)');
+
+    destroyView(view);
+  });
+
+  it('移除当前超链接时只保留链接文字', () => {
+    const view = createMarkdownCommandView('[链接](https://example.com)', (doc) =>
+      TextSelection.create(doc, 2),
+    );
+
+    expect(executeEditorCommand({ type: 'removeLink' }, view, '', () => undefined)).toBe(true);
     expect(currentMarkdown(view)).toBe('链接');
 
     destroyView(view);

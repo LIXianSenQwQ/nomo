@@ -5,6 +5,7 @@
     listenDesktopMenuCommands,
     isTauriRuntime,
     listAppSettings,
+    openExternalLink,
     updateAppSetting,
     type RecentDocument,
   } from '../lib/desktop/tauriStorage';
@@ -15,6 +16,7 @@
     setCodeBlockTokenizer,
     type EditorChangeEvent,
     type EditorCommand,
+    type EditorAnchorRect,
     type InlinePendingMarks,
     type EditorMode,
   } from '../lib/editor-core';
@@ -112,6 +114,16 @@
     folderTree: FileTreeNode[] = [];
   let expandedFolders = new Set<string>();
   let tablePickerOpen = false;
+  let linkPickerOpen = false;
+  let linkText = '';
+  let linkHref = '';
+  let linkError = '';
+  let linkCanRemove = false;
+  let linkDraftTitle: string | null = null;
+  let linkPickerPositionStyle = '';
+  let linkOpening = false;
+  let linkOpeningTimer: number | null = null;
+  let linkOpeningToken = 0;
   let toastMessage = '';
   let toastTimer: number | null = null;
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
@@ -258,6 +270,7 @@
     saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs),
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
+    openLinkPicker: () => openLinkPicker(),
     editFrontMatter: () => editFrontMatter(),
     showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
     setMode: (nextMode) => setMode(nextMode),
@@ -282,6 +295,8 @@
     mode,
     theme: { name: theme },
     onChange: syncFromEditor,
+    onLinkShortcut: () => openLinkPicker(),
+    onOpenLink: (href) => openLinkFromEditor(href),
   });
   const editorSettings = createEditorSettingsController({
     getDesktopEnabled: () => desktopEnabled,
@@ -331,18 +346,34 @@
     recoveryKey: RECOVERY_KEY,
     getDesktopEnabled: () => desktopEnabled,
     getDirty: () => dirty,
-    setMarkdown: (value) => { markdown = value; },
-    setDirty: (value) => { dirty = value; },
-    setLargeDocumentMode: (value) => { largeDocumentMode = value; },
-    setReadonlyDocumentMode: (value) => { readonlyDocumentMode = value; },
+    setMarkdown: (value) => {
+      markdown = value;
+    },
+    setDirty: (value) => {
+      dirty = value;
+    },
+    setLargeDocumentMode: (value) => {
+      largeDocumentMode = value;
+    },
+    setReadonlyDocumentMode: (value) => {
+      readonlyDocumentMode = value;
+    },
     getNativePath: () => nativePath,
-    setNativePath: (value) => { nativePath = value; },
+    setNativePath: (value) => {
+      nativePath = value;
+    },
     getFileName: () => fileName,
-    setFileName: (value) => { fileName = value; },
+    setFileName: (value) => {
+      fileName = value;
+    },
     getFilePath: () => filePath,
-    setFilePath: (value) => { filePath = value; },
+    setFilePath: (value) => {
+      filePath = value;
+    },
     getLastKnownModifiedAt: () => lastKnownModifiedAt,
-    setLastKnownModifiedAt: (value) => { lastKnownModifiedAt = value; },
+    setLastKnownModifiedAt: (value) => {
+      lastKnownModifiedAt = value;
+    },
     getCurrentFolderPath: () => currentFolderPath,
     getFileInput: () => fileInput,
     getEditor: () => editor,
@@ -455,7 +486,9 @@
   const updateActiveOutlineFromSemanticScroll =
     outlineInteraction.updateActiveOutlineFromSemanticScroll;
 
-  async function handleCreateNode(event: CustomEvent<{ parentPath: string; type: 'folder' | 'file'; name: string }>) {
+  async function handleCreateNode(
+    event: CustomEvent<{ parentPath: string; type: 'folder' | 'file'; name: string }>,
+  ) {
     const { parentPath, type, name } = event.detail;
     let finalName = name || (type === 'folder' ? '新建文件夹' : '无标题.md');
     finalName = finalName.replace(/[<>:"/\\|?*]/g, '');
@@ -466,7 +499,7 @@
 
     const { join } = await import('@tauri-apps/api/path');
     let targetPath = await join(parentPath, finalName);
-    
+
     const { statMarkdownFile } = await import('../lib/desktop/tauriStorage');
     let suffix = 1;
     let currentName = finalName;
@@ -517,10 +550,10 @@
     await renameFile(path, targetPath).catch((err) => {
       statusMessage = `重命名失败: ${err}`;
     });
-    
+
     await loadFolder(currentFolderPath);
-    
-    tabs.forEach(t => {
+
+    tabs.forEach((t) => {
       if (t.nativePath === path || t.nativePath?.startsWith(path + '/')) {
         const newNativePath = t.nativePath.replace(path, targetPath);
         t.nativePath = newNativePath;
@@ -543,7 +576,7 @@
 
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
-    
+
     if (desktopEnabled) {
       const settings = await listAppSettings().catch(() => []);
       const workspaceTabsSetting = settings.find((s) => s.key === 'workspaceTabs');
@@ -604,6 +637,7 @@
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
     if (toastTimer !== null) window.clearTimeout(toastTimer);
+    if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
     sidebarResize.destroy();
     unsubscribe();
@@ -654,6 +688,118 @@
 
   function closeTablePicker() {
     tablePickerOpen = false;
+  }
+
+  function openLinkPicker() {
+    if (readonlyDocumentMode) {
+      statusMessage = '当前文档只读，无法编辑超链接';
+      return;
+    }
+    if (mode !== 'semantic') {
+      statusMessage = '请切换到语义模式后编辑超链接';
+      return;
+    }
+
+    const activeLink = editor.getActiveLink();
+    linkText = activeLink?.text ?? '';
+    linkHref = activeLink?.href ?? '';
+    linkCanRemove = Boolean(activeLink?.active);
+    linkDraftTitle = activeLink?.title ?? null;
+    linkPickerPositionStyle = getLinkPickerPositionStyle(editor.getSelectionAnchorRect());
+    linkError = '';
+    tablePickerOpen = false;
+    linkPickerOpen = true;
+  }
+
+  function openLinkFromEditor(href: string) {
+    const token = ++linkOpeningToken;
+    linkOpening = true;
+    statusMessage = '正在打开链接...';
+    if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
+
+    const minimumVisibleTime = new Promise<void>((resolve) => {
+      linkOpeningTimer = window.setTimeout(resolve, 700);
+    });
+
+    Promise.all([
+      openExternalLink(href).catch((error) => {
+        statusMessage = `打开链接失败：${error}`;
+      }),
+      minimumVisibleTime,
+    ]).finally(() => {
+      if (token === linkOpeningToken) {
+        linkOpening = false;
+        linkOpeningTimer = null;
+      }
+    });
+  }
+
+  function closeLinkPicker() {
+    linkPickerOpen = false;
+    linkText = '';
+    linkError = '';
+    linkCanRemove = false;
+  }
+
+  function updateLinkText(event: Event) {
+    linkText = (event.currentTarget as HTMLInputElement).value;
+  }
+
+  function updateLinkHref(event: Event) {
+    linkHref = (event.currentTarget as HTMLInputElement).value;
+    if (linkError) linkError = '';
+  }
+
+  function applyLink() {
+    if (!linkHref.trim()) {
+      linkError = '请输入链接地址';
+      return;
+    }
+
+    const applied = editor.execute({
+      type: 'insertLink',
+      href: linkHref,
+      title: linkDraftTitle ?? undefined,
+      text: linkText,
+    });
+    if (!applied) {
+      linkError = '链接地址不可用，请使用 http(s)、mailto、锚点或相对路径';
+      return;
+    }
+
+    closeLinkPicker();
+    editor.focus();
+  }
+
+  function getLinkPickerPositionStyle(anchorRect: EditorAnchorRect | null) {
+    if (typeof window === 'undefined') return '';
+
+    const popoverWidth = 392;
+    const popoverHeight = 118;
+    const viewportGap = 12;
+    const fallbackLeft = window.innerWidth / 2 - popoverWidth / 2;
+    const fallbackTop = 116;
+    const baseLeft = anchorRect?.left ?? fallbackLeft;
+    const baseTop = anchorRect ? anchorRect.bottom + 10 : fallbackTop;
+    const maxLeft = Math.max(viewportGap, window.innerWidth - popoverWidth - viewportGap);
+    const left = Math.min(Math.max(baseLeft, viewportGap), maxLeft);
+    const top =
+      baseTop + popoverHeight > window.innerHeight
+        ? Math.max(viewportGap, (anchorRect?.top ?? fallbackTop) - popoverHeight - 10)
+        : baseTop;
+
+    return `left: ${Math.round(left)}px; top: ${Math.round(top)}px;`;
+  }
+
+  function removeLink() {
+    const removed = editor.execute({ type: 'removeLink' });
+    if (!removed) {
+      linkError = '当前选区没有可移除的超链接';
+      return;
+    }
+
+    closeLinkPicker();
+    editor.focus();
   }
 
   function insertTableWithSize(rows: number, columns: number) {
@@ -824,6 +970,12 @@
   {version}
   {stats}
   {tablePickerOpen}
+  {linkPickerOpen}
+  {linkText}
+  {linkHref}
+  {linkError}
+  {linkCanRemove}
+  {linkPickerPositionStyle}
   {getCompactPath}
   {getFolderName}
   {getDirectoryLabel}
@@ -842,9 +994,15 @@
   {runCommand}
   {pendingInlineMarks}
   {openTablePicker}
+  {openLinkPicker}
   {editFrontMatter}
   {showUnavailableFeature}
   {closeTablePicker}
+  {closeLinkPicker}
+  {updateLinkText}
+  {updateLinkHref}
+  {applyLink}
+  {removeLink}
   {insertTableWithSize}
   {setMode}
   {toggleOutlineVisible}
@@ -884,3 +1042,10 @@
 />
 
 <div class="app-toast" class:visible={toastMessage} role="status">{toastMessage}</div>
+
+{#if linkOpening}
+  <div class="link-opening-indicator" role="status" aria-live="polite">
+    <span class="link-opening-spinner" aria-hidden="true"></span>
+    <span>正在打开链接</span>
+  </div>
+{/if}

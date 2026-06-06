@@ -29,12 +29,14 @@ import { CalloutNodeView } from './nodeViews/CalloutNodeView';
 import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
+import { findActiveLinkRange } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { inlineMarkdownMarkInputPlugin } from './plugins/inlineMarkdownMarkInput';
+import { linkInteractionPlugin } from './plugins/linkInteraction';
 import {
   pendingInlineMarkPlugin,
   toggleMarkPending,
@@ -56,10 +58,12 @@ import { schema } from './schema';
 import { addTableRowAfter, addTableRowBefore, findTableContext } from './tableCommands';
 import { updateTocBlocks } from '../toc/tocService';
 import type {
+  EditorAnchorRect,
   EditorChangeEvent,
   EditorCommand,
   EditorCore,
   EditorCoreOptions,
+  EditorLinkSnapshot,
   EditorListener,
   InlinePendingMarkName,
   InlinePendingMarks,
@@ -185,6 +189,49 @@ export class ProseMirrorEditorCore implements EditorCore {
     }
   }
 
+  getActiveLink(): EditorLinkSnapshot | null {
+    this.assertActive();
+    if (!this.view) return null;
+    return findActiveLinkRange(this.view.state);
+  }
+
+  getSelectionAnchorRect(): EditorAnchorRect | null {
+    this.assertActive();
+    if (!this.view) return null;
+
+    const { selection } = this.view.state;
+    const from = selection.from;
+    const to = selection.empty ? selection.from : selection.to;
+
+    try {
+      const fromRect = this.view.coordsAtPos(from);
+      const toRect = this.view.coordsAtPos(to);
+      const left = Math.min(fromRect.left, toRect.left);
+      const top = Math.min(fromRect.top, toRect.top);
+      const right = Math.max(fromRect.right, toRect.right);
+      const bottom = Math.max(fromRect.bottom, toRect.bottom);
+
+      return {
+        left,
+        top,
+        right,
+        bottom,
+        width: Math.max(1, right - left),
+        height: Math.max(1, bottom - top),
+      };
+    } catch {
+      const rect = this.view.dom.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+  }
+
   execute(command: EditorCommand): boolean {
     this.assertActive();
 
@@ -289,6 +336,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         inlineCodeInputPlugin(),
         mathInlineInputPlugin(),
         inlineMarkdownMarkInputPlugin(),
+        linkInteractionPlugin({ openLink: this.options.onOpenLink }),
         codeHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
@@ -305,6 +353,10 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Mod-b': toggleMarkPending(schema.marks.strong),
           'Mod-i': toggleMarkPending(schema.marks.em),
           'Ctrl-`': toggleMark(schema.marks.code),
+          'Mod-k': (_state, _dispatch, _view) => {
+            this.options.onLinkShortcut?.();
+            return Boolean(this.options.onLinkShortcut);
+          },
           'Alt-Shift-5': toggleMarkPending(schema.marks.strikethrough),
           'Mod-u': toggleMarkPending(schema.marks.underline),
           'Mod-\\': (_state, _dispatch, _view) =>

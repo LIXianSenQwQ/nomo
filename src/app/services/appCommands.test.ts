@@ -20,6 +20,7 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
       commands.push(command);
     }),
     openTablePicker: vi.fn(),
+    openLinkPicker: vi.fn(),
     editFrontMatter: vi.fn(),
     showUnavailableFeature: vi.fn(),
     setMode: vi.fn(),
@@ -62,6 +63,32 @@ describe('appCommands', () => {
 
     expect(handlers.commands).toEqual([{ type: 'toggleHighlight' }]);
     expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过桌面菜单命令打开超链接编辑器', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-link', handlers);
+
+    expect(handlers.openLinkPicker).toHaveBeenCalledTimes(1);
+    expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + K 打开超链接编辑器', () => {
+    const handlers = createHandlers();
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'k',
+      code: 'KeyK',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.openLinkPicker).toHaveBeenCalledTimes(1);
+    expect(handlers.commands).toEqual([]);
   });
 
   it('通过 Ctrl + \\ 触发清除样式快捷键', () => {

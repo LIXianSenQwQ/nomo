@@ -1,5 +1,6 @@
 import type { Schema } from 'prosemirror-model';
 import { INLINE_TAG_TO_MARK } from './htmlPolicy';
+import { createLinkAttrs } from '../link';
 
 /**
  * 在 MarkdownParseState 上下文中遍历 DOM 片段，调用 openMark/addText/closeMark。
@@ -46,10 +47,12 @@ function walkDOMFragment(
         if (markType) {
           let attrs: Record<string, unknown> | null = null;
           if (markName === 'link') {
-            attrs = {
-              href: el.getAttribute('href') ?? '',
-              title: el.getAttribute('title') ?? null,
-            };
+            const linkAttrs = createLinkAttrs(el.getAttribute('href'), el.getAttribute('title'));
+            attrs = linkAttrs ? { ...linkAttrs } : null;
+            if (!attrs) {
+              walkDOMFragment(state, el, schema);
+              continue;
+            }
           }
           const mark = markType.create(attrs);
           state.openMark(mark);
