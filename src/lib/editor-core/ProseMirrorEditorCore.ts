@@ -18,6 +18,8 @@ import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
+import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
 import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
@@ -109,18 +111,18 @@ export class ProseMirrorEditorCore implements EditorCore {
           new HtmlBlockNodeView(node, view, getPos as () => number),
         inline_code: (node, view, getPos) =>
           new InlineCodeNodeView(node, view, getPos as () => number),
+        footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
+        footnote_def: (node, view) => new FootnoteDefNodeView(node, view),
         math_inline: (node, view, getPos) =>
           new MathInlineNodeView(node, view, getPos as () => number),
         math_block: (node, view, getPos) =>
           new MathBlockNodeView(node, view, getPos as () => number),
         mermaid_block: (node, view, getPos) =>
           new MermaidBlockNodeView(node, view, getPos as () => number),
-        callout: (node, view, getPos) =>
-          new CalloutNodeView(node, view, getPos as () => number),
+        callout: (node, view, getPos) => new CalloutNodeView(node, view, getPos as () => number),
         horizontal_rule: (node, view, getPos) =>
           new HorizontalRuleNodeView(node, view, getPos as () => number),
-        toc_block: (node, view, getPos) =>
-          new TocBlockNodeView(node, view, getPos as () => number),
+        toc_block: (node, view, getPos) => new TocBlockNodeView(node, view, getPos as () => number),
       },
     });
     this.refreshInitialEditableState();
@@ -316,7 +318,9 @@ export class ProseMirrorEditorCore implements EditorCore {
                 const emptyParagraph = schema.nodes.paragraph.create();
                 const tr = state.tr.insert(calloutEnd, emptyParagraph);
                 if (dispatch) {
-                  dispatch(tr.setSelection(TextSelection.create(tr.doc, calloutEnd + 1)).scrollIntoView());
+                  dispatch(
+                    tr.setSelection(TextSelection.create(tr.doc, calloutEnd + 1)).scrollIntoView(),
+                  );
                 }
                 return true;
               }
@@ -480,10 +484,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.emit('transaction');
   }
 
-  private replaceViewState(
-    markdown: string,
-    selection?: { anchor: number; head: number },
-  ): void {
+  private replaceViewState(markdown: string, selection?: { anchor: number; head: number }): void {
     if (!this.view) {
       return;
     }

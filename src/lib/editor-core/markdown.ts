@@ -19,6 +19,27 @@ import { splitFrontMatterBlock } from '../markdown/frontMatter';
 
 const markdownIt = MarkdownIt('commonmark', { html: true }).enable(['table', 'strikethrough']);
 
+markdownIt.inline.ruler.before('link', 'footnote_ref', (state, silent) => {
+  const src = state.src;
+  const pos = state.pos;
+  if (src.charCodeAt(pos) !== 0x5b || src.charCodeAt(pos + 1) !== 0x5e) return false;
+
+  const end = src.indexOf(']', pos + 2);
+  if (end === -1) return false;
+
+  const id = src.slice(pos + 2, end).trim();
+  if (!id || /\s/.test(id)) return false;
+
+  if (!silent) {
+    const token = state.push('footnote_ref', 'sup', 0);
+    token.content = id;
+    token.markup = '[^]';
+    token.meta = { id };
+  }
+  state.pos = end + 1;
+  return true;
+});
+
 markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
   const src = state.src;
   const pos = state.pos;
@@ -57,6 +78,36 @@ markdownIt.inline.ruler.after('backticks', 'math_inline', (state, silent) => {
     token.markup = '$';
     state.pos = end + 1;
   }
+  return true;
+});
+
+markdownIt.block.ruler.before('reference', 'footnote_def', (state, startLine, _endLine, silent) => {
+  const startPos = state.bMarks[startLine] + state.tShift[startLine];
+  const lineText = state.src.slice(startPos, state.eMarks[startLine]);
+  const match = /^\[\^([^\]\s]+)\]:[ \t]*(.*)$/.exec(lineText);
+  if (!match) return false;
+
+  if (silent) return true;
+
+  const id = match[1];
+  const content = match[2] ?? '';
+  const openToken = state.push('footnote_def_open', 'div', 1);
+  openToken.block = true;
+  openToken.map = [startLine, startLine + 1];
+  openToken.markup = '[^]:';
+  openToken.meta = { id };
+
+  const inlineToken = state.push('inline', '', 0);
+  inlineToken.content = content;
+  inlineToken.children = [];
+  inlineToken.map = [startLine, startLine + 1];
+
+  const closeToken = state.push('footnote_def_close', 'div', -1);
+  closeToken.block = true;
+  closeToken.markup = '[^]:';
+  closeToken.meta = { id };
+
+  state.line = startLine + 1;
   return true;
 });
 
@@ -144,6 +195,11 @@ const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   tr: { block: 'table_row' },
   th: { block: 'table_header', getAttrs: getTableCellAttrs },
   td: { block: 'table_cell', getAttrs: getTableCellAttrs },
+  footnote_ref: {
+    node: 'footnote_ref',
+    getAttrs: (tok: Token) => ({ id: tok.meta?.id ?? tok.content }),
+  },
+  footnote_def: { block: 'footnote_def', getAttrs: (tok: Token) => ({ id: tok.meta?.id ?? '' }) },
   math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
@@ -359,6 +415,15 @@ const tableMarkdownSerializer = new MarkdownSerializer(
         state.write(`\`${code}\``);
       }
     },
+    footnote_ref(state, node) {
+      state.write(`[^${node.attrs.id}]`);
+    },
+    footnote_def(state, node) {
+      state.ensureNewLine();
+      state.write(`[^${node.attrs.id}]: `);
+      state.renderInline(node);
+      state.closeBlock(node);
+    },
     text(state, node) {
       state.text(escapeMarkdownTextWithoutManualInlineMarkers(node.text ?? ''), false);
     },
@@ -538,9 +603,7 @@ type ListItemBlankParagraphContext = {
   previousChildBlockEnd: number;
 };
 
-function createListItemBlankParagraphContext(
-  token: Token,
-): ListItemBlankParagraphContext | null {
+function createListItemBlankParagraphContext(token: Token): ListItemBlankParagraphContext | null {
   if (token.type !== 'list_item_open' || !token.map) {
     return null;
   }
@@ -832,8 +895,11 @@ function collapseTocTokens(tokens: Token[], markdown: string): Token[] {
     const startLine = token.map?.[0] ?? 0;
     const endLine = tokens[endIndex].map?.[0] ?? startLine;
     const tocToken = new Token('toc_block', '', 0);
-    tocToken.content = lines.slice(startLine + 1, endLine).join('\n').trim();
-    tocToken.map = [startLine, (tokens[endIndex].map?.[1] ?? endLine + 1)];
+    tocToken.content = lines
+      .slice(startLine + 1, endLine)
+      .join('\n')
+      .trim();
+    tocToken.map = [startLine, tokens[endIndex].map?.[1] ?? endLine + 1];
     result.push(tocToken);
     index = endIndex;
   }

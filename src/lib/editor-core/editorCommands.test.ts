@@ -4,6 +4,8 @@ import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { executeEditorCommand } from './editorCommands';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
+import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import { schema } from './schema';
@@ -259,7 +261,9 @@ describe('editorCommands', () => {
   });
 
   it('段落按 + 应变为 H1', () => {
-    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create(null, schema.text('测试'))]);
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('测试')),
+    ]);
     const target = document.createElement('div');
     document.body.appendChild(target);
 
@@ -270,7 +274,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'increaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(true);
     expect(view.state.doc.child(0).type.name).toBe('heading');
@@ -294,7 +303,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'increaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(false);
     expect(view.state.doc.child(0).attrs.level).toBe(1);
@@ -317,7 +331,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'increaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'increaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(true);
     expect(view.state.doc.child(0).attrs.level).toBe(2);
@@ -340,7 +359,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'decreaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(true);
     expect(view.state.doc.child(0).type.name).toBe('heading');
@@ -364,7 +388,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'decreaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(false);
     expect(view.state.doc.child(0).attrs.level).toBe(6);
@@ -374,7 +403,9 @@ describe('editorCommands', () => {
   });
 
   it('段落按 - 应不处理', () => {
-    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create(null, schema.text('测试'))]);
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('测试')),
+    ]);
     const target = document.createElement('div');
     document.body.appendChild(target);
 
@@ -385,7 +416,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    const result = executeEditorCommand({ type: 'decreaseHeadingLevel' }, view, '', () => undefined);
+    const result = executeEditorCommand(
+      { type: 'decreaseHeadingLevel' },
+      view,
+      '',
+      () => undefined,
+    );
 
     expect(result).toBe(false);
     expect(view.state.doc.child(0).type.name).toBe('paragraph');
@@ -421,7 +457,12 @@ describe('editorCommands', () => {
       }),
     });
 
-    executeEditorCommand({ type: 'insertTable', rows: 1, columns: 2 }, tableView, '', () => undefined);
+    executeEditorCommand(
+      { type: 'insertTable', rows: 1, columns: 2 },
+      tableView,
+      '',
+      () => undefined,
+    );
     expect(getTopLevelNodeNames(tableView.state.doc)).toEqual(['table', 'paragraph']);
     expect(tableView.state.selection.$from.parent.type.name).toBe('paragraph');
 
@@ -430,10 +471,155 @@ describe('editorCommands', () => {
     tableView.destroy();
     tableTarget.remove();
   });
+
+  it('插入脚注时生成正文引用和底部定义，并把光标移入定义内容', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, schema.text('正文')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 3),
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertFootnote' }, view, '', () => undefined);
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph', 'footnote_def']);
+    expect(view.state.doc.child(0).child(1).type.name).toBe('footnote_ref');
+    expect(view.state.doc.child(0).child(1).attrs.id).toBe('1');
+    expect(view.state.doc.child(1).attrs.id).toBe('1');
+    expect(view.state.selection.$from.parent.type.name).toBe('footnote_def');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('插入脚注时按已有数字 id 递增，且忽略非数字 id', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('正文'),
+        schema.nodes.footnote_ref.create({ id: 'note' }),
+        schema.nodes.footnote_ref.create({ id: '2' }),
+      ]),
+      schema.nodes.footnote_def.create({ id: 'note' }, schema.text('非数字')),
+      schema.nodes.footnote_def.create({ id: '2' }, schema.text('第二条')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+      }),
+    });
+
+    executeEditorCommand({ type: 'insertFootnote' }, view, '', () => undefined);
+
+    const lastNode = view.state.doc.child(view.state.doc.childCount - 1);
+    expect(lastNode.type.name).toBe('footnote_def');
+    expect(lastNode.attrs.id).toBe('3');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('正文脚注引用点击后跳到底部定义', () => {
+    const doc = createFootnoteDoc();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
+        footnote_def: (node, view) => new FootnoteDefNodeView(node, view),
+      },
+    });
+
+    target.querySelector<HTMLElement>('.footnote-ref')!.click();
+
+    expect(view.state.selection.$from.parent.type.name).toBe('footnote_def');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('底部脚注定义点击标记后跳回首个正文引用', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('第一处'),
+        schema.nodes.footnote_ref.create({ id: '1' }),
+      ]),
+      schema.nodes.paragraph.create(null, [
+        schema.text('第二处'),
+        schema.nodes.footnote_ref.create({ id: '1' }),
+      ]),
+      schema.nodes.footnote_def.create({ id: '1' }, schema.text('说明')),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
+        footnote_def: (node, view) => new FootnoteDefNodeView(node, view),
+      },
+    });
+
+    target.querySelector<HTMLElement>('.footnote-def-marker')!.click();
+
+    expect(view.state.selection).toBeInstanceOf(TextSelection);
+    expect(view.state.selection.from).toBe('第一处'.length + 2);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('正文脚注引用 hover 时显示脚注内容预览', async () => {
+    const doc = createFootnoteDoc();
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
+        footnote_def: (node, view) => new FootnoteDefNodeView(node, view),
+      },
+    });
+
+    target
+      .querySelector<HTMLElement>('.footnote-ref')!
+      .dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = document.body.querySelector<HTMLElement>('.footnote-preview');
+    expect(preview).not.toBeNull();
+    expect(preview!.textContent).toContain('脚注说明');
+
+    view.destroy();
+    target.remove();
+  });
 });
 
 function getTopLevelNodeNames(doc: PmNode): string[] {
   const names: string[] = [];
   doc.forEach((node) => names.push(node.type.name));
   return names;
+}
+
+function createFootnoteDoc(): PmNode {
+  return schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, [
+      schema.text('正文'),
+      schema.nodes.footnote_ref.create({ id: '1' }),
+    ]),
+    schema.nodes.footnote_def.create({ id: '1' }, schema.text('脚注说明')),
+  ]);
 }

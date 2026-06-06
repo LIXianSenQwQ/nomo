@@ -99,6 +99,55 @@ export const schema = new Schema({
           },
         ],
       },
+      footnote_ref: {
+        inline: true,
+        group: 'inline',
+        atom: true,
+        selectable: false,
+        draggable: false,
+        attrs: {
+          id: { default: '' },
+        },
+        toDOM(node) {
+          const id = node.attrs.id as string;
+          return ['sup', { class: 'footnote-ref', 'data-footnote-id': id }, id];
+        },
+        parseDOM: [
+          {
+            tag: 'sup.footnote-ref',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              return { id: el.getAttribute('data-footnote-id') ?? '' };
+            },
+          },
+        ],
+      },
+      footnote_def: {
+        content: 'inline*',
+        group: 'block',
+        defining: true,
+        attrs: {
+          id: { default: '' },
+        },
+        toDOM(node) {
+          const id = node.attrs.id as string;
+          return [
+            'div',
+            { class: 'footnote-def', 'data-footnote-id': id },
+            ['span', { class: 'footnote-def-marker' }, id],
+            ['span', { class: 'footnote-def-content' }, 0],
+          ];
+        },
+        parseDOM: [
+          {
+            tag: 'div.footnote-def',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              return { id: el.getAttribute('data-footnote-id') ?? '' };
+            },
+          },
+        ],
+      },
       // 跨行公式块（display math）：$$...$$ 语法
       callout: calloutNodeSpec,
       toc_block: {
@@ -172,10 +221,7 @@ export const schema = new Schema({
       },
     },
     underline: {
-      parseDOM: [
-        { tag: 'u' },
-        { style: 'text-decoration=underline' },
-      ],
+      parseDOM: [{ tag: 'u' }, { style: 'text-decoration=underline' }],
       toDOM() {
         return ['u', 0];
       },

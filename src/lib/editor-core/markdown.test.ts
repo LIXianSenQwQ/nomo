@@ -72,4 +72,29 @@ describe('markdown serialization', () => {
 
     expect(hasUnderline).toBe(true);
   });
+
+  it('round trips single-line footnotes', () => {
+    const input = '正文内容[^1]\n\n[^1]: 脚注内容';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('preserves inline marks inside footnote definitions', () => {
+    const input = '正文[^1]\n\n[^1]: **重点** [链接](https://example.com) `code`';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('preserves non-numeric footnote ids', () => {
+    const input = '正文[^note]\n\n[^note]: 说明';
+
+    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+  });
+
+  it('does not parse normal brackets as footnotes', () => {
+    const doc = parseMarkdown('正文[不是脚注] [^缺少结束');
+
+    expect(doc.child(0).type.name).toBe('paragraph');
+    expect(doc.child(0).textContent).toBe('正文[不是脚注] [^缺少结束');
+  });
 });

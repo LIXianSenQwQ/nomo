@@ -172,6 +172,11 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
         )
         .item(&diagram_menu)
         .item(
+            &MenuItemBuilder::with_id("menu-footnote", "脚注")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
             &MenuItemBuilder::with_id("menu-horizontal-rule", "水平分割线")
                 .accelerator("Ctrl + Shift + H")
                 .build(app)

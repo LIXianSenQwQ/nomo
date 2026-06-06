@@ -2,7 +2,12 @@
   import { onMount } from 'svelte';
   import { Moon, Sun } from '@lucide/svelte';
   import type { RecentDocument } from '../../lib/desktop/tauriStorage';
-  import { DIAGRAM_TEMPLATES, type DiagramType, type EditorCommand, type EditorMode } from '../../lib/editor-core';
+  import {
+    DIAGRAM_TEMPLATES,
+    type DiagramType,
+    type EditorCommand,
+    type EditorMode,
+  } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
 
   export let theme: 'light' | 'dark';
@@ -42,38 +47,40 @@
   onMount(() => {
     isMac = navigator.userAgent.includes('Mac');
     isWin = navigator.userAgent.includes('Win');
-    
+
     let isDestroyed = false;
 
     if (desktopEnabled) {
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
         if (isDestroyed) return;
         const appWindow = getCurrentWindow();
-        
+
         // 初始化状态
-        appWindow.isFullscreen().then(fullscreen => {
+        appWindow.isFullscreen().then((fullscreen) => {
           if (!isDestroyed) isFullscreen = fullscreen;
         });
-        appWindow.isMaximized().then(maximized => {
+        appWindow.isMaximized().then((maximized) => {
           if (!isDestroyed) isMaximized = maximized;
         });
 
         // 监听窗口改变事件
-        appWindow.onResized(async () => {
-          if (!isDestroyed) {
-            isFullscreen = await appWindow.isFullscreen();
-            // 在 Mac 上双击 topbar 放大其实是 zoom，但原生的红绿灯还在！
-            // 所以即使 isMaximized 变成了 true，我们也不应该去掉 80px 的左内边距。
-            // 只有 isFullscreen 才会让红绿灯消失。
-            isMaximized = await appWindow.isMaximized();
-          }
-        }).then(unlisten => {
-          if (isDestroyed) {
-            unlisten();
-          } else {
-            unlistenResized = unlisten;
-          }
-        });
+        appWindow
+          .onResized(async () => {
+            if (!isDestroyed) {
+              isFullscreen = await appWindow.isFullscreen();
+              // 在 Mac 上双击 topbar 放大其实是 zoom，但原生的红绿灯还在！
+              // 所以即使 isMaximized 变成了 true，我们也不应该去掉 80px 的左内边距。
+              // 只有 isFullscreen 才会让红绿灯消失。
+              isMaximized = await appWindow.isMaximized();
+            }
+          })
+          .then((unlisten) => {
+            if (isDestroyed) {
+              unlisten();
+            } else {
+              unlistenResized = unlisten;
+            }
+          });
       });
     }
 
@@ -89,9 +96,13 @@
     if (!desktopEnabled || e.buttons !== 1) return;
 
     const target = e.target as HTMLElement;
-    
+
     // 排除交互元素，避免影响按钮点击
-    if (target.closest('button') || target.closest('.titlebar-right') || target.closest('.titlebar-menu')) {
+    if (
+      target.closest('button') ||
+      target.closest('.titlebar-right') ||
+      target.closest('.titlebar-menu')
+    ) {
       return;
     }
 
@@ -103,7 +114,7 @@
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const appWindow = getCurrentWindow();
-      
+
       if (e.detail === 2) {
         // 双击最大化/还原
         await appWindow.toggleMaximize();
@@ -131,7 +142,12 @@
   }
 </script>
 
-<header class="titlebar" class:is-mac={isMac} class:is-win={isWin} class:is-fullscreen={isFullscreen}>
+<header
+  class="titlebar"
+  class:is-mac={isMac}
+  class:is-win={isWin}
+  class:is-fullscreen={isFullscreen}
+>
   <div class="titlebar-row top-row" data-drag-region role="presentation" on:mousedown={handleDrag}>
     <div class="titlebar-left" data-drag-region>
       <span class="app-logo">M</span>
@@ -328,17 +344,21 @@
                 >
               </div>
             </div>
-            <button on:mousedown|preventDefault on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
+            <button
+              on:mousedown|preventDefault
+              on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
               >段落 <span class="shortcut">Ctrl + 0</span></button
             >
             <button
               on:mousedown|preventDefault
-              on:click={() => finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
+              on:click={() =>
+                finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
               >提升标题 <span class="shortcut">Ctrl + =</span></button
             >
             <button
               on:mousedown|preventDefault
-              on:click={() => finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
+              on:click={() =>
+                finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
               >降低标题 <span class="shortcut">Ctrl + -</span></button
             >
             <div class="divider"></div>
@@ -357,23 +377,19 @@
             >
             <div class="divider"></div>
             <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'toggleBlockquote' }), 'paragraph')}
+              on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'paragraph')}
               >引用 <span class="shortcut">Ctrl + Shift + Q</span></button
             >
             <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'insertCallout' }), 'paragraph')}
+              on:click={() => finish(() => runCommand({ type: 'insertCallout' }), 'paragraph')}
               >提示块 <span class="shortcut">Ctrl + Shift + A</span></button
             >
             <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
+              on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
               >有序列表 <span class="shortcut">Ctrl + Shift + [</span></button
             >
             <button
-              on:click={() =>
-                finish(() => runCommand({ type: 'toggleBulletList' }), 'paragraph')}
+              on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'paragraph')}
               >无序列表 <span class="shortcut">Ctrl + Shift + ]</span></button
             >
             <button
@@ -406,8 +422,13 @@
                 {/each}
               </div>
             </div>
-            <button on:click={() => comingSoon('脚注', 'paragraph')}>脚注</button>
-            <button on:click={() => finish(() => runCommand({ type: 'insertHorizontalRule' }), 'paragraph')}
+            <button
+              on:click={() => finish(() => runCommand({ type: 'insertFootnote' }), 'paragraph')}
+              >脚注</button
+            >
+            <button
+              on:click={() =>
+                finish(() => runCommand({ type: 'insertHorizontalRule' }), 'paragraph')}
               >水平分割线 <span class="shortcut">Ctrl + Shift + H</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'insertToc' }), 'paragraph')}
@@ -440,7 +461,8 @@
             >
             <button on:click={() => comingSoon('行公式', 'format')}>行公式</button>
             <div class="divider"></div>
-            <button on:click={() => finish(() => runCommand({ type: 'toggleStrikethrough' }), 'format')}
+            <button
+              on:click={() => finish(() => runCommand({ type: 'toggleStrikethrough' }), 'format')}
               >删除线 <span class="shortcut">Alt + Shift + 5</span></button
             >
             <button on:click={() => comingSoon('高亮', 'format')}>高亮</button>
@@ -485,7 +507,9 @@
       </div>
 
       <div class="menu-item">
-        <button class="menu-btn" on:click|stopPropagation={() => finish(openSettings, 'settings')}>设置</button>
+        <button class="menu-btn" on:click|stopPropagation={() => finish(openSettings, 'settings')}
+          >设置</button
+        >
       </div>
     </nav>
   </div>

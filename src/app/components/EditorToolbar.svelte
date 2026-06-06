@@ -19,6 +19,7 @@
     Save,
     Sigma,
     Strikethrough,
+    Superscript,
     Table2,
     Underline,
   } from '@lucide/svelte';
@@ -140,13 +141,25 @@
   >
     <Underline size={17} />
   </button>
-  <button title="引用" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleBlockquote' })}>
+  <button
+    title="引用"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleBlockquote' })}
+  >
     <Quote size={17} />
   </button>
-  <button title="提示块" on:mousedown|preventDefault on:click={() => runCommand({ type: 'insertCallout' })}>
+  <button
+    title="提示块"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'insertCallout' })}
+  >
     <Info size={17} />
   </button>
-  <button title="列表" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleBulletList' })}>
+  <button
+    title="列表"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleBulletList' })}
+  >
     <List size={17} />
   </button>
   <button
@@ -157,7 +170,19 @@
   >
     <ListTree size={17} />
   </button>
-  <button title="任务列表" on:mousedown|preventDefault on:click={() => runCommand({ type: 'toggleTaskList' })}>
+  <button
+    title="插入脚注"
+    aria-label="插入脚注"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'insertFootnote' })}
+  >
+    <Superscript size={17} />
+  </button>
+  <button
+    title="任务列表"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleTaskList' })}
+  >
     <CheckSquare size={17} />
   </button>
   <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>
@@ -206,11 +231,7 @@
       </div>
     {/if}
   </div>
-  <button
-    title="代码块"
-    on:click={() =>
-      runCommand({ type: 'insertCodeBlock' })}
-  >
+  <button title="代码块" on:click={() => runCommand({ type: 'insertCodeBlock' })}>
     <Code2 size={17} />
   </button>
   <button
@@ -247,11 +268,7 @@
       >
         <div class="diagram-picker-header">图表</div>
         {#each DIAGRAM_TEMPLATES as template}
-          <button
-            type="button"
-            role="menuitem"
-            on:click={() => insertDiagram(template.type)}
-          >
+          <button type="button" role="menuitem" on:click={() => insertDiagram(template.type)}>
             <span>{template.label}</span>
             <small>{template.type}</small>
           </button>

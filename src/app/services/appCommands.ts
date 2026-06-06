@@ -87,7 +87,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
       handlers.runCommand({ type: 'insertDiagramBlock', diagramType });
     }
   } else if (command === 'menu-footnote') {
-    handlers.showUnavailableFeature('脚注');
+    handlers.runCommand({ type: 'insertFootnote' });
   } else if (command === 'menu-horizontal-rule') {
     handlers.runCommand({ type: 'insertHorizontalRule' });
   } else if (command === 'menu-content-directory') {

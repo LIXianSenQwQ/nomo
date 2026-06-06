@@ -12,7 +12,10 @@ import { getDiagramTemplate } from './diagramTemplates';
  * 在当前块的下方插入一个新的空段落，并将光标移入。
  * 逻辑：定位当前顶层块的末尾位置，在该位置插入空段落节点。
  */
-function insertParagraphAfterCurrentBlock(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+function insertParagraphAfterCurrentBlock(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
   if (!dispatch) return false;
   const { $from } = state.selection;
   const topDepth = 1;
@@ -30,7 +33,10 @@ function insertParagraphAfterCurrentBlock(state: EditorState, dispatch?: (tr: Tr
  * 在当前块的上方插入一个新的空段落，并将光标移入。
  * 逻辑：定位当前顶层块的起始位置，在该位置之前插入空段落节点。
  */
-function insertParagraphBeforeCurrentBlock(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+function insertParagraphBeforeCurrentBlock(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
   if (!dispatch) return false;
   const { $from } = state.selection;
   const topDepth = 1;
@@ -354,6 +360,8 @@ export function executeEditorCommand(
         alt: command.alt ?? null,
         title: command.title ?? null,
       });
+    case 'insertFootnote':
+      return insertFootnote(view);
     case 'insertCodeBlock': {
       // 开关逻辑：已在代码块内则取消（恢复为段落），否则插入新代码块
       const { selection } = state;
@@ -407,7 +415,9 @@ export function executeEditorCommand(
         }
       }
       // 不在代码块内 → 正常插入（有选中文本时放入代码块）
-      const selectedText = state.selection.empty ? '' : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+      const selectedText = state.selection.empty
+        ? ''
+        : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
       return insertBlock(view, schema.nodes.code_block, selectedText);
     }
     case 'toggleTaskList':
@@ -593,6 +603,36 @@ function insertTable(view: EditorView, tableNode: PmNode): boolean {
   }
   view.dispatch(tr.scrollIntoView());
   return true;
+}
+
+function insertFootnote(view: EditorView): boolean {
+  const { state } = view;
+  const id = createNextFootnoteId(state.doc);
+  const footnoteRef = schema.nodes.footnote_ref.create({ id });
+  const footnoteDef = schema.nodes.footnote_def.create({ id });
+
+  let tr = state.tr.replaceSelectionWith(footnoteRef, false);
+  const defPos = tr.doc.content.size;
+  tr = tr.insert(defPos, footnoteDef);
+  tr = tr.setSelection(TextSelection.create(tr.doc, defPos + 1));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function createNextFootnoteId(doc: PmNode): string {
+  let maxNumericId = 0;
+  doc.descendants((node) => {
+    if (node.type.name !== 'footnote_ref' && node.type.name !== 'footnote_def') {
+      return true;
+    }
+
+    const id = String(node.attrs.id ?? '');
+    if (/^\d+$/.test(id)) {
+      maxNumericId = Math.max(maxNumericId, Number(id));
+    }
+    return true;
+  });
+  return String(maxNumericId + 1);
 }
 
 function setSelectionInFirstTableCell(tr: Transaction, tablePos: number): void {

@@ -61,13 +61,17 @@ export type EditorCommand =
   | { type: 'setParagraph' }
   | { type: 'toggleBlockquote' }
   | { type: 'insertCallout'; calloutType?: 'note' | 'tip' | 'important' | 'warning' | 'caution' }
-  | { type: 'toggleCalloutType'; calloutType?: 'note' | 'tip' | 'important' | 'warning' | 'caution' }
+  | {
+      type: 'toggleCalloutType';
+      calloutType?: 'note' | 'tip' | 'important' | 'warning' | 'caution';
+    }
   | { type: 'unwrapCallout' }
   | { type: 'toggleBulletList' }
   | { type: 'toggleOrderedList' }
   | { type: 'toggleTaskList' }
   | { type: 'insertLink'; href: string; title?: string; text?: string }
   | { type: 'insertImage'; src: string; alt?: string; title?: string }
+  | { type: 'insertFootnote' }
   | { type: 'insertCodeBlock'; language?: string; code?: string }
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }
