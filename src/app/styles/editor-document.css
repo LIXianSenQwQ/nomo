@@ -36,13 +36,7 @@
   align-items: start;
   min-height: 100%;
   padding: 44px 20px 64px;
-  background:
-    radial-gradient(
-      circle at 50% 12%,
-      color-mix(in srgb, var(--md-editor-accent) 7%, transparent),
-      transparent 34%
-    ),
-    var(--md-editor-document-bg);
+  background: var(--md-editor-document-bg);
 }
 
 .prosemirror-host {
