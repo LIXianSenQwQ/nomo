@@ -1331,6 +1331,92 @@
   display: none;
 }
 
+.comment-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  margin: 14px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
+  border-radius: var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-surface) 84%, #9ca3af 7%);
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.comment-block:hover {
+  border-color: color-mix(in srgb, var(--md-editor-border) 54%, var(--md-editor-accent) 46%);
+  background: color-mix(in srgb, var(--md-editor-surface) 78%, var(--md-editor-accent) 7%);
+}
+
+.comment-block:focus-visible,
+.comment-block.ProseMirror-selectednode {
+  outline: 2px solid var(--md-editor-accent);
+  outline-offset: 2px;
+}
+
+.comment-block-label,
+.comment-inline-label {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 74%, transparent);
+  border-radius: var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-surface) 72%, #9ca3af 10%);
+  color: color-mix(in srgb, var(--md-editor-muted-fg) 88%, var(--md-editor-fg) 12%);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.comment-block-preview {
+  min-width: 0;
+  color: var(--md-editor-muted-fg);
+  font-size: 0.92em;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-block.is-empty .comment-block-preview {
+  opacity: 0.72;
+}
+
+.comment-block.is-editing {
+  display: block;
+  cursor: default;
+}
+
+.comment-block-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  padding: 9px 10px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-surface);
+  color: var(--md-editor-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+}
+
+.comment-block-textarea:focus {
+  border-color: var(--md-editor-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-editor-accent) 18%, transparent);
+}
+
 .prosemirror-host .ProseMirror {
   min-height: calc(100vh - 235px);
   outline: none;
@@ -2009,6 +2095,57 @@
   vertical-align: baseline;
   outline: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ---- Markdown 注释 comment_inline ---- */
+
+.comment-inline {
+  display: inline-flex;
+  align-items: center;
+  max-width: min(34ch, 72vw);
+  min-height: 24px;
+  margin: 0 2px;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+.comment-inline .comment-inline-label {
+  display: inline-block;
+  max-width: min(34ch, 72vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.comment-inline:focus-visible,
+.comment-inline.ProseMirror-selectednode {
+  border-radius: var(--md-editor-radius-sm);
+  outline: 2px solid var(--md-editor-accent);
+  outline-offset: 2px;
+}
+
+.comment-inline.is-editing,
+.comment-inline.is-editing.ProseMirror-selectednode {
+  max-width: min(64ch, 84vw);
+  outline: none;
+}
+
+.comment-inline-input {
+  display: inline;
+  width: auto;
+  min-width: min(24ch, 84vw);
+  max-width: min(64ch, 84vw);
+  padding: 4px 9px;
+  border: 1px solid var(--md-editor-accent);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-surface);
+  color: var(--md-editor-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: 0.9em;
+  line-height: 1.35;
+  vertical-align: baseline;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 
 /* 轻量语法提示 token 样式 */

@@ -18,6 +18,8 @@ import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { CommentBlockNodeView } from './nodeViews/CommentBlockNodeView';
+import { CommentInlineNodeView } from './nodeViews/CommentInlineNodeView';
 import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
 import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
@@ -117,8 +119,12 @@ export class ProseMirrorEditorCore implements EditorCore {
           new ImageNodeView(node, view, () => this.options.getImageContext?.() ?? {}),
         html_block: (node, view, getPos) =>
           new HtmlBlockNodeView(node, view, getPos as () => number),
+        comment_block: (node, view, getPos) =>
+          new CommentBlockNodeView(node, view, getPos as () => number),
         inline_code: (node, view, getPos) =>
           new InlineCodeNodeView(node, view, getPos as () => number),
+        comment_inline: (node, view, getPos) =>
+          new CommentInlineNodeView(node, view, getPos as () => number),
         footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
         footnote_def: (node, view) => new FootnoteDefNodeView(node, view),
         math_inline: (node, view, getPos) =>
@@ -480,6 +486,13 @@ export class ProseMirrorEditorCore implements EditorCore {
               }
               return true;
             }
+            if (nodeAfter?.type.name === 'comment_inline') {
+              if (dispatch) {
+                CommentInlineNodeView.requestKeyboardEntry('start');
+                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos)));
+              }
+              return true;
+            }
             return false;
           },
           ArrowLeft: (state, dispatch) => {
@@ -500,6 +513,17 @@ export class ProseMirrorEditorCore implements EditorCore {
             if (nodeBefore?.type.name === 'inline_code') {
               if (dispatch) {
                 InlineCodeNodeView.requestKeyboardEntry('end');
+                dispatch(
+                  state.tr.setSelection(
+                    NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),
+                  ),
+                );
+              }
+              return true;
+            }
+            if (nodeBefore?.type.name === 'comment_inline') {
+              if (dispatch) {
+                CommentInlineNodeView.requestKeyboardEntry('end');
                 dispatch(
                   state.tr.setSelection(
                     NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),

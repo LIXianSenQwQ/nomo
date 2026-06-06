@@ -239,6 +239,7 @@ const tableMarkdownParserWithHandlers =
   tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
 
 const ADJACENT_INLINE_CODE_SENTINEL = '<!-- md-adjacent-inline-code -->';
+const COMMENT_RE = /^<!--([\s\S]*?)-->$/;
 const defaultFenceTokenHandler = tableMarkdownParserWithHandlers.tokenHandlers.fence;
 
 // 覆盖 html_block token handler — 分类 HTML 后决定走可编辑节点还是 fallback paragraph
@@ -255,6 +256,14 @@ tableMarkdownParserWithHandlers.tokenHandlers = {
     defaultFenceTokenHandler(state, tok);
   },
   html_block: (state: HtmlMarkdownParseState, tok: Token) => {
+    if (isMarkdownComment(tok.content) && !isReservedTocComment(tok.content)) {
+      state.openNode(schema.nodes.comment_block, {
+        content: readMarkdownCommentContent(tok.content),
+      });
+      state.closeNode();
+      return;
+    }
+
     const classification = classifyHtmlBlock(tok.content);
     if (classification.editable) {
       const attrs: Record<string, unknown> = {
@@ -305,6 +314,14 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
 ) => {
   const content = tok.content;
   if (content === ADJACENT_INLINE_CODE_SENTINEL) {
+    return;
+  }
+
+  if (isMarkdownComment(content) && !isReservedTocComment(content)) {
+    state.openNode(schema.nodes.comment_inline, {
+      content: readMarkdownCommentContent(content),
+    });
+    state.closeNode();
     return;
   }
 
@@ -411,6 +428,11 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.write(html);
       state.closeBlock(node);
     },
+    comment_block(state, node) {
+      state.ensureNewLine();
+      state.write(serializeMarkdownComment(String(node.attrs.content ?? ''), true));
+      state.closeBlock(node);
+    },
     toc_block(state, node) {
       state.ensureNewLine();
       const content = String(node.attrs.content ?? '').trim();
@@ -432,6 +454,9 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       } else {
         state.write(`\`${code}\``);
       }
+    },
+    comment_inline(state, node) {
+      state.write(serializeMarkdownComment(String(node.attrs.content ?? ''), false));
     },
     footnote_ref(state, node) {
       state.write(`[^${node.attrs.id}]`);
@@ -970,4 +995,34 @@ function extractAttr(rawTag: string, name: string): string | null {
   const regex = new RegExp(`${name}="([^"]*)"`, 'i');
   const match = regex.exec(rawTag);
   return match ? match[1] : null;
+}
+
+function isMarkdownComment(content: string): boolean {
+  return COMMENT_RE.test(content.trim());
+}
+
+function isReservedTocComment(content: string): boolean {
+  const trimmed = content.trim();
+  return /^<!--\s*toc\s*-->\s*$/i.test(trimmed) || /^<!--\s*\/toc\s*-->\s*$/i.test(trimmed);
+}
+
+function readMarkdownCommentContent(rawComment: string): string {
+  const match = COMMENT_RE.exec(rawComment.trim());
+  if (!match) return rawComment;
+
+  const content = match[1].replace(/\r\n/g, '\n');
+  if (/^\n[\s\S]*\n$/.test(content)) {
+    return content.slice(1, -1);
+  }
+
+  return content.replace(/^[ \t]?/, '').replace(/[ \t]?$/, '');
+}
+
+function serializeMarkdownComment(content: string, block: boolean): string {
+  const safeContent = content.replace(/-->/g, '-- >').replace(/\r\n/g, '\n');
+  if (block && safeContent.includes('\n')) {
+    return `<!--\n${safeContent}\n-->`;
+  }
+
+  return safeContent.trim() ? `<!-- ${safeContent} -->` : block ? '<!-- -->' : '<!---->';
 }

@@ -81,6 +81,32 @@ export const schema = new Schema({
           return [tag, domAttrs, 0];
         },
       },
+      comment_block: {
+        atom: true,
+        selectable: true,
+        draggable: false,
+        group: 'block',
+        attrs: {
+          content: { default: '' },
+        },
+        toDOM(node) {
+          return [
+            'div',
+            { class: 'comment-block', 'data-comment': node.attrs.content },
+            ['span', { class: 'comment-block-label' }, '注释'],
+            ['span', { class: 'comment-block-preview' }, node.attrs.content || '点击填写注释'],
+          ];
+        },
+        parseDOM: [
+          {
+            tag: 'div.comment-block',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              return { content: el.getAttribute('data-comment') ?? el.textContent ?? '' };
+            },
+          },
+        ],
+      },
       // 行内代码（inline code）：`code` 语法
       inline_code: {
         inline: true,
@@ -104,6 +130,32 @@ export const schema = new Schema({
               return {
                 code: code.startsWith('`') && code.endsWith('`') ? code.slice(1, -1) : code,
               };
+            },
+          },
+        ],
+      },
+      comment_inline: {
+        inline: true,
+        group: 'inline',
+        atom: true,
+        selectable: true,
+        draggable: false,
+        attrs: {
+          content: { default: '' },
+        },
+        toDOM(node) {
+          return [
+            'span',
+            { class: 'comment-inline', 'data-comment': node.attrs.content },
+            ['span', { class: 'comment-inline-label' }, '注释'],
+          ];
+        },
+        parseDOM: [
+          {
+            tag: 'span.comment-inline',
+            getAttrs(dom) {
+              const el = dom as HTMLElement;
+              return { content: el.getAttribute('data-comment') ?? '' };
             },
           },
         ],

@@ -186,4 +186,40 @@ describe('markdown serialization', () => {
     expect(doc.child(0).type.name).toBe('paragraph');
     expect(doc.child(0).textContent).toBe('正文[不是脚注] [^缺少结束');
   });
+
+  it('parses block comments as dedicated comment_block nodes', () => {
+    const input = '<!--\n这里是一段注释\n可以多行\n-->';
+    const doc = parseMarkdown(input);
+
+    expect(doc.child(0).type.name).toBe('comment_block');
+    expect(doc.child(0).attrs.content).toBe('这里是一段注释\n可以多行');
+    expect(serializeMarkdown(doc).trim()).toBe(input);
+  });
+
+  it('parses inline comments as dedicated comment_inline nodes', () => {
+    const input = '这是正文 <!-- 这里是行内注释 --> 后面继续正文。';
+    const doc = parseMarkdown(input);
+    const paragraph = doc.child(0);
+
+    expect(paragraph.type.name).toBe('paragraph');
+    expect(paragraph.child(1).type.name).toBe('comment_inline');
+    expect(paragraph.child(1).attrs.content).toBe('这里是行内注释');
+    expect(serializeMarkdown(doc).trim()).toBe(input);
+  });
+
+  it('keeps HTML blocks separate from Markdown comments', () => {
+    const doc = parseMarkdown('<section>HTML</section>\n\n<!-- 注释 -->');
+
+    expect(doc.child(0).type.name).toBe('html_block');
+    expect(doc.child(1).type.name).toBe('comment_block');
+    expect(serializeMarkdown(doc).trim()).toBe('<section>HTML</section>\n\n<!-- 注释 -->');
+  });
+
+  it('still reserves toc comments for toc_block parsing', () => {
+    const input = '<!-- toc -->\n- [标题](#标题)\n<!-- /toc -->\n\n# 标题';
+    const doc = parseMarkdown(input);
+
+    expect(doc.child(0).type.name).toBe('toc_block');
+    expect(doc.child(0).attrs.content).toBe('- [标题](#标题)');
+  });
 });

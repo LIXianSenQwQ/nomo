@@ -172,6 +172,21 @@ describe('App outline layout', () => {
     expect(appSource).toContain('updateLinkText');
   });
 
+  it('wires Markdown comments through toolbar, titlebar and native menu', () => {
+    expect(toolbarSource).toContain('MessageSquare');
+    expect(toolbarSource).toContain("type: 'insertCommentInline'");
+    expect(toolbarSource).toContain('aria-label="插入行内注释"');
+    expect(titleBarSource).toContain("type: 'insertCommentInline'");
+    expect(titleBarSource).toContain("type: 'insertCommentBlock'");
+    expect(titleBarSource).not.toContain("comingSoon('注释'");
+    expect(appCommandsSource).toContain("command === 'menu-comment'");
+    expect(appCommandsSource).toContain("type: 'insertCommentInline'");
+    expect(appCommandsSource).toContain("command === 'menu-comment-block'");
+    expect(appCommandsSource).toContain("type: 'insertCommentBlock'");
+    expect(tauriMenuSource).toContain('with_id("menu-comment", "注释")');
+    expect(tauriMenuSource).toContain('with_id("menu-comment-block", "注释块")');
+  });
+
   it('forwards native menu events to desktop command handlers', () => {
     const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
     const tauriCommandsSource = readFileSync(

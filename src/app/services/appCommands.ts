@@ -106,7 +106,9 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-highlight') {
     handlers.runCommand({ type: 'toggleHighlight' });
   } else if (command === 'menu-comment') {
-    handlers.showUnavailableFeature('注释');
+    handlers.runCommand({ type: 'insertCommentInline' });
+  } else if (command === 'menu-comment-block') {
+    handlers.runCommand({ type: 'insertCommentBlock' });
   } else if (command === 'menu-link') {
     handlers.openLinkPicker();
   } else if (command === 'menu-image') {

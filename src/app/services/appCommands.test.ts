@@ -74,6 +74,24 @@ describe('appCommands', () => {
     expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
   });
 
+  it('通过桌面菜单命令插入行内注释', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-comment', handlers);
+
+    expect(handlers.commands).toEqual([{ type: 'insertCommentInline' }]);
+    expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过桌面菜单命令插入注释块', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-comment-block', handlers);
+
+    expect(handlers.commands).toEqual([{ type: 'insertCommentBlock' }]);
+    expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
   it('通过 Ctrl + K 打开超链接编辑器', () => {
     const handlers = createHandlers();
     const event = new KeyboardEvent('keydown', {

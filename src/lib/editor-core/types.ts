@@ -98,6 +98,8 @@ export type EditorCommand =
   | { type: 'removeLink' }
   | { type: 'insertImage'; src: string; alt?: string; title?: string }
   | { type: 'insertFootnote' }
+  | { type: 'insertCommentInline'; content?: string }
+  | { type: 'insertCommentBlock'; content?: string }
   | { type: 'insertCodeBlock'; language?: string; code?: string }
   | { type: 'insertMathBlock'; tex?: string }
   | { type: 'insertMermaidBlock'; code?: string }

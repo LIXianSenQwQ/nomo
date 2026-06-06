@@ -12,6 +12,7 @@
     Link,
     List,
     ListTree,
+    MessageSquare,
     Info,
     PanelRightClose,
     PanelRightOpen,
@@ -159,6 +160,14 @@
     on:click={openLinkPicker}
   >
     <Link size={17} />
+  </button>
+  <button
+    title="行内注释"
+    aria-label="插入行内注释"
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'insertCommentInline' })}
+  >
+    <MessageSquare size={17} />
   </button>
   <button
     title="引用"

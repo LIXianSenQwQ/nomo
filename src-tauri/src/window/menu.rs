@@ -1,9 +1,9 @@
+use crate::database;
 use std::path::Path;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     AppHandle, Emitter, Manager, Runtime, WebviewWindow,
 };
-use crate::database;
 
 pub(crate) fn install_window_menu<R: Runtime>(
     app: &AppHandle<R>,
@@ -25,7 +25,9 @@ pub(crate) fn install_window_menu<R: Runtime>(
     Ok(())
 }
 
-pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Menu<R>, String> {
+pub(crate) fn build_window_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<tauri::menu::Menu<R>, String> {
     let recent_docs = database::query_recent_files(app).unwrap_or_default();
 
     let mut file_menu_builder = SubmenuBuilder::new(app, "文件(&F)")
@@ -202,6 +204,11 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                 .map_err(|e| e.to_string())?,
         )
         .item(
+            &MenuItemBuilder::with_id("menu-comment", "注释")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
             &MenuItemBuilder::with_id("menu-link", "超链接")
                 .accelerator("Ctrl + K")
                 .build(app)
@@ -217,6 +224,11 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
         .item(
             &MenuItemBuilder::with_id("toggle-blockquote", "引用块")
                 .accelerator("Ctrl + Shift + Q")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-comment-block", "注释块")
                 .build(app)
                 .map_err(|e| e.to_string())?,
         )

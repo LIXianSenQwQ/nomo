@@ -386,6 +386,10 @@
               >提示块 <span class="shortcut">Ctrl + Shift + A</span></button
             >
             <button
+              on:click={() => finish(() => runCommand({ type: 'insertCommentBlock' }), 'paragraph')}
+              >注释块</button
+            >
+            <button
               on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
               >有序列表 <span class="shortcut">Ctrl + Shift + [</span></button
             >
@@ -469,7 +473,10 @@
             <button on:click={() => finish(() => runCommand({ type: 'toggleHighlight' }), 'format')}
               >高亮</button
             >
-            <button on:click={() => comingSoon('注释', 'format')}>注释</button>
+            <button
+              on:click={() => finish(() => runCommand({ type: 'insertCommentInline' }), 'format')}
+              >注释</button
+            >
             <div class="divider"></div>
             <button on:click={() => finish(openLinkPicker, 'format')}
               >超链接 <span class="shortcut">Ctrl + K</span></button

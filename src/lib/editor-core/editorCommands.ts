@@ -13,6 +13,8 @@ import {
 import type { EditorView } from 'prosemirror-view';
 import { schema } from './schema';
 import { getDiagramTemplate } from './diagramTemplates';
+import { CommentBlockNodeView } from './nodeViews/CommentBlockNodeView';
+import { CommentInlineNodeView } from './nodeViews/CommentInlineNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { createLinkAttrs } from './link';
 
@@ -672,6 +674,10 @@ export function executeEditorCommand(
       });
     case 'insertFootnote':
       return insertFootnote(view);
+    case 'insertCommentInline':
+      return insertInlineComment(view, command.content);
+    case 'insertCommentBlock':
+      return insertBlockComment(view, command.content);
     case 'insertCodeBlock': {
       // 开关逻辑：已在代码块内则取消（恢复为段落），否则插入新代码块
       const { selection } = state;
@@ -1113,6 +1119,56 @@ function insertFootnote(view: EditorView): boolean {
   const defPos = tr.doc.content.size;
   tr = tr.insert(defPos, footnoteDef);
   tr = tr.setSelection(TextSelection.create(tr.doc, defPos + 1));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function insertInlineComment(view: EditorView, content?: string): boolean {
+  const { state } = view;
+  const selectedText = state.selection.empty
+    ? ''
+    : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+  const node = schema.nodes.comment_inline.create({
+    content: content ?? (selectedText || '这里是行内注释'),
+  });
+  const tr = state.tr.replaceSelectionWith(node, false);
+  const nodePos = tr.mapping.map(state.selection.from, -1);
+  if (tr.doc.nodeAt(nodePos)?.type === schema.nodes.comment_inline) {
+    tr.setSelection(NodeSelection.create(tr.doc, nodePos));
+    CommentInlineNodeView.requestInstantEdit();
+  }
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
+function insertBlockComment(view: EditorView, content?: string): boolean {
+  const { state } = view;
+  const { $from, $to, empty } = state.selection;
+  const selectedText = empty
+    ? ''
+    : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
+  const node = schema.nodes.comment_block.create({
+    content: content ?? (selectedText || '这里是块级注释'),
+  });
+
+  let tr: Transaction;
+  let nodePos: number;
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    nodePos = $from.before(1);
+    tr = state.tr.replaceWith(nodePos, $from.after(1), node);
+  } else if (empty && $from.depth === 1 && $from.parent.isTextblock) {
+    nodePos = $from.after(1);
+    tr = state.tr.insert(nodePos, node);
+  } else if ($from.depth === 1 && $to.depth === 1) {
+    nodePos = $from.before(1);
+    tr = state.tr.replaceWith(nodePos, $to.after(1), node);
+  } else {
+    nodePos = state.doc.content.size;
+    tr = state.tr.insert(nodePos, node);
+  }
+
+  tr.setSelection(NodeSelection.create(tr.doc, nodePos));
+  CommentBlockNodeView.requestInstantEdit();
   view.dispatch(tr.scrollIntoView());
   return true;
 }
