@@ -5,14 +5,15 @@
   z-index: 30;
   width: 220px;
   max-height: calc(100vh - 260px);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-editor-surface) 64%, transparent);
   box-shadow:
-    0 12px 36px rgba(15, 23, 42, 0.1),
-    0 1px 2px rgba(15, 23, 42, 0.06);
+    0 8px 24px rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.03);
   backdrop-filter: blur(10px);
   color: var(--md-editor-muted-fg);
   font-size: 12px;
@@ -39,12 +40,14 @@
   min-height: 24px;
   border-radius: var(--md-editor-radius-sm);
   color: inherit;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .content-outline-row.active {
-  background: color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
+  background: color-mix(in srgb, var(--md-editor-accent) 7%, transparent);
   color: var(--md-editor-accent-strong);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .outline-toggle,
@@ -79,6 +82,7 @@
   min-height: 24px;
   padding: 0;
   text-align: left;
+  overflow: hidden;
 }
 
 .outline-link:hover,
@@ -86,11 +90,17 @@
   color: var(--md-editor-accent-strong);
 }
 
-.outline-link span {
+.outline-link > span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 标题中的数字前缀降低视觉权重 */
+.outline-num {
+  opacity: 0.45;
+  font-weight: 400;
 }
 
 .content-outline p {

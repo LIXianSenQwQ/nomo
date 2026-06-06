@@ -39,6 +39,12 @@
     event.stopPropagation();
     toggleOutlineItemExpanded(item);
   }
+
+  // 拆分标题中的数字前缀与正文，如 "1.2 标题" → ["1.2 ", "标题"]
+  function splitTitleNumber(title: string): [string, string] {
+    const match = title.match(/^(\d+(?:\.\d+)*\.?\s*)/);
+    return match ? [match[1], title.slice(match[1].length)] : ['', title];
+  }
 </script>
 
 {#if externalFileWarning}
@@ -130,7 +136,13 @@
                   title={item.title}
                   on:click={() => jumpToOutlineItem(item)}
                 >
-                  <span>{item.title}</span>
+                  <span>
+                    {#if splitTitleNumber(item.title)[0]}
+                      <span class="outline-num">{splitTitleNumber(item.title)[0]}</span>{splitTitleNumber(item.title)[1]}
+                    {:else}
+                      {item.title}
+                    {/if}
+                  </span>
                 </button>
               </div>
             {/if}
