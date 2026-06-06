@@ -465,7 +465,9 @@
               on:click={() => finish(() => runCommand({ type: 'toggleStrikethrough' }), 'format')}
               >删除线 <span class="shortcut">Alt + Shift + 5</span></button
             >
-            <button on:click={() => comingSoon('高亮', 'format')}>高亮</button>
+            <button on:click={() => finish(() => runCommand({ type: 'toggleHighlight' }), 'format')}
+              >高亮</button
+            >
             <button on:click={() => comingSoon('注释', 'format')}>注释</button>
             <div class="divider"></div>
             <button on:click={() => comingSoon('超链接', 'format')}
@@ -473,7 +475,8 @@
             >
             <button on:click={() => comingSoon('图像', 'format')}>图像</button>
             <div class="divider"></div>
-            <button on:click={() => comingSoon('清除样式', 'format')}
+            <button
+              on:click={() => finish(() => runCommand({ type: 'clearInlineStyles' }), 'format')}
               >清除样式 <span class="shortcut">Ctrl + \</span></button
             >
           </div>

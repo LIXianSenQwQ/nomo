@@ -1,6 +1,7 @@
 import type { MarkType, Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin, type EditorState } from 'prosemirror-state';
 import { schema } from '../schema';
+import { pendingInlineMarkKey } from './pendingInlineMark';
 
 interface InlineMarkMatch {
   from: number;
@@ -18,6 +19,29 @@ interface InlineMarkMatch {
  */
 export function inlineMarkdownMarkInputPlugin(): Plugin {
   return new Plugin({
+    props: {
+      handleTextInput(view, from, to, text) {
+        if (from !== to || text !== '>' || !view.state.selection.empty) return false;
+
+        const match = findOpeningHtmlTagBeforeCursor(view.state, from);
+        if (!match) return false;
+
+        const existingMarkTypeNames =
+          view.state.storedMarks
+            ?.map((mark) => mark.type.name)
+            .filter((name) => Boolean(view.state.schema.marks[name])) ?? [];
+        const markTypeNames = Array.from(new Set([...existingMarkTypeNames, match.markType.name]));
+
+        const tr = view.state.tr
+          .delete(match.from, from)
+          .addStoredMark(match.markType.create())
+          .setMeta(pendingInlineMarkKey, { action: 'set', markTypeNames });
+
+        view.dispatch(tr);
+        return true;
+      },
+    },
+
     appendTransaction(transactions, _oldState, newState) {
       if (!transactions.some((tr) => tr.docChanged)) return null;
 
@@ -35,6 +59,33 @@ export function inlineMarkdownMarkInputPlugin(): Plugin {
     },
   });
 }
+
+function findOpeningHtmlTagBeforeCursor(
+  state: EditorState,
+  cursorPos: number,
+): { from: number; markType: MarkType } | null {
+  const $cursor = state.selection.$from;
+  const parent = $cursor.parent;
+  if (!parent.isTextblock || parent.type === schema.nodes.code_block) return null;
+
+  const textBeforeCursor = parent.textBetween(0, $cursor.parentOffset, '\0', '\0');
+  for (const tag of OPENING_HTML_TAG_INPUTS) {
+    if (!textBeforeCursor.endsWith(tag.inputBeforeClose)) continue;
+
+    const from = cursorPos - tag.inputBeforeClose.length;
+    const tagStartInText = textBeforeCursor.length - tag.inputBeforeClose.length;
+    if (isEscaped(textBeforeCursor, tagStartInText)) return null;
+
+    return { from, markType: tag.markType };
+  }
+
+  return null;
+}
+
+const OPENING_HTML_TAG_INPUTS: Array<{ inputBeforeClose: string; markType: MarkType }> = [
+  { inputBeforeClose: '<mark', markType: schema.marks.highlight },
+  { inputBeforeClose: '<u', markType: schema.marks.underline },
+];
 
 function findInlineMarkTextMatchesNearSelection(state: EditorState): InlineMarkMatch[] {
   const matches: InlineMarkMatch[] = [];
@@ -58,7 +109,19 @@ function findInlineMarkTextMatchesNearSelection(state: EditorState): InlineMarkM
 function scanTextForInlineMarks(text: string, absoluteTextPos: number): InlineMarkMatch[] {
   const matches: InlineMarkMatch[] = [];
 
-  const underlineMatch = findUnderlineTagMatch(text);
+  const highlightMatch = findHtmlTagMatch(text, 'mark');
+  if (highlightMatch) {
+    matches.push({
+      ...highlightMatch,
+      from: absoluteTextPos + highlightMatch.from,
+      to: absoluteTextPos + highlightMatch.to,
+      markerLength: 0,
+      markType: schema.marks.highlight,
+    });
+    return matches;
+  }
+
+  const underlineMatch = findHtmlTagMatch(text, 'u');
   if (underlineMatch) {
     matches.push({
       ...underlineMatch,
@@ -108,9 +171,12 @@ function scanTextForInlineMarks(text: string, absoluteTextPos: number): InlineMa
   return matches;
 }
 
-function findUnderlineTagMatch(text: string): { from: number; to: number; content: string } | null {
-  const openTag = '<u>';
-  const closeTag = '</u>';
+function findHtmlTagMatch(
+  text: string,
+  tagName: 'u' | 'mark',
+): { from: number; to: number; content: string } | null {
+  const openTag = `<${tagName}>`;
+  const closeTag = `</${tagName}>`;
   let index = 0;
 
   while (index < text.length) {

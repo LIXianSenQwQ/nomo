@@ -1,6 +1,6 @@
 use tauri::AppHandle;
 use crate::{database, models::WindowStateInput};
-use crate::window::menu::build_window_menu;
+use crate::window::menu::install_window_menu;
 
 #[tauri::command]
 pub(crate) fn update_window_state(app: AppHandle, input: WindowStateInput) -> Result<(), String> {
@@ -19,11 +19,7 @@ pub(crate) fn refresh_window_menu(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<(), String> {
-    let menu = build_window_menu(&app).map_err(|error| format!("构建菜单失败：{error}"))?;
-    window
-        .set_menu(menu)
-        .map_err(|error| format!("设置菜单失败：{error}"))?;
-    Ok(())
+    install_window_menu(&app, &window)
 }
 
 #[tauri::command]
@@ -37,6 +33,7 @@ pub(crate) fn create_new_window(app: AppHandle) -> Result<(), String> {
         .map_err(|error| format!("创建新窗口失败：{error}"))?;
 
     crate::window::os::setup_window(&window);
+    install_window_menu(&app, &window)?;
 
     Ok(())
 }

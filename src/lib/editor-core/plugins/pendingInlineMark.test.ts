@@ -246,6 +246,30 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('uses mark tag delimiters for pending highlight input', () => {
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+        plugins: [pendingInlineMarkPlugin()],
+      }),
+    });
+
+    toggleMarkPending(schema.marks.highlight)(view.state, view.dispatch);
+    view.dispatch(view.state.tr.insertText('A'));
+
+    expect(isPendingMarkActive(view.state, schema.marks.highlight)).toBe(true);
+    expect(hasTextMarkForText(view.state, 'A', 'highlight')).toBe(true);
+    expect(hasMarkDelimiter(target, 'highlight')).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('shows edit delimiters for every mark on the same text range', () => {
     const doc = schema.nodes.doc.create(null, [
       schema.nodes.paragraph.create(null, [
@@ -562,6 +586,7 @@ const MARK_SYNTAX_MAP: Record<string, { open: string; close: string }> = {
   em: { open: '*', close: '*' },
   strikethrough: { open: '~~', close: '~~' },
   underline: { open: '<u>', close: '</u>' },
+  highlight: { open: '<mark>', close: '</mark>' },
 };
 
 function createMarkedTextView(selectionPos: number): { target: HTMLElement; view: EditorView } {

@@ -1,9 +1,29 @@
 use std::path::Path;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder},
-    AppHandle, Runtime,
+    AppHandle, Emitter, Manager, Runtime, WebviewWindow,
 };
 use crate::database;
+
+pub(crate) fn install_window_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &WebviewWindow<R>,
+) -> Result<(), String> {
+    let menu = build_window_menu(app).map_err(|error| format!("构建菜单失败：{error}"))?;
+    window
+        .set_menu(menu)
+        .map_err(|error| format!("设置菜单失败：{error}"))?;
+    window.on_menu_event(|window, event| {
+        let command = event.id().as_ref().to_string();
+        if command == "quit" {
+            window.app_handle().exit(0);
+            return;
+        }
+
+        let _ = window.emit("newmd://menu-command", command);
+    });
+    Ok(())
+}
 
 pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Menu<R>, String> {
     let recent_docs = database::query_recent_files(app).unwrap_or_default();
@@ -44,7 +64,7 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
                     .unwrap_or("未命名.md")
                     .to_string()
             });
-            let item_id = format!("recent-file:{}", doc.path);
+            let item_id = format!("open-recent:{}", doc.path);
             recent_submenu_builder = recent_submenu_builder.item(
                 &MenuItemBuilder::with_id(item_id, label)
                     .build(app)
@@ -146,6 +166,48 @@ pub(crate) fn build_window_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri:
         .map_err(|e| e.to_string())?;
 
     let format_menu = SubmenuBuilder::new(app, "格式(&O)")
+        .item(
+            &MenuItemBuilder::with_id("toggle-bold", "加粗")
+                .accelerator("Ctrl + B")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("toggle-italic", "斜体")
+                .accelerator("Ctrl + I")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("toggle-underline", "下划线")
+                .accelerator("Ctrl + U")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("toggle-inline-code", "行代码")
+                .accelerator("Ctrl + `")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("toggle-strikethrough", "删除线")
+                .accelerator("Alt + Shift + 5")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-highlight", "高亮")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("menu-clear-format", "清除样式")
+                .accelerator("Ctrl + \\")
+                .build(app)
+                .map_err(|e| e.to_string())?,
+        )
+        .separator()
         .item(
             &MenuItemBuilder::with_id("toggle-blockquote", "引用块")
                 .accelerator("Ctrl + Shift + Q")

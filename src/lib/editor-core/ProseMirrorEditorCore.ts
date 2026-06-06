@@ -273,6 +273,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       em: this.isPendingMarkActive('em'),
       strikethrough: this.isPendingMarkActive('strikethrough'),
       underline: this.isPendingMarkActive('underline'),
+      highlight: this.isPendingMarkActive('highlight'),
     };
   }
 
@@ -306,6 +307,10 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Ctrl-`': toggleMark(schema.marks.code),
           'Alt-Shift-5': toggleMarkPending(schema.marks.strikethrough),
           'Mod-u': toggleMarkPending(schema.marks.underline),
+          'Mod-\\': (_state, _dispatch, _view) =>
+            this.runProseMirrorCommand({ type: 'clearInlineStyles' }),
+          'Ctrl-\\': (_state, _dispatch, _view) =>
+            this.runProseMirrorCommand({ type: 'clearInlineStyles' }),
           'Ctrl-Enter': (state, dispatch) => {
             // 在表格内：下方插入新行
             const context = findTableContext(state);
@@ -551,7 +556,8 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
     command.type === 'toggleBold' ||
     command.type === 'toggleItalic' ||
     command.type === 'toggleStrikethrough' ||
-    command.type === 'toggleUnderline'
+    command.type === 'toggleUnderline' ||
+    command.type === 'toggleHighlight'
   );
 }
 

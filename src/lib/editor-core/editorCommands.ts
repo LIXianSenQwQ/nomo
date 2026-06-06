@@ -1,9 +1,15 @@
 import { lift, setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
-import { toggleMarkPending } from './plugins/pendingInlineMark';
+import { pendingInlineMarkKey, toggleMarkPending } from './plugins/pendingInlineMark';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
-import type { MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
-import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
+import type { Mark, MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
+import {
+  EditorState,
+  NodeSelection,
+  Selection,
+  TextSelection,
+  type Transaction,
+} from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { schema } from './schema';
 import { getDiagramTemplate } from './diagramTemplates';
@@ -67,6 +73,23 @@ import { createTocList } from '../toc/tocService';
 import { ensureFrontMatter } from '../markdown/frontMatter';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
+
+const CLEAR_INLINE_MARK_NAMES = [
+  'strong',
+  'em',
+  'underline',
+  'highlight',
+  'strikethrough',
+  'link',
+  'code',
+];
+const CLEAR_INLINE_NODE_NAMES = ['inline_code', 'math_inline'];
+
+type InlineAtomReplacement = {
+  from: number;
+  to: number;
+  text: string;
+};
 
 /** 如果当前已是同级标题，则取消为正文；否则设为对应级别 */
 function toggleHeading(view: EditorView, level: number): boolean {
@@ -313,6 +336,279 @@ function toggleBlockquote(state: EditorState, dispatch?: (tr: Transaction) => vo
   return wrapIn(schema.nodes.blockquote)(state, dispatch);
 }
 
+/**
+ * 清除行内样式：只处理文本 mark 和行内原子节点，不改变标题、列表、引用等块级语义。
+ */
+function clearInlineStyles(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
+  const { selection } = state;
+
+  if (selection instanceof NodeSelection && isClearableInlineAtom(selection.node)) {
+    if (dispatch) {
+      const replacementText = getInlineAtomPlainText(selection.node);
+      const tr = state.tr;
+      replaceRangeWithPlainText(tr, selection.from, selection.to, replacementText);
+      const cursor = selection.from + replacementText.length;
+      dispatch(
+        exitInlinePendingState(tr)
+          .setSelection(TextSelection.create(tr.doc, cursor))
+          .setStoredMarks([])
+          .scrollIntoView(),
+      );
+    }
+    return true;
+  }
+
+  if (!selection.empty) {
+    return clearInlineStylesInRange(state, dispatch, selection.from, selection.to);
+  }
+
+  const markRange = findClearableMarkRangeAtCursor(state);
+  if (markRange) {
+    if (dispatch) {
+      const tr = state.tr.removeMark(markRange.from, markRange.to, markRange.mark.type);
+      dispatch(
+        exitInlinePendingState(tr)
+          .setSelection(TextSelection.create(tr.doc, clampDocPosition(markRange.cursor, tr.doc)))
+          .setStoredMarks([])
+          .scrollIntoView(),
+      );
+    }
+    return true;
+  }
+
+  const atomReplacement = findAdjacentClearableInlineAtom(state);
+  if (atomReplacement) {
+    if (dispatch) {
+      const tr = state.tr;
+      replaceRangeWithPlainText(tr, atomReplacement.from, atomReplacement.to, atomReplacement.text);
+      dispatch(
+        exitInlinePendingState(tr)
+          .setSelection(
+            TextSelection.create(tr.doc, atomReplacement.from + atomReplacement.text.length),
+          )
+          .setStoredMarks([])
+          .scrollIntoView(),
+      );
+    }
+    return true;
+  }
+
+  if (hasClearableStoredMark(state)) {
+    if (dispatch) {
+      dispatch(exitInlinePendingState(state.tr).setStoredMarks([]));
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function clearInlineStylesInRange(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  from: number,
+  to: number,
+): boolean {
+  const clearableMarks = findClearableMarksInRange(state, from, to);
+  const atomReplacements = findClearableInlineAtomsInRange(state, from, to);
+  if (clearableMarks.length === 0 && atomReplacements.length === 0) return false;
+
+  if (dispatch) {
+    const tr = state.tr;
+    for (const markType of getClearableMarkTypes(state)) {
+      tr.removeMark(from, to, markType);
+    }
+
+    for (const replacement of atomReplacements.reverse()) {
+      replaceRangeWithPlainText(tr, replacement.from, replacement.to, replacement.text);
+    }
+
+    dispatch(
+      exitInlinePendingState(tr)
+        .setSelection(createMappedSelection(tr, from, to))
+        .setStoredMarks([])
+        .scrollIntoView(),
+    );
+  }
+  return true;
+}
+
+function findClearableMarksInRange(state: EditorState, from: number, to: number): Mark[] {
+  const markTypes = new Set(getClearableMarkTypes(state));
+  const marks: Mark[] = [];
+  state.doc.nodesBetween(from, to, (node) => {
+    if (!node.isText) return true;
+    for (const mark of node.marks) {
+      if (markTypes.has(mark.type)) marks.push(mark);
+    }
+    return true;
+  });
+  return marks;
+}
+
+function findClearableInlineAtomsInRange(
+  state: EditorState,
+  from: number,
+  to: number,
+): InlineAtomReplacement[] {
+  const replacements: InlineAtomReplacement[] = [];
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!isClearableInlineAtom(node)) return true;
+    const nodeTo = pos + node.nodeSize;
+    if (pos >= from && nodeTo <= to) {
+      replacements.push({ from: pos, to: nodeTo, text: getInlineAtomPlainText(node) });
+    }
+    return false;
+  });
+  return replacements;
+}
+
+function findClearableMarkRangeAtCursor(
+  state: EditorState,
+): { from: number; to: number; mark: Mark; cursor: number } | null {
+  const pos = state.selection.from;
+  const directMarks = state.storedMarks ?? state.selection.$from.marks();
+  const directMark = getFirstClearableMark(directMarks);
+  if (directMark) {
+    const range = findMarkRangeNearPosition(state, pos, directMark);
+    if (range) return { ...range, mark: directMark, cursor: pos };
+  }
+
+  const rightMark = getFirstClearableMark(state.selection.$from.nodeAfter?.marks ?? []);
+  if (rightMark) {
+    const range = findMarkRangeNearPosition(state, pos, rightMark);
+    if (range) return { ...range, mark: rightMark, cursor: pos };
+  }
+
+  const leftMark = getFirstClearableMark(state.selection.$from.nodeBefore?.marks ?? []);
+  if (leftMark) {
+    const range = findMarkRangeNearPosition(state, Math.max(pos - 1, 0), leftMark);
+    if (range) return { ...range, mark: leftMark, cursor: pos };
+  }
+
+  return null;
+}
+
+function findMarkRangeNearPosition(
+  state: EditorState,
+  pos: number,
+  mark: Mark,
+): { from: number; to: number } | null {
+  let found: { from: number; to: number } | null = null;
+  state.doc.nodesBetween(0, state.doc.content.size, (node, nodePos) => {
+    if (found || !node.isText || !mark.isInSet(node.marks)) return true;
+    const from = nodePos;
+    const to = nodePos + node.nodeSize;
+    if (pos >= from && pos <= to) {
+      found = expandMarkRange(state.doc, from, to, mark);
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+function expandMarkRange(
+  doc: PmNode,
+  initialFrom: number,
+  initialTo: number,
+  mark: Mark,
+): { from: number; to: number } {
+  let from = initialFrom;
+  let to = initialTo;
+
+  doc.nodesBetween(0, doc.content.size, (node, pos) => {
+    if (!node.isText || !mark.isInSet(node.marks)) return true;
+    const nodeTo = pos + node.nodeSize;
+    if (nodeTo === from) {
+      from = pos;
+      return true;
+    }
+    if (pos === to) {
+      to = nodeTo;
+      return true;
+    }
+    return true;
+  });
+
+  return { from, to };
+}
+
+function findAdjacentClearableInlineAtom(state: EditorState): InlineAtomReplacement | null {
+  const { $from } = state.selection;
+  const nodeAfter = $from.nodeAfter;
+  if (nodeAfter && isClearableInlineAtom(nodeAfter)) {
+    return {
+      from: $from.pos,
+      to: $from.pos + nodeAfter.nodeSize,
+      text: getInlineAtomPlainText(nodeAfter),
+    };
+  }
+
+  const nodeBefore = $from.nodeBefore;
+  if (nodeBefore && isClearableInlineAtom(nodeBefore)) {
+    return {
+      from: $from.pos - nodeBefore.nodeSize,
+      to: $from.pos,
+      text: getInlineAtomPlainText(nodeBefore),
+    };
+  }
+
+  return null;
+}
+
+function getClearableMarkTypes(state: EditorState): MarkType[] {
+  return CLEAR_INLINE_MARK_NAMES.map((name) => state.schema.marks[name]).filter(
+    (markType): markType is MarkType => Boolean(markType),
+  );
+}
+
+function getFirstClearableMark(marks: readonly Mark[]): Mark | null {
+  return marks.find((mark) => CLEAR_INLINE_MARK_NAMES.includes(mark.type.name)) ?? null;
+}
+
+function hasClearableStoredMark(state: EditorState): boolean {
+  return Boolean(
+    state.storedMarks?.some((mark) => CLEAR_INLINE_MARK_NAMES.includes(mark.type.name)),
+  );
+}
+
+function exitInlinePendingState(tr: Transaction): Transaction {
+  return tr.setMeta(pendingInlineMarkKey, { action: 'exit' });
+}
+
+function isClearableInlineAtom(node: PmNode): boolean {
+  return node.isInline && CLEAR_INLINE_NODE_NAMES.includes(node.type.name);
+}
+
+function getInlineAtomPlainText(node: PmNode): string {
+  if (node.type.name === 'inline_code') return String(node.attrs.code ?? '');
+  if (node.type.name === 'math_inline') return String(node.attrs.tex ?? '');
+  return node.textContent;
+}
+
+function replaceRangeWithPlainText(tr: Transaction, from: number, to: number, text: string): void {
+  if (text) {
+    tr.replaceWith(from, to, schema.text(text));
+  } else {
+    tr.delete(from, to);
+  }
+}
+
+function createMappedSelection(tr: Transaction, from: number, to: number): Selection {
+  const mappedFrom = clampDocPosition(tr.mapping.map(from, -1), tr.doc);
+  const mappedTo = clampDocPosition(tr.mapping.map(to, 1), tr.doc);
+  try {
+    return TextSelection.create(tr.doc, mappedFrom, mappedTo);
+  } catch {
+    return TextSelection.near(tr.doc.resolve(mappedFrom));
+  }
+}
+
+function clampDocPosition(position: number, doc: PmNode): number {
+  return Math.max(0, Math.min(position, doc.content.size));
+}
+
 export function executeEditorCommand(
   command: EditorCommand,
   view: EditorView,
@@ -334,6 +630,10 @@ export function executeEditorCommand(
       return run(toggleMarkPending(schema.marks.strikethrough));
     case 'toggleUnderline':
       return run(toggleMarkPending(schema.marks.underline));
+    case 'toggleHighlight':
+      return run(toggleMarkPending(schema.marks.highlight));
+    case 'clearInlineStyles':
+      return run(clearInlineStyles);
     case 'setHeading':
       return toggleHeading(view, command.level);
     case 'setParagraph':

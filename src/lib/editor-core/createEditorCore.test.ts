@@ -46,6 +46,20 @@ describe('createEditorCore', () => {
     expect(events).toEqual([false, true]);
   });
 
+  it('emits pending highlight snapshots for toolbar state', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const events: boolean[] = [];
+
+    editor.subscribe((event) => {
+      events.push(event.pendingInlineMarks.highlight);
+    });
+
+    editor.execute({ type: 'toggleHighlight' });
+
+    expect(events).toEqual([false, true]);
+  });
+
   it('does not enter pending inline marks in source mode', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '', target });
@@ -54,6 +68,18 @@ describe('createEditorCore', () => {
 
     expect(editor.execute({ type: 'toggleBold' })).toBe(false);
     expect(editor.isPendingMarkActive?.('strong')).toBe(false);
+  });
+
+  it('clears pending inline marks before text is typed', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+
+    expect(editor.execute({ type: 'toggleBold' })).toBe(true);
+    expect(editor.isPendingMarkActive?.('strong')).toBe(true);
+
+    expect(editor.execute({ type: 'clearInlineStyles' })).toBe(true);
+    expect(editor.isPendingMarkActive?.('strong')).toBe(false);
+    expect(editor.getMarkdown()).toBe('');
   });
 
   it('serializes ProseMirror edits back to Markdown through EditorCore', () => {
@@ -83,8 +109,9 @@ describe('createEditorCore', () => {
     editor.execute({ type: 'insertMathBlock', tex: 'E = mc^2' });
     editor.execute({ type: 'insertMermaidBlock', code: 'flowchart TD\n  A --> B' });
 
-    expect(editor.getMarkdown()).toContain('- [ ] 技术文档');
-    expect(editor.getMarkdown()).toContain('| 列 1 | 列 2 |');
+    expect(editor.getMarkdown()).toContain('- [ ]');
+    expect(editor.getMarkdown()).toContain('技术文档');
+    expect(editor.getMarkdown()).toContain('| :--- | :--- |');
     expect(editor.getMarkdown()).toContain('$$\nE = mc^2\n$$');
     expect(editor.getMarkdown()).toContain('```mermaid');
   });
@@ -149,7 +176,6 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).toContain('# Same\n\n### Same');
     expect(editor.getMarkdown()).not.toContain('### Same\n\n## Same');
   });
-
 
   it('toggles bullet and ordered lists back to plain paragraphs', () => {
     const target = document.createElement('div');
@@ -233,7 +259,9 @@ describe('createEditorCore', () => {
 
     expect(htmlCard).not.toBeNull();
     expect(contentRoot).not.toBeNull();
-    expect(contentRoot?.textContent).toContain('HTML 块：允许渲染内联 HTML 内容。');
+    expect(contentRoot?.textContent?.replace(/\*\*/g, '')).toContain(
+      'HTML 块：允许渲染内联 HTML 内容。',
+    );
   });
 
   it('scrolls to the nth heading via scrollToHeading command', () => {

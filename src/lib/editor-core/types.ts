@@ -1,7 +1,7 @@
 import type { DiagramType } from './diagramTemplates';
 
 export type EditorMode = 'semantic' | 'source';
-export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline';
+export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline' | 'highlight';
 export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
 
 export interface EditorThemeOptions {
@@ -57,6 +57,8 @@ export type EditorCommand =
   | { type: 'toggleCode' }
   | { type: 'toggleStrikethrough' }
   | { type: 'toggleUnderline' }
+  | { type: 'toggleHighlight' }
+  | { type: 'clearInlineStyles' }
   | { type: 'setHeading'; level: 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'setParagraph' }
   | { type: 'toggleBlockquote' }

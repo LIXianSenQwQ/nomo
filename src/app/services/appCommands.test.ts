@@ -1,0 +1,82 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { EditorCommand, EditorMode } from '../../lib/editor-core';
+import {
+  executeDesktopCommand,
+  handleGlobalShortcut,
+  type AppCommandHandlers,
+} from './appCommands';
+
+function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
+  const commands: EditorCommand[] = [];
+  return {
+    commands,
+    createNewFile: vi.fn(),
+    createNewWindow: vi.fn(),
+    openFileDialog: vi.fn(),
+    openFolderDialog: vi.fn(),
+    openRecentFile: vi.fn(),
+    saveMarkdownFile: vi.fn(),
+    runCommand: vi.fn((command: EditorCommand) => {
+      commands.push(command);
+    }),
+    openTablePicker: vi.fn(),
+    editFrontMatter: vi.fn(),
+    showUnavailableFeature: vi.fn(),
+    setMode: vi.fn(),
+    getMode: vi.fn((): EditorMode => 'semantic'),
+    toggleTheme: vi.fn(),
+    toggleFocusMode: vi.fn(),
+  };
+}
+
+describe('appCommands', () => {
+  it('通过桌面菜单命令新建窗口', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('new-window', handlers);
+
+    expect(handlers.createNewWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('通过桌面菜单命令打开最近文件', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('open-recent:D:\\Docs\\demo.md', handlers);
+
+    expect(handlers.openRecentFile).toHaveBeenCalledWith('D:\\Docs\\demo.md');
+  });
+
+  it('通过桌面菜单命令触发清除样式', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-clear-format', handlers);
+
+    expect(handlers.commands).toEqual([{ type: 'clearInlineStyles' }]);
+    expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过桌面菜单命令触发高亮', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-highlight', handlers);
+
+    expect(handlers.commands).toEqual([{ type: 'toggleHighlight' }]);
+    expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + \\ 触发清除样式快捷键', () => {
+    const handlers = createHandlers();
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: '\\',
+      code: 'Backslash',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.commands).toEqual([{ type: 'clearInlineStyles' }]);
+  });
+});

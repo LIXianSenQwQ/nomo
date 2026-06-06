@@ -3,6 +3,7 @@ import type { Node as PmNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { executeEditorCommand } from './editorCommands';
+import { parseMarkdown, serializeMarkdown } from './markdown';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
 import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
@@ -12,7 +13,133 @@ import { setCodeBlockMathRenderer } from './renderers';
 import { schema } from './schema';
 import { createTableNode } from './tableCommands';
 
+function createMarkdownCommandView(
+  markdown: string,
+  createSelection: (doc: PmNode) => TextSelection | NodeSelection,
+): EditorView {
+  const doc = parseMarkdown(markdown);
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+
+  return new EditorView(target, {
+    state: EditorState.create({
+      doc,
+      selection: createSelection(doc),
+    }),
+  });
+}
+
+function paragraphContentSelection(doc: PmNode): TextSelection {
+  return TextSelection.create(doc, 1, doc.child(0).nodeSize - 1);
+}
+
+function runClearInlineStyles(view: EditorView): boolean {
+  return executeEditorCommand({ type: 'clearInlineStyles' }, view, '', () => undefined);
+}
+
+function currentMarkdown(view: EditorView): string {
+  return serializeMarkdown(view.state.doc).trim();
+}
+
+function destroyView(view: EditorView): void {
+  view.dom.parentElement?.remove();
+  view.destroy();
+}
+
 describe('editorCommands', () => {
+  it('清除选区内的加粗样式', () => {
+    const view = createMarkdownCommandView('**文字**', paragraphContentSelection);
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('文字');
+
+    destroyView(view);
+  });
+
+  it('清除选区内的混合行内样式', () => {
+    const view = createMarkdownCommandView(
+      '**粗体** *斜体* ~~删除~~ <u>下划线</u> <mark>高亮</mark>',
+      paragraphContentSelection,
+    );
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('粗体 斜体 删除 下划线 高亮');
+
+    destroyView(view);
+  });
+
+  it('选中文本切换高亮样式', () => {
+    const view = createMarkdownCommandView('重点', paragraphContentSelection);
+
+    expect(executeEditorCommand({ type: 'toggleHighlight' }, view, '', () => undefined)).toBe(
+      true,
+    );
+    expect(currentMarkdown(view)).toBe('<mark>重点</mark>');
+
+    destroyView(view);
+  });
+
+  it('清除链接样式并保留链接文字', () => {
+    const view = createMarkdownCommandView(
+      '[链接](https://example.com)',
+      paragraphContentSelection,
+    );
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('链接');
+
+    destroyView(view);
+  });
+
+  it('清除行内代码节点并保留代码文本', () => {
+    const view = createMarkdownCommandView('`code`', (doc) => TextSelection.create(doc, 1, 2));
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('code');
+
+    destroyView(view);
+  });
+
+  it('清除行内公式节点并保留公式文本', () => {
+    const view = createMarkdownCommandView('$x+1$', (doc) => TextSelection.create(doc, 1, 2));
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('x+1');
+
+    destroyView(view);
+  });
+
+  it('光标位于加粗文字内部时清除整段连续加粗样式', () => {
+    const view = createMarkdownCommandView('**粗体**', (doc) => TextSelection.create(doc, 2));
+
+    expect(runClearInlineStyles(view)).toBe(true);
+    expect(currentMarkdown(view)).toBe('粗体');
+
+    destroyView(view);
+  });
+
+  it('光标贴近行内原子节点边界时清除相邻节点', () => {
+    const codeView = createMarkdownCommandView('`code`', (doc) => TextSelection.create(doc, 1));
+    const mathView = createMarkdownCommandView('$x+1$', (doc) => TextSelection.create(doc, 2));
+
+    expect(runClearInlineStyles(codeView)).toBe(true);
+    expect(currentMarkdown(codeView)).toBe('code');
+    expect(runClearInlineStyles(mathView)).toBe(true);
+    expect(currentMarkdown(mathView)).toBe('x+1');
+
+    destroyView(codeView);
+    destroyView(mathView);
+  });
+
+  it('光标位于普通文本时不产生清除样式事务', () => {
+    const view = createMarkdownCommandView('普通文本', (doc) => TextSelection.create(doc, 2));
+
+    expect(runClearInlineStyles(view)).toBe(false);
+    expect(currentMarkdown(view)).toBe('普通文本');
+
+    destroyView(view);
+  });
+
   it('在紧贴旧代码块上方新建代码块时，只让新代码块进入编辑态', () => {
     const doc = schema.nodes.doc.create(null, [
       schema.nodes.paragraph.create(),
@@ -167,11 +294,7 @@ describe('editorCommands', () => {
 
     executeEditorCommand({ type: 'insertMathBlock', tex: '' }, view, '', () => undefined);
 
-    expect(getTopLevelNodeNames(view.state.doc)).toEqual([
-      'paragraph',
-      'math_block',
-      'paragraph',
-    ]);
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph', 'math_block', 'paragraph']);
     expect(view.state.doc.child(0).textContent).toBe('正文内容');
 
     const mathBlock = target.querySelector<HTMLElement>('.math-block');
@@ -341,11 +464,7 @@ describe('editorCommands', () => {
 
     executeEditorCommand({ type: 'insertCodeBlock', language: 'ts' }, view, '', () => undefined);
 
-    expect(getTopLevelNodeNames(view.state.doc)).toEqual([
-      'paragraph',
-      'code_block',
-      'paragraph',
-    ]);
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph', 'code_block', 'paragraph']);
     expect(view.state.doc.child(0).textContent).toBe('正文内容');
     expect(view.state.doc.child(1).attrs.params).toBe('ts');
     expect(target.querySelector('.code-card.is-editing')).not.toBeNull();

@@ -773,6 +773,7 @@
       em: false,
       strikethrough: false,
       underline: false,
+      highlight: false,
     };
   }
 </script>

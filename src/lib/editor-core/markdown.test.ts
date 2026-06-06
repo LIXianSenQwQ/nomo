@@ -73,6 +73,52 @@ describe('markdown serialization', () => {
     expect(hasUnderline).toBe(true);
   });
 
+  it('serializes highlight marks as mark tags', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [schema.text('重点', [schema.marks.highlight.create()])]),
+    ]);
+
+    expect(serializeMarkdown(doc).trim()).toBe('<mark>重点</mark>');
+  });
+
+  it('parses mark tags as highlight marks', () => {
+    const doc = parseMarkdown('<mark>重点</mark>');
+    let hasHighlight = false;
+    doc.descendants((node) => {
+      if (!node.isText) return true;
+      hasHighlight = node.marks.some((mark) => mark.type === schema.marks.highlight);
+      return !hasHighlight;
+    });
+
+    expect(hasHighlight).toBe(true);
+    expect(serializeMarkdown(doc).trim()).toBe('<mark>重点</mark>');
+  });
+
+  it('preserves highlight marks inside table cells', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.table.create(null, [
+        schema.nodes.table_row.create(null, [
+          schema.nodes.table_header.create(null, [
+            schema.nodes.paragraph.create(null, [
+              schema.text('重点', [schema.marks.highlight.create()]),
+            ]),
+          ]),
+        ]),
+        schema.nodes.table_row.create(null, [
+          schema.nodes.table_cell.create(null, [
+            schema.nodes.paragraph.create(null, [
+              schema.text('内容', [schema.marks.highlight.create()]),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    expect(serializeMarkdown(doc).trim()).toBe(
+      '| <mark>重点</mark> |\n| :--- |\n| <mark>内容</mark> |',
+    );
+  });
+
   it('round trips single-line footnotes', () => {
     const input = '正文内容[^1]\n\n[^1]: 脚注内容';
 

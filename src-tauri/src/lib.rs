@@ -19,6 +19,8 @@ pub fn run() {
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
                 crate::window::os::setup_window(&window);
+                crate::window::menu::install_window_menu(app.handle(), &window)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
             crate::window::state::restore_window_state(app.handle());
             Ok(())

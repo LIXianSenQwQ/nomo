@@ -20,6 +20,8 @@ export interface AppCommandHandlers {
 export function executeDesktopCommand(command: string, handlers: AppCommandHandlers) {
   if (command === 'new-file') {
     handlers.createNewFile();
+  } else if (command === 'new-window') {
+    handlers.createNewWindow();
   } else if (command === 'open-file') {
     handlers.openFileDialog();
   } else if (command === 'open-directory') {
@@ -101,7 +103,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-strikethrough') {
     handlers.runCommand({ type: 'toggleStrikethrough' });
   } else if (command === 'menu-highlight') {
-    handlers.showUnavailableFeature('高亮');
+    handlers.runCommand({ type: 'toggleHighlight' });
   } else if (command === 'menu-comment') {
     handlers.showUnavailableFeature('注释');
   } else if (command === 'menu-link') {
@@ -109,7 +111,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-image') {
     handlers.showUnavailableFeature('图像');
   } else if (command === 'menu-clear-format') {
-    handlers.showUnavailableFeature('清除样式');
+    handlers.runCommand({ type: 'clearInlineStyles' });
   } else if (command === 'toggle-source') {
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');
   } else if (command === 'toggle-theme') {
@@ -159,6 +161,9 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === '0') {
     event.preventDefault();
     handlers.runCommand({ type: 'setParagraph' });
+  } else if (event.code === 'Backslash') {
+    event.preventDefault();
+    handlers.runCommand({ type: 'clearInlineStyles' });
   } else if (key === '=' || key === '+') {
     event.preventDefault();
     handlers.runCommand({ type: 'increaseHeadingLevel' });

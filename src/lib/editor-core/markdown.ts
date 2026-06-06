@@ -278,6 +278,7 @@ const INLINE_MARK_MAP: Record<string, string> = {
   del: 'strikethrough',
   strike: 'strikethrough',
   u: 'underline',
+  mark: 'highlight',
 };
 
 const htmlInlineStack: Array<{ tag: string; markName: string }> = [];
@@ -456,6 +457,12 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     underline: {
       open: '<u>',
       close: '</u>',
+      mixable: true,
+      expelEnclosingWhitespace: true,
+    },
+    highlight: {
+      open: '<mark>',
+      close: '</mark>',
       mixable: true,
       expelEnclosingWhitespace: true,
     },
@@ -767,6 +774,7 @@ function serializeInlineText(node: ProseMirrorNode): string {
     if (mark.type.name === 'code') return `\`${value.replace(/`/g, '\\`')}\``;
     if (mark.type.name === 'strikethrough') return `~~${value}~~`;
     if (mark.type.name === 'underline') return `<u>${value}</u>`;
+    if (mark.type.name === 'highlight') return `<mark>${value}</mark>`;
     if (mark.type.name === 'link') return `[${value}](${mark.attrs.href})`;
     return value;
   }, text);

@@ -6,6 +6,7 @@
     Code2,
     FolderOpen,
     Heading1,
+    Highlighter,
     Image,
     Italic,
     List,
@@ -140,6 +141,14 @@
     on:click={() => runCommand({ type: 'toggleUnderline' })}
   >
     <Underline size={17} />
+  </button>
+  <button
+    title="高亮"
+    class:active={pendingInlineMarks.highlight}
+    on:mousedown|preventDefault
+    on:click={() => runCommand({ type: 'toggleHighlight' })}
+  >
+    <Highlighter size={17} />
   </button>
   <button
     title="引用"

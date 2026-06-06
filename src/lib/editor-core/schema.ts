@@ -226,5 +226,11 @@ export const schema = new Schema({
         return ['u', 0];
       },
     },
+    highlight: {
+      parseDOM: [{ tag: 'mark' }],
+      toDOM() {
+        return ['mark', 0];
+      },
+    },
   }),
 });

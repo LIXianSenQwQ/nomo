@@ -128,6 +128,33 @@ describe('App outline layout', () => {
     expect(tauriMenuSource).toContain('menu-chart:erDiagram');
   });
 
+  it('wires highlight through toolbar, titlebar and native menu', () => {
+    expect(toolbarSource).toContain('Highlighter');
+    expect(toolbarSource).toContain("runCommand({ type: 'toggleHighlight' })");
+    expect(titleBarSource).toContain("runCommand({ type: 'toggleHighlight' })");
+    expect(titleBarSource).not.toContain("comingSoon('高亮'");
+    expect(appCommandsSource).toContain("command === 'menu-highlight'");
+    expect(appCommandsSource).toContain("handlers.runCommand({ type: 'toggleHighlight' });");
+    expect(tauriMenuSource).toContain('with_id("menu-highlight", "高亮")');
+  });
+
+  it('forwards native menu events to desktop command handlers', () => {
+    const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
+    const tauriCommandsSource = readFileSync(
+      resolve(__dirname, '../../src-tauri/src/window/commands.rs'),
+      'utf-8',
+    );
+
+    expect(tauriLibSource).toContain('install_window_menu(app.handle(), &window)');
+    expect(tauriCommandsSource).toContain('install_window_menu(&app, &window)');
+    expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
+    expect(tauriMenuSource).toContain('window.emit("newmd://menu-command", command)');
+    expect(tauriMenuSource).toContain('window.app_handle().exit(0)');
+    expect(tauriMenuSource).toContain('format!("open-recent:{}", doc.path)');
+    expect(appCommandsSource).toContain("command === 'new-window'");
+    expect(appCommandsSource).toContain("command.startsWith('open-recent:')");
+  });
+
   it('wires YAML Front Matter to the semantic metadata card flow', () => {
     expect(editorSource).toContain('FrontMatterCard');
     expect(editorSource).toContain('frontMatterEditing');
