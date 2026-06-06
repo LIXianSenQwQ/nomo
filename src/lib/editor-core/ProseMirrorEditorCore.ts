@@ -21,6 +21,7 @@ import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
 import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
+import { ImageNodeView } from './nodeViews/ImageNodeView';
 import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
@@ -68,6 +69,7 @@ import type {
   InlinePendingMarkName,
   InlinePendingMarks,
   EditorRuntimeOptions,
+  EditorImageDeletionEvent,
   EditorSnapshot,
   EditorThemeOptions,
   SetMarkdownOptions,
@@ -111,6 +113,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       nodeViews: {
         code_block: (node, view, getPos) =>
           new CodeBlockNodeView(node, view, getPos as () => number),
+        image: (node, view) =>
+          new ImageNodeView(node, view, () => this.options.getImageContext?.() ?? {}),
         html_block: (node, view, getPos) =>
           new HtmlBlockNodeView(node, view, getPos as () => number),
         inline_code: (node, view, getPos) =>
@@ -147,6 +151,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
     this.assertActive();
+    const previousDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
     this.markdown = updateTocBlocks(markdown);
     this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.version += 1;
@@ -156,6 +161,10 @@ export class ProseMirrorEditorCore implements EditorCore {
         options?.reason !== 'save-file' &&
         options?.reason !== 'switch-tab');
     this.replaceViewState(this.markdown);
+    if (shouldReportImageDeletion(options)) {
+      const nextDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
+      this.notifyDeletedImages(previousDoc, nextDoc);
+    }
     this.emit(options?.reason ?? 'programmatic-update');
   }
 
@@ -521,6 +530,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       return;
     }
 
+    const previousDoc = this.view.state.doc;
     const nextState = this.view.state.apply(transaction);
     this.view.updateState(nextState);
 
@@ -534,6 +544,7 @@ export class ProseMirrorEditorCore implements EditorCore {
           head: nextState.selection.head,
         });
       }
+      this.notifyDeletedImages(previousDoc, nextState.doc);
     }
 
     // 每次事务都递增版本并通知（pending mark 状态切换、选区变化等需要及时反映到 UI）
@@ -601,6 +612,20 @@ export class ProseMirrorEditorCore implements EditorCore {
       throw new Error('EditorCore has been destroyed.');
     }
   }
+
+  private notifyDeletedImages(previousDoc: ProseMirrorNode, nextDoc: ProseMirrorNode): void {
+    if (!this.options.onImagesDeleted) {
+      return;
+    }
+
+    const deletedSrcs = findFullyRemovedImageSrcs(previousDoc, nextDoc);
+    if (deletedSrcs.length === 0) {
+      return;
+    }
+
+    const event: EditorImageDeletionEvent = { srcs: deletedSrcs };
+    this.options.onImagesDeleted(event);
+  }
 }
 
 function isPendingInlineMarkCommand(command: EditorCommand): boolean {
@@ -615,4 +640,46 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
 
 function clampDocPosition(doc: ProseMirrorNode, position: number): number {
   return Math.max(0, Math.min(position, doc.content.size));
+}
+
+function shouldReportImageDeletion(options: SetMarkdownOptions | undefined): boolean {
+  return (
+    options?.reason !== 'open-file' &&
+    options?.reason !== 'save-file' &&
+    options?.reason !== 'switch-tab' &&
+    options?.reason !== 'restore-snapshot'
+  );
+}
+
+function findFullyRemovedImageSrcs(
+  previousDoc: ProseMirrorNode,
+  nextDoc: ProseMirrorNode,
+): string[] {
+  const previous = countImageSrcs(previousDoc);
+  const next = countImageSrcs(nextDoc);
+  const deleted: string[] = [];
+
+  for (const [src, previousCount] of previous) {
+    if (previousCount > 0 && !next.has(src)) {
+      deleted.push(src);
+    }
+  }
+
+  return deleted;
+}
+
+function countImageSrcs(doc: ProseMirrorNode): Map<string, number> {
+  const counts = new Map<string, number>();
+  doc.descendants((node) => {
+    if (node.type.name !== 'image') {
+      return true;
+    }
+
+    const src = String(node.attrs.src ?? '').trim();
+    if (src) {
+      counts.set(src, (counts.get(src) ?? 0) + 1);
+    }
+    return false;
+  });
+  return counts;
 }

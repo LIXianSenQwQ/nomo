@@ -11,12 +11,15 @@
   } from '../lib/desktop/tauriStorage';
   import {
     createEditorCore,
+    getImageLoader,
     setCodeBlockDiagramRenderer,
     setCodeBlockMathRenderer,
     setCodeBlockTokenizer,
+    setImageLoader,
     type EditorChangeEvent,
     type EditorCommand,
     type EditorAnchorRect,
+    type EditorImageDeletionEvent,
     type InlinePendingMarks,
     type EditorMode,
   } from '../lib/editor-core';
@@ -50,6 +53,7 @@
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
+  import { createDesktopImageLoader } from './services/desktopImageLoader';
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
   import { createDefaultTab, writeActiveTabState } from './services/tabs';
@@ -59,7 +63,11 @@
     getNextActiveMenu,
   } from './services/appUiState';
   import { createEditorSettingsController } from './services/editorSettingsController';
-  import { applyBlockStyleSetting } from './services/settings';
+  import {
+    applyBlockStyleSetting,
+    loadPersistedImageSettings,
+    persistImageSettings,
+  } from './services/settings';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
@@ -67,6 +75,11 @@
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
   import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
+  import {
+    DEFAULT_IMAGE_HANDLING_SETTINGS,
+    type ImageContext,
+    type ImageHandlingSettings,
+  } from '../lib/services/render';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
@@ -75,6 +88,7 @@
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
   setCodeBlockMathRenderer(createKatexMathRenderer());
+  setImageLoader(createDesktopImageLoader());
 
   let markdown = initialMarkdown,
     dirty = false,
@@ -99,6 +113,7 @@
     contentWidthPercent = 68,
     focusMode = false,
     blockStyle: 'classic' | 'modern' = 'modern';
+  let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
   let editorHost: HTMLDivElement,
     fileInput: HTMLInputElement,
     sourceTextarea: HTMLTextAreaElement,
@@ -297,6 +312,8 @@
     onChange: syncFromEditor,
     onLinkShortcut: () => openLinkPicker(),
     onOpenLink: (href) => openLinkFromEditor(href),
+    getImageContext: () => getImageContext(),
+    onImagesDeleted: (event) => handleDeletedImageResources(event),
   });
   const editorSettings = createEditorSettingsController({
     getDesktopEnabled: () => desktopEnabled,
@@ -332,12 +349,17 @@
     isSettingsOpen = false;
   }
 
-  async function handleSaveSettings(newWorkspaceDir: string) {
+  async function handleSaveSettings(
+    newWorkspaceDir: string,
+    nextImageSettings: ImageHandlingSettings,
+  ) {
     if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
       await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
       currentFolderPath = newWorkspaceDir;
       await loadFolder(newWorkspaceDir).catch(() => undefined);
     }
+    imageSettings = nextImageSettings;
+    persistImageSettings(desktopEnabled, imageSettings);
     closeSettings();
   }
 
@@ -449,10 +471,17 @@
   });
   const imageInsertion = createImageInsertionHandlers({
     getEditor: () => editor,
+    getMode: () => mode,
     getFileName: () => fileName,
+    getNativePath: () => nativePath,
+    getSourceTextarea: () => sourceTextarea,
+    getImageContext: () => getImageContext(),
+    saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs),
+    setMarkdown: (value) => editor.setMarkdown(value),
     setStatusMessage: (message) => {
       statusMessage = message;
     },
+    syncSourceTextareaHeight: () => syncSourceTextareaHeight(),
   });
   const handleEditorDrop = imageInsertion.handleEditorDrop;
   const handleEditorPaste = imageInsertion.handleEditorPaste;
@@ -613,6 +642,7 @@
 
     editor.mount(editorHost);
     await loadPersistedSettings();
+    imageSettings = await loadPersistedImageSettings(desktopEnabled);
     // 确保 blockStyle 默认值写入 DOM（loadPersistedSettings 可能跳过）
     applyBlockStyleSetting(blockStyle);
     await refreshRecentFiles();
@@ -903,6 +933,62 @@
     return outlineInteraction.getSourceLineHeight();
   }
 
+  function handleDeletedImageResources(event: EditorImageDeletionEvent) {
+    const loader = getImageLoader();
+    if (!loader?.remove || event.srcs.length === 0) {
+      return;
+    }
+
+    const context = getImageContext();
+    Promise.allSettled(event.srcs.map((src) => loader.remove!(src, context))).then((results) => {
+      const removed = results.filter(
+        (result) => result.status === 'fulfilled' && result.value.removed,
+      ).length;
+      const failed = results.filter(
+        (result) =>
+          result.status === 'rejected' ||
+          (result.status === 'fulfilled' && Boolean(result.value.error)),
+      ).length;
+
+      if (removed > 0 && failed > 0) {
+        statusMessage = `已删除 ${removed} 个图片文件，${failed} 个删除失败`;
+      } else if (removed > 0) {
+        statusMessage = `已删除 ${removed} 个图片文件`;
+      } else if (failed > 0) {
+        statusMessage = `${failed} 个图片文件删除失败`;
+      }
+    });
+  }
+
+  function getImageContext(): ImageContext {
+    const documentPath = nativePath ?? filePath;
+    const documentDir = getParentPath(documentPath);
+    return {
+      documentPath,
+      documentFileName: fileName,
+      documentDir,
+      assetsDirectory: documentDir ? joinPath(documentDir, 'assets') : undefined,
+      settings: imageSettings,
+    };
+  }
+
+  function getParentPath(path: string | null | undefined): string | undefined {
+    if (!path) {
+      return undefined;
+    }
+    const normalized = path.replace(/\\/g, '/');
+    const index = normalized.lastIndexOf('/');
+    if (index <= 0) {
+      return undefined;
+    }
+    return path.slice(0, index);
+  }
+
+  function joinPath(parent: string, child: string): string {
+    const separator = parent.includes('\\') ? '\\' : '/';
+    return `${parent.replace(/[\\/]+$/, '')}${separator}${child}`;
+  }
+
   function writeRecoveryDraft(reason: string) {
     writeRecoveryDraftToStorage(RECOVERY_KEY, {
       reason,
@@ -1037,6 +1123,7 @@
 <SettingsDrawer
   isOpen={isSettingsOpen}
   currentWorkspaceDir={currentFolderPath}
+  {imageSettings}
   {closeSettings}
   saveSettings={handleSaveSettings}
 />

@@ -6,6 +6,13 @@ import { createLinkAttrs } from './link';
 
 export type TableColumnAlignment = 'left' | 'center' | 'right';
 
+const markdownImageNodeSpec = markdownSchema.spec.nodes.get('image')!;
+const imageNodeSpec = {
+  ...markdownImageNodeSpec,
+  selectable: false,
+  draggable: false,
+};
+
 function readCellAlignment(dom: HTMLElement): TableColumnAlignment | null {
   const value = dom.style.textAlign || dom.getAttribute('data-align');
   return value === 'left' || value === 'center' || value === 'right' ? value : null;
@@ -13,6 +20,7 @@ function readCellAlignment(dom: HTMLElement): TableColumnAlignment | null {
 
 export const schema = new Schema({
   nodes: markdownSchema.spec.nodes
+    .update('image', imageNodeSpec)
     .append(
       tableNodes({
         tableGroup: 'block',

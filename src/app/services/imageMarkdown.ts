@@ -8,5 +8,10 @@ export function createImageMarkdownSrc(fileName: string, imageName: string) {
     .trim()
     .replace(/[\\/:*?"<>|]/g, '-')
     .replace(/\s+/g, '-');
-  return `./${baseName}.assets/${safeName}`;
+  return `./assets/${safeName || `${baseName}.png`}`;
+}
+
+export function createImageMarkdown(alt: string, src: string) {
+  const safeAlt = alt.replace(/[\[\]\n\r]/g, ' ').trim() || 'image';
+  return `![${safeAlt}](${src})`;
 }

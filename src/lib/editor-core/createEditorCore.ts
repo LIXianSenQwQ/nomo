@@ -5,6 +5,8 @@ export {
   setCodeBlockDiagramRenderer,
   setCodeBlockMathRenderer,
   setCodeBlockTokenizer,
+  getImageLoader,
+  setImageLoader,
 } from './renderers';
 
 export function createEditorCore(options: EditorCoreOptions): EditorCore {

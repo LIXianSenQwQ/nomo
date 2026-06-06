@@ -139,6 +139,14 @@ describe('markdown serialization', () => {
     expect(serializeMarkdown(parseMarkdown(titled)).trim()).toBe(titled);
   });
 
+  it('round trips Markdown images with alt and optional title', () => {
+    const plain = '![截图](./assets/a.png)';
+    const titled = '![截图](./assets/a.png "说明")';
+
+    expect(serializeMarkdown(parseMarkdown(plain)).trim()).toBe(plain);
+    expect(serializeMarkdown(parseMarkdown(titled)).trim()).toBe(titled);
+  });
+
   it('allows common safe link targets', () => {
     const input = [
       '[相对](../docs/readme.md)',

@@ -994,7 +994,9 @@
 }
 
 .mermaid-block-fullscreen-button,
-.mermaid-fullscreen-close-button {
+.mermaid-fullscreen-close-button,
+.image-node-fullscreen-button,
+.image-fullscreen-close-button {
   display: inline-grid;
   place-items: center;
   width: 36px;
@@ -1013,7 +1015,8 @@
     box-shadow 180ms ease;
 }
 
-.mermaid-block-fullscreen-button {
+.mermaid-block-fullscreen-button,
+.image-node-fullscreen-button {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -1023,13 +1026,17 @@
 }
 
 .mermaid-block:hover .mermaid-block-fullscreen-button,
-.mermaid-block:focus-within .mermaid-block-fullscreen-button {
+.mermaid-block:focus-within .mermaid-block-fullscreen-button,
+.image-node:hover .image-node-fullscreen-button,
+.image-node:focus-within .image-node-fullscreen-button {
   opacity: 1;
   transform: translateY(0);
 }
 
 .mermaid-block-fullscreen-button:hover,
-.mermaid-fullscreen-close-button:hover {
+.mermaid-fullscreen-close-button:hover,
+.image-node-fullscreen-button:hover,
+.image-fullscreen-close-button:hover {
   border-color: color-mix(in srgb, var(--md-editor-accent) 55%, var(--md-editor-border));
   background: color-mix(in srgb, var(--md-editor-accent) 12%, var(--md-editor-surface));
   color: var(--md-editor-accent);
@@ -1037,12 +1044,16 @@
 }
 
 .mermaid-block-fullscreen-button:active,
-.mermaid-fullscreen-close-button:active {
+.mermaid-fullscreen-close-button:active,
+.image-node-fullscreen-button:active,
+.image-fullscreen-close-button:active {
   transform: translateY(1px);
 }
 
 .mermaid-block-fullscreen-button:focus-visible,
-.mermaid-fullscreen-close-button:focus-visible {
+.mermaid-fullscreen-close-button:focus-visible,
+.image-node-fullscreen-button:focus-visible,
+.image-fullscreen-close-button:focus-visible {
   outline: 2px solid var(--md-editor-accent);
   outline-offset: 2px;
   opacity: 1;
@@ -1050,7 +1061,9 @@
 }
 
 .mermaid-block-fullscreen-button svg,
-.mermaid-fullscreen-close-button svg {
+.mermaid-fullscreen-close-button svg,
+.image-node-fullscreen-button svg,
+.image-fullscreen-close-button svg {
   width: 18px;
   height: 18px;
   stroke: currentColor;
@@ -1065,11 +1078,13 @@
   filter: invert(0.9) hue-rotate(180deg);
 }
 
-.has-mermaid-fullscreen {
+.has-mermaid-fullscreen,
+.has-image-fullscreen {
   overflow: hidden;
 }
 
-.mermaid-fullscreen-overlay {
+.mermaid-fullscreen-overlay,
+.image-fullscreen-overlay {
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -1080,7 +1095,8 @@
   background: color-mix(in srgb, #020617 72%, transparent);
 }
 
-.mermaid-fullscreen-panel {
+.mermaid-fullscreen-panel,
+.image-fullscreen-panel {
   position: relative;
   display: flex;
   width: min(1180px, calc(100vw - 48px));
@@ -1096,7 +1112,8 @@
   box-shadow: 0 24px 70px color-mix(in srgb, #020617 34%, transparent);
 }
 
-.mermaid-fullscreen-close-button {
+.mermaid-fullscreen-close-button,
+.image-fullscreen-close-button {
   position: absolute;
   top: 12px;
   right: 12px;
@@ -1105,7 +1122,8 @@
   box-shadow: 0 8px 22px color-mix(in srgb, #020617 14%, transparent);
 }
 
-.mermaid-fullscreen-viewport {
+.mermaid-fullscreen-viewport,
+.image-fullscreen-viewport {
   position: relative;
   display: grid;
   flex: 1;
@@ -1121,23 +1139,34 @@
   -ms-overflow-style: none;
 }
 
-.mermaid-fullscreen-viewport::-webkit-scrollbar {
+.mermaid-fullscreen-viewport::-webkit-scrollbar,
+.image-fullscreen-viewport::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
 }
 
-.mermaid-fullscreen-viewport.is-dragging {
+.mermaid-fullscreen-viewport.is-dragging,
+.image-fullscreen-viewport.is-dragging {
   cursor: grabbing;
 }
 
-.mermaid-fullscreen-zoom-surface {
+.mermaid-fullscreen-zoom-surface,
+.image-fullscreen-zoom-surface {
   box-sizing: border-box;
   width: 900px;
   min-width: 280px;
   max-width: none;
   zoom: var(--mermaid-fullscreen-scale, 1.25);
   transition: filter 120ms ease;
+}
+
+.image-fullscreen-zoom-surface {
+  display: grid;
+  place-items: center;
+  width: max-content;
+  min-width: 0;
+  zoom: var(--image-fullscreen-scale, 1);
 }
 
 .mermaid-fullscreen-viewport .mermaid-block-rendered {
@@ -1155,7 +1184,22 @@
   margin: 0 auto;
 }
 
-.mermaid-fullscreen-zoom-badge {
+.image-fullscreen-viewport img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-surface);
+  box-shadow: 0 14px 44px color-mix(in srgb, #020617 22%, transparent);
+}
+
+.mermaid-fullscreen-zoom-badge,
+.image-fullscreen-zoom-badge {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -1182,11 +1226,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mermaid-block-fullscreen-button,
-  .mermaid-fullscreen-close-button {
+  .mermaid-fullscreen-close-button,
+  .image-node-fullscreen-button,
+  .image-fullscreen-close-button {
     transition: none;
   }
 
-  .mermaid-fullscreen-zoom-surface {
+  .mermaid-fullscreen-zoom-surface,
+  .image-fullscreen-zoom-surface {
     transition: none;
   }
 }
@@ -1196,16 +1243,19 @@
     padding: 14px 0 4px;
   }
 
-  .mermaid-block-fullscreen-button {
+  .mermaid-block-fullscreen-button,
+  .image-node-fullscreen-button {
     opacity: 1;
     transform: none;
   }
 
-  .mermaid-fullscreen-overlay {
+  .mermaid-fullscreen-overlay,
+  .image-fullscreen-overlay {
     padding: 8px;
   }
 
-  .mermaid-fullscreen-panel {
+  .mermaid-fullscreen-panel,
+  .image-fullscreen-panel {
     width: calc(100vw - 16px);
     height: calc(100vh - 16px);
   }
@@ -1214,7 +1264,8 @@
     width: min(900px, calc(100vw - 64px));
   }
 
-  .mermaid-fullscreen-viewport {
+  .mermaid-fullscreen-viewport,
+  .image-fullscreen-viewport {
     padding: 16px;
   }
 }
@@ -1624,13 +1675,78 @@
   cursor: pointer;
 }
 
+.image-node {
+  position: relative;
+  display: inline-grid;
+  max-width: 100%;
+  margin: 10px 8px;
+  vertical-align: bottom;
+  cursor: default;
+  line-height: 0;
+  user-select: none;
+}
+
+.image-node img,
 .prosemirror-host .ProseMirror img {
   max-width: 100%;
   min-width: 160px;
   min-height: 90px;
-  border: 1px dashed var(--md-editor-border);
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
   border-radius: var(--md-editor-radius-md);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
   object-fit: contain;
+  user-select: none;
+}
+
+.image-node img {
+  display: block;
+  height: auto;
+  background: var(--md-editor-surface);
+  pointer-events: none;
+}
+
+.image-node.is-loading::before {
+  content: '图片加载中';
+  display: inline-grid;
+  place-items: center;
+  min-width: 160px;
+  min-height: 90px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
+  border-radius: var(--md-editor-radius-md);
+  background: color-mix(in srgb, var(--md-editor-surface) 84%, var(--md-editor-table-header-bg));
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+  color: var(--md-editor-muted-fg);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.image-node-placeholder {
+  display: inline-grid;
+  gap: 5px;
+  min-width: 180px;
+  min-height: 96px;
+  align-content: center;
+  padding: 14px 16px;
+  border: 1px dashed color-mix(in srgb, var(--md-editor-warning) 52%, var(--md-editor-border));
+  border-radius: var(--md-editor-radius-md);
+  background: color-mix(in srgb, var(--md-editor-warning) 8%, var(--md-editor-surface));
+  color: var(--md-editor-warning);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.image-node-placeholder strong {
+  overflow: hidden;
+  max-width: min(360px, 70vw);
+  color: var(--md-editor-fg);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-node.ProseMirror-selectednode {
+  outline: none;
 }
 
 .prosemirror-host .ProseMirror img.ProseMirror-separator {
@@ -1640,6 +1756,7 @@
   min-height: 0;
   border: 0;
   border-radius: 0;
+  box-shadow: none;
 }
 
 .prosemirror-host .ProseMirror ul li p:first-child {

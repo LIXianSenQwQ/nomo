@@ -3,6 +3,8 @@ export {
   setCodeBlockTokenizer,
   setCodeBlockDiagramRenderer,
   setCodeBlockMathRenderer,
+  getImageLoader,
+  setImageLoader,
 } from './createEditorCore';
 export { DIAGRAM_TEMPLATES, getDiagramTemplate, isDiagramType } from './diagramTemplates';
 export type { DiagramTemplate, DiagramType } from './diagramTemplates';
@@ -13,6 +15,7 @@ export type {
   EditorCoreOptions,
   EditorError,
   EditorAnchorRect,
+  EditorImageDeletionEvent,
   EditorLinkSnapshot,
   InlinePendingMarkName,
   InlinePendingMarks,

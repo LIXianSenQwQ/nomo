@@ -1,3 +1,5 @@
+pub(crate) mod image_assets;
+
 use crate::models::{DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo};
 use std::{
     fs,

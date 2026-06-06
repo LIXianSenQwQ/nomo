@@ -1,4 +1,5 @@
 import type { DiagramType } from './diagramTemplates';
+import type { ImageContext } from '../services/render';
 
 export type EditorMode = 'semantic' | 'source';
 export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline' | 'highlight';
@@ -57,6 +58,10 @@ export interface EditorChangeEvent {
   readonly: boolean;
   reason: string;
   pendingInlineMarks: InlinePendingMarks;
+}
+
+export interface EditorImageDeletionEvent {
+  srcs: string[];
 }
 
 export interface EditorSelectionEvent {
@@ -132,6 +137,8 @@ export interface EditorCoreOptions {
   onError?: (error: EditorError) => void;
   onLinkShortcut?: () => void;
   onOpenLink?: (href: string) => void;
+  getImageContext?: () => ImageContext;
+  onImagesDeleted?: (event: EditorImageDeletionEvent) => void;
 }
 
 export interface EditorCore {

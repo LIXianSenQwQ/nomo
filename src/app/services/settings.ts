@@ -1,6 +1,12 @@
 import { listAppSettings, updateAppSetting } from '../../lib/desktop/tauriStorage';
 import { CodeBlockNodeView } from '../../lib/editor-core/nodeViews/CodeBlockNodeView';
 import { MermaidBlockNodeView } from '../../lib/editor-core/nodeViews/MermaidBlockNodeView';
+import {
+  DEFAULT_IMAGE_HANDLING_SETTINGS,
+  type ImageHandlingSettings,
+  type ImageInsertStrategy,
+  type ImageUploadProvider,
+} from '../../lib/services/render';
 
 export interface PersistedEditorSettings {
   theme?: 'light' | 'dark';
@@ -9,6 +15,8 @@ export interface PersistedEditorSettings {
   contentWidthPercent?: number;
   blockStyle?: 'classic' | 'modern';
 }
+
+const IMAGE_SETTINGS_STORAGE_KEY = 'new-md-image-handling-settings';
 
 export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
@@ -59,6 +67,29 @@ export function persistEditorSetting(desktopEnabled: boolean, key: string, value
   updateAppSetting(key, value).catch(() => undefined);
 }
 
+export async function loadPersistedImageSettings(
+  desktopEnabled: boolean,
+): Promise<ImageHandlingSettings> {
+  const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
+  const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
+  const saved =
+    parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
+    parseLocalImageSettings();
+
+  return normalizeImageSettings(saved);
+}
+
+export function persistImageSettings(desktopEnabled: boolean, settings: ImageHandlingSettings) {
+  const normalized = normalizeImageSettings(settings);
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(IMAGE_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
+  }
+  if (!desktopEnabled) {
+    return;
+  }
+  updateAppSetting('imageHandlingSettings', normalized).catch(() => undefined);
+}
+
 export function applyThemeSetting(theme: 'light' | 'dark') {
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
   // 通知代码块更新语法高亮主题
@@ -93,4 +124,60 @@ function parseSetting<T>(settings: Map<string, string>, key: string): T | null {
   } catch {
     return null;
   }
+}
+
+function parseLocalImageSettings(): Partial<ImageHandlingSettings> | null {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  const raw = localStorage.getItem(IMAGE_SETTINGS_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as Partial<ImageHandlingSettings>;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeImageSettings(
+  value: Partial<ImageHandlingSettings> | null | undefined,
+): ImageHandlingSettings {
+  const strategy = value?.imageInsertStrategy;
+  const provider = value?.uploadProvider;
+
+  return {
+    imageInsertStrategy: isImageInsertStrategy(strategy)
+      ? strategy
+      : DEFAULT_IMAGE_HANDLING_SETTINGS.imageInsertStrategy,
+    uploadProvider: isImageUploadProvider(provider)
+      ? provider
+      : DEFAULT_IMAGE_HANDLING_SETTINGS.uploadProvider,
+    picgoServerUrl:
+      typeof value?.picgoServerUrl === 'string' && value.picgoServerUrl.trim()
+        ? value.picgoServerUrl.trim()
+        : DEFAULT_IMAGE_HANDLING_SETTINGS.picgoServerUrl,
+    picgoCoreCommand:
+      typeof value?.picgoCoreCommand === 'string' && value.picgoCoreCommand.trim()
+        ? value.picgoCoreCommand.trim()
+        : DEFAULT_IMAGE_HANDLING_SETTINGS.picgoCoreCommand,
+    picgoCoreConfigPath:
+      typeof value?.picgoCoreConfigPath === 'string' ? value.picgoCoreConfigPath.trim() : '',
+  };
+}
+
+function isImageInsertStrategy(value: unknown): value is ImageInsertStrategy {
+  return (
+    value === 'copy-current-folder' ||
+    value === 'copy-assets' ||
+    value === 'copy-document-assets' ||
+    value === 'upload'
+  );
+}
+
+function isImageUploadProvider(value: unknown): value is ImageUploadProvider {
+  return value === 'picgo' || value === 'picgo-core';
 }
