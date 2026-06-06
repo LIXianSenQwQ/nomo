@@ -15,8 +15,6 @@
     ListTree,
     MessageSquare,
     Info,
-    PanelLeftClose,
-    PanelLeftOpen,
     Quote,
     Sigma,
     Strikethrough,
@@ -35,7 +33,6 @@
   import { clickOutside } from '../actions/clickOutside';
 
   export let mode: EditorMode;
-  export let focusMode: boolean;
   export let contentWidthPercent: number;
   export let outlineVisible: boolean;
   export let runCommand: (command: EditorCommand) => void;
@@ -48,7 +45,6 @@
   export let updateContentWidth: (event: Event) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
-  export let toggleFocusMode: () => void;
 
   const tableRows = [1, 2, 3, 4, 5];
   const tableColumns = [1, 2, 3, 4, 5, 6];
@@ -343,18 +339,5 @@
     on:click={toggleOutlineVisible}
   >
     <ListTree size={18} />
-  </button>
-  <button
-    class="icon-button"
-    title={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
-    aria-label={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
-    aria-pressed={!focusMode}
-    on:click={toggleFocusMode}
-  >
-    {#if focusMode}
-      <PanelLeftOpen size={18} />
-    {:else}
-      <PanelLeftClose size={18} />
-    {/if}
   </button>
 </div>

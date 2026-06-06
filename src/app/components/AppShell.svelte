@@ -130,6 +130,7 @@
     {activeMenu}
     {recentFiles}
     {mode}
+    {focusMode}
     {outlineVisible}
     {getCompactPath}
     {toggleMenu}
@@ -181,7 +182,6 @@
 
       <EditorToolbar
         {mode}
-        {focusMode}
         {contentWidthPercent}
         {outlineVisible}
         {runCommand}
@@ -194,7 +194,6 @@
         {updateContentWidth}
         {setMode}
         {toggleOutlineVisible}
-        {toggleFocusMode}
       />
 
       <EditorWorkspace

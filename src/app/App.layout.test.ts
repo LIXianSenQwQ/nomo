@@ -21,6 +21,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
+  const documentTabsSource = readFileSync(
+    resolve(__dirname, 'components/DocumentTabs.svelte'),
+    'utf-8',
+  );
   const frontMatterCardSource = readFileSync(
     resolve(__dirname, 'components/FrontMatterCard.svelte'),
     'utf-8',
@@ -46,6 +50,7 @@ describe('App outline layout', () => {
     'styles/app.css',
     'styles/app-layout.css',
     'styles/app-chrome.css',
+    'styles/app-responsive.css',
     'styles/editor-document.css',
     'styles/editor-outline.css',
   ]
@@ -234,6 +239,9 @@ describe('App outline layout', () => {
 
   it('keeps the editor toolbar focused on editing and view controls', () => {
     expect(toolbarSource).not.toContain('FolderOpen');
+    expect(toolbarSource).not.toContain('PanelLeftClose');
+    expect(toolbarSource).not.toContain('PanelLeftOpen');
+    expect(toolbarSource).not.toContain('资源管理器侧边栏');
     expect(toolbarSource).not.toContain('Save');
     expect(toolbarSource).not.toContain('Image');
     expect(toolbarSource).not.toContain('Palette');
@@ -249,7 +257,7 @@ describe('App outline layout', () => {
     expect(toolbarSource).toContain('contentWidthPercent');
   });
 
-  it('uses semantic icons for mode, outline, toc, and explorer sidebar controls', () => {
+  it('uses semantic icons for mode, outline and toc controls in the editor toolbar', () => {
     expect(toolbarSource).toContain('BookOpenText');
     expect(toolbarSource).toContain('CodeXml');
     expect(toolbarSource).toContain('aria-label="切换到语义编辑"');
@@ -258,9 +266,35 @@ describe('App outline layout', () => {
     expect(toolbarSource).toContain("setMode('source')");
     expect(toolbarSource).toContain('ListTree size={18}');
     expect(toolbarSource).toContain('TableOfContents size={17}');
-    expect(toolbarSource).toContain('PanelLeftClose');
-    expect(toolbarSource).toContain('PanelLeftOpen');
-    expect(toolbarSource).toContain('资源管理器侧边栏');
+  });
+
+  it('keeps global explorer and window controls in the single titlebar chrome', () => {
+    expect(titleBarSource).toContain('sidebar-toggle-btn');
+    expect(titleBarSource).toContain('PanelLeftClose');
+    expect(titleBarSource).toContain('PanelLeftOpen');
+    expect(titleBarSource).toContain('资源管理器侧边栏');
+    expect(titleBarSource).toContain('export let focusMode: boolean');
+    expect(titleBarSource).toContain("title={isMaximized ? '还原窗口' : '最大化'}");
+    expect(titleBarSource).toContain("aria-label={isMaximized ? '还原窗口' : '最大化'}");
+    expect(titleBarSource).toContain('handleMaximizeWindow');
+    expect(titleBarSource).toContain('syncWindowState');
+    expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
+    expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
+  });
+
+  it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {
+    const containerStart = documentTabsSource.indexOf('<div class="tabs-container"');
+    const addButtonIndex = documentTabsSource.indexOf('class="tab-add"');
+    const containerEnd = documentTabsSource.indexOf('</div>', addButtonIndex);
+
+    expect(containerStart).toBeGreaterThan(-1);
+    expect(addButtonIndex).toBeGreaterThan(containerStart);
+    expect(containerEnd).toBeGreaterThan(addButtonIndex);
+    expect(documentTabsSource).not.toContain('class="tab-actions"');
+    expect(documentTabsSource).toContain('{#if showAddButton}');
+    expect(documentTabsSource).toContain('tabsWidth + addButtonWidth <= tabsContainer.clientWidth');
+    expect(styles).not.toContain('.tab-actions');
+    expect(styles).toMatch(/\.tab-add\s*\{[\s\S]*?flex-shrink:\s*0;/);
   });
 
   it('moves editor appearance controls into the settings drawer draft flow', () => {

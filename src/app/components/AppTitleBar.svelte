@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Moon, Sun } from '@lucide/svelte';
+  import { Moon, PanelLeftClose, PanelLeftOpen, Sun } from '@lucide/svelte';
   import type { RecentDocument } from '../../lib/desktop/tauriStorage';
   import {
     DIAGRAM_TEMPLATES,
@@ -15,6 +15,7 @@
   export let activeMenu: string | null;
   export let recentFiles: RecentDocument[];
   export let mode: EditorMode;
+  export let focusMode: boolean;
   export let getCompactPath: (path: string) => string;
   export let toggleMenu: (menu: string) => void;
   export let closeMenu: (menu: string) => void;
@@ -44,52 +45,67 @@
   let isFullscreen = false;
   let isMaximized = false;
   let unlistenResized: (() => void) | null = null;
+  let canSyncWindowState = false;
+  let windowStateListenerReady = false;
+
+  async function syncWindowState() {
+    if (!desktopEnabled || !canSyncWindowState) return;
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const appWindow = getCurrentWindow();
+      const [fullscreen, maximized] = await Promise.all([
+        appWindow.isFullscreen(),
+        appWindow.isMaximized(),
+      ]);
+
+      if (canSyncWindowState) {
+        isFullscreen = fullscreen;
+        isMaximized = maximized;
+      }
+    } catch (err) {
+      console.error('Failed to sync window state:', err);
+    }
+  }
+
+  async function setupWindowStateListener() {
+    if (!desktopEnabled || !canSyncWindowState || windowStateListenerReady) return;
+
+    windowStateListenerReady = true;
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      if (!canSyncWindowState) return;
+
+      const appWindow = getCurrentWindow();
+      await syncWindowState();
+      const unlisten = await appWindow.onResized(syncWindowState);
+
+      if (canSyncWindowState) {
+        unlistenResized = unlisten;
+      } else {
+        unlisten();
+      }
+    } catch (err) {
+      windowStateListenerReady = false;
+      console.error('Failed to setup window state listener:', err);
+    }
+  }
+
+  $: void setupWindowStateListener();
 
   onMount(() => {
     isMac = navigator.userAgent.includes('Mac');
     isWin = navigator.userAgent.includes('Win');
-
-    let isDestroyed = false;
-
-    if (desktopEnabled) {
-      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        if (isDestroyed) return;
-        const appWindow = getCurrentWindow();
-
-        // 初始化状态
-        appWindow.isFullscreen().then((fullscreen) => {
-          if (!isDestroyed) isFullscreen = fullscreen;
-        });
-        appWindow.isMaximized().then((maximized) => {
-          if (!isDestroyed) isMaximized = maximized;
-        });
-
-        // 监听窗口改变事件
-        appWindow
-          .onResized(async () => {
-            if (!isDestroyed) {
-              isFullscreen = await appWindow.isFullscreen();
-              // 在 Mac 上双击 topbar 放大其实是 zoom，但原生的红绿灯还在！
-              // 所以即使 isMaximized 变成了 true，我们也不应该去掉 80px 的左内边距。
-              // 只有 isFullscreen 才会让红绿灯消失。
-              isMaximized = await appWindow.isMaximized();
-            }
-          })
-          .then((unlisten) => {
-            if (isDestroyed) {
-              unlisten();
-            } else {
-              unlistenResized = unlisten;
-            }
-          });
-      });
-    }
+    canSyncWindowState = true;
+    void setupWindowStateListener();
 
     return () => {
-      isDestroyed = true;
+      canSyncWindowState = false;
       if (unlistenResized) {
         unlistenResized();
+        unlistenResized = null;
       }
+      windowStateListenerReady = false;
     };
   });
 
@@ -119,6 +135,7 @@
       if (e.detail === 2) {
         // 双击最大化/还原
         await appWindow.toggleMaximize();
+        await syncWindowState();
       } else {
         await appWindow.startDragging();
       }
@@ -141,6 +158,11 @@
     runCommand({ type: 'insertDiagramBlock', diagramType });
     closeMenu(menu);
   }
+
+  async function handleMaximizeWindow() {
+    await Promise.resolve(maximizeWindow());
+    await syncWindowState();
+  }
 </script>
 
 <header
@@ -150,65 +172,25 @@
   class:is-fullscreen={isFullscreen}
 >
   <div class="titlebar-row top-row" data-drag-region role="presentation" on:mousedown={handleDrag}>
+    <button
+      class="icon-btn sidebar-toggle-btn"
+      title={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
+      aria-label={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
+      aria-pressed={!focusMode}
+      on:click={toggleFocusMode}
+    >
+      {#if focusMode}
+        <PanelLeftOpen size={16} />
+      {:else}
+        <PanelLeftClose size={16} />
+      {/if}
+    </button>
+
     <div class="titlebar-left" data-drag-region>
       <span class="app-logo">M</span>
       <span class="app-name" data-drag-region>NewMd</span>
     </div>
-    <span class="titlebar-spacer" data-drag-region></span>
-    <div class="titlebar-right">
-      <button class="icon-btn" title="切换主题" on:click={toggleTheme}>
-        {#if theme === 'light'}
-          <Moon size={14} />
-        {:else}
-          <Sun size={14} />
-        {/if}
-      </button>
 
-      {#if desktopEnabled && isWin}
-        <div class="window-controls">
-          <button class="control-btn" title="最小化" on:click={minimizeWindow}>
-            <svg width="10" height="1" viewBox="0 0 10 1"
-              ><line
-                x1="0"
-                y1="0.5"
-                x2="10"
-                y2="0.5"
-                stroke="currentColor"
-                stroke-width="1.5"
-              /></svg
-            >
-          </button>
-          <button class="control-btn" title="最大化" on:click={maximizeWindow}>
-            <svg width="10" height="10" viewBox="0 0 10 10"
-              ><rect
-                x="0.5"
-                y="0.5"
-                width="9"
-                height="9"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.2"
-              /></svg
-            >
-          </button>
-          <button class="control-btn close" title="关闭" on:click={closeAppWindow}>
-            <svg width="10" height="10" viewBox="0 0 10 10"
-              ><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" /><line
-                x1="9"
-                y1="1"
-                x2="1"
-                y2="9"
-                stroke="currentColor"
-                stroke-width="1.2"
-              /></svg
-            >
-          </button>
-        </div>
-      {/if}
-    </div>
-  </div>
-
-  <div class="titlebar-row bottom-row">
     <nav class="titlebar-menu">
       <div
         class="menu-item"
@@ -523,5 +505,83 @@
         >
       </div>
     </nav>
+
+    <span class="titlebar-spacer" data-drag-region></span>
+    <div class="titlebar-right">
+      <button class="icon-btn" title="切换主题" aria-label="切换主题" on:click={toggleTheme}>
+        {#if theme === 'light'}
+          <Moon size={14} />
+        {:else}
+          <Sun size={14} />
+        {/if}
+      </button>
+
+      {#if desktopEnabled && isWin}
+        <div class="window-controls">
+          <button class="control-btn" title="最小化" aria-label="最小化" on:click={minimizeWindow}>
+            <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true"
+              ><line
+                x1="0"
+                y1="0.5"
+                x2="10"
+                y2="0.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+              /></svg
+            >
+          </button>
+          <button
+            class="control-btn"
+            title={isMaximized ? '还原窗口' : '最大化'}
+            aria-label={isMaximized ? '还原窗口' : '最大化'}
+            on:click={handleMaximizeWindow}
+          >
+            {#if isMaximized}
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <rect
+                  x="3.5"
+                  y="1.5"
+                  width="7"
+                  height="7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.1"
+                />
+                <path
+                  d="M1.5 3.5h7v7h-7z"
+                  fill="var(--md-titlebar-bg)"
+                  stroke="currentColor"
+                  stroke-width="1.1"
+                />
+              </svg>
+            {:else}
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
+                ><rect
+                  x="0.5"
+                  y="0.5"
+                  width="9"
+                  height="9"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.2"
+                /></svg
+              >
+            {/if}
+          </button>
+          <button class="control-btn close" title="关闭" aria-label="关闭" on:click={closeAppWindow}>
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
+              ><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" /><line
+                x1="9"
+                y1="1"
+                x2="1"
+                y2="9"
+                stroke="currentColor"
+                stroke-width="1.2"
+              /></svg
+            >
+          </button>
+        </div>
+      {/if}
+    </div>
   </div>
 </header>

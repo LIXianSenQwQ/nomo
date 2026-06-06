@@ -100,6 +100,9 @@
 
 .explorer-header button:focus-visible,
 .explorer-actions button:focus-visible,
+.titlebar .icon-btn:focus-visible,
+.control-btn:focus-visible,
+.menu-btn:focus-visible,
 .menu-bar button:focus-visible,
 .mode-switch button:focus-visible,
 .icon-button:focus-visible,

@@ -75,15 +75,6 @@
   overflow: hidden;
 }
 
-.tab-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  min-height: 40px;
-  margin-left: 4px;
-}
-
 .tabs-container {
   display: flex;
   align-items: flex-end;
@@ -183,8 +174,10 @@
   align-items: center;
   justify-content: center;
   min-width: 32px;
+  flex-shrink: 0;
   height: 32px;
-  font-size: 20px;
+  margin-left: 4px;
+  margin-bottom: 2px;
   border: 0;
   background: transparent;
   color: var(--md-editor-muted-fg);
