@@ -1,7 +1,9 @@
 <script lang="ts">
   import { FileText, FolderOpen, FolderPlus, FilePlus, RefreshCw, ChevronsUp } from '@lucide/svelte';
   import type { FileTreeNode } from '../types';
+  import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import { createEventDispatcher } from 'svelte';
+  import ContextMenu from './ContextMenu.svelte';
 
   export let currentFolderPath: string;
   export let rootFolderExpanded: boolean;
@@ -21,12 +23,24 @@
   export let previewNativePath: string | null;
   export let startResize: (event: MouseEvent) => void;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    createNode: { parentPath: string; type: 'folder' | 'file'; name: string };
+    renameNode: { path: string; newName: string };
+    refreshFolder: void;
+    collapseAll: void;
+    deleteNode: { path: string; isDir: boolean };
+  }>();
 
   let creatingParentPath: string | null = null;
   let creatingType: 'folder' | 'file' | null = null;
   let creatingValue = '';
   let creatingInputRef: HTMLInputElement | null = null;
+
+  // 资源管理器右键菜单状态
+  let explorerContextMenuOpen = false;
+  let explorerContextMenuX = 0;
+  let explorerContextMenuY = 0;
+  let explorerContextMenuItems: ContextMenuItem[] = [];
 
   let renamingPath: string | null = null;
   let renamingValue = '';
@@ -64,8 +78,8 @@
     openRecentEntry(path, 'file');
   }
 
-  function startCreating(parentPath: string, type: 'folder' | 'file', event: MouseEvent) {
-    event.stopPropagation();
+  function startCreating(parentPath: string, type: 'folder' | 'file', event?: MouseEvent) {
+    event?.stopPropagation();
     creatingParentPath = parentPath;
     creatingType = type;
     creatingValue = '';
@@ -121,8 +135,8 @@
     }
   }
 
-  function startRenaming(path: string, currentName: string, event: MouseEvent) {
-    event.stopPropagation();
+  function startRenaming(path: string, currentName: string, event?: MouseEvent) {
+    event?.stopPropagation();
     renamingPath = path;
     renamingValue = currentName;
     setTimeout(() => {
@@ -162,6 +176,130 @@
     const sep = activePath.includes('\\') ? '\\' : '/';
     return activePath.startsWith(folderPath + sep);
   }
+
+  // 在系统文件管理器中定位文件/文件夹
+  async function revealPathInFolder(path: string) {
+    try {
+      const { revealInExplorer } = await import('../../lib/desktop/tauriStorage');
+      await revealInExplorer(path);
+    } catch {
+      // 非桌面环境或调用失败，静默忽略
+    }
+  }
+
+  // 步骤1：构建文件右键菜单项
+  function buildFileContextMenuItems(node: FileTreeNode): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [];
+
+    items.push({
+      label: '打开',
+      action: () => openPreviewFile(node.path),
+    });
+    items.push({
+      label: '在新标签页打开',
+      action: () => openRecentEntry(node.path, 'file'),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '重命名',
+      action: () => startRenaming(node.path, node.name),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '复制路径',
+      action: () => {
+        navigator.clipboard.writeText(node.path).catch(() => {});
+      },
+    });
+    items.push({
+      label: '在文件夹中显示',
+      action: () => revealPathInFolder(node.path),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '删除',
+      danger: true,
+      action: () => {
+        dispatch('deleteNode', { path: node.path, isDir: false });
+      },
+    });
+
+    return items;
+  }
+
+  // 步骤2：构建文件夹右键菜单项
+  function buildFolderContextMenuItems(node: FileTreeNode): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [];
+
+    items.push({
+      label: '新建文件',
+      action: () => startCreating(node.path, 'file'),
+    });
+    items.push({
+      label: '新建文件夹',
+      action: () => startCreating(node.path, 'folder'),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '重命名',
+      action: () => startRenaming(node.path, node.name),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '复制路径',
+      action: () => {
+        navigator.clipboard.writeText(node.path).catch(() => {});
+      },
+    });
+    items.push({
+      label: '在文件夹中显示',
+      action: () => revealPathInFolder(node.path),
+    });
+
+    items.push({ label: '', action: () => {}, separator: true });
+    items.push({
+      label: '刷新',
+      action: () => dispatch('refreshFolder'),
+    });
+    items.push({
+      label: '删除',
+      danger: true,
+      action: () => {
+        dispatch('deleteNode', { path: node.path, isDir: true });
+      },
+    });
+
+    return items;
+  }
+
+  // 步骤3：处理文件右键事件
+  function handleFileContextMenu(node: FileTreeNode, event: MouseEvent) {
+    event.preventDefault();
+    explorerContextMenuX = event.clientX;
+    explorerContextMenuY = event.clientY;
+    explorerContextMenuItems = buildFileContextMenuItems(node);
+    explorerContextMenuOpen = true;
+  }
+
+  // 步骤4：处理文件夹右键事件
+  function handleFolderContextMenu(node: FileTreeNode, event: MouseEvent) {
+    event.preventDefault();
+    explorerContextMenuX = event.clientX;
+    explorerContextMenuY = event.clientY;
+    explorerContextMenuItems = buildFolderContextMenuItems(node);
+    explorerContextMenuOpen = true;
+  }
+
+  // 步骤5：关闭资源管理器右键菜单
+  function closeExplorerContextMenu() {
+    explorerContextMenuOpen = false;
+    explorerContextMenuItems = [];
+  }
 </script>
 
 <aside class="rail" aria-label="资源管理器">
@@ -196,6 +334,7 @@
               title={node.path}
               on:click={() => hasChildren && toggleFolderCollapse(node.path)}
               on:dblclick={(e) => startRenaming(node.path, node.name, e)}
+              on:contextmenu|preventDefault={(event) => handleFolderContextMenu(node, event)}
             >
               {#if hasChildren}
                 <span class="chevron-icon">
@@ -264,6 +403,7 @@
             title={node.path}
             on:click={() => handleFileClick(node.path)}
             on:dblclick={() => handleFileDblClick(node.path)}
+            on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
           >
             <FileText size={13} />
             <span>{node.name}</span>
@@ -286,6 +426,38 @@
           class:active={isFolderActive(currentFolderPath)}
           title={currentFolderPath}
           on:click={toggleRootFolder}
+          on:contextmenu|preventDefault={(event) => {
+            // 根文件夹右键菜单：不包含重命名和删除
+            const items: ContextMenuItem[] = [];
+            items.push({
+              label: '新建文件',
+              action: () => startCreating(currentFolderPath, 'file'),
+            });
+            items.push({
+              label: '新建文件夹',
+              action: () => startCreating(currentFolderPath, 'folder'),
+            });
+            items.push({ label: '', action: () => {}, separator: true });
+            items.push({
+              label: '复制路径',
+              action: () => {
+                navigator.clipboard.writeText(currentFolderPath).catch(() => {});
+              },
+            });
+            items.push({
+              label: '在文件夹中显示',
+              action: () => revealPathInFolder(currentFolderPath),
+            });
+            items.push({ label: '', action: () => {}, separator: true });
+            items.push({
+              label: '刷新',
+              action: () => dispatch('refreshFolder'),
+            });
+            explorerContextMenuX = event.clientX;
+            explorerContextMenuY = event.clientY;
+            explorerContextMenuItems = items;
+            explorerContextMenuOpen = true;
+          }}
         >
           <span class="chevron-icon">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
@@ -374,3 +546,12 @@
     on:mousedown={startResize}
   ></button>
 </aside>
+
+{#if explorerContextMenuOpen}
+  <ContextMenu
+    x={explorerContextMenuX}
+    y={explorerContextMenuY}
+    items={explorerContextMenuItems}
+    onClose={closeExplorerContextMenu}
+  />
+{/if}

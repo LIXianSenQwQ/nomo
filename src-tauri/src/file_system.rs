@@ -29,6 +29,19 @@ pub(crate) fn rename_file(old_path: String, new_path: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub(crate) fn delete_file(path: String) -> Result<(), String> {
+    let file_path = Path::new(&path);
+    if !file_path.exists() {
+        return Err(format!("文件不存在：{path}"));
+    }
+    if file_path.is_dir() {
+        fs::remove_dir_all(&path).map_err(|error| format!("删除文件夹失败：{error}"))
+    } else {
+        fs::remove_file(&path).map_err(|error| format!("删除文件失败：{error}"))
+    }
+}
+
+#[tauri::command]
 pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String> {
     let status = file_status(&path);
     if !status.exists {

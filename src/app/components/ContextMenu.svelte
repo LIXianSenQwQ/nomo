@@ -74,26 +74,29 @@
   role="menu"
 >
   {#each items as item, index}
-    {#if item.separator && index > 0}
-      <div class="context-menu-separator" role="separator"></div>
-    {/if}
-    <button
-      type="button"
-      class="context-menu-item"
-      class:active={item.active}
-      class:danger={item.danger}
-      role="menuitem"
-      on:mousedown|preventDefault
-      on:click={() => handleItemClick(item)}
-    >
-      <span class="context-menu-item-check">
-        {#if item.active}✓{/if}
-      </span>
-      <span class="context-menu-item-label">{item.label}</span>
-      {#if item.shortcut}
-        <span class="context-menu-item-shortcut">{item.shortcut}</span>
+    {#if item.separator}
+      {#if index > 0}
+        <div class="context-menu-separator" role="separator"></div>
       {/if}
-    </button>
+    {:else}
+      <button
+        type="button"
+        class="context-menu-item"
+        class:active={item.active}
+        class:danger={item.danger}
+        role="menuitem"
+        on:mousedown|preventDefault
+        on:click={() => handleItemClick(item)}
+      >
+        <span class="context-menu-item-check">
+          {#if item.active}✓{/if}
+        </span>
+        <span class="context-menu-item-label" style="color: var(--md-editor-fg); font-size: 12.5px;">{item.label}</span>
+        {#if item.shortcut}
+          <span class="context-menu-item-shortcut">{item.shortcut}</span>
+        {/if}
+      </button>
+    {/if}
   {/each}
 </div>
 
@@ -107,7 +110,8 @@
     border-radius: var(--md-editor-radius-md);
     background: var(--md-editor-surface);
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
-    animation: context-menu-in 120ms ease-out;
+    animation: context-menu-in 120ms ease-out forwards;
+    color: var(--md-editor-fg);
   }
 
   @keyframes context-menu-in {
@@ -168,6 +172,8 @@
   .context-menu-item-label {
     flex: 1;
     min-width: 0;
+    display: block;
+    overflow: visible;
   }
 
   .context-menu-item-shortcut {

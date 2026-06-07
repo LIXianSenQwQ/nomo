@@ -9,6 +9,8 @@
     updateAppSetting,
     rememberRecentEntry,
     checkPathsExist,
+    deleteFile,
+    revealInExplorer,
     type RecentEntry,
     type RecentEntryType,
     clearRecentEntries,
@@ -70,6 +72,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   } from './services/appUiState';
   import { createEditorSettingsController } from './services/editorSettingsController';
   import ContextMenu from './components/ContextMenu.svelte';
+  import ConfirmDialog from './components/ConfirmDialog.svelte';
   import type { ContextMenuOpenEvent, ContextMenuItem } from '../lib/editor-core/plugins/contextMenu';
   import {
     applyBlockStyleSetting,
@@ -168,6 +171,12 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   let contextMenuY = 0;
   let contextMenuItems: ContextMenuItem[] = [];
   let contextMenuOpen = false;
+
+  // 删除确认对话框状态
+  let deleteConfirmOpen = false;
+  let deleteConfirmPath = '';
+  let deleteConfirmIsDir = false;
+  let deleteConfirmName = '';
 
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
@@ -652,6 +661,74 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     }
   }
 
+  // 步骤：关闭除指定标签外的所有标签页（保留标签自动固定）
+  function handleCloseOtherTabs(event: CustomEvent<{ tabId: string }>) {
+    const keepTabId = event.detail.tabId;
+    const keepTab = tabs.find((t) => t.id === keepTabId);
+    if (!keepTab) return;
+
+    const dirtyTabs = tabs.filter((t) => t.id !== keepTabId && t.dirty && t.id !== previewTabId);
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      if (!ok) return;
+    }
+
+    tabs = [keepTab];
+    activeTabId = keepTabId;
+    // 无论保留的是否是预览标签，都固定它（只剩一个标签不需要预览机制）
+    previewTabId = null;
+    loadTabState(keepTab);
+    updateWindowTitle();
+    persistWorkspaceState();
+  }
+
+  // 步骤：关闭指定标签页右侧的所有标签页
+  function handleCloseTabsToRight(event: CustomEvent<{ tabId: string }>) {
+    const tabId = event.detail.tabId;
+    const tabIndex = tabs.findIndex((t) => t.id === tabId);
+    if (tabIndex < 0) return;
+
+    const rightTabs = tabs.slice(tabIndex + 1);
+    const dirtyRightTabs = rightTabs.filter((t) => t.dirty && t.id !== previewTabId);
+    if (dirtyRightTabs.length > 0) {
+      const names = dirtyRightTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      if (!ok) return;
+    }
+
+    const remaining = tabs.slice(0, tabIndex + 1);
+    tabs = remaining;
+    if (previewTabId && !remaining.find((t) => t.id === previewTabId)) {
+      previewTabId = null;
+    }
+    if (!remaining.find((t) => t.id === activeTabId)) {
+      activeTabId = tabId;
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab) loadTabState(tab);
+    }
+    updateWindowTitle();
+    persistWorkspaceState();
+  }
+
+  // 步骤：关闭全部标签页，保留一个空白标签
+  function handleCloseAllTabs() {
+    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      if (!ok) return;
+    }
+
+    const newTab = createBlankTab();
+    tabs = [newTab];
+    activeTabId = newTab.id;
+    previewTabId = null;
+    loadTabState(newTab);
+    updateWindowTitle();
+    persistWorkspaceState();
+  }
+
   const documentActions = createDocumentActionsController({
     largeDocumentLimit: LARGE_DOCUMENT_LIMIT,
     recoveryKey: RECOVERY_KEY,
@@ -842,6 +919,65 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   function handleCollapseAll() {
     expandedFolders = new Set();
     // 保留根目录展开，只折叠子文件夹
+  }
+
+  // 步骤：打开删除确认对话框
+  function handleDeleteNode(event: CustomEvent<{ path: string; isDir: boolean }>) {
+    const { path, isDir } = event.detail;
+    deleteConfirmPath = path;
+    deleteConfirmIsDir = isDir;
+    deleteConfirmName = path.includes('\\')
+      ? path.slice(path.lastIndexOf('\\') + 1)
+      : path.includes('/')
+        ? path.slice(path.lastIndexOf('/') + 1)
+        : path;
+    deleteConfirmOpen = true;
+  }
+
+  // 步骤：执行删除操作
+  async function executeDelete() {
+    const path = deleteConfirmPath;
+    const isDir = deleteConfirmIsDir;
+    const typeLabel = isDir ? '文件夹' : '文件';
+    deleteConfirmOpen = false;
+
+    try {
+      await deleteFile(path);
+      // 关闭受影响的标签页（精确匹配或以文件夹路径开头）
+      const sep = path.includes('\\') ? '\\' : '/';
+      const affectedTabs = tabs.filter((t) =>
+        isDir
+          ? t.nativePath && (t.nativePath === path || t.nativePath.startsWith(path + sep))
+          : t.nativePath === path,
+      );
+      for (const tab of affectedTabs) {
+        if (tab.id === previewTabId) {
+          // 预览标签直接移除
+          tabs = tabs.filter((t) => t.id !== tab.id);
+          previewTabId = null;
+        } else {
+          closeTab(tab.id);
+        }
+      }
+      // 如果删光了所有标签，创建一个空白标签
+      if (tabs.length === 0) {
+        const newTab = createBlankTab();
+        tabs = [newTab];
+        activeTabId = newTab.id;
+        loadTabState(newTab);
+      }
+      // 刷新文件夹
+      if (currentFolderPath) {
+        await loadFolder(currentFolderPath);
+      }
+      statusMessage = `已删除${typeLabel}`;
+    } catch (error) {
+      statusMessage = `删除失败: ${error}`;
+    }
+  }
+
+  function closeDeleteConfirm() {
+    deleteConfirmOpen = false;
   }
 
   async function handleCreateNode(
@@ -1500,6 +1636,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   on:renameNode={handleRenameNode}
   on:refreshFolder={handleRefreshFolder}
   on:collapseAll={handleCollapseAll}
+  on:closeOtherTabs={handleCloseOtherTabs}
+  on:closeTabsToRight={handleCloseTabsToRight}
+  on:closeAllTabs={handleCloseAllTabs}
+  on:deleteNode={handleDeleteNode}
 />
 
 <SettingsDrawer
@@ -1542,3 +1682,14 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     onClose={closeContextMenu}
   />
 {/if}
+
+<ConfirmDialog
+  open={deleteConfirmOpen}
+  title="确认删除"
+  message={`确定要删除 ${deleteConfirmIsDir ? '文件夹' : '文件'} "${deleteConfirmName}" 吗？`}
+  detail={deleteConfirmPath}
+  confirmLabel="删除"
+  danger={true}
+  onConfirm={executeDelete}
+  onCancel={closeDeleteConfirm}
+/>

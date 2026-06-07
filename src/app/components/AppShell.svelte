@@ -192,10 +192,23 @@
       on:renameNode
       on:refreshFolder
       on:collapseAll
+      on:deleteNode
     />
 
     <section class="editor-shell" aria-label="编辑器">
-      <DocumentTabs {tabs} {activeTabId} {previewTabId} {switchTab} {closeTab} {pinPreviewTab} {createNewFile} {currentFolderPath} />
+      <DocumentTabs
+        {tabs}
+        {activeTabId}
+        {previewTabId}
+        {switchTab}
+        {closeTab}
+        {pinPreviewTab}
+        {createNewFile}
+        {currentFolderPath}
+        on:closeOtherTabs
+        on:closeTabsToRight
+        on:closeAllTabs
+      />
 
       <EditorToolbar
         {mode}

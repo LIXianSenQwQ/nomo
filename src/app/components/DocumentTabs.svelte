@@ -1,7 +1,9 @@
 <script lang="ts">
   import { ChevronDown, FileText, Plus, X } from '@lucide/svelte';
-  import { onMount, tick } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
+  import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
+  import ContextMenu from './ContextMenu.svelte';
 
   export let tabs: Tab[];
   export let activeTabId: string;
@@ -11,6 +13,12 @@
   export let pinPreviewTab: () => void;
   export let createNewFile: () => void;
   export let currentFolderPath: string = '';
+
+  const dispatch = createEventDispatcher<{
+    closeOtherTabs: { tabId: string };
+    closeTabsToRight: { tabId: string };
+    closeAllTabs: void;
+  }>();
 
   const dropdownButtonWidth = 28;
 
@@ -36,7 +44,79 @@
   let measureQueued = false;
   let dropdownMenuStyle = '';
 
+  // 标签栏右键菜单状态
+  let tabContextMenuOpen = false;
+  let tabContextMenuX = 0;
+  let tabContextMenuY = 0;
+  let tabContextMenuItems: ContextMenuItem[] = [];
+
   $: hiddenTabs = tabs.filter((_, i) => i < visibleRange.start || i >= visibleRange.end);
+
+  // 构建标签右键菜单项
+  function buildTabContextMenuItems(tab: Tab): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [];
+    const isPreview = previewTabId === tab.id;
+    const tabIndex = tabs.findIndex((t) => t.id === tab.id);
+
+    // 步骤1：基础关闭操作
+    items.push({
+      label: '关闭',
+      action: () => closeTab(tab.id),
+      shortcut: isPreview ? undefined : 'Ctrl+W',
+    });
+
+    // 步骤2：批量关闭操作
+    const otherTabs = tabs.filter((t) => t.id !== tab.id);
+    if (otherTabs.length > 0) {
+      items.push({
+        label: '关闭其他标签页',
+        action: () => dispatch('closeOtherTabs', { tabId: tab.id }),
+      });
+    }
+
+    const rightTabs = tabs.slice(tabIndex + 1);
+    if (rightTabs.length > 0) {
+      items.push({
+        label: '关闭右侧标签页',
+        action: () => dispatch('closeTabsToRight', { tabId: tab.id }),
+      });
+    }
+
+    if (tabs.length > 1) {
+      items.push({
+        label: '关闭全部标签页',
+        action: () => dispatch('closeAllTabs'),
+        danger: true,
+      });
+    }
+
+    // 步骤3：路径相关操作
+    const path = tab.nativePath || tab.filePath;
+    if (path) {
+      items.push({ label: '', action: () => {}, separator: true });
+      items.push({
+        label: '复制路径',
+        action: () => {
+          navigator.clipboard.writeText(path).catch(() => {});
+        },
+      });
+    }
+
+    return items;
+  }
+
+  function handleTabContextMenu(tab: Tab, event: MouseEvent) {
+    event.preventDefault();
+    tabContextMenuX = event.clientX;
+    tabContextMenuY = event.clientY;
+    tabContextMenuItems = buildTabContextMenuItems(tab);
+    tabContextMenuOpen = true;
+  }
+
+  function closeTabContextMenu() {
+    tabContextMenuOpen = false;
+    tabContextMenuItems = [];
+  }
 
   function queueMeasureTabs() {
     if (measureQueued) return;
@@ -186,6 +266,7 @@
         on:dblclick={() => {
           if (previewTabId === tab.id) pinPreviewTab();
         }}
+        on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
       >
         <FileText size={13} />
         <span class="tab-title">{tab.fileName}</span>
@@ -240,6 +321,7 @@
         role="menuitem"
         title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
         on:click={() => selectHiddenTab(tab.id)}
+        on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
       >
         <FileText size={13} />
         <span class="tab-dropdown-item-name">{tab.fileName}</span>
@@ -249,4 +331,8 @@
       </button>
     {/each}
   </div>
+{/if}
+
+{#if tabContextMenuOpen}
+  <ContextMenu x={tabContextMenuX} y={tabContextMenuY} items={tabContextMenuItems} onClose={closeTabContextMenu} />
 {/if}

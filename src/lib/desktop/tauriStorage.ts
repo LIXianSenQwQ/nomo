@@ -324,6 +324,16 @@ export async function renameFile(oldPath: string, newPath: string): Promise<void
   await invoke('rename_file', { oldPath, newPath });
 }
 
+export async function deleteFile(path: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('delete_file', { path });
+}
+
+export async function revealInExplorer(path: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('reveal_in_explorer', { path });
+}
+
 export async function readCurrentWindowState(): Promise<WindowState> {
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const currentWindow = getCurrentWindow();
