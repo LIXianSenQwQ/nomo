@@ -48,6 +48,7 @@
   --md-editor-table-border: #dfe3e8;
   --md-editor-table-header-bg: #f0f2f4;
   --md-editor-shadow: 0 14px 34px rgba(22, 32, 44, 0.08);
+  --md-window-border: rgba(0, 0, 0, 0.72);
   --md-editor-radius-sm: 4px;
   --md-editor-radius-md: 8px;
   --md-editor-font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
@@ -121,6 +122,7 @@
   --md-editor-table-border: #333b46;
   --md-editor-table-header-bg: #252c35;
   --md-editor-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+  --md-window-border: rgba(0, 0, 0, 0.86);
 
   /* 顶栏与菜单变量（暗色） */
   --md-titlebar-bg: #1a1a1a;
