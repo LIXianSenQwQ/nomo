@@ -35,6 +35,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
+  const tauriTraySource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/tray.rs'),
+    'utf-8',
+  );
   const tauriFileSystemSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/file_system.rs'),
     'utf-8',
@@ -326,14 +330,36 @@ describe('App outline layout', () => {
     expect(settingsDrawerSource).toContain('打开文件夹默认行为');
     expect(settingsDrawerSource).toContain('文件预览标签');
     expect(settingsDrawerSource).toContain('toggleFilePreviewEnabled');
+    expect(settingsDrawerSource).toContain('自动保存');
+    expect(settingsDrawerSource).toContain('toggleAutoSaveEnabled');
+    expect(settingsDrawerSource).toContain('关闭到托盘');
+    expect(settingsDrawerSource).toContain('toggleCloseToTrayEnabled');
     expect(settingsDrawerSource).toContain('draftFolderBehavior,');
     expect(settingsDrawerSource).toContain('draftFilePreviewEnabled,');
+    expect(settingsDrawerSource).toContain('draftAutoSaveEnabled,');
+    expect(settingsDrawerSource).toContain('draftCloseToTrayEnabled,');
     expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
     expect(appSource).toContain('updateLineHeightValue(nextAppearanceSettings.lineHeight)');
     expect(appSource).toContain('updateBlockStyle(nextAppearanceSettings.blockStyle)');
     expect(appSource).toContain('filePreviewEnabled = true');
+    expect(appSource).toContain('autoSaveEnabled = false');
+    expect(appSource).toContain('closeToTrayEnabled = false');
     expect(appSource).toContain("updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled)");
+    expect(appSource).toContain("updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled)");
+    expect(appSource).toContain("updateAppSetting('closeToTrayEnabled', nextCloseToTrayEnabled)");
+    expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');
     expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
+  });
+
+  it('supports closing windows to the system tray when enabled', () => {
+    expect(tauriLibSource).toContain('crate::window::tray::install_app_tray');
+    expect(tauriLibSource).toContain('crate::window::commands::hide_window_to_tray');
+    expect(tauriLibSource).toContain('WindowEvent::CloseRequested');
+    expect(tauriTraySource).toContain('TrayIconBuilder::with_id');
+    expect(tauriTraySource).toContain('"打开 NewMd"');
+    expect(tauriTraySource).toContain('"退出"');
+    expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
+    expect(tauriTraySource).toContain('closeToTrayEnabled');
   });
 
   it('removes application-level workspace storage path configuration', () => {
@@ -349,9 +375,7 @@ describe('App outline layout', () => {
     expect(tauriStorageSource).not.toContain('get_default_workspace_dir');
     expect(tauriLibSource).not.toContain('get_default_workspace_dir');
     expect(tauriFileSystemSource).not.toContain('get_default_workspace_dir');
-    expect(tauriDatabaseSource).toContain(
-      "DELETE FROM app_settings WHERE key = 'workspaceDir'",
-    );
+    expect(tauriDatabaseSource).toContain("DELETE FROM app_settings WHERE key = 'workspaceDir'");
   });
 
   it('keeps automatic local image cleanup behind an image setting toggle', () => {

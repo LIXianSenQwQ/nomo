@@ -19,6 +19,7 @@
     folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
     filePreviewEnabled: boolean;
     autoSaveEnabled: boolean;
+    closeToTrayEnabled: boolean;
     editorMode: EditorMode;
     sidebarHidden: boolean;
     outlineVisible: boolean;
@@ -31,6 +32,7 @@
   export let blockStyle: 'classic' | 'modern';
   export let filePreviewEnabled: boolean;
   export let autoSaveEnabled: boolean;
+  export let closeToTrayEnabled: boolean;
   export let editorMode: EditorMode;
   export let sidebarHidden: boolean;
   export let outlineVisible: boolean;
@@ -48,6 +50,7 @@
   let draftBlockStyle: 'classic' | 'modern' = blockStyle;
   let draftFilePreviewEnabled = filePreviewEnabled;
   let draftAutoSaveEnabled = autoSaveEnabled;
+  let draftCloseToTrayEnabled = closeToTrayEnabled;
   let draftEditorMode: EditorMode = editorMode;
   let draftSidebarHidden = sidebarHidden;
   let draftOutlineVisible = outlineVisible;
@@ -62,6 +65,7 @@
     draftBlockStyle = blockStyle;
     draftFilePreviewEnabled = filePreviewEnabled;
     draftAutoSaveEnabled = autoSaveEnabled;
+    draftCloseToTrayEnabled = closeToTrayEnabled;
     draftEditorMode = editorMode;
     draftSidebarHidden = sidebarHidden;
     draftOutlineVisible = outlineVisible;
@@ -80,6 +84,7 @@
         folderOpenDefaultBehavior: draftFolderBehavior,
         filePreviewEnabled: draftFilePreviewEnabled,
         autoSaveEnabled: draftAutoSaveEnabled,
+        closeToTrayEnabled: draftCloseToTrayEnabled,
         editorMode: draftEditorMode,
         sidebarHidden: draftSidebarHidden,
         outlineVisible: draftOutlineVisible,
@@ -87,9 +92,7 @@
     );
   }
 
-  function setDraftFolderBehavior(
-    value: 'current-window' | 'new-window' | 'ask-every-time',
-  ) {
+  function setDraftFolderBehavior(value: 'current-window' | 'new-window' | 'ask-every-time') {
     draftFolderBehavior = value;
   }
 
@@ -99,6 +102,10 @@
 
   function toggleAutoSaveEnabled(event: Event) {
     draftAutoSaveEnabled = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function toggleCloseToTrayEnabled(event: Event) {
+    draftCloseToTrayEnabled = (event.currentTarget as HTMLInputElement).checked;
   }
 
   function setDraftEditorMode(nextMode: EditorMode) {
@@ -298,6 +305,20 @@
             />
             <span class="toggle-switch" aria-hidden="true"></span>
           </label>
+
+          <label class="toggle-setting" for="closeToTrayEnabled">
+            <span>
+              <span class="toggle-title">关闭到托盘</span>
+              <span class="toggle-desc">点击关闭时隐藏窗口，托盘双击或右键菜单可重新打开。</span>
+            </span>
+            <input
+              id="closeToTrayEnabled"
+              type="checkbox"
+              checked={draftCloseToTrayEnabled}
+              on:change={toggleCloseToTrayEnabled}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
         </section>
 
         <section
@@ -484,9 +505,7 @@
       </div>
 
       <footer class="drawer-footer">
-        <button type="button" class="save-btn" on:click={handleSave}>
-          保存
-        </button>
+        <button type="button" class="save-btn" on:click={handleSave}> 保存 </button>
       </footer>
     </div>
   </div>

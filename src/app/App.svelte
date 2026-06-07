@@ -54,6 +54,7 @@
   import {
     closeAppWindow as closeDesktopWindow,
     createAppWindow,
+    exitApp as exitDesktopApp,
     maximizeAppWindow,
     minimizeAppWindow,
     updateAppWindowTitle,
@@ -63,7 +64,11 @@
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
   import { createBlankTab, writeActiveTabState } from './services/tabs';
-import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './services/documentFiles';
+  import {
+    readMarkdownFromPath,
+    rememberNativeFolder,
+    pickFolderPath,
+  } from './services/documentFiles';
   import {
     closeActiveMenu,
     createSidebarResizeHandlers,
@@ -72,7 +77,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   import { createEditorSettingsController } from './services/editorSettingsController';
   import ContextMenu from './components/ContextMenu.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
-  import type { ContextMenuOpenEvent, ContextMenuItem } from '../lib/editor-core/plugins/contextMenu';
+  import type {
+    ContextMenuOpenEvent,
+    ContextMenuItem,
+  } from '../lib/editor-core/plugins/contextMenu';
   import {
     applyBlockStyleSetting,
     loadPersistedImageSettings,
@@ -102,6 +110,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
     filePreviewEnabled: boolean;
     autoSaveEnabled: boolean;
+    closeToTrayEnabled: boolean;
     editorMode: EditorMode;
     sidebarHidden: boolean;
     outlineVisible: boolean;
@@ -189,11 +198,14 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   let previewTabId: string | null = null;
   let filePreviewEnabled = true;
   let autoSaveEnabled = false;
+  let closeToTrayEnabled = false;
   let windowLabel = '';
 
   function persistWorkspaceState() {
     if (desktopEnabled && windowLabel) {
-      updateAppSetting(`workspaceTabs:${windowLabel}`, { tabs, activeTabId }).catch(() => undefined);
+      updateAppSetting(`workspaceTabs:${windowLabel}`, { tabs, activeTabId }).catch(
+        () => undefined,
+      );
     }
   }
 
@@ -321,7 +333,8 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   const minimizeWindow = () => minimizeAppWindow(desktopEnabled);
   const maximizeWindow = () => maximizeAppWindow(desktopEnabled);
-  const closeAppWindow = () => closeDesktopWindow(desktopEnabled);
+  const closeAppWindow = () => closeDesktopWindow(desktopEnabled, closeToTrayEnabled);
+  const exitApp = () => exitDesktopApp(desktopEnabled);
   const createNewWindow = (folderPath?: string) => createAppWindow(desktopEnabled, folderPath);
 
   function resolveFolderName(path: string): string {
@@ -432,11 +445,9 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   async function closeCurrentWindow() {
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
-    if (dirtyTabs.length > 0) {
+    if (!closeToTrayEnabled && dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(
-        `以下文件有未保存修改：${names}。关闭窗口将丢失这些更改，是否继续？`,
-      );
+      const ok = confirm(`以下文件有未保存修改：${names}。关闭窗口将丢失这些更改，是否继续？`);
       if (!ok) return;
     }
     closeAppWindow();
@@ -615,6 +626,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     updateBlockStyle(nextAppearanceSettings.blockStyle);
     const nextFilePreviewEnabled = nextWorkspaceBehaviorSettings.filePreviewEnabled;
     const nextAutoSaveEnabled = nextWorkspaceBehaviorSettings.autoSaveEnabled;
+    const nextCloseToTrayEnabled = nextWorkspaceBehaviorSettings.closeToTrayEnabled;
     if (nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior !== folderOpenDefaultBehavior) {
       folderOpenDefaultBehavior = nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior;
       await updateAppSetting('folderOpenDefaultBehavior', folderOpenDefaultBehavior).catch(
@@ -635,6 +647,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         documentActions.cancelPendingAutoSaves();
       }
       await updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled).catch(() => undefined);
+    }
+    if (nextCloseToTrayEnabled !== closeToTrayEnabled) {
+      closeToTrayEnabled = nextCloseToTrayEnabled;
+      await updateAppSetting('closeToTrayEnabled', nextCloseToTrayEnabled).catch(() => undefined);
     }
     if (nextWorkspaceBehaviorSettings.sidebarHidden !== focusMode) {
       setSidebarHidden(nextWorkspaceBehaviorSettings.sidebarHidden);
@@ -690,8 +706,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     }
 
     const isLargeDocument =
-      document.markdown.length > LARGE_DOCUMENT_LIMIT ||
-      document.sizeBytes > LARGE_DOCUMENT_LIMIT;
+      document.markdown.length > LARGE_DOCUMENT_LIMIT || document.sizeBytes > LARGE_DOCUMENT_LIMIT;
 
     targetTab.fileName = document.fileName;
     targetTab.filePath = document.path;
@@ -1210,14 +1225,14 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       windowLabel = getCurrentWindow().label;
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('refresh_window_menu')
-        .catch(() => undefined);
+      await invoke('refresh_window_menu').catch(() => undefined);
 
       const settings = await listAppSettings().catch(() => []);
       // 优先读取窗口独立的状态，兼容旧的全局 key
       const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
-      const workspaceTabsSetting = settings.find((s) => s.key === workspaceTabsKey)
-        ?? settings.find((s) => s.key === 'workspaceTabs');
+      const workspaceTabsSetting =
+        settings.find((s) => s.key === workspaceTabsKey) ??
+        settings.find((s) => s.key === 'workspaceTabs');
       if (workspaceTabsSetting) {
         try {
           const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
@@ -1275,6 +1290,18 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         }
       }
 
+      const closeToTraySetting = settings.find((s) => s.key === 'closeToTrayEnabled');
+      if (closeToTraySetting) {
+        try {
+          const value = JSON.parse(closeToTraySetting.valueJson);
+          if (typeof value === 'boolean') {
+            closeToTrayEnabled = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       const editorModeSetting = settings.find((s) => s.key === 'editorMode');
       if (editorModeSetting) {
         try {
@@ -1318,8 +1345,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
           const folderPath = JSON.parse(pendingFolderSetting.valueJson);
           if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
             currentFolderPath = folderPath;
-            await loadFolder(folderPath)
-              .catch(() => undefined);
+            await loadFolder(folderPath).catch(() => undefined);
             // 标记为已消费，避免刷新时重复处理
             await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
           }
@@ -1631,11 +1657,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   function handleDeletedImageResources(event: EditorImageDeletionEvent) {
     const loader = getImageLoader();
-    if (
-      !imageSettings.autoDeleteUnusedLocalImages ||
-      !loader?.remove ||
-      event.srcs.length === 0
-    ) {
+    if (!imageSettings.autoDeleteUnusedLocalImages || !loader?.remove || event.srcs.length === 0) {
       return;
     }
 
@@ -1771,6 +1793,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {minimizeWindow}
   {maximizeWindow}
   {closeAppWindow}
+  {exitApp}
   {createNewWindow}
   {createNewFile}
   {openFileDialog}
@@ -1837,10 +1860,11 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {blockStyle}
   {filePreviewEnabled}
   {autoSaveEnabled}
+  {closeToTrayEnabled}
   editorMode={mode}
   sidebarHidden={focusMode}
   {outlineVisible}
-  folderOpenDefaultBehavior={folderOpenDefaultBehavior}
+  {folderOpenDefaultBehavior}
   {closeSettings}
   saveSettings={handleSaveSettings}
 />

@@ -4,7 +4,7 @@ mod file_system;
 mod models;
 mod window;
 
-use tauri::WindowEvent;
+use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +13,12 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
                 crate::window::state::persist_current_window_state(window);
+            }
+            WindowEvent::CloseRequested { api, .. } => {
+                if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
             _ => {}
         })
@@ -23,6 +29,8 @@ pub fn run() {
                 crate::window::menu::install_window_menu(app.handle(), &window)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
+            crate::window::tray::install_app_tray(app.handle())
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             crate::window::state::restore_window_state(app.handle(), "main");
             Ok(())
         })
@@ -52,6 +60,8 @@ pub fn run() {
             crate::window::commands::minimize_window,
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,
+            crate::window::commands::hide_window_to_tray,
+            crate::window::commands::exit_app,
             crate::file_system::get_folder_tree,
             crate::file_system::check_paths_exist,
             crate::external_link::open_external_link,

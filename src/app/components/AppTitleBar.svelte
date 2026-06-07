@@ -24,6 +24,7 @@
   export let minimizeWindow: () => void;
   export let maximizeWindow: () => void;
   export let closeAppWindow: () => void;
+  export let exitApp: () => void;
   export let createNewWindow: () => void;
   export let createNewFile: () => void;
   export let openFileDialog: () => void;
@@ -290,7 +291,7 @@
               >关闭窗口 <span class="shortcut">Alt + F4</span></button
             >
             <div class="divider"></div>
-            <button on:click={() => finish(closeAppWindow, 'file')}>退出</button>
+            <button on:click={() => finish(exitApp, 'file')}>退出</button>
           </div>
         {/if}
       </div>
@@ -618,7 +619,12 @@
               >
             {/if}
           </button>
-          <button class="control-btn close" title="关闭" aria-label="关闭" on:click={closeAppWindow}>
+          <button
+            class="control-btn close"
+            title="关闭"
+            aria-label="关闭"
+            on:click={closeAppWindow}
+          >
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
               ><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" /><line
                 x1="9"

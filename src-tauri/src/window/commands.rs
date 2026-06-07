@@ -80,3 +80,15 @@ pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
         .close()
         .map_err(|error| format!("关闭窗口失败：{error}"))
 }
+
+#[tauri::command]
+pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .hide()
+        .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))
+}
+
+#[tauri::command]
+pub(crate) fn exit_app(app: AppHandle) {
+    app.exit(0);
+}

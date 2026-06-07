@@ -70,6 +70,7 @@
   export let minimizeWindow: () => void;
   export let maximizeWindow: () => void;
   export let closeAppWindow: () => void;
+  export let exitApp: () => void;
   export let createNewWindow: () => void;
   export let createNewFile: () => void;
   export let openFileDialog: () => void;
@@ -150,6 +151,7 @@
     {minimizeWindow}
     {maximizeWindow}
     {closeAppWindow}
+    {exitApp}
     {createNewWindow}
     {createNewFile}
     {openFileDialog}
@@ -192,7 +194,9 @@
       {toggleFolderCollapse}
       {openRecentEntry}
       {openPreviewFile}
-      previewNativePath={previewTabId ? tabs.find((t) => t.id === previewTabId)?.nativePath ?? null : null}
+      previewNativePath={previewTabId
+        ? (tabs.find((t) => t.id === previewTabId)?.nativePath ?? null)
+        : null}
       {startResize}
       on:createNode
       on:renameNode

@@ -26,16 +26,29 @@ export async function maximizeAppWindow(desktopEnabled: boolean) {
   }
 }
 
-export async function closeAppWindow(desktopEnabled: boolean) {
+export async function closeAppWindow(desktopEnabled: boolean, closeToTrayEnabled = false) {
   if (!desktopEnabled) {
     return;
   }
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('close_window');
+    await invoke(closeToTrayEnabled ? 'hide_window_to_tray' : 'close_window');
   } catch (error) {
     console.error('关闭窗口失败:', error);
+  }
+}
+
+export async function exitApp(desktopEnabled: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('exit_app');
+  } catch (error) {
+    console.error('退出应用失败:', error);
   }
 }
 
@@ -68,12 +81,16 @@ export async function createAppWindow(
     });
 
     await new Promise<void>((resolve, reject) => {
-      appWindow.once('tauri://created', () => {
-        resolve();
-      }).catch(reject);
-      appWindow.once<string>('tauri://error', (event) => {
-        reject(event.payload);
-      }).catch(reject);
+      appWindow
+        .once('tauri://created', () => {
+          resolve();
+        })
+        .catch(reject);
+      appWindow
+        .once<string>('tauri://error', (event) => {
+          reject(event.payload);
+        })
+        .catch(reject);
     });
     return windowId;
   } catch (error) {
