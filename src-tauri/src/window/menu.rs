@@ -20,7 +20,7 @@ pub(crate) fn install_window_menu<R: Runtime>(
             return;
         }
 
-        let _ = window.emit("newmd://menu-command", command);
+        let _ = window.emit("nomo://menu-command", command);
     });
     Ok(())
 }

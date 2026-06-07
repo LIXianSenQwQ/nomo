@@ -100,7 +100,7 @@
   } from '../lib/services/render';
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
-  const RECOVERY_KEY = 'new-md-save-recovery';
+  const RECOVERY_KEY = 'nomo-save-recovery';
   type EditorAppearanceSettings = {
     fontSize: number;
     lineHeight: number;
@@ -1733,7 +1733,7 @@
 </script>
 
 <svelte:head>
-  <title>NewMd 阶段4</title>
+  <title>Nomo</title>
 </svelte:head>
 
 <AppShell
@@ -1774,8 +1774,6 @@
   {activeOutlineId}
   {collapsedOutlineIds}
   {visibleOutlineIds}
-  {statusMessage}
-  {version}
   {stats}
   {tablePickerOpen}
   {linkPickerOpen}

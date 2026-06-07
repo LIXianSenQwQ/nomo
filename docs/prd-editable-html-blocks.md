@@ -8,7 +8,7 @@
 
 ## Problem Statement
 
-NewMd 在语义模式下将所有 Markdown 中的 HTML 块渲染为 `contenteditable=false` 的 widget（`<span class="html-widget">`），用户只能预览不能所见即所得编辑。当 Markdown 文档中包含简单 HTML（如 `<section>` 包裹的内容区块）时，用户希望在语义模式下直接编辑其中的文字，而不是被迫切回源码模式修改。
+Nomo 在语义模式下将所有 Markdown 中的 HTML 块渲染为 `contenteditable=false` 的 widget（`<span class="html-widget">`），用户只能预览不能所见即所得编辑。当 Markdown 文档中包含简单 HTML（如 `<section>` 包裹的内容区块）时，用户希望在语义模式下直接编辑其中的文字，而不是被迫切回源码模式修改。
 
 ## Solution
 

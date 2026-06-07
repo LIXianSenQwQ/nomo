@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "NewMd",
+  "productName": "Nomo",
   "version": "0.0.0",
-  "identifier": "com.newmd.desktop",
+  "identifier": "com.nomo.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://127.0.0.1:5173",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "NewMd",
+        "title": "Nomo",
         "width": 1180,
         "height": 760,
         "minWidth": 920,

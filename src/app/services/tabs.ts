@@ -17,7 +17,7 @@ export function createDefaultTab(markdown: string): Tab {
   return {
     id: 'default',
     fileName: '阶段3样例.md',
-    filePath: 'D:\\Demo\\NewMd\\阶段3样例.md',
+    filePath: 'D:\\Demo\\Nomo\\阶段3样例.md',
     nativePath: null,
     markdown,
     dirty: false,

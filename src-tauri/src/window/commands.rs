@@ -1,6 +1,6 @@
 use crate::window::menu::install_window_menu;
 use crate::{database, models::WindowStateInput};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 pub(crate) fn update_window_state(
@@ -85,7 +85,9 @@ pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
 pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
     window
         .hide()
-        .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))
+        .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))?;
+    crate::window::tray::set_tray_active(window.app_handle(), false);
+    Ok(())
 }
 
 #[tauri::command]

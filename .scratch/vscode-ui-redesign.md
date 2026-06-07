@@ -1,4 +1,4 @@
-# 轻量 Markdown 编辑器 UI 重构 PRD
+# Nomo UI 重构 PRD
 
 ## 1. 背景与目标
 

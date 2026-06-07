@@ -478,13 +478,13 @@ fn is_remote_image_src(src: &str) -> bool {
 fn write_temp_image_file(file_name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
     let safe_file_name = sanitize_image_file_name(file_name);
     let mut target = std::env::temp_dir().join(format!(
-        "newmd-image-{}-{safe_file_name}",
+        "nomo-image-{}-{safe_file_name}",
         crate::database::now_ts()
     ));
     let mut index = 1;
     while target.exists() {
         target = std::env::temp_dir().join(format!(
-            "newmd-image-{}-{index}-{safe_file_name}",
+            "nomo-image-{}-{index}-{safe_file_name}",
             crate::database::now_ts()
         ));
         index += 1;
@@ -686,7 +686,7 @@ mod tests {
 
     fn create_test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "newmd-image-assets-{name}-{}",
+            "nomo-image-assets-{name}-{}",
             crate::database::now_ts()
         ));
         fs::create_dir_all(&dir).expect("test dir");

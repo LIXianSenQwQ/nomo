@@ -1,4 +1,4 @@
-# PRD：轻量 Markdown 编辑器工程
+# PRD：Nomo 工程
 
 > 文档日期：2026-05-29  
 > 输入资料：`Svelte_ProseMirror_Markdown_编辑器技术架构文档.md`、`Typora_Typedown_功能总结.md`  

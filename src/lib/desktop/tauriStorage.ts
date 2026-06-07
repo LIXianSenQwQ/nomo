@@ -349,7 +349,7 @@ export async function listenDesktopMenuCommands(
   handler: (command: DesktopMenuCommand) => void,
 ): Promise<UnlistenFn> {
   const { listen } = await import('@tauri-apps/api/event');
-  return listen<string>('newmd://menu-command', (event) =>
+  return listen<string>('nomo://menu-command', (event) =>
     handler(event.payload as DesktopMenuCommand),
   );
 }

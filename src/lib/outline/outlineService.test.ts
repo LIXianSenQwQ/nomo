@@ -16,6 +16,7 @@ describe('outlineService', () => {
     expect(stats).toMatchObject({
       chars: 43,
       words: 3,
+      lines: 7,
       headings: 1,
       readingMinutes: 1,
     });

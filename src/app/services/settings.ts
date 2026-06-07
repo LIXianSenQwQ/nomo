@@ -16,7 +16,7 @@ export interface PersistedEditorSettings {
   blockStyle?: 'classic' | 'modern';
 }
 
-const IMAGE_SETTINGS_STORAGE_KEY = 'new-md-image-handling-settings';
+const IMAGE_SETTINGS_STORAGE_KEY = 'nomo-image-handling-settings';
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
 const THEME_TRANSITION_MS = 180;
 let themeTransitionTimer: number | null = null;
@@ -27,19 +27,19 @@ export async function loadPersistedEditorSettings(
   const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
   const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
   const savedTheme =
-    parseSetting<string>(settings, 'theme') ?? localStorage.getItem('new-md-theme');
+    parseSetting<string>(settings, 'theme') ?? localStorage.getItem('nomo-theme');
   const savedFontSize = Number(
-    parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('new-md-font-size'),
+    parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('nomo-font-size'),
   );
   const savedLineHeight = Number(
-    parseSetting<number>(settings, 'lineHeight') ?? localStorage.getItem('new-md-line-height'),
+    parseSetting<number>(settings, 'lineHeight') ?? localStorage.getItem('nomo-line-height'),
   );
   const savedContentWidthPercent = Number(
     parseSetting<number>(settings, 'contentWidthPercent') ??
-      localStorage.getItem('new-md-content-width-percent'),
+      localStorage.getItem('nomo-content-width-percent'),
   );
   const savedBlockStyle =
-    parseSetting<string>(settings, 'blockStyle') ?? localStorage.getItem('new-md-block-style');
+    parseSetting<string>(settings, 'blockStyle') ?? localStorage.getItem('nomo-block-style');
 
   return {
     theme: savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : undefined,

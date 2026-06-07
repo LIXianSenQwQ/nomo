@@ -4,11 +4,11 @@
  */
 export function createRichMarkdownSample(): string {
   return `---
-title: NewMd Markdown 渲染验收
+title: Nomo Markdown 渲染验收
 ---
-# NewMd Markdown 渲染验收 🚀
+# Nomo Markdown 渲染验收 🚀
 
-这份样例用于验证语义模式中的 **Markdown-first** 渲染能力，包含 Emoji ✅、行内代码 \`const ok = true\`、行内公式 $a^2 + b^2 = c^2$ 和链接 [NewMd](https://example.com)。
+这份样例用于验证语义模式中的 **Markdown-first** 渲染能力，包含 Emoji ✅、行内代码 \`const ok = true\`、行内公式 $a^2 + b^2 = c^2$ 和链接 [Nomo](https://example.com)。
 
 ## 1. 标题层级
 

@@ -50,8 +50,6 @@
   export let activeOutlineId: string;
   export let collapsedOutlineIds: Set<string>;
   export let visibleOutlineIds: Set<string>;
-  export let statusMessage: string;
-  export let version: number;
   export let stats: DocumentStats;
   export let tablePickerOpen: boolean;
   export let linkPickerOpen: boolean;
@@ -282,7 +280,7 @@
         {closeLinkPicker}
       />
 
-      <StatusBar {dirty} {statusMessage} {version} {stats} {mode} {readonlyDocumentMode} />
+      <StatusBar {stats} />
     </section>
   </main>
 </div>

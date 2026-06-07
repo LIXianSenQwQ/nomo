@@ -56,14 +56,14 @@ export function createEditorSettingsController(options: EditorSettingsController
     const nextTheme = options.getTheme() === 'light' ? 'dark' : 'light';
     options.setTheme(nextTheme);
     applyThemeSetting(nextTheme, { transition: true });
-    localStorage.setItem('new-md-theme', nextTheme);
+    localStorage.setItem('nomo-theme', nextTheme);
     persistSetting('theme', nextTheme);
     options.getEditor().updateTheme({ name: nextTheme });
   }
 
   function updateFontSizeValue(value: number) {
     options.setFontSize(value);
-    localStorage.setItem('new-md-font-size', String(value));
+    localStorage.setItem('nomo-font-size', String(value));
     persistSetting('fontSize', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
   }
@@ -74,7 +74,7 @@ export function createEditorSettingsController(options: EditorSettingsController
 
   function updateLineHeightValue(value: number) {
     options.setLineHeight(value);
-    localStorage.setItem('new-md-line-height', String(value));
+    localStorage.setItem('nomo-line-height', String(value));
     persistSetting('lineHeight', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
   }
@@ -86,14 +86,14 @@ export function createEditorSettingsController(options: EditorSettingsController
   function updateContentWidth(event: Event) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
     options.setContentWidthPercent(value);
-    localStorage.setItem('new-md-content-width-percent', String(value));
+    localStorage.setItem('nomo-content-width-percent', String(value));
     persistSetting('contentWidthPercent', value);
     applyEditorLayoutSettings(options.getContentWidthPercent());
   }
 
   function updateBlockStyle(blockStyle: 'classic' | 'modern') {
     options.setBlockStyle(blockStyle);
-    localStorage.setItem('new-md-block-style', blockStyle);
+    localStorage.setItem('nomo-block-style', blockStyle);
     persistSetting('blockStyle', blockStyle);
     applyBlockStyleSetting(blockStyle);
   }

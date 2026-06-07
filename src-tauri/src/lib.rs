@@ -18,6 +18,7 @@ pub fn run() {
                 if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
                     api.prevent_close();
                     let _ = window.hide();
+                    crate::window::tray::set_tray_active(window.app_handle(), false);
                 }
             }
             _ => {}
@@ -68,5 +69,5 @@ pub fn run() {
             crate::external_link::reveal_in_explorer
         ])
         .run(tauri::generate_context!())
-        .expect("error while running NewMd");
+        .expect("error while running Nomo");
 }

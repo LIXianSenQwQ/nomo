@@ -66,7 +66,7 @@ export async function createAppWindow(
     const windowId = await invoke<string>('create_new_window', { pendingFolder });
     const appWindow = new WebviewWindow(windowId, {
       url: '/',
-      title: 'NewMd',
+      title: 'Nomo',
       width: 1180,
       height: 760,
       minWidth: 920,
@@ -109,6 +109,6 @@ export async function updateAppWindowTitle(
   }
 
   const win = getCurrentWindow();
-  const title = `${fileName}${dirty ? ' *' : ''} - NewMd`;
+  const title = `${fileName}${dirty ? ' *' : ''} - Nomo`;
   await win.setTitle(title).catch(() => undefined);
 }

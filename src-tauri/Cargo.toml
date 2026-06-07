@@ -1,12 +1,12 @@
 [package]
-name = "new-md"
+name = "nomo"
 version = "0.0.0"
 description = "A lightweight Markdown-first editor"
 authors = ["清羽"]
 edition = "2021"
 
 [lib]
-name = "new_md_lib"
+name = "nomo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -14,7 +14,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 rusqlite = { version = "0.32", features = ["bundled"] }
-tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

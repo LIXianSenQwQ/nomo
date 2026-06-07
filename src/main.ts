@@ -9,7 +9,7 @@ import { mount } from 'svelte';
 const target = document.getElementById('app');
 
 if (!target) {
-  throw new Error('NewMd app root was not found.');
+  throw new Error('Nomo app root was not found.');
 }
 
 const app = mount(App, {

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default desktop capability for the NewMd shell.",
+  "description": "Default desktop capability for the Nomo shell.",
   "windows": ["main", "window-*"],
   "permissions": [
     "core:default",

@@ -9,6 +9,7 @@
     type EditorMode,
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
+  import nomoAppIcon from '../assets/nomo-app-icon.png';
 
   export let theme: 'light' | 'dark';
   export let desktopEnabled: boolean;
@@ -198,8 +199,8 @@
     </button>
 
     <div class="titlebar-left" data-drag-region>
-      <span class="app-logo">M</span>
-      <span class="app-name" data-drag-region>NewMd</span>
+      <img class="app-logo" src={nomoAppIcon} alt="" aria-hidden="true" draggable="false" />
+      <span class="app-name" data-drag-region>Nomo</span>
     </div>
 
     <nav class="titlebar-menu">

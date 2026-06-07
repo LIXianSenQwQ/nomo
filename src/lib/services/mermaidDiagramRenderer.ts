@@ -10,7 +10,7 @@ export function createMermaidDiagramRenderer(): DiagramRenderer {
           securityLevel: 'strict',
           theme: options.theme === 'dark' ? 'dark' : 'default',
         });
-        const id = `newmd-${hashText(code)}`;
+        const id = `nomo-${hashText(code)}`;
         const result = await mermaid.render(id, code);
         return { svg: result.svg };
       } catch (error) {

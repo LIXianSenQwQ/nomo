@@ -8,6 +8,7 @@ export interface OutlineItem {
 export interface DocumentStats {
   chars: number;
   words: number;
+  lines: number;
   headings: number;
   readingMinutes: number;
 }
@@ -48,6 +49,7 @@ export function calculateDocumentStats(markdown: string): DocumentStats {
   return {
     chars: markdown.length,
     words,
+    lines: markdown.length === 0 ? 1 : markdown.split(/\r\n|\r|\n/).length,
     headings: extractOutline(markdown).length,
     readingMinutes: Math.max(1, Math.ceil(words / 280)),
   };

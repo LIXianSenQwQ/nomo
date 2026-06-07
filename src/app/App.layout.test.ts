@@ -30,6 +30,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
+  const desktopWindowSource = readFileSync(
+    resolve(__dirname, 'services/desktopWindow.ts'),
+    'utf-8',
+  );
   const tauriMenuSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/menu.rs'),
     'utf-8',
@@ -224,7 +228,7 @@ describe('App outline layout', () => {
     expect(tauriLibSource).toContain('install_window_menu(app.handle(), &window)');
     expect(tauriCommandsSource).toContain('install_window_menu(&app, &window)');
     expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
-    expect(tauriMenuSource).toContain('window.emit("newmd://menu-command", command)');
+    expect(tauriMenuSource).toContain('window.emit("nomo://menu-command", command)');
     expect(tauriMenuSource).toContain('window.app_handle().exit(0)');
     expect(tauriMenuSource).toContain('format!("open-recent:{}:{}", entry.entry_type, entry.path)');
     expect(appCommandsSource).toContain("command === 'new-window'");
@@ -289,14 +293,22 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
+    expect(titleBarSource).toContain('nomoAppIcon');
+    expect(titleBarSource).toContain('class="app-logo"');
+    expect(titleBarSource).toContain('aria-hidden="true"');
+    expect(titleBarSource).toContain('Nomo</span>');
+    expect(titleBarSource).not.toContain('<span class="app-logo">M</span>');
     expect(titleBarSource).toContain('资源管理器侧边栏');
     expect(titleBarSource).toContain('export let focusMode: boolean');
     expect(titleBarSource).toContain("title={isMaximized ? '还原窗口' : '最大化'}");
     expect(titleBarSource).toContain("aria-label={isMaximized ? '还原窗口' : '最大化'}");
     expect(titleBarSource).toContain('handleMaximizeWindow');
     expect(titleBarSource).toContain('syncWindowState');
+    expect(desktopWindowSource).toContain("title: 'Nomo'");
+    expect(desktopWindowSource).toContain('} - Nomo');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
+    expect(styles).toMatch(/\.app-logo\s*\{[\s\S]*?width:\s*20px;/);
   });
 
   it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {
@@ -354,9 +366,13 @@ describe('App outline layout', () => {
   it('supports closing windows to the system tray when enabled', () => {
     expect(tauriLibSource).toContain('crate::window::tray::install_app_tray');
     expect(tauriLibSource).toContain('crate::window::commands::hide_window_to_tray');
+    expect(tauriLibSource).toContain('crate::window::tray::set_tray_active');
     expect(tauriLibSource).toContain('WindowEvent::CloseRequested');
     expect(tauriTraySource).toContain('TrayIconBuilder::with_id');
-    expect(tauriTraySource).toContain('"打开 NewMd"');
+    expect(tauriTraySource).toContain('"打开 Nomo"');
+    expect(tauriTraySource).toContain('nomo-tray-dark-active-24-preview.png');
+    expect(tauriTraySource).toContain('nomo-tray-dark-inactive-24-preview.png');
+    expect(tauriTraySource).toContain('set_tray_active');
     expect(tauriTraySource).toContain('"退出"');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
     expect(tauriTraySource).toContain('closeToTrayEnabled');

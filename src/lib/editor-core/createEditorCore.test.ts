@@ -3,13 +3,13 @@ import { createEditorCore } from './createEditorCore';
 
 describe('createEditorCore', () => {
   it('keeps Markdown as the observable editor state', () => {
-    const editor = createEditorCore({ markdown: '# NewMd' });
+    const editor = createEditorCore({ markdown: '# Nomo' });
 
-    editor.setMarkdown('# NewMd\n\n阶段0');
+    editor.setMarkdown('# Nomo\n\n阶段0');
 
-    expect(editor.getMarkdown()).toBe('# NewMd\n\n阶段0');
+    expect(editor.getMarkdown()).toBe('# Nomo\n\n阶段0');
     expect(editor.getSnapshot()).toMatchObject({
-      markdown: '# NewMd\n\n阶段0',
+      markdown: '# Nomo\n\n阶段0',
       version: 1,
     });
   });

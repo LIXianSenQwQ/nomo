@@ -8,7 +8,7 @@ Status: ready-for-agent
 
 ## Solution
 
-将 `App.svelte` 收敛为轻量 Markdown 编辑器的应用装配层：保留 EditorCore 协调、桌面存储流程、全局快捷键、文件变更检查和主状态；将可复用 UI 区域拆成独立 Svelte 组件；将跨组件类型、DOM action、路径展示工具和应用样式放到稳定目录中。
+将 `App.svelte` 收敛为 Nomo 的应用装配层：保留 EditorCore 协调、桌面存储流程、全局快捷键、文件变更检查和主状态；将可复用 UI 区域拆成独立 Svelte 组件；将跨组件类型、DOM action、路径展示工具和应用样式放到稳定目录中。
 
 ## User Stories
 

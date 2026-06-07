@@ -94,21 +94,13 @@
 }
 
 .app-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(
-    135deg,
-    var(--md-editor-accent, #2f7d6f),
-    var(--md-editor-accent-strong, #174e45)
-  );
-  color: #ffffff;
-  font-weight: 800;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  font-size: 11px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 }
 
 .app-name {
