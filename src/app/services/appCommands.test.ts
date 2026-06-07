@@ -27,6 +27,8 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     getMode: vi.fn((): EditorMode => 'semantic'),
     toggleTheme: vi.fn(),
     toggleFocusMode: vi.fn(),
+    switchToNextTab: vi.fn(),
+    switchToPrevTab: vi.fn(),
   };
 }
 

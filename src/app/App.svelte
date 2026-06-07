@@ -35,7 +35,6 @@
     type DocumentStats,
     type OutlineItem,
   } from '../lib/outline/outlineService';
-  import { createRichMarkdownSample } from '../lib/markdown/sample';
   import {
     extractFrontMatterBlock,
     removeFrontMatter,
@@ -63,7 +62,7 @@
   import { createDesktopImageLoader } from './services/desktopImageLoader';
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
-  import { createBlankTab, createDefaultTab, writeActiveTabState } from './services/tabs';
+  import { createBlankTab, writeActiveTabState } from './services/tabs';
 import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './services/documentFiles';
   import {
     closeActiveMenu,
@@ -94,7 +93,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'new-md-save-recovery';
-  const initialMarkdown = createRichMarkdownSample();
   type EditorAppearanceSettings = {
     fontSize: number;
     lineHeight: number;
@@ -106,25 +104,25 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   setCodeBlockMathRenderer(createKatexMathRenderer());
   setImageLoader(createDesktopImageLoader());
 
-  let markdown = initialMarkdown,
+  let markdown = '',
     dirty = false,
     version = 0;
   let mode: EditorMode = 'semantic';
   let theme: 'light' | 'dark' = 'light';
-  let fileName = '阶段3样例.md',
-    filePath = 'D:\\Demo\\NewMd\\阶段3样例.md';
+  let fileName = '',
+    filePath = '';
   let nativePath: string | null = null;
-  let statusMessage = '阶段4：桌面体验与稳定性打磨';
+  let statusMessage = '准备就绪';
   let desktopEnabled = false;
   let recentFiles: RecentEntry[] = [];
   let missingRecentPaths = new Set<string>();
-  let outline: OutlineItem[] = extractOutline(initialMarkdown);
+  let outline: OutlineItem[] = [];
   let outlineVisible = true,
     activeOutlineId = outline[0]?.id ?? '';
   let collapsedOutlineIds = new Set<string>();
   let visibleOutlineIds = new Set(outline.map((item) => item.id));
   let suppressOutlineScrollUntil = 0;
-  let stats: DocumentStats = calculateDocumentStats(initialMarkdown);
+  let stats: DocumentStats = calculateDocumentStats('');
   let fontSize = 16,
     lineHeight = 1.75,
     contentWidthPercent = 68,
@@ -178,8 +176,8 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   let deleteConfirmIsDir = false;
   let deleteConfirmName = '';
 
-  let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
-  let activeTabId = 'default';
+  let tabs: Tab[] = [];
+  let activeTabId = '';
   let previewTabId: string | null = null;
   let windowLabel = '';
 
@@ -191,6 +189,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
+    if (!activeTabId) return;
     tabs = writeActiveTabState(tabs, activeTabId, {
       markdown,
       dirty,
@@ -245,7 +244,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   // 切换活动标签页
   function switchTab(tabId: string) {
-    if (activeTabId === tabId) return;
+    if (!tabId || activeTabId === tabId) return;
     saveActiveTabState();
     const targetTab = tabs.find((t) => t.id === tabId);
     if (targetTab) {
@@ -711,7 +710,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     persistWorkspaceState();
   }
 
-  // 步骤：关闭全部标签页，保留一个空白标签
+  // 步骤：关闭全部标签页，清空状态不保留空白标签
   function handleCloseAllTabs() {
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (dirtyTabs.length > 0) {
@@ -720,11 +719,27 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       if (!ok) return;
     }
 
-    const newTab = createBlankTab();
-    tabs = [newTab];
-    activeTabId = newTab.id;
-    previewTabId = null;
-    loadTabState(newTab);
+    isSwitchingTab = true;
+    try {
+      tabs = [];
+      activeTabId = '';
+      previewTabId = null;
+      markdown = '';
+      fileName = '';
+      filePath = '';
+      nativePath = null;
+      dirty = false;
+      lastKnownModifiedAt = 0;
+      largeDocumentMode = false;
+      readonlyDocumentMode = false;
+      externalFileWarning = '';
+      outline = [];
+      if (editor) {
+        editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+      }
+    } finally {
+      isSwitchingTab = false;
+    }
     updateWindowTitle();
     persistWorkspaceState();
   }
@@ -891,10 +906,25 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
           activeTabId = tabs[newActiveIndex].id;
           loadTabState(tabs[newActiveIndex]);
         } else {
-          const newTab = createBlankTab();
-          tabs = [newTab];
-          activeTabId = newTab.id;
-          loadTabState(newTab);
+          activeTabId = '';
+          markdown = '';
+          fileName = '';
+          filePath = '';
+          nativePath = null;
+          dirty = false;
+          lastKnownModifiedAt = 0;
+          largeDocumentMode = false;
+          readonlyDocumentMode = false;
+          externalFileWarning = '';
+          outline = [];
+          isSwitchingTab = true;
+          try {
+            if (editor) {
+              editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+            }
+          } finally {
+            isSwitchingTab = false;
+          }
         }
         updateWindowTitle();
       }
@@ -903,6 +933,29 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     }
 
     _documentCloseTab(tabId, event);
+
+    // 关闭最后一个普通标签后清空编辑器状态
+    if (tabs.length === 0) {
+      markdown = '';
+      fileName = '';
+      filePath = '';
+      nativePath = null;
+      dirty = false;
+      lastKnownModifiedAt = 0;
+      largeDocumentMode = false;
+      readonlyDocumentMode = false;
+      externalFileWarning = '';
+      outline = [];
+      isSwitchingTab = true;
+      try {
+        if (editor) {
+          editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+        }
+      } finally {
+        isSwitchingTab = false;
+      }
+      updateWindowTitle();
+    }
   }
   const jumpToOutlineItem = outlineInteraction.jumpToOutlineItem;
   const updateActiveOutlineFromSourceScroll =
@@ -959,12 +1012,27 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
           closeTab(tab.id);
         }
       }
-      // 如果删光了所有标签，创建一个空白标签
+      // 如果删光了所有标签，清空状态不自动创建标签
       if (tabs.length === 0) {
-        const newTab = createBlankTab();
-        tabs = [newTab];
-        activeTabId = newTab.id;
-        loadTabState(newTab);
+        activeTabId = '';
+        markdown = '';
+        fileName = '';
+        filePath = '';
+        nativePath = null;
+        dirty = false;
+        lastKnownModifiedAt = 0;
+        largeDocumentMode = false;
+        readonlyDocumentMode = false;
+        externalFileWarning = '';
+        outline = [];
+        isSwitchingTab = true;
+        try {
+          if (editor) {
+            editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+          }
+        } finally {
+          isSwitchingTab = false;
+        }
       }
       // 刷新文件夹
       if (currentFolderPath) {

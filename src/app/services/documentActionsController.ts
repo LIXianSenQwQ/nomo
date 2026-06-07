@@ -328,7 +328,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         options.setActiveTabId(nextTabs[newActiveIndex].id);
         options.loadTabState(nextTabs[newActiveIndex]);
       } else {
-        createNewFile();
+        options.setActiveTabId('');
       }
     }
   }

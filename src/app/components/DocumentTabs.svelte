@@ -82,13 +82,11 @@
       });
     }
 
-    if (tabs.length > 1) {
-      items.push({
-        label: '关闭全部标签页',
-        action: () => dispatch('closeAllTabs'),
-        danger: true,
-      });
-    }
+    items.push({
+      label: '关闭全部标签页',
+      action: () => dispatch('closeAllTabs'),
+      danger: true,
+    });
 
     // 步骤3：路径相关操作
     const path = tab.nativePath || tab.filePath;
@@ -132,6 +130,13 @@
   // 策略：从右到左依次计算能放下的标签（优先显示新标签），如果激活标签不在范围内则平移窗口
   function measureAndComputeVisible() {
     if (!tabsContainer || !measureArea) return;
+
+    if (tabs.length === 0) {
+      visibleRange = { start: 0, end: 0 };
+      showAddButton = true;
+      overflowState = false;
+      return;
+    }
 
     const measured = measureArea.querySelectorAll<HTMLElement>('.doc-tab');
     const widths: number[] = [];
