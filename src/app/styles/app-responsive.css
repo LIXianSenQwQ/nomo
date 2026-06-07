@@ -44,6 +44,7 @@
 }
 
 .titlebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 42px;
@@ -54,7 +55,7 @@
   box-sizing: border-box;
   font-size: 12px;
   color: var(--md-titlebar-fg);
-  z-index: 1000;
+  z-index: 2000;
 }
 
 .titlebar-row {

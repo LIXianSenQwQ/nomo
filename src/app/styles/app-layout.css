@@ -50,7 +50,7 @@
   border: 0;
   background: transparent;
   cursor: col-resize;
-  z-index: 1000;
+  z-index: 30;
   transition: background-color 0.15s;
 }
 
