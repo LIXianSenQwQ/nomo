@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Moon, PanelLeftClose, PanelLeftOpen, Sun } from '@lucide/svelte';
-  import type { RecentDocument } from '../../lib/desktop/tauriStorage';
+  import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import {
     DIAGRAM_TEMPLATES,
     type DiagramType,
@@ -13,7 +13,8 @@
   export let theme: 'light' | 'dark';
   export let desktopEnabled: boolean;
   export let activeMenu: string | null;
-  export let recentFiles: RecentDocument[];
+  export let recentFiles: RecentEntry[];
+  export let missingRecentPaths: Set<string>;
   export let mode: EditorMode;
   export let focusMode: boolean;
   export let getCompactPath: (path: string) => string;
@@ -27,8 +28,12 @@
   export let createNewFile: () => void;
   export let openFileDialog: () => void;
   export let openFolderDialog: () => void;
-  export let openRecentFile: (path: string) => void;
+  export let openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
+  export let clearRecentEntriesList: () => void;
+  export let removeRecentEntry: (path: string) => void;
+  export let closeCurrentFile: () => void;
+  export let closeCurrentWindow: () => void;
   export let runCommand: (command: EditorCommand) => void;
   export let openTablePicker: () => void;
   export let openLinkPicker: () => void;
@@ -49,7 +54,9 @@
   let windowStateListenerReady = false;
 
   async function syncWindowState() {
-    if (!desktopEnabled || !canSyncWindowState) return;
+    if (!desktopEnabled || !canSyncWindowState) {
+      return;
+    }
 
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -63,13 +70,15 @@
         isFullscreen = fullscreen;
         isMaximized = maximized;
       }
-    } catch (err) {
-      console.error('Failed to sync window state:', err);
+    } catch {
+      // ignore
     }
   }
 
   async function setupWindowStateListener() {
-    if (!desktopEnabled || !canSyncWindowState || windowStateListenerReady) return;
+    if (!desktopEnabled || !canSyncWindowState || windowStateListenerReady) {
+      return;
+    }
 
     windowStateListenerReady = true;
     try {
@@ -85,9 +94,8 @@
       } else {
         unlisten();
       }
-    } catch (err) {
+    } catch {
       windowStateListenerReady = false;
-      console.error('Failed to setup window state listener:', err);
     }
   }
 
@@ -110,7 +118,9 @@
   });
 
   async function handleDrag(e: MouseEvent) {
-    if (!desktopEnabled || e.buttons !== 1) return;
+    if (!desktopEnabled || e.buttons !== 1) {
+      return;
+    }
 
     const target = e.target as HTMLElement;
 
@@ -139,8 +149,8 @@
       } else {
         await appWindow.startDragging();
       }
-    } catch (err) {
-      console.error('Failed to start dragging:', err);
+    } catch {
+      // ignore
     }
   }
 
@@ -201,13 +211,14 @@
         {#if activeMenu === 'file'}
           <div class="dropdown-menu">
             <button on:click={() => finish(createNewFile, 'file')}
-              >新建 <span class="shortcut">Ctrl + N</span></button
+              >新建 Markdown <span class="shortcut">Ctrl + N</span></button
             >
             <button on:click={() => finish(createNewWindow, 'file')}
               >新建窗口 <span class="shortcut">Ctrl + Shift + N</span></button
             >
+            <div class="divider"></div>
             <button on:click={() => finish(openFileDialog, 'file')}
-              >打开... <span class="shortcut">Ctrl + O</span></button
+              >打开文件... <span class="shortcut">Ctrl + O</span></button
             >
             <button on:click={() => finish(openFolderDialog, 'file')}
               >打开文件夹... <span class="shortcut">Ctrl + Shift + O</span></button
@@ -223,14 +234,43 @@
                   stroke-linejoin="round"
                 /></svg
               >
-              <div class="dropdown-menu nested">
-                {#each recentFiles.slice(0, 8) as recent}
-                  <button on:click={() => finish(() => openRecentFile(recent.path), 'file')}>
-                    {recent.title ?? getCompactPath(recent.path)}
+              <div class="dropdown-menu nested recent-submenu">
+                {#each recentFiles.slice(0, 10) as recent}
+                  {@const isMissing = missingRecentPaths.has(recent.path)}
+                  <button
+                    class="recent-entry"
+                    class:recent-folder={recent.entryType === 'folder'}
+                    class:recent-missing={isMissing}
+                    disabled={isMissing}
+                    title={isMissing ? `${recent.path}（路径已失效，点击移除）` : recent.path}
+                    on:click={() =>
+                      isMissing
+                        ? finish(() => removeRecentEntry(recent.path), 'file')
+                        : finish(() => openRecentEntry(recent.path, recent.entryType), 'file')}
+                  >
+                    <span class="recent-icon">
+                      {#if recent.entryType === 'folder'}
+                        📁
+                      {:else}
+                        📄
+                      {/if}
+                    </span>
+                    <span class="recent-label">
+                      {recent.title ?? getCompactPath(recent.path)}
+                    </span>
                   </button>
                 {/each}
                 {#if recentFiles.length === 0}
-                  <span class="disabled-item">无最近打开的文件</span>
+                  <span class="disabled-item">无最近打开的记录</span>
+                {/if}
+                {#if recentFiles.length > 0}
+                  <div class="divider"></div>
+                  <button
+                    class="recent-clear"
+                    on:click={() => finish(clearRecentEntriesList, 'file')}
+                  >
+                    清除最近打开
+                  </button>
                 {/if}
               </div>
             </div>
@@ -243,9 +283,14 @@
               >另存为... <span class="shortcut">Ctrl + Shift + S</span></button
             >
             <div class="divider"></div>
-            <button on:click={() => finish(closeAppWindow, 'file')}
-              >退出 <span class="shortcut">Alt + F4</span></button
+            <button on:click={() => finish(closeCurrentFile, 'file')}
+              >关闭当前文件 <span class="shortcut">Ctrl + W</span></button
             >
+            <button on:click={() => finish(closeCurrentWindow, 'file')}
+              >关闭窗口 <span class="shortcut">Alt + F4</span></button
+            >
+            <div class="divider"></div>
+            <button on:click={() => finish(closeAppWindow, 'file')}>退出</button>
           </div>
         {/if}
       </div>

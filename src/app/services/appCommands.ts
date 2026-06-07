@@ -5,7 +5,7 @@ export interface AppCommandHandlers {
   createNewWindow: () => void;
   openFileDialog: () => void;
   openFolderDialog: () => void;
-  openRecentFile: (path: string) => void;
+  openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   saveMarkdownFile: (saveAs?: boolean) => void;
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
@@ -28,7 +28,15 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'open-directory') {
     handlers.openFolderDialog();
   } else if (command.startsWith('open-recent:')) {
-    handlers.openRecentFile(command.slice('open-recent:'.length));
+    const payload = command.slice('open-recent:'.length);
+    if (payload.startsWith('file:')) {
+      handlers.openRecentEntry(payload.slice('file:'.length), 'file');
+    } else if (payload.startsWith('folder:')) {
+      handlers.openRecentEntry(payload.slice('folder:'.length), 'folder');
+    } else {
+      // 兼容旧格式，默认当作文件处理
+      handlers.openRecentEntry(payload, 'file');
+    }
   } else if (command === 'save-file') {
     handlers.saveMarkdownFile();
   } else if (command === 'save-file-as') {

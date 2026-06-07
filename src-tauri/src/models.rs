@@ -10,9 +10,27 @@ pub(crate) struct DocumentPayload {
     pub(crate) readonly: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum RecentEntryType {
+    #[serde(rename = "file")]
+    File,
+    #[serde(rename = "folder")]
+    Folder,
+}
+
+impl RecentEntryType {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            RecentEntryType::File => "file",
+            RecentEntryType::Folder => "folder",
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
-pub(crate) struct RecentDocument {
+pub(crate) struct RecentEntry {
     pub(crate) path: String,
+    pub(crate) entry_type: String,
     pub(crate) title: Option<String>,
     pub(crate) modified_at: i64,
     pub(crate) word_count: i64,
@@ -20,8 +38,9 @@ pub(crate) struct RecentDocument {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct RecentFileInput {
+pub(crate) struct RecentEntryInput {
     pub(crate) path: String,
+    pub(crate) entry_type: RecentEntryType,
     pub(crate) title: Option<String>,
     pub(crate) word_count: i64,
 }

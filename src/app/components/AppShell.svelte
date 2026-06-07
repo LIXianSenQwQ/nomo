@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RecentDocument } from '../../lib/desktop/tauriStorage';
+  import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
@@ -23,7 +23,8 @@
   export let theme: 'light' | 'dark';
   export let desktopEnabled: boolean;
   export let activeMenu: string | null;
-  export let recentFiles: RecentDocument[];
+  export let recentFiles: RecentEntry[];
+  export let missingRecentPaths: Set<string>;
   export let mode: EditorMode;
   export let outlineVisible: boolean;
   export let currentFolderPath: string;
@@ -71,8 +72,12 @@
   export let createNewFile: () => void;
   export let openFileDialog: () => void;
   export let openFolderDialog: () => void;
-  export let openRecentFile: (path: string) => void;
+  export let openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   export let openPreviewFile: (path: string) => void;
+  export let clearRecentEntriesList: () => void;
+  export let removeRecentEntry: (path: string) => void;
+  export let closeCurrentFile: () => void;
+  export let closeCurrentWindow: () => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
@@ -132,6 +137,7 @@
     {desktopEnabled}
     {activeMenu}
     {recentFiles}
+    {missingRecentPaths}
     {mode}
     {focusMode}
     {outlineVisible}
@@ -146,8 +152,12 @@
     {createNewFile}
     {openFileDialog}
     {openFolderDialog}
-    {openRecentFile}
+    {openRecentEntry}
     {saveMarkdownFile}
+    {clearRecentEntriesList}
+    {removeRecentEntry}
+    {closeCurrentFile}
+    {closeCurrentWindow}
     {runCommand}
     {openTablePicker}
     {openLinkPicker}
@@ -174,7 +184,7 @@
       {getDirectoryLabel}
       {toggleRootFolder}
       {toggleFolderCollapse}
-      {openRecentFile}
+      {openRecentEntry}
       {openPreviewFile}
       previewNativePath={previewTabId ? tabs.find((t) => t.id === previewTabId)?.nativePath ?? null : null}
       {startResize}

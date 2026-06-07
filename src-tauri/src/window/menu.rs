@@ -28,7 +28,7 @@ pub(crate) fn install_window_menu<R: Runtime>(
 pub(crate) fn build_window_menu<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<tauri::menu::Menu<R>, String> {
-    let recent_docs = database::query_recent_files(app).unwrap_or_default();
+    let recent_entries = database::query_recent_entries(app).unwrap_or_default();
 
     let mut file_menu_builder = SubmenuBuilder::new(app, "文件(&F)")
         .item(
@@ -56,17 +56,17 @@ pub(crate) fn build_window_menu<R: Runtime>(
                 .map_err(|e| e.to_string())?,
         );
 
-    if !recent_docs.is_empty() {
+    if !recent_entries.is_empty() {
         let mut recent_submenu_builder = SubmenuBuilder::new(app, "打开最近");
-        for doc in recent_docs.iter().take(8) {
-            let label = doc.title.clone().unwrap_or_else(|| {
-                Path::new(&doc.path)
+        for entry in recent_entries.iter().take(8) {
+            let label = entry.title.clone().unwrap_or_else(|| {
+                Path::new(&entry.path)
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("未命名.md")
                     .to_string()
             });
-            let item_id = format!("open-recent:{}", doc.path);
+            let item_id = format!("open-recent:{}:{}", entry.entry_type, entry.path);
             recent_submenu_builder = recent_submenu_builder.item(
                 &MenuItemBuilder::with_id(item_id, label)
                     .build(app)

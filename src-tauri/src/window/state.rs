@@ -23,14 +23,16 @@ pub(crate) fn persist_current_window_state(window: &tauri::Window) {
         height: Some(size.height),
     };
 
-    let _ = update_window_state(window.app_handle().clone(), input);
+    let key = format!("windowState:{}", window.label());
+    let _ = update_window_state(window.app_handle().clone(), key, input);
 }
 
-pub(crate) fn restore_window_state(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
+pub(crate) fn restore_window_state(app: &AppHandle, label: &str) {
+    let Some(window) = app.get_webview_window(label) else {
         return;
     };
-    let Ok(Some(value_json)) = database::get_setting_value(app, "windowState") else {
+    let key = format!("windowState:{}", label);
+    let Ok(Some(value_json)) = database::get_setting_value(app, &key) else {
         return;
     };
     let Ok(state) = serde_json::from_str::<WindowStateInput>(&value_json) else {

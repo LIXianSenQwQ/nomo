@@ -9,13 +9,19 @@ export interface NativeDocument {
   readonly: boolean;
 }
 
-export interface RecentDocument {
+export type RecentEntryType = 'file' | 'folder';
+
+export interface RecentEntry {
   path: string;
+  entryType: RecentEntryType;
   title?: string | null;
   modifiedAt: number;
   wordCount: number;
   openedAt: number;
 }
+
+/** @deprecated 使用 RecentEntry */
+export type RecentDocument = RecentEntry;
 
 export interface SettingRecord {
   key: string;
@@ -75,8 +81,9 @@ interface NativeDocumentPayload {
   readonly: boolean;
 }
 
-interface RecentDocumentPayload {
+interface RecentEntryPayload {
   path: string;
+  entry_type: RecentEntryType;
   title?: string | null;
   modified_at: number;
   word_count: number;
@@ -175,36 +182,63 @@ export async function saveMarkdownNative(
   );
 }
 
+export async function checkPathsExist(paths: string[]): Promise<boolean[]> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<boolean[]>('check_paths_exist', { paths });
+}
+
 export async function statMarkdownFile(path: string): Promise<FileStatus> {
   const { invoke } = await import('@tauri-apps/api/core');
   return normalizeFileStatus(await invoke<FileStatusPayload>('stat_markdown_file', { path }));
 }
 
-export async function rememberRecentFile(
+export async function rememberRecentEntry(
   path: string,
+  entryType: RecentEntryType,
   title: string | null,
   wordCount: number,
 ): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('remember_recent_file', {
+  await invoke('remember_recent_entry', {
     input: {
       path,
+      entry_type: entryType,
       title,
       word_count: wordCount,
     },
   });
 }
 
-export async function listRecentFiles(): Promise<RecentDocument[]> {
+/** @deprecated 使用 rememberRecentEntry */
+export async function rememberRecentFile(
+  path: string,
+  title: string | null,
+  wordCount: number,
+): Promise<void> {
+  return rememberRecentEntry(path, 'file', title, wordCount);
+}
+
+export async function listRecentEntries(): Promise<RecentEntry[]> {
   const { invoke } = await import('@tauri-apps/api/core');
-  const rows = await invoke<RecentDocumentPayload[]>('list_recent_files');
+  const rows = await invoke<RecentEntryPayload[]>('list_recent_entries');
   return rows.map((row) => ({
     path: row.path,
+    entryType: row.entry_type,
     title: row.title,
     modifiedAt: row.modified_at,
     wordCount: row.word_count,
     openedAt: row.opened_at,
   }));
+}
+
+/** @deprecated 使用 listRecentEntries */
+export async function listRecentFiles(): Promise<RecentDocument[]> {
+  return listRecentEntries();
+}
+
+export async function clearRecentEntries(): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('clear_recent_entries');
 }
 
 export async function createDocumentSnapshot(
@@ -257,7 +291,12 @@ export async function listAppSettings(): Promise<SettingRecord[]> {
 
 export async function updateWindowState(state: WindowState): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('update_window_state', { input: toSnakeWindowState(state) });
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  const label = getCurrentWindow().label || 'main';
+  await invoke('update_window_state', {
+    key: `windowState:${label}`,
+    input: toSnakeWindowState(state),
+  });
 }
 
 export async function getDefaultWorkspaceDir(): Promise<string> {

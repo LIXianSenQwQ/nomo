@@ -1,13 +1,17 @@
-use tauri::AppHandle;
-use crate::{database, models::WindowStateInput};
 use crate::window::menu::install_window_menu;
+use crate::{database, models::WindowStateInput};
+use tauri::AppHandle;
 
 #[tauri::command]
-pub(crate) fn update_window_state(app: AppHandle, input: WindowStateInput) -> Result<(), String> {
+pub(crate) fn update_window_state(
+    app: AppHandle,
+    key: String,
+    input: WindowStateInput,
+) -> Result<(), String> {
     database::update_app_setting(
         app,
         crate::models::SettingInput {
-            key: "windowState".to_string(),
+            key,
             value_json: serde_json::to_string(&input)
                 .map_err(|error| format!("序列化窗口状态失败：{error}"))?,
         },
@@ -19,23 +23,32 @@ pub(crate) fn refresh_window_menu(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<(), String> {
-    install_window_menu(&app, &window)
+    crate::window::os::setup_window(&window);
+    install_window_menu(&app, &window)?;
+    crate::window::state::restore_window_state(&app, window.label());
+    Ok(())
 }
 
 #[tauri::command]
-pub(crate) fn create_new_window(app: AppHandle) -> Result<(), String> {
+pub(crate) fn create_new_window(
+    app: AppHandle,
+    pending_folder: Option<String>,
+) -> Result<String, String> {
     let id = format!("window-{}", database::now_ts());
-    let window = tauri::WebviewWindowBuilder::new(&app, &id, tauri::WebviewUrl::App("index.html".into()))
-        .title("NewMd")
-        .inner_size(1180.0, 760.0)
-        .min_inner_size(920.0, 640.0)
-        .build()
-        .map_err(|error| format!("创建新窗口失败：{error}"))?;
 
-    crate::window::os::setup_window(&window);
-    install_window_menu(&app, &window)?;
+    // 新窗口加载前先写入待打开目录，避免前端初始化读取设置时发生竞态。
+    if let Some(folder) = pending_folder {
+        database::update_app_setting(
+            app.clone(),
+            crate::models::SettingInput {
+                key: format!("pendingFolder:{}", id),
+                value_json: serde_json::to_string(&folder)
+                    .map_err(|error| format!("序列化待打开文件夹失败：{error}"))?,
+            },
+        )?;
+    }
 
-    Ok(())
+    Ok(id)
 }
 
 #[tauri::command]

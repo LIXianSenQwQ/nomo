@@ -157,13 +157,26 @@
 }
 
 .tree-file.active {
-  background: linear-gradient(
-    90deg,
-    var(--md-editor-sidebar-active),
-    color-mix(in srgb, var(--md-editor-sidebar-active) 55%, transparent)
-  );
+  position: relative;
+  background: var(--md-editor-sidebar-active);
   color: var(--md-editor-accent-strong);
   font-weight: 700;
+}
+
+/* 当前文件左侧高亮指示条 */
+.tree-file.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--md-editor-accent);
+}
+
+.tree-file.active:hover {
+  background: var(--md-editor-sidebar-active);
 }
 
 /* 预览中的文件在文件树中显示斜体 */

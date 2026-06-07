@@ -7,7 +7,11 @@
     listAppSettings,
     openExternalLink,
     updateAppSetting,
-    type RecentDocument,
+    rememberRecentEntry,
+    checkPathsExist,
+    type RecentEntry,
+    type RecentEntryType,
+    clearRecentEntries,
   } from '../lib/desktop/tauriStorage';
   import {
     createEditorCore,
@@ -38,6 +42,7 @@
   } from '../lib/markdown/frontMatter';
   import AppShell from './components/AppShell.svelte';
   import SettingsDrawer from './components/SettingsDrawer.svelte';
+  import FolderOpenDialog from './components/FolderOpenDialog.svelte';
   import type { FileTreeNode, Tab, WorkspaceState } from './types';
   import { getCompactPath, getDirectoryLabel, getFolderName } from './utils/pathLabels';
   import {
@@ -57,7 +62,7 @@
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
   import { createBlankTab, createDefaultTab, writeActiveTabState } from './services/tabs';
-import { readMarkdownFromPath } from './services/documentFiles';
+import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './services/documentFiles';
   import {
     closeActiveMenu,
     createSidebarResizeHandlers,
@@ -108,7 +113,8 @@ import { readMarkdownFromPath } from './services/documentFiles';
   let nativePath: string | null = null;
   let statusMessage = '阶段4：桌面体验与稳定性打磨';
   let desktopEnabled = false;
-  let recentFiles: RecentDocument[] = [];
+  let recentFiles: RecentEntry[] = [];
+  let missingRecentPaths = new Set<string>();
   let outline: OutlineItem[] = extractOutline(initialMarkdown);
   let outlineVisible = true,
     activeOutlineId = outline[0]?.id ?? '';
@@ -122,6 +128,10 @@ import { readMarkdownFromPath } from './services/documentFiles';
     focusMode = false,
     blockStyle: 'classic' | 'modern' = 'modern';
   let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
+  let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
+    'ask-every-time';
+  let folderOpenDialogPath: string | null = null;
+  let folderOpenDialogName = '';
   let editorHost: HTMLDivElement,
     fileInput: HTMLInputElement,
     sourceTextarea: HTMLTextAreaElement,
@@ -162,10 +172,11 @@ import { readMarkdownFromPath } from './services/documentFiles';
   let tabs: Tab[] = [createDefaultTab(initialMarkdown)];
   let activeTabId = 'default';
   let previewTabId: string | null = null;
+  let windowLabel = '';
 
   function persistWorkspaceState() {
-    if (desktopEnabled) {
-      updateAppSetting('workspaceTabs', { tabs, activeTabId }).catch(() => undefined);
+    if (desktopEnabled && windowLabel) {
+      updateAppSetting(`workspaceTabs:${windowLabel}`, { tabs, activeTabId }).catch(() => undefined);
     }
   }
 
@@ -289,14 +300,133 @@ import { readMarkdownFromPath } from './services/documentFiles';
   const minimizeWindow = () => minimizeAppWindow(desktopEnabled);
   const maximizeWindow = () => maximizeAppWindow(desktopEnabled);
   const closeAppWindow = () => closeDesktopWindow(desktopEnabled);
-  const createNewWindow = () => createAppWindow(desktopEnabled);
+  const createNewWindow = (folderPath?: string) => createAppWindow(desktopEnabled, folderPath);
+
+  function resolveFolderName(path: string): string {
+    const normalized = path.replace(/\\/g, '/').replace(/\/$/, '');
+    const idx = normalized.lastIndexOf('/');
+    return idx >= 0 ? normalized.slice(idx + 1) || path : path;
+  }
+
+  async function openFolderInCurrentWindow(folderPath: string) {
+    currentFolderPath = folderPath;
+    await updateAppSetting('workspaceDir', folderPath).catch(() => undefined);
+    await loadFolder(folderPath);
+    await rememberNativeFolder(folderPath);
+    await refreshRecentFiles();
+  }
+
+  async function openFolderInNewWindow(folderPath: string) {
+    await rememberNativeFolder(folderPath);
+    await refreshRecentFiles();
+    await createNewWindow(folderPath);
+  }
+
+  async function handleFolderOpenChoice(
+    event: CustomEvent<{ choice: 'current-window' | 'new-window'; remember: boolean }>,
+  ) {
+    const { choice, remember } = event.detail;
+    folderOpenDialogPath = null;
+
+    if (!folderOpenDialogName) return;
+
+    if (remember) {
+      folderOpenDefaultBehavior = choice;
+      await updateAppSetting('folderOpenDefaultBehavior', choice).catch(() => undefined);
+    }
+
+    if (choice === 'current-window') {
+      await openFolderInCurrentWindow(folderOpenDialogName);
+    } else {
+      await openFolderInNewWindow(folderOpenDialogName);
+    }
+    folderOpenDialogName = '';
+  }
+
+  function showFolderOpenDialog(folderPath: string) {
+    folderOpenDialogName = folderPath;
+    folderOpenDialogPath = folderPath;
+  }
+
+  async function openFolderWithBehavior(folderPath: string) {
+    if (folderOpenDefaultBehavior === 'current-window') {
+      await openFolderInCurrentWindow(folderPath);
+    } else if (folderOpenDefaultBehavior === 'new-window') {
+      await openFolderInNewWindow(folderPath);
+    } else {
+      showFolderOpenDialog(folderPath);
+    }
+  }
+
+  async function openFolderDialog() {
+    if (!desktopEnabled) return;
+    const { folderPath, error } = await pickFolderPath();
+    if (error) {
+      statusMessage = error;
+    }
+    if (folderPath) {
+      await openFolderWithBehavior(folderPath);
+    }
+  }
+
+  async function openRecentEntry(path: string, entryType: RecentEntryType) {
+    if (!desktopEnabled) return;
+
+    if (entryType === 'folder') {
+      await openFolderWithBehavior(path);
+      return;
+    }
+
+    await openRecentFile(path);
+  }
+
+  async function clearRecentEntriesList() {
+    if (!desktopEnabled) return;
+    await clearRecentEntries().catch(() => undefined);
+    await refreshRecentFiles();
+  }
+
+  async function removeRecentEntry(path: string) {
+    if (!desktopEnabled) return;
+    // 当前后端没有单条删除命令，通过清除全部 + 重新写入保留条目实现
+    const current = recentFiles.filter((entry) => entry.path !== path);
+    await clearRecentEntries().catch(() => undefined);
+    for (const entry of current) {
+      if (entry.entryType === 'file') {
+        await rememberRecentEntry(entry.path, 'file', entry.title ?? null, entry.wordCount).catch(
+          () => undefined,
+        );
+      } else {
+        await rememberRecentEntry(entry.path, 'folder', null, 0).catch(() => undefined);
+      }
+    }
+    await refreshRecentFiles();
+  }
+
+  function closeCurrentFile() {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab) return;
+    closeTab(activeTab.id);
+  }
+
+  async function closeCurrentWindow() {
+    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(
+        `以下文件有未保存修改：${names}。关闭窗口将丢失这些更改，是否继续？`,
+      );
+      if (!ok) return;
+    }
+    closeAppWindow();
+  }
 
   const commandHandlers: AppCommandHandlers = {
     createNewFile: () => createNewFile(),
     createNewWindow,
     openFileDialog: () => openFileDialog(),
     openFolderDialog: () => openFolderDialog(),
-    openRecentFile: (path) => openRecentFile(path),
+    openRecentEntry: (path, entryType) => openRecentEntry(path, entryType),
     saveMarkdownFile: (saveAs) => saveMarkdownFile(saveAs),
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
@@ -317,6 +447,23 @@ import { readMarkdownFromPath } from './services/documentFiles';
     if (desktopEnabled && (fileName || dirty !== undefined)) {
       updateWindowTitle();
     }
+  }
+
+  // 步骤：recentFiles 变化时异步检测路径是否存在，用于灰显失效条目
+  $: if (desktopEnabled && recentFiles.length > 0) {
+    void (async () => {
+      const paths = recentFiles.map((entry) => entry.path);
+      const exists = await checkPathsExist(paths).catch(() => paths.map(() => true));
+      const nextMissing = new Set<string>();
+      recentFiles.forEach((entry, index) => {
+        if (!exists[index]) {
+          nextMissing.add(entry.path);
+        }
+      });
+      missingRecentPaths = nextMissing;
+    })();
+  } else {
+    missingRecentPaths = new Set<string>();
   }
   let fileCheckTimer: number | null = null;
 
@@ -396,6 +543,7 @@ import { readMarkdownFromPath } from './services/documentFiles';
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
+    nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
   ) {
     if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
       await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
@@ -407,6 +555,10 @@ import { readMarkdownFromPath } from './services/documentFiles';
     updateFontSizeValue(nextAppearanceSettings.fontSize);
     updateLineHeightValue(nextAppearanceSettings.lineHeight);
     updateBlockStyle(nextAppearanceSettings.blockStyle);
+    if (nextFolderBehavior !== folderOpenDefaultBehavior) {
+      folderOpenDefaultBehavior = nextFolderBehavior;
+      await updateAppSetting('folderOpenDefaultBehavior', nextFolderBehavior).catch(() => undefined);
+    }
     closeSettings();
   }
 
@@ -627,7 +779,6 @@ import { readMarkdownFromPath } from './services/documentFiles';
   const openMarkdownFile = documentActions.openMarkdownFile;
   const saveMarkdownFile = documentActions.saveMarkdownFile;
   const openRecentFile = documentActions.openRecentFile;
-  const openFolderDialog = folderExplorer.openFolderDialog;
   const createNewFile = documentActions.createNewFile;
   const _documentCloseTab = documentActions.closeTab;
   const refreshRecentFiles = documentActions.refreshRecentFiles;
@@ -712,7 +863,7 @@ import { readMarkdownFromPath } from './services/documentFiles';
       if (result) {
         await loadFolder(currentFolderPath);
         expandAncestors(targetPath, currentFolderPath);
-        openRecentFile(targetPath);
+        openRecentEntry(targetPath, 'file');
       }
     }
   }
@@ -760,8 +911,17 @@ import { readMarkdownFromPath } from './services/documentFiles';
     desktopEnabled = isTauriRuntime();
 
     if (desktopEnabled) {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      windowLabel = getCurrentWindow().label;
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('refresh_window_menu')
+        .catch(() => undefined);
+
       const settings = await listAppSettings().catch(() => []);
-      const workspaceTabsSetting = settings.find((s) => s.key === 'workspaceTabs');
+      // 优先读取窗口独立的状态，兼容旧的全局 key
+      const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
+      const workspaceTabsSetting = settings.find((s) => s.key === workspaceTabsKey)
+        ?? settings.find((s) => s.key === 'workspaceTabs');
       if (workspaceTabsSetting) {
         try {
           const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
@@ -789,6 +949,39 @@ import { readMarkdownFromPath } from './services/documentFiles';
         currentFolderPath = await getDefaultWorkspaceDir().catch(() => '');
         if (currentFolderPath) {
           await updateAppSetting('workspaceDir', currentFolderPath).catch(() => undefined);
+        }
+      }
+
+      const folderBehaviorSetting = settings.find((s) => s.key === 'folderOpenDefaultBehavior');
+      if (folderBehaviorSetting) {
+        try {
+          const value = JSON.parse(folderBehaviorSetting.valueJson) as
+            | 'current-window'
+            | 'new-window'
+            | 'ask-every-time';
+          if (['current-window', 'new-window', 'ask-every-time'].includes(value)) {
+            folderOpenDefaultBehavior = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
+      const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
+      if (pendingFolderSetting) {
+        try {
+          const folderPath = JSON.parse(pendingFolderSetting.valueJson);
+          if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
+            currentFolderPath = folderPath;
+            await updateAppSetting('workspaceDir', folderPath).catch(() => undefined);
+            await loadFolder(folderPath)
+              .catch(() => undefined);
+            // 标记为已消费，避免刷新时重复处理
+            await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
+          }
+        } catch {
+          // ignore
         }
       }
     }
@@ -1187,6 +1380,7 @@ import { readMarkdownFromPath } from './services/documentFiles';
   {desktopEnabled}
   {activeMenu}
   {recentFiles}
+  {missingRecentPaths}
   {mode}
   {outlineVisible}
   {currentFolderPath}
@@ -1233,8 +1427,12 @@ import { readMarkdownFromPath } from './services/documentFiles';
   {createNewFile}
   {openFileDialog}
   {openFolderDialog}
-  {openRecentFile}
+  {openRecentEntry}
   {openPreviewFile}
+  {clearRecentEntriesList}
+  {removeRecentEntry}
+  {closeCurrentFile}
+  {closeCurrentWindow}
   {saveMarkdownFile}
   {runCommand}
   {pendingInlineMarks}
@@ -1284,6 +1482,7 @@ import { readMarkdownFromPath } from './services/documentFiles';
   {fontSize}
   {lineHeight}
   {blockStyle}
+  folderOpenDefaultBehavior={folderOpenDefaultBehavior}
   {closeSettings}
   saveSettings={handleSaveSettings}
 />
@@ -1296,6 +1495,17 @@ import { readMarkdownFromPath } from './services/documentFiles';
     <span>正在打开链接</span>
   </div>
 {/if}
+
+<FolderOpenDialog
+  open={folderOpenDialogPath !== null}
+  folderPath={folderOpenDialogPath ?? ''}
+  folderName={resolveFolderName(folderOpenDialogPath ?? '')}
+  on:choose={handleFolderOpenChoice}
+  on:cancel={() => {
+    folderOpenDialogPath = null;
+    folderOpenDialogName = '';
+  }}
+/>
 
 {#if contextMenuOpen}
   <ContextMenu

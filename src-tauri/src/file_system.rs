@@ -1,11 +1,7 @@
 pub(crate) mod image_assets;
 
 use crate::models::{DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo};
-use std::{
-    fs,
-    path::Path,
-    time::UNIX_EPOCH,
-};
+use std::{fs, path::Path, time::UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 #[tauri::command]
@@ -42,19 +38,24 @@ pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String
         return Err(format!("路径不是文件：{path}"));
     }
 
-    let markdown = fs::read_to_string(&path).map_err(|error| format!("读取 Markdown 文件失败：{error}"))?;
+    let markdown =
+        fs::read_to_string(&path).map_err(|error| format!("读取 Markdown 文件失败：{error}"))?;
     document_payload(path, markdown)
 }
 
 #[tauri::command]
-pub(crate) fn write_markdown_file(path: String, markdown: String) -> Result<DocumentPayload, String> {
+pub(crate) fn write_markdown_file(
+    path: String,
+    markdown: String,
+) -> Result<DocumentPayload, String> {
     if let Some(parent) = Path::new(&path).parent() {
         if !parent.exists() {
             return Err(format!("保存目录不存在：{}", parent.display()));
         }
     }
 
-    fs::write(&path, markdown.as_bytes()).map_err(|error| format!("保存 Markdown 文件失败：{error}"))?;
+    fs::write(&path, markdown.as_bytes())
+        .map_err(|error| format!("保存 Markdown 文件失败：{error}"))?;
     document_payload(path, markdown)
 }
 
@@ -126,15 +127,29 @@ fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, S
     })
 }
 
+#[tauri::command]
+pub(crate) fn check_paths_exist(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    Ok(paths
+        .into_iter()
+        .map(|path| Path::new(&path).exists())
+        .collect())
+}
+
 fn file_status(path: &str) -> FileStatus {
     let metadata = fs::metadata(path);
 
     FileStatus {
         path: path.to_string(),
         exists: Path::new(path).exists(),
-        is_file: metadata.as_ref().map(|value| value.is_file()).unwrap_or(false),
+        is_file: metadata
+            .as_ref()
+            .map(|value| value.is_file())
+            .unwrap_or(false),
         modified_at: file_modified_at(path),
-        size_bytes: metadata.as_ref().map(|value| value.len() as i64).unwrap_or_default(),
+        size_bytes: metadata
+            .as_ref()
+            .map(|value| value.len() as i64)
+            .unwrap_or_default(),
         readonly: metadata
             .as_ref()
             .map(|value| value.permissions().readonly())

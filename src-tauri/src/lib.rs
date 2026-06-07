@@ -23,15 +23,16 @@ pub fn run() {
                 crate::window::menu::install_window_menu(app.handle(), &window)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
-            crate::window::state::restore_window_state(app.handle());
+            crate::window::state::restore_window_state(app.handle(), "main");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             crate::file_system::read_markdown_file,
             crate::file_system::write_markdown_file,
             crate::file_system::stat_markdown_file,
-            crate::database::remember_recent_file,
-            crate::database::list_recent_files,
+            crate::database::remember_recent_entry,
+            crate::database::list_recent_entries,
+            crate::database::clear_recent_entries,
             crate::database::create_document_snapshot,
             crate::database::list_document_snapshots,
             crate::database::update_app_setting,
@@ -52,6 +53,7 @@ pub fn run() {
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,
             crate::file_system::get_folder_tree,
+            crate::file_system::check_paths_exist,
             crate::external_link::open_external_link,
             crate::external_link::reveal_in_explorer
         ])

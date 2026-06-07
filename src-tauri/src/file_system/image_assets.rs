@@ -192,7 +192,9 @@ pub(crate) fn upload_image_via_picgo_core(
     }
 
     let mut process = Command::new(command);
-    process.arg("upload").arg(temp_path.to_string_lossy().to_string());
+    process
+        .arg("upload")
+        .arg(temp_path.to_string_lossy().to_string());
     if let Some(config_path) = input
         .config_path
         .as_deref()
@@ -307,7 +309,10 @@ fn sanitize_image_file_name(file_name: &str) -> String {
         .file_stem()
         .and_then(|value| value.to_str())
         .unwrap_or("image");
-    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("");
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
     let safe_stem = sanitize_path_segment(stem);
     if extension.is_empty() {
         safe_stem
@@ -321,8 +326,7 @@ fn sanitize_path_segment(value: &str) -> String {
         .trim()
         .chars()
         .map(|ch| {
-            if ch.is_control()
-                || matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
+            if ch.is_control() || matches!(ch, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
             {
                 '-'
             } else if ch.is_whitespace() {
@@ -376,7 +380,10 @@ fn unique_file_name(directory: &Path, safe_file_name: &str) -> String {
         .file_stem()
         .and_then(|value| value.to_str())
         .unwrap_or("image");
-    let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("");
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
     let mut candidate = safe_file_name.to_string();
     let mut suffix = 1;
 
@@ -589,9 +596,8 @@ mod tests {
     #[test]
     fn builds_assets_markdown_path_with_safe_file_name() {
         let dir = Path::new("D:\\Docs");
-        let target =
-            build_image_asset_target(dir, "设计 文档", "copy-assets", "截图 1:?.PNG")
-                .expect("target");
+        let target = build_image_asset_target(dir, "设计 文档", "copy-assets", "截图 1:?.PNG")
+            .expect("target");
 
         expect_path_ends_with(&target.absolute_path, "assets\\截图-1.png");
         assert_eq!(target.markdown_src, "./assets/截图-1.png");
@@ -610,8 +616,7 @@ mod tests {
 
     #[test]
     fn parses_picgo_server_json_result() {
-        let url =
-            parse_picgo_server_url(r#"{"success":true,"result":["https://img.test/a.png"]}"#);
+        let url = parse_picgo_server_url(r#"{"success":true,"result":["https://img.test/a.png"]}"#);
 
         assert_eq!(url.as_deref(), Some("https://img.test/a.png"));
     }

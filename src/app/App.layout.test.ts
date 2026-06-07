@@ -209,7 +209,7 @@ describe('App outline layout', () => {
     expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
     expect(tauriMenuSource).toContain('window.emit("newmd://menu-command", command)');
     expect(tauriMenuSource).toContain('window.app_handle().exit(0)');
-    expect(tauriMenuSource).toContain('format!("open-recent:{}", doc.path)');
+    expect(tauriMenuSource).toContain('format!("open-recent:{}:{}", entry.entry_type, entry.path)');
     expect(appCommandsSource).toContain("command === 'new-window'");
     expect(appCommandsSource).toContain("command.startsWith('open-recent:')");
   });
@@ -308,10 +308,10 @@ describe('App outline layout', () => {
     expect(settingsDrawerSource).toContain('draftFontSize = fontSize');
     expect(settingsDrawerSource).toContain('draftLineHeight = lineHeight');
     expect(settingsDrawerSource).toContain('draftBlockStyle = blockStyle');
-    expect(settingsDrawerSource).toContain(
-      'saveSettings(selectedDir, normalizeImageSettings(draftImageSettings), {',
-    );
     expect(settingsDrawerSource).toContain('aria-label="提示块样式"');
+    expect(settingsDrawerSource).toContain('draftFolderBehavior = folderOpenDefaultBehavior');
+    expect(settingsDrawerSource).toContain('打开文件夹默认行为');
+    expect(settingsDrawerSource).toContain('draftFolderBehavior,');
     expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
     expect(appSource).toContain('updateLineHeightValue(nextAppearanceSettings.lineHeight)');
     expect(appSource).toContain('updateBlockStyle(nextAppearanceSettings.blockStyle)');

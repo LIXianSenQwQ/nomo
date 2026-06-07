@@ -1,4 +1,4 @@
-import type { NativeDocument } from '../../lib/desktop/tauriStorage';
+import type { NativeDocument, RecentEntry } from '../../lib/desktop/tauriStorage';
 import type { EditorCore } from '../../lib/editor-core';
 import { calculateDocumentStats } from '../../lib/outline/outlineService';
 import type { Tab } from '../types';
@@ -7,7 +7,7 @@ import {
   exportMarkdownInBrowser,
   findDroppedMarkdownPath,
   getExternalFileWarning,
-  loadRecentDocuments,
+  loadRecentEntries,
   openMarkdownFromDialog,
   readMarkdownFromPath,
   rememberNativeDocument,
@@ -41,7 +41,7 @@ interface DocumentActionsOptions {
   getActiveTabId(): string;
   setActiveTabId(value: string): void;
   setStatusMessage(value: string): void;
-  setRecentFiles(value: Awaited<ReturnType<typeof loadRecentDocuments>>): void;
+  setRecentFiles(value: Awaited<ReturnType<typeof loadRecentEntries>>): void;
   setExternalFileWarning(value: string): void;
   saveActiveTabState(): void;
   loadTabState(tab: Tab): void;
@@ -334,7 +334,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   }
 
   async function refreshRecentFiles() {
-    options.setRecentFiles(await loadRecentDocuments(options.getDesktopEnabled()));
+    options.setRecentFiles(await loadRecentEntries(options.getDesktopEnabled()));
   }
 
   let saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};

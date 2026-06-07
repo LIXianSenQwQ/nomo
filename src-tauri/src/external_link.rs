@@ -22,9 +22,7 @@ pub(crate) fn open_external_link(href: String) -> Result<(), String> {
 
 fn has_dangerous_protocol(href: &str) -> bool {
     let lower = href.to_ascii_lowercase();
-    lower.starts_with("javascript:")
-        || lower.starts_with("vbscript:")
-        || lower.starts_with("data:")
+    lower.starts_with("javascript:") || lower.starts_with("vbscript:") || lower.starts_with("data:")
 }
 
 #[cfg(target_os = "windows")]

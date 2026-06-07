@@ -236,6 +236,55 @@
   font-style: italic;
 }
 
+.recent-submenu {
+  min-width: 220px;
+  max-width: 340px;
+}
+
+.recent-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  overflow: hidden;
+}
+
+.recent-entry .recent-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.recent-entry .recent-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-entry.recent-folder .recent-label {
+  font-weight: 500;
+}
+
+.recent-entry.recent-missing {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.recent-entry.recent-missing .recent-label::after {
+  content: '（已失效）';
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--md-editor-muted-fg);
+}
+
+.recent-clear {
+  color: var(--md-editor-muted-fg);
+  font-size: 11.5px;
+  justify-content: center !important;
+}
+
 .titlebar-spacer {
   flex: 1;
   min-width: 24px;

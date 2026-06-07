@@ -39,13 +39,47 @@ export async function closeAppWindow(desktopEnabled: boolean) {
   }
 }
 
-export async function createAppWindow(desktopEnabled: boolean) {
+export async function createAppWindow(
+  desktopEnabled: boolean,
+  pendingFolder?: string,
+): Promise<string | undefined> {
   if (!desktopEnabled) {
-    return;
+    return undefined;
   }
 
   const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('create_new_window').catch(() => undefined);
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  try {
+    const windowId = await invoke<string>('create_new_window', { pendingFolder });
+    const appWindow = new WebviewWindow(windowId, {
+      url: '/',
+      title: 'NewMd',
+      width: 1180,
+      height: 760,
+      minWidth: 920,
+      minHeight: 640,
+      center: true,
+      visible: true,
+      decorations: false,
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      closable: true,
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      appWindow.once('tauri://created', () => {
+        resolve();
+      }).catch(reject);
+      appWindow.once<string>('tauri://error', (event) => {
+        reject(event.payload);
+      }).catch(reject);
+    });
+    return windowId;
+  } catch (error) {
+    console.error('创建新窗口失败:', error);
+    return undefined;
+  }
 }
 
 export async function updateAppWindowTitle(

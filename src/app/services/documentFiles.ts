@@ -1,15 +1,15 @@
 import {
   createDocumentSnapshot,
+  listRecentEntries,
   listDocumentSnapshots,
-  listRecentFiles,
   openFolderWithDialog,
   openMarkdownWithDialog,
   readMarkdownFile,
-  rememberRecentFile,
+  rememberRecentEntry,
   saveMarkdownNative,
   statMarkdownFile,
   type NativeDocument,
-  type RecentDocument,
+  type RecentEntry,
   type SnapshotRecord,
 } from '../../lib/desktop/tauriStorage';
 import type { FileTreeNode } from '../types';
@@ -65,14 +65,23 @@ export function exportMarkdownInBrowser(markdown: string, fileName: string) {
 }
 
 export async function rememberNativeDocument(document: NativeDocument, words: number) {
-  await rememberRecentFile(document.path, document.fileName, words).catch(() => undefined);
+  await rememberRecentEntry(document.path, 'file', document.fileName, words).catch(() => undefined);
 }
 
-export async function loadRecentDocuments(desktopEnabled: boolean): Promise<RecentDocument[]> {
+export async function rememberNativeFolder(folderPath: string) {
+  await rememberRecentEntry(folderPath, 'folder', null, 0).catch(() => undefined);
+}
+
+export async function loadRecentEntries(desktopEnabled: boolean): Promise<RecentEntry[]> {
   if (!desktopEnabled) {
     return [];
   }
-  return listRecentFiles().catch(() => []);
+  return listRecentEntries().catch(() => []);
+}
+
+/** @deprecated 使用 loadRecentEntries */
+export async function loadRecentDocuments(desktopEnabled: boolean): Promise<RecentEntry[]> {
+  return loadRecentEntries(desktopEnabled);
 }
 
 export async function loadDocumentSnapshots(

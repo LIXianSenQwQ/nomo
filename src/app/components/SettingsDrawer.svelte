@@ -20,11 +20,13 @@
   export let fontSize: number;
   export let lineHeight: number;
   export let blockStyle: 'classic' | 'modern';
+  export let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
   export let closeSettings: () => void;
   export let saveSettings: (
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
+    nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
   ) => void;
 
   let selectedDir: string = currentWorkspaceDir;
@@ -32,6 +34,8 @@
   let draftFontSize: number = fontSize;
   let draftLineHeight: number = lineHeight;
   let draftBlockStyle: 'classic' | 'modern' = blockStyle;
+  let draftFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
+    folderOpenDefaultBehavior;
 
   // Whenever the drawer opens, reset the selected path to the current one
   $: if (isOpen) {
@@ -40,6 +44,7 @@
     draftFontSize = fontSize;
     draftLineHeight = lineHeight;
     draftBlockStyle = blockStyle;
+    draftFolderBehavior = folderOpenDefaultBehavior;
   }
 
   async function browseFolder() {
@@ -59,11 +64,22 @@
   }
 
   function handleSave() {
-    saveSettings(selectedDir, normalizeImageSettings(draftImageSettings), {
-      fontSize: draftFontSize,
-      lineHeight: draftLineHeight,
-      blockStyle: draftBlockStyle,
-    });
+    saveSettings(
+      selectedDir,
+      normalizeImageSettings(draftImageSettings),
+      {
+        fontSize: draftFontSize,
+        lineHeight: draftLineHeight,
+        blockStyle: draftBlockStyle,
+      },
+      draftFolderBehavior,
+    );
+  }
+
+  function setDraftFolderBehavior(
+    value: 'current-window' | 'new-window' | 'ask-every-time',
+  ) {
+    draftFolderBehavior = value;
   }
 
   function setImageStrategy(strategy: ImageInsertStrategy) {
@@ -147,6 +163,43 @@
           </div>
           <p class="setting-desc">这是存放所有 Markdown 文件和分组的根目录。</p>
         </div>
+
+        <section class="setting-group" aria-labelledby="folderBehaviorTitle">
+          <div class="setting-heading">
+            <h3 id="folderBehaviorTitle">文件与窗口</h3>
+            <p>选择打开文件夹时的默认行为。</p>
+          </div>
+
+          <div class="setting-field">
+            <span class="setting-label">打开文件夹默认行为</span>
+            <div class="folder-behavior-options" role="group" aria-label="打开文件夹默认行为">
+              <button
+                type="button"
+                class:active={draftFolderBehavior === 'ask-every-time'}
+                aria-pressed={draftFolderBehavior === 'ask-every-time'}
+                on:click={() => setDraftFolderBehavior('ask-every-time')}
+              >
+                每次询问
+              </button>
+              <button
+                type="button"
+                class:active={draftFolderBehavior === 'current-window'}
+                aria-pressed={draftFolderBehavior === 'current-window'}
+                on:click={() => setDraftFolderBehavior('current-window')}
+              >
+                当前窗口
+              </button>
+              <button
+                type="button"
+                class:active={draftFolderBehavior === 'new-window'}
+                aria-pressed={draftFolderBehavior === 'new-window'}
+                on:click={() => setDraftFolderBehavior('new-window')}
+              >
+                新窗口
+              </button>
+            </div>
+          </div>
+        </section>
 
         <section
           class="setting-group appearance-setting-group"
@@ -498,6 +551,54 @@
     outline-offset: 1px;
   }
 
+  .folder-behavior-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-md);
+    background: color-mix(in srgb, var(--md-editor-surface) 82%, var(--md-editor-bg));
+  }
+
+  .folder-behavior-options button {
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--md-editor-radius-sm);
+    background: transparent;
+    color: var(--md-editor-muted-fg);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .folder-behavior-options button:hover {
+    background: color-mix(in srgb, var(--md-editor-accent) 8%, transparent);
+    color: var(--md-editor-fg);
+  }
+
+  .folder-behavior-options button.active {
+    background: var(--md-editor-bg);
+    color: var(--md-editor-accent-strong);
+    box-shadow: 0 1px 8px color-mix(in srgb, #020617 10%, transparent);
+  }
+
+  .folder-behavior-options button:focus-visible,
+  .segmented-control button:focus-visible,
+  .provider-switch button:focus-visible,
+  .browse-btn:focus-visible,
+  .save-btn:focus-visible,
+  .icon-btn:focus-visible {
+    outline: 2px solid var(--md-editor-accent);
+    outline-offset: 2px;
+  }
+
   .segmented-control,
   .provider-switch {
     display: grid;
@@ -538,15 +639,6 @@
     background: var(--md-editor-bg);
     color: var(--md-editor-accent-strong);
     box-shadow: 0 1px 8px color-mix(in srgb, #020617 10%, transparent);
-  }
-
-  .segmented-control button:focus-visible,
-  .provider-switch button:focus-visible,
-  .browse-btn:focus-visible,
-  .save-btn:focus-visible,
-  .icon-btn:focus-visible {
-    outline: 2px solid var(--md-editor-accent);
-    outline-offset: 2px;
   }
 
   .browse-btn {

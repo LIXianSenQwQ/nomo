@@ -14,7 +14,7 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     createNewWindow: vi.fn(),
     openFileDialog: vi.fn(),
     openFolderDialog: vi.fn(),
-    openRecentFile: vi.fn(),
+    openRecentEntry: vi.fn(),
     saveMarkdownFile: vi.fn(),
     runCommand: vi.fn((command: EditorCommand) => {
       commands.push(command);
@@ -42,9 +42,25 @@ describe('appCommands', () => {
   it('通过桌面菜单命令打开最近文件', () => {
     const handlers = createHandlers();
 
+    executeDesktopCommand('open-recent:file:D:\\Docs\\demo.md', handlers);
+
+    expect(handlers.openRecentEntry).toHaveBeenCalledWith('D:\\Docs\\demo.md', 'file');
+  });
+
+  it('通过桌面菜单命令打开最近文件夹', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('open-recent:folder:D:\\Docs', handlers);
+
+    expect(handlers.openRecentEntry).toHaveBeenCalledWith('D:\\Docs', 'folder');
+  });
+
+  it('兼容旧格式打开最近文件', () => {
+    const handlers = createHandlers();
+
     executeDesktopCommand('open-recent:D:\\Docs\\demo.md', handlers);
 
-    expect(handlers.openRecentFile).toHaveBeenCalledWith('D:\\Docs\\demo.md');
+    expect(handlers.openRecentEntry).toHaveBeenCalledWith('D:\\Docs\\demo.md', 'file');
   });
 
   it('通过桌面菜单命令触发清除样式', () => {
