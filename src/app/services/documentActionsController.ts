@@ -21,6 +21,7 @@ interface DocumentActionsOptions {
   recoveryKey: string;
   getDesktopEnabled(): boolean;
   getDirty(): boolean;
+  getAutoSaveEnabled(): boolean;
   getNativePath(): string | null;
   setMarkdown(value: string): void;
   setNativePath(value: string | null): void;
@@ -340,6 +341,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   let saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   function debouncedAutoSave(currentMarkdown: string) {
+    if (!options.getAutoSaveEnabled()) return;
+
     const tabId = options.getActiveTabId();
     const path = options.getNativePath();
     const fileName = options.getFileName();
@@ -352,6 +355,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     
     saveTimers[tabId] = setTimeout(async () => {
       delete saveTimers[tabId];
+      if (!options.getAutoSaveEnabled()) return;
       if (!options.getDesktopEnabled()) return;
 
       const markdownToSave = normalizeMarkdownForSave(currentMarkdown);
@@ -447,6 +451,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       }
     }, 1000);
   }
+
+  function cancelPendingAutoSaves() {
+    for (const timer of Object.values(saveTimers)) {
+      clearTimeout(timer);
+    }
+    saveTimers = {};
+  }
+
   async function checkExternalFileChange() {
     const warning = await getExternalFileWarning(
       options.getDesktopEnabled(),
@@ -471,5 +483,6 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     refreshRecentFiles,
     checkExternalFileChange,
     debouncedAutoSave,
+    cancelPendingAutoSaves,
   };
 }

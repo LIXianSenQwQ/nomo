@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
   import { fade, slide } from 'svelte/transition';
+  import type { EditorMode } from '../../lib/editor-core';
   import type {
     ImageHandlingSettings,
     ImageInsertStrategy,
@@ -14,6 +15,15 @@
     blockStyle: 'classic' | 'modern';
   }
 
+  interface WorkspaceBehaviorSettings {
+    folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
+    filePreviewEnabled: boolean;
+    autoSaveEnabled: boolean;
+    editorMode: EditorMode;
+    sidebarHidden: boolean;
+    outlineVisible: boolean;
+  }
+
   export let isOpen: boolean;
   export let currentWorkspaceDir: string;
   export let imageSettings: ImageHandlingSettings;
@@ -21,14 +31,17 @@
   export let lineHeight: number;
   export let blockStyle: 'classic' | 'modern';
   export let filePreviewEnabled: boolean;
+  export let autoSaveEnabled: boolean;
+  export let editorMode: EditorMode;
+  export let sidebarHidden: boolean;
+  export let outlineVisible: boolean;
   export let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
   export let closeSettings: () => void;
   export let saveSettings: (
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
-    nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
-    nextFilePreviewEnabled: boolean,
+    nextWorkspaceBehaviorSettings: WorkspaceBehaviorSettings,
   ) => void;
 
   let selectedDir: string = currentWorkspaceDir;
@@ -37,6 +50,10 @@
   let draftLineHeight: number = lineHeight;
   let draftBlockStyle: 'classic' | 'modern' = blockStyle;
   let draftFilePreviewEnabled = filePreviewEnabled;
+  let draftAutoSaveEnabled = autoSaveEnabled;
+  let draftEditorMode: EditorMode = editorMode;
+  let draftSidebarHidden = sidebarHidden;
+  let draftOutlineVisible = outlineVisible;
   let draftFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
     folderOpenDefaultBehavior;
 
@@ -48,6 +65,10 @@
     draftLineHeight = lineHeight;
     draftBlockStyle = blockStyle;
     draftFilePreviewEnabled = filePreviewEnabled;
+    draftAutoSaveEnabled = autoSaveEnabled;
+    draftEditorMode = editorMode;
+    draftSidebarHidden = sidebarHidden;
+    draftOutlineVisible = outlineVisible;
     draftFolderBehavior = folderOpenDefaultBehavior;
   }
 
@@ -76,8 +97,14 @@
         lineHeight: draftLineHeight,
         blockStyle: draftBlockStyle,
       },
-      draftFolderBehavior,
-      draftFilePreviewEnabled,
+      {
+        folderOpenDefaultBehavior: draftFolderBehavior,
+        filePreviewEnabled: draftFilePreviewEnabled,
+        autoSaveEnabled: draftAutoSaveEnabled,
+        editorMode: draftEditorMode,
+        sidebarHidden: draftSidebarHidden,
+        outlineVisible: draftOutlineVisible,
+      },
     );
   }
 
@@ -89,6 +116,22 @@
 
   function toggleFilePreviewEnabled(event: Event) {
     draftFilePreviewEnabled = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function toggleAutoSaveEnabled(event: Event) {
+    draftAutoSaveEnabled = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function setDraftEditorMode(nextMode: EditorMode) {
+    draftEditorMode = nextMode;
+  }
+
+  function toggleSidebarHidden(event: Event) {
+    draftSidebarHidden = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function toggleOutlineVisible(event: Event) {
+    draftOutlineVisible = (event.currentTarget as HTMLInputElement).checked;
   }
 
   function setImageStrategy(strategy: ImageInsertStrategy) {
@@ -216,6 +259,28 @@
             </div>
           </div>
 
+          <div class="setting-field">
+            <span class="setting-label">默认编辑模式</span>
+            <div class="segmented-control" role="group" aria-label="默认编辑模式">
+              <button
+                type="button"
+                class:active={draftEditorMode === 'semantic'}
+                aria-pressed={draftEditorMode === 'semantic'}
+                on:click={() => setDraftEditorMode('semantic')}
+              >
+                语义编辑
+              </button>
+              <button
+                type="button"
+                class:active={draftEditorMode === 'source'}
+                aria-pressed={draftEditorMode === 'source'}
+                on:click={() => setDraftEditorMode('source')}
+              >
+                源码模式
+              </button>
+            </div>
+          </div>
+
           <label class="toggle-setting" for="filePreviewEnabled">
             <span>
               <span class="toggle-title">文件预览标签</span>
@@ -226,6 +291,48 @@
               type="checkbox"
               checked={draftFilePreviewEnabled}
               on:change={toggleFilePreviewEnabled}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+
+          <label class="toggle-setting" for="sidebarHidden">
+            <span>
+              <span class="toggle-title">隐藏资源管理器侧边栏</span>
+              <span class="toggle-desc">启动后保持侧边栏收起，释放正文编辑空间。</span>
+            </span>
+            <input
+              id="sidebarHidden"
+              type="checkbox"
+              checked={draftSidebarHidden}
+              on:change={toggleSidebarHidden}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+
+          <label class="toggle-setting" for="outlineVisible">
+            <span>
+              <span class="toggle-title">显示文档大纲</span>
+              <span class="toggle-desc">在编辑区右侧显示当前文档标题导航。</span>
+            </span>
+            <input
+              id="outlineVisible"
+              type="checkbox"
+              checked={draftOutlineVisible}
+              on:change={toggleOutlineVisible}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+
+          <label class="toggle-setting" for="autoSaveEnabled">
+            <span>
+              <span class="toggle-title">自动保存</span>
+              <span class="toggle-desc">编辑后自动写入当前本地文件，默认关闭。</span>
+            </span>
+            <input
+              id="autoSaveEnabled"
+              type="checkbox"
+              checked={draftAutoSaveEnabled}
+              on:change={toggleAutoSaveEnabled}
             />
             <span class="toggle-switch" aria-hidden="true"></span>
           </label>

@@ -98,6 +98,14 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     lineHeight: number;
     blockStyle: 'classic' | 'modern';
   };
+  type WorkspaceBehaviorSettings = {
+    folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
+    filePreviewEnabled: boolean;
+    autoSaveEnabled: boolean;
+    editorMode: EditorMode;
+    sidebarHidden: boolean;
+    outlineVisible: boolean;
+  };
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
@@ -180,6 +188,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   let activeTabId = '';
   let previewTabId: string | null = null;
   let filePreviewEnabled = true;
+  let autoSaveEnabled = false;
   let windowLabel = '';
 
   function persistWorkspaceState() {
@@ -434,6 +443,39 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     closeAppWindow();
   }
 
+  function persistEditorModePreference(nextMode: EditorMode) {
+    updateAppSetting('editorMode', nextMode).catch(() => undefined);
+  }
+
+  function setMode(nextMode: EditorMode) {
+    editorInteraction
+      .setMode(nextMode)
+      .then(() => {
+        if (!(largeDocumentMode && nextMode === 'semantic')) {
+          persistEditorModePreference(nextMode);
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  function setSidebarHidden(hidden: boolean) {
+    focusMode = hidden;
+    updateAppSetting('sidebarHidden', hidden).catch(() => undefined);
+  }
+
+  function toggleFocusMode() {
+    setSidebarHidden(!focusMode);
+  }
+
+  function setOutlineVisiblePreference(visible: boolean) {
+    outlineVisible = visible;
+    updateAppSetting('outlineVisible', visible).catch(() => undefined);
+  }
+
+  function toggleOutlineVisible() {
+    setOutlineVisiblePreference(!outlineVisible);
+  }
+
   const commandHandlers: AppCommandHandlers = {
     createNewFile: () => createNewFile(),
     createNewWindow,
@@ -566,8 +608,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
-    nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
-    nextFilePreviewEnabled: boolean,
+    nextWorkspaceBehaviorSettings: WorkspaceBehaviorSettings,
   ) {
     if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
       await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
@@ -579,9 +620,13 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     updateFontSizeValue(nextAppearanceSettings.fontSize);
     updateLineHeightValue(nextAppearanceSettings.lineHeight);
     updateBlockStyle(nextAppearanceSettings.blockStyle);
-    if (nextFolderBehavior !== folderOpenDefaultBehavior) {
-      folderOpenDefaultBehavior = nextFolderBehavior;
-      await updateAppSetting('folderOpenDefaultBehavior', nextFolderBehavior).catch(() => undefined);
+    const nextFilePreviewEnabled = nextWorkspaceBehaviorSettings.filePreviewEnabled;
+    const nextAutoSaveEnabled = nextWorkspaceBehaviorSettings.autoSaveEnabled;
+    if (nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior !== folderOpenDefaultBehavior) {
+      folderOpenDefaultBehavior = nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior;
+      await updateAppSetting('folderOpenDefaultBehavior', folderOpenDefaultBehavior).catch(
+        () => undefined,
+      );
     }
     if (nextFilePreviewEnabled !== filePreviewEnabled) {
       filePreviewEnabled = nextFilePreviewEnabled;
@@ -590,6 +635,24 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         persistWorkspaceState();
       }
       await updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled).catch(() => undefined);
+    }
+    if (nextAutoSaveEnabled !== autoSaveEnabled) {
+      autoSaveEnabled = nextAutoSaveEnabled;
+      if (!autoSaveEnabled) {
+        documentActions.cancelPendingAutoSaves();
+      }
+      await updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled).catch(() => undefined);
+    }
+    if (nextWorkspaceBehaviorSettings.sidebarHidden !== focusMode) {
+      setSidebarHidden(nextWorkspaceBehaviorSettings.sidebarHidden);
+    }
+    if (nextWorkspaceBehaviorSettings.outlineVisible !== outlineVisible) {
+      setOutlineVisiblePreference(nextWorkspaceBehaviorSettings.outlineVisible);
+    }
+    if (nextWorkspaceBehaviorSettings.editorMode !== mode) {
+      setMode(nextWorkspaceBehaviorSettings.editorMode);
+    } else {
+      persistEditorModePreference(nextWorkspaceBehaviorSettings.editorMode);
     }
     closeSettings();
   }
@@ -760,6 +823,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     recoveryKey: RECOVERY_KEY,
     getDesktopEnabled: () => desktopEnabled,
     getDirty: () => dirty,
+    getAutoSaveEnabled: () => autoSaveEnabled,
     setMarkdown: (value) => {
       markdown = value;
     },
@@ -878,7 +942,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   const handleEditorDrop = imageInsertion.handleEditorDrop;
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const loadPersistedSettings = editorSettings.loadPersistedSettings;
-  const setMode = editorInteraction.setMode;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
   const toggleTheme = editorSettings.toggleTheme;
@@ -886,7 +949,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   const updateLineHeightValue = editorSettings.updateLineHeightValue;
   const updateContentWidth = editorSettings.updateContentWidth;
   const updateBlockStyle = editorSettings.updateBlockStyle;
-  const toggleOutlineVisible = outlineInteraction.toggleOutlineVisible;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
   const pruneCollapsedOutlineIds = outlineInteraction.pruneCollapsedOutlineIds;
@@ -1149,6 +1211,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
+    let persistedEditorMode: EditorMode | null = null;
 
     if (desktopEnabled) {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -1222,6 +1285,54 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         }
       }
 
+      const autoSaveSetting = settings.find((s) => s.key === 'autoSaveEnabled');
+      if (autoSaveSetting) {
+        try {
+          const value = JSON.parse(autoSaveSetting.valueJson);
+          if (typeof value === 'boolean') {
+            autoSaveEnabled = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const editorModeSetting = settings.find((s) => s.key === 'editorMode');
+      if (editorModeSetting) {
+        try {
+          const value = JSON.parse(editorModeSetting.valueJson);
+          if (value === 'semantic' || value === 'source') {
+            persistedEditorMode = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const sidebarHiddenSetting = settings.find((s) => s.key === 'sidebarHidden');
+      if (sidebarHiddenSetting) {
+        try {
+          const value = JSON.parse(sidebarHiddenSetting.valueJson);
+          if (typeof value === 'boolean') {
+            focusMode = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const outlineVisibleSetting = settings.find((s) => s.key === 'outlineVisible');
+      if (outlineVisibleSetting) {
+        try {
+          const value = JSON.parse(outlineVisibleSetting.valueJson);
+          if (typeof value === 'boolean') {
+            outlineVisible = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
       const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
       if (pendingFolderSetting) {
@@ -1245,6 +1356,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     // 监听图片右键菜单自定义事件（冒泡自 ImageNodeView）
     editorHost.addEventListener('image-context-menu', handleImageContextMenu);
     await loadPersistedSettings();
+    if (persistedEditorMode && !largeDocumentMode) {
+      mode = persistedEditorMode;
+      editor.updateOptions({ mode: persistedEditorMode });
+    }
     imageSettings = await loadPersistedImageSettings(desktopEnabled);
     // 确保 blockStyle 默认值写入 DOM（loadPersistedSettings 可能跳过）
     applyBlockStyleSetting(blockStyle);
@@ -1305,7 +1420,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       persistWorkspaceState();
     }
 
-    if (desktopEnabled && dirty && nativePath) {
+    if (autoSaveEnabled && desktopEnabled && dirty && nativePath) {
       documentActions.debouncedAutoSave(event.markdown);
     }
 
@@ -1314,10 +1429,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       return;
     }
     syncSourceTextareaHeight();
-  }
-
-  function toggleFocusMode() {
-    focusMode = !focusMode;
   }
 
   function openTablePicker() {
@@ -1655,6 +1766,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {activeTabId}
   {previewTabId}
   {markdown}
+  {largeDocumentMode}
   {frontMatter}
   {frontMatterEditing}
   {readonlyDocumentMode}
@@ -1748,6 +1860,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {lineHeight}
   {blockStyle}
   {filePreviewEnabled}
+  {autoSaveEnabled}
+  editorMode={mode}
+  sidebarHidden={focusMode}
+  {outlineVisible}
   folderOpenDefaultBehavior={folderOpenDefaultBehavior}
   {closeSettings}
   saveSettings={handleSaveSettings}
