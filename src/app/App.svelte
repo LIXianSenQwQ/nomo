@@ -129,7 +129,7 @@
   let fileName = '',
     filePath = '';
   let nativePath: string | null = null;
-  let statusMessage = '准备就绪';
+  let statusMessage = '';
   let desktopEnabled = false;
   let recentFiles: RecentEntry[] = [];
   let missingRecentPaths = new Set<string>();

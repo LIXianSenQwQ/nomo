@@ -162,20 +162,26 @@
 
       <!-- 底部状态栏 -->
       <footer class="status-bar">
-        <div class="status-left">
-          <div class="status-item"><i class="fa-solid fa-arrows-rotate"></i> 已同步</div>
-          <div class="status-item">
-            <i class="fa-regular fa-circle-xmark"></i> 0
-            <i class="fa-solid fa-triangle-exclamation" style="margin-left: 4px"></i> 0
+        <details class="status-stats">
+          <summary>0 词</summary>
+          <div class="writing-stats-card" role="dialog" aria-label="字数统计">
+            <div class="writing-stats-title">字数统计</div>
+            <dl>
+              <div>
+                <dt>1</dt>
+                <dd>行</dd>
+              </div>
+              <div>
+                <dt>0</dt>
+                <dd>词</dd>
+              </div>
+              <div>
+                <dt>0</dt>
+                <dd>字符</dd>
+              </div>
+            </dl>
           </div>
-        </div>
-        <div class="status-right">
-          <div class="status-item">阶段4：桌面体验与稳定性打磨</div>
-          <div class="status-item">version 0.302</div>
-          <div class="status-item">utf-8</div>
-          <div class="status-item">LF</div>
-          <div class="status-item"><i class="fa-brands fa-markdown"></i> Markdown</div>
-        </div>
+        </details>
       </footer>
     </div>
   </body>
