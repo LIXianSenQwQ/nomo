@@ -55,7 +55,7 @@ export function createEditorSettingsController(options: EditorSettingsController
   function toggleTheme() {
     const nextTheme = options.getTheme() === 'light' ? 'dark' : 'light';
     options.setTheme(nextTheme);
-    applyThemeSetting(nextTheme);
+    applyThemeSetting(nextTheme, { transition: true });
     localStorage.setItem('new-md-theme', nextTheme);
     persistSetting('theme', nextTheme);
     options.getEditor().updateTheme({ name: nextTheme });

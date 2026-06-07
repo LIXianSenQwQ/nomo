@@ -553,7 +553,12 @@
 
     <span class="titlebar-spacer" data-drag-region></span>
     <div class="titlebar-right">
-      <button class="icon-btn" title="切换主题" aria-label="切换主题" on:click={toggleTheme}>
+      <button
+        class="icon-btn theme-toggle-icon-btn"
+        title="切换主题"
+        aria-label="切换主题"
+        on:click={toggleTheme}
+      >
         {#if theme === 'light'}
           <Moon size={14} />
         {:else}

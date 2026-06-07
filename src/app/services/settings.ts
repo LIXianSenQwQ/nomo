@@ -17,6 +17,9 @@ export interface PersistedEditorSettings {
 }
 
 const IMAGE_SETTINGS_STORAGE_KEY = 'new-md-image-handling-settings';
+const THEME_TRANSITION_CLASS = 'theme-transitioning';
+const THEME_TRANSITION_MS = 180;
+let themeTransitionTimer: number | null = null;
 
 export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
@@ -90,11 +93,30 @@ export function persistImageSettings(desktopEnabled: boolean, settings: ImageHan
   updateAppSetting('imageHandlingSettings', normalized).catch(() => undefined);
 }
 
-export function applyThemeSetting(theme: 'light' | 'dark') {
+export function applyThemeSetting(theme: 'light' | 'dark', options?: { transition?: boolean }) {
+  if (options?.transition && !prefersReducedMotion()) {
+    document.documentElement.classList.add(THEME_TRANSITION_CLASS);
+    if (themeTransitionTimer !== null) {
+      window.clearTimeout(themeTransitionTimer);
+    }
+    themeTransitionTimer = window.setTimeout(() => {
+      document.documentElement.classList.remove(THEME_TRANSITION_CLASS);
+      themeTransitionTimer = null;
+    }, THEME_TRANSITION_MS + 40);
+  }
+
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
   // 通知代码块更新语法高亮主题
   CodeBlockNodeView.updateTheme();
   MermaidBlockNodeView.updateTheme();
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
 }
 
 export function applyTypographySettings(fontSize: number, lineHeight: number) {

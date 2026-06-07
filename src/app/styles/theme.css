@@ -136,46 +136,92 @@
   --md-scrollbar-thumb-active: #828d99;
 }
 
-.app-layout,
-.titlebar,
-.rail,
-.editor-shell,
-.menu-bar,
-.topbar,
-.toolbar,
-.statusbar,
-.dropdown-menu,
-.context-menu,
-.settings-drawer,
-.confirm-dialog,
-.front-matter-card,
-.content-outline,
-.quick-link-popover,
-.desktop-alert {
+:root.theme-transitioning body,
+:root.theme-transitioning .app-layout,
+:root.theme-transitioning .titlebar,
+:root.theme-transitioning .rail,
+:root.theme-transitioning .editor-shell,
+:root.theme-transitioning .menu-bar,
+:root.theme-transitioning .topbar,
+:root.theme-transitioning .toolbar,
+:root.theme-transitioning .statusbar,
+:root.theme-transitioning .dropdown-menu,
+:root.theme-transitioning .context-menu,
+:root.theme-transitioning .settings-drawer,
+:root.theme-transitioning .confirm-dialog,
+:root.theme-transitioning .front-matter-card,
+:root.theme-transitioning .content-outline,
+:root.theme-transitioning .quick-link-popover,
+:root.theme-transitioning .desktop-alert,
+:root.theme-transitioning .doc-tab,
+:root.theme-transitioning .icon-btn,
+:root.theme-transitioning .menu-btn,
+:root.theme-transitioning .toolbar button,
+:root.theme-transitioning .mode-switch,
+:root.theme-transitioning .tree-file,
+:root.theme-transitioning .tree-folder,
+:root.theme-transitioning .table-util-bar,
+:root.theme-transitioning .table-control-btn,
+:root.theme-transitioning .document-layout,
+:root.theme-transitioning .source-editor {
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 120ms ease,
+    box-shadow 160ms ease,
+    fill 120ms ease,
+    stroke 120ms ease;
+}
+
+:root.theme-transitioning .theme-toggle-icon-btn svg {
+  animation: theme-toggle-pop 160ms ease;
+}
+
+@keyframes theme-toggle-pop {
+  from {
+    transform: scale(0.86) rotate(-8deg);
+    opacity: 0.72;
+  }
+
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-layout,
-  .titlebar,
-  .rail,
-  .editor-shell,
-  .menu-bar,
-  .topbar,
-  .toolbar,
-  .statusbar,
-  .dropdown-menu,
-  .context-menu,
-  .settings-drawer,
-  .confirm-dialog,
-  .front-matter-card,
-  .content-outline,
-  .quick-link-popover,
-  .desktop-alert {
+  :root.theme-transitioning body,
+  :root.theme-transitioning .app-layout,
+  :root.theme-transitioning .titlebar,
+  :root.theme-transitioning .rail,
+  :root.theme-transitioning .editor-shell,
+  :root.theme-transitioning .menu-bar,
+  :root.theme-transitioning .topbar,
+  :root.theme-transitioning .toolbar,
+  :root.theme-transitioning .statusbar,
+  :root.theme-transitioning .dropdown-menu,
+  :root.theme-transitioning .context-menu,
+  :root.theme-transitioning .settings-drawer,
+  :root.theme-transitioning .confirm-dialog,
+  :root.theme-transitioning .front-matter-card,
+  :root.theme-transitioning .content-outline,
+  :root.theme-transitioning .quick-link-popover,
+  :root.theme-transitioning .desktop-alert,
+  :root.theme-transitioning .doc-tab,
+  :root.theme-transitioning .icon-btn,
+  :root.theme-transitioning .menu-btn,
+  :root.theme-transitioning .toolbar button,
+  :root.theme-transitioning .mode-switch,
+  :root.theme-transitioning .tree-file,
+  :root.theme-transitioning .tree-folder,
+  :root.theme-transitioning .table-util-bar,
+  :root.theme-transitioning .table-control-btn,
+  :root.theme-transitioning .document-layout,
+  :root.theme-transitioning .source-editor {
     transition: none;
+  }
+
+  :root.theme-transitioning .theme-toggle-icon-btn svg {
+    animation: none;
   }
 }
