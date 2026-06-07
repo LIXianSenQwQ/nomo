@@ -133,24 +133,6 @@
   padding: 6px 8px 10px;
 }
 
-/* 自定义滚动条 — 更细更精致 */
-.file-tree::-webkit-scrollbar {
-  width: 4px;
-}
-
-.file-tree::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.file-tree::-webkit-scrollbar-thumb {
-  background: var(--md-editor-border);
-  border-radius: 2px;
-}
-
-.file-tree::-webkit-scrollbar-thumb:hover {
-  background: var(--md-editor-muted-fg);
-}
-
 .tree-file:hover {
   background: var(--md-editor-surface);
 }

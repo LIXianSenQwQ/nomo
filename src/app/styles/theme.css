@@ -61,6 +61,14 @@
   --md-titlebar-fg: #333333;
   --md-dropdown-bg: rgba(255, 255, 255, 0.96);
   --md-dropdown-border: #d8d8d8;
+
+  /* Windows 资源管理器式滚动条 */
+  --md-scrollbar-size: 12px;
+  --md-scrollbar-radius: 999px;
+  --md-scrollbar-track: transparent;
+  --md-scrollbar-thumb: #c8cdd2;
+  --md-scrollbar-thumb-hover: #aeb5bc;
+  --md-scrollbar-thumb-active: #9099a3;
 }
 
 :root[data-theme='dark'] {
@@ -120,4 +128,10 @@
   --md-titlebar-fg: #cccccc;
   --md-dropdown-bg: rgba(30, 30, 30, 0.96);
   --md-dropdown-border: #3a3a3a;
+
+  /* Windows 资源管理器式滚动条（暗色） */
+  --md-scrollbar-track: transparent;
+  --md-scrollbar-thumb: #4b5561;
+  --md-scrollbar-thumb-hover: #66717d;
+  --md-scrollbar-thumb-active: #828d99;
 }

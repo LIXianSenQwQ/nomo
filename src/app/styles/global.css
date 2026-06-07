@@ -1,5 +1,37 @@
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--md-scrollbar-thumb) var(--md-scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: var(--md-scrollbar-size);
+  height: var(--md-scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--md-scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--md-scrollbar-radius);
+  background: var(--md-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--md-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--md-scrollbar-thumb-active);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html,
