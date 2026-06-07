@@ -356,6 +356,13 @@
   color: #ffffff !important;
 }
 
+.chevron-placeholder {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+}
+
 /* Chevron指示标旋转微动效 */
 .chevron-icon {
   display: inline-flex;
@@ -380,15 +387,15 @@
   gap: 6px;
   width: 100%;
   margin: 1px 0;
-  padding: 4px 12px;
+  padding: 5px 12px;
   border: none;
   background: transparent;
   text-align: left;
   font-family: inherit;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--md-editor-muted-fg);
-  letter-spacing: 0.3px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--md-editor-fg);
+  letter-spacing: 0.2px;
   cursor: pointer;
   transition:
     background-color 0.15s,
@@ -410,6 +417,19 @@
   color: var(--md-editor-fg);
 }
 
+.tree-folder-root-title.active {
+  background: var(--md-editor-sidebar-active);
+  color: var(--md-editor-accent-strong);
+}
+
+.tree-folder-root-title.active svg {
+  color: var(--md-editor-accent-strong);
+}
+
+.tree-folder-root-title.active .folder-actions {
+  opacity: 1;
+}
+
 .tree-folder-root-title svg {
   color: var(--md-editor-accent, #007acc);
 }
@@ -424,6 +444,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  position: relative;
 }
 
 .tree-folder.nested-dir {
@@ -448,6 +469,28 @@
 
 .tree-folder.nested-dir:hover {
   background: rgba(128, 128, 128, 0.08);
+}
+
+/* 空文件夹禁用展开交互 */
+.tree-folder.nested-dir.empty {
+  cursor: default;
+}
+
+.tree-folder.nested-dir.empty:hover {
+  background: transparent;
+}
+
+.tree-folder.nested-dir.active {
+  background: var(--md-editor-sidebar-active);
+  color: var(--md-editor-accent-strong);
+}
+
+.tree-folder.nested-dir.active svg {
+  color: var(--md-editor-accent-strong);
+}
+
+.tree-folder.nested-dir.active .folder-actions {
+  opacity: 1;
 }
 
 .tree-folder.nested-dir svg {

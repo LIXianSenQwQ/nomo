@@ -16,6 +16,8 @@ export interface AppCommandHandlers {
   getMode: () => EditorMode;
   toggleTheme: () => void;
   toggleFocusMode: () => void;
+  switchToNextTab: () => void;
+  switchToPrevTab: () => void;
 }
 
 export function executeDesktopCommand(command: string, handlers: AppCommandHandlers) {
@@ -169,6 +171,13 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === 'f' && event.shiftKey) {
     event.preventDefault();
     handlers.toggleFocusMode();
+  } else if (key === 'tab') {
+    event.preventDefault();
+    if (event.shiftKey) {
+      handlers.switchToPrevTab();
+    } else {
+      handlers.switchToNextTab();
+    }
   } else if (['1', '2', '3', '4', '5', '6'].includes(key)) {
     event.preventDefault();
     handlers.runCommand({ type: 'setHeading', level: Number(key) as 1 | 2 | 3 | 4 | 5 | 6 });

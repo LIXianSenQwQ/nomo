@@ -182,7 +182,8 @@ fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
             .unwrap_or("")
             .to_string();
 
-        if name.starts_with('.') || name == "node_modules" || name == "target" || name == "dist" {
+        // 过滤掉构建产物和依赖目录，但保留 . 开头的隐藏文件/文件夹
+        if name == "node_modules" || name == "target" || name == "dist" {
             continue;
         }
 

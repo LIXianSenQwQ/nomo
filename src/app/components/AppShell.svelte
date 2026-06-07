@@ -190,6 +190,8 @@
       {startResize}
       on:createNode
       on:renameNode
+      on:refreshFolder
+      on:collapseAll
     />
 
     <section class="editor-shell" aria-label="编辑器">

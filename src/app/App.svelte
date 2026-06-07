@@ -244,6 +244,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       persistWorkspaceState();
       loadTabState(targetTab);
       updateWindowTitle();
+      // 切换后若标签关联了本地文件，展开资源管理器中对应的文件夹路径
+      if (targetTab.nativePath && currentFolderPath) {
+        expandAncestors(targetTab.nativePath, currentFolderPath);
+      }
     }
   }
 
@@ -437,6 +441,16 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     getMode: () => mode,
     toggleTheme: () => toggleTheme(),
     toggleFocusMode: () => toggleFocusMode(),
+    switchToNextTab: () => {
+      const idx = tabs.findIndex((t) => t.id === activeTabId);
+      const nextIdx = idx >= 0 ? (idx + 1) % tabs.length : 0;
+      if (tabs[nextIdx]) switchTab(tabs[nextIdx].id);
+    },
+    switchToPrevTab: () => {
+      const idx = tabs.findIndex((t) => t.id === activeTabId);
+      const prevIdx = idx >= 0 ? (idx - 1 + tabs.length) % tabs.length : tabs.length - 1;
+      if (tabs[prevIdx]) switchTab(tabs[prevIdx].id);
+    },
   };
 
   async function updateWindowTitle() {
@@ -818,6 +832,17 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     outlineInteraction.updateActiveOutlineFromSourceScroll;
   const updateActiveOutlineFromSemanticScroll =
     outlineInteraction.updateActiveOutlineFromSemanticScroll;
+
+  async function handleRefreshFolder() {
+    if (currentFolderPath) {
+      await loadFolder(currentFolderPath);
+    }
+  }
+
+  function handleCollapseAll() {
+    expandedFolders = new Set();
+    // 保留根目录展开，只折叠子文件夹
+  }
 
   async function handleCreateNode(
     event: CustomEvent<{ parentPath: string; type: 'folder' | 'file'; name: string }>,
@@ -1473,6 +1498,8 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {openSettings}
   on:createNode={handleCreateNode}
   on:renameNode={handleRenameNode}
+  on:refreshFolder={handleRefreshFolder}
+  on:collapseAll={handleCollapseAll}
 />
 
 <SettingsDrawer

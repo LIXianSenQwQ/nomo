@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FileText, FolderOpen, FolderPlus, FilePlus } from '@lucide/svelte';
+  import { FileText, FolderOpen, FolderPlus, FilePlus, RefreshCw, ChevronsUp } from '@lucide/svelte';
   import type { FileTreeNode } from '../types';
   import { createEventDispatcher } from 'svelte';
 
@@ -31,6 +31,9 @@
   let renamingPath: string | null = null;
   let renamingValue = '';
   let renamingInputRef: HTMLInputElement | null = null;
+
+  // 正在创建中的文件夹路径（用于空文件夹创建时临时显示箭头）
+  let pendingCreatePaths: Set<string> = new Set();
 
   // 文件树双击检测状态（单击预览 / 双击固定）
   let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -66,6 +69,7 @@
     creatingParentPath = parentPath;
     creatingType = type;
     creatingValue = '';
+    pendingCreatePaths = pendingCreatePaths.add(parentPath);
     // Expand parent if it's collapsed
     if (parentPath === currentFolderPath) {
       if (!rootFolderExpanded) toggleRootFolder();
@@ -80,23 +84,38 @@
   function commitCreating() {
     if (!creatingType || !creatingParentPath) return;
     const value = creatingValue.trim();
+    if (!value) {
+      // 未输入内容时取消创建
+      cancelCreating();
+      return;
+    }
     dispatch('createNode', {
       parentPath: creatingParentPath,
       type: creatingType,
-      name: value, // Can be empty, parent handles fallback
+      name: value,
     });
+    pendingCreatePaths.delete(creatingParentPath);
+    pendingCreatePaths = pendingCreatePaths;
     creatingParentPath = null;
     creatingType = null;
   }
 
   function cancelCreating() {
+    if (creatingParentPath) {
+      pendingCreatePaths.delete(creatingParentPath);
+      pendingCreatePaths = pendingCreatePaths;
+    }
     creatingParentPath = null;
     creatingType = null;
   }
 
   function handleCreatingKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter') {
-      commitCreating();
+      if (creatingValue.trim()) {
+        commitCreating();
+      } else {
+        cancelCreating();
+      }
     } else if (event.key === 'Escape') {
       cancelCreating();
     }
@@ -134,11 +153,28 @@
       cancelRenaming();
     }
   }
+
+  // 判断文件夹是否包含当前活跃文件（用于状态反馈高亮）
+  function isFolderActive(folderPath: string): boolean {
+    const activePath = nativePath || previewNativePath || '';
+    if (!activePath) return false;
+    if (activePath === folderPath) return false; // 文件高亮由 .active 处理
+    const sep = activePath.includes('\\') ? '\\' : '/';
+    return activePath.startsWith(folderPath + sep);
+  }
 </script>
 
 <aside class="rail" aria-label="资源管理器">
   <header class="explorer-header">
     <span>资源管理器</span>
+    <div class="header-actions">
+      <button type="button" class="action-btn" title="刷新" on:click={() => dispatch('refreshFolder')}>
+        <RefreshCw size={13} />
+      </button>
+      <button type="button" class="action-btn" title="折叠全部" on:click={() => dispatch('collapseAll')}>
+        <ChevronsUp size={13} />
+      </button>
+    </div>
   </header>
 
   <section class="file-tree" aria-label="文件夹结构">
@@ -146,28 +182,35 @@
       {#each nodes as node}
         {#if node.is_dir}
           {@const isExpanded = expandedFolders.has(node.path)}
-          <div class="tree-folder-wrapper">
+          {@const hasChildren = (node.children && node.children.length > 0) || pendingCreatePaths.has(node.path)}
+          <div class="tree-folder-wrapper" class:expanded={isExpanded && hasChildren} style="--tree-depth: {depth}">
             <!-- svelte-ignore a11y-click-events-have-key-events -->
             <div
               role="button"
               tabindex="0"
               class="tree-folder nested-dir"
               class:collapsed={!isExpanded}
+              class:active={isFolderActive(node.path)}
+              class:empty={!hasChildren}
               style="padding-left: {12 + depth * 12}px"
               title={node.path}
-              on:click={() => toggleFolderCollapse(node.path)}
+              on:click={() => hasChildren && toggleFolderCollapse(node.path)}
               on:dblclick={(e) => startRenaming(node.path, node.name, e)}
             >
-              <span class="chevron-icon">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
-                  ><path
-                    d="M3 4.5l3 3 3-3"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  /></svg
-                >
-              </span>
+              {#if hasChildren}
+                <span class="chevron-icon">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+                    ><path
+                      d="M3 4.5l3 3 3-3"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    /></svg
+                  >
+                </span>
+              {:else}
+                <span class="chevron-placeholder"></span>
+              {/if}
               <FolderOpen size={13} />
               {#if renamingPath === node.path}
                 <input
@@ -240,6 +283,7 @@
           tabindex="0"
           class="tree-folder-root-title"
           class:collapsed={!rootFolderExpanded}
+          class:active={isFolderActive(currentFolderPath)}
           title={currentFolderPath}
           on:click={toggleRootFolder}
         >

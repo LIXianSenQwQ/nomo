@@ -4,7 +4,6 @@ import { getFolderName } from '../utils/pathLabels';
 import { loadFolderTree, pickFolderPath } from './documentFiles';
 import {
   expandAncestors as expandFolderAncestors,
-  getDefaultExpandedFolders,
   toggleExpandedFolder,
 } from './folderTree';
 
@@ -47,7 +46,6 @@ export function createFolderExplorerController(options: FolderExplorerController
       options.setFolderTree(result);
     }
 
-    options.setExpandedFolders(getDefaultExpandedFolders(options.getFolderTree()));
     options.setStatusMessage(`已载入文件夹：${getFolderName(folderPath)}`);
   }
 
