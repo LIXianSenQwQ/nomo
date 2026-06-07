@@ -332,7 +332,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   async function openFolderInCurrentWindow(folderPath: string) {
     currentFolderPath = folderPath;
-    await updateAppSetting('workspaceDir', folderPath).catch(() => undefined);
     await loadFolder(folderPath);
     await rememberNativeFolder(folderPath);
     await refreshRecentFiles();
@@ -605,16 +604,10 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   }
 
   async function handleSaveSettings(
-    newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
     nextWorkspaceBehaviorSettings: WorkspaceBehaviorSettings,
   ) {
-    if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
-      await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
-      currentFolderPath = newWorkspaceDir;
-      await loadFolder(newWorkspaceDir).catch(() => undefined);
-    }
     imageSettings = nextImageSettings;
     persistImageSettings(desktopEnabled, imageSettings);
     updateFontSizeValue(nextAppearanceSettings.fontSize);
@@ -1240,21 +1233,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         }
       }
 
-      const workspaceDirSetting = settings.find((s) => s.key === 'workspaceDir');
-      if (workspaceDirSetting) {
-        try {
-          currentFolderPath = JSON.parse(workspaceDirSetting.valueJson);
-        } catch {
-          // ignore
-        }
-      } else {
-        const { getDefaultWorkspaceDir } = await import('../lib/desktop/tauriStorage');
-        currentFolderPath = await getDefaultWorkspaceDir().catch(() => '');
-        if (currentFolderPath) {
-          await updateAppSetting('workspaceDir', currentFolderPath).catch(() => undefined);
-        }
-      }
-
       const folderBehaviorSetting = settings.find((s) => s.key === 'folderOpenDefaultBehavior');
       if (folderBehaviorSetting) {
         try {
@@ -1340,7 +1318,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
           const folderPath = JSON.parse(pendingFolderSetting.valueJson);
           if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
             currentFolderPath = folderPath;
-            await updateAppSetting('workspaceDir', folderPath).catch(() => undefined);
             await loadFolder(folderPath)
               .catch(() => undefined);
             // 标记为已消费，避免刷新时重复处理
@@ -1854,7 +1831,6 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
 <SettingsDrawer
   isOpen={isSettingsOpen}
-  currentWorkspaceDir={currentFolderPath}
   {imageSettings}
   {fontSize}
   {lineHeight}

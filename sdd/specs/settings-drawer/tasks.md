@@ -1,4 +1,4 @@
-# Task Breakdown & Execution Board: Settings Drawer & Workspace Path (Tasks)
+# Task Breakdown & Execution Board: Settings Drawer (Tasks)
 
 > This document is used by AI and developers to break down and track atomic tasks. Before starting coding, be sure to complete this checklist and check them off one by one during execution.
 
@@ -10,15 +10,15 @@
 - [ ] Task 2.1: In `AppTitleBar.svelte`, add a "设置" menu button to the right of the "查看" menu.
 - [ ] Task 2.2: Pass a `toggleSettings` or `openSettings` prop/function to manage the drawer's visibility state.
 
-## Phase 3: Workspace Path Configuration Logic
-- [ ] Task 3.1: Inside `SettingsDrawer.svelte`, add the UI for the workspace path (label, read-only input, "浏览..." button).
-- [ ] Task 3.2: Implement the "浏览..." button click handler using `@tauri-apps/plugin-dialog` (`open({ directory: true })`) to pick a folder.
-- [ ] Task 3.3: Implement the Save logic: on click, invoke a callback with the new path.
+## Phase 3: Preferences Draft & Save Logic
+- [ ] Task 3.1: Inside `SettingsDrawer.svelte`, expose editor appearance, image handling, and file/window behavior settings.
+- [ ] Task 3.2: Keep settings changes in local draft state until the user clicks "保存".
+- [ ] Task 3.3: Implement the Save logic: on click, invoke a callback with the updated preferences only.
 
 ## Phase 4: App State Integration
 - [ ] Task 4.1: In `App.svelte`, define the `isSettingsOpen` state.
 - [ ] Task 4.2: Add the `SettingsDrawer` to `AppShell.svelte` (or `App.svelte` directly overlaying the shell).
-- [ ] Task 4.3: Implement the `onSaveSettings` handler in `App.svelte` to update `currentFolderPath`, save to SQLite via `updateAppSetting`, call `loadFolder(newPath)`, and close the drawer.
+- [ ] Task 4.3: Implement the `onSaveSettings` handler in `App.svelte` to persist supported preferences and close the drawer without changing `currentFolderPath`.
 
 # Task Dependencies
 - [Task 1.2] depends on [Task 1.1]

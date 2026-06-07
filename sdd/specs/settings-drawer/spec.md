@@ -12,17 +12,17 @@ dependencies:
   - "none"
 ---
 
-# Specification: Settings Drawer & Workspace Path (Specification)
+# Specification: Settings Drawer (Specification)
 
 ## 1. Scope
 - **In Scope**:
   - Adding a "设置" (Settings) top-level menu button in the AppTitleBar, right next to "查看" (View).
   - Creating a new `SettingsDrawer.svelte` component that acts as a right-side sliding drawer with a backdrop mask.
   - The drawer will have an exit button on the top-left and a save button on the bottom-right.
-  - Inside the drawer, a configuration section for "工作区存储路径" (Workspace Storage Path) using the Tauri dialog plugin.
-  - Updating the global workspace state and SQLite settings upon saving.
+  - Inside the drawer, preference sections for editor appearance, image handling, and file/window behavior.
+  - Saving preference changes to the existing application settings layer.
 - **Out of Scope**:
-  - Other settings (e.g., theme, editor preferences) are not included in this iteration but the drawer structure will allow future additions.
+  - Application-level default storage roots or workspace path configuration.
 
 ## 2. Functional Requirements
 
@@ -44,17 +44,11 @@ The system SHALL display a drawer overlay for application configuration.
 - **THEN** the top-left corner of the drawer has an exit/close button.
 - **THEN** the bottom-right corner of the drawer has a "保存" (Save) button.
 
-#### Requirement: Configure Workspace Path
-The system SHALL allow the user to browse and change the workspace root directory.
-
-##### Scenario: Select New Path
-- **WHEN** the user clicks the "浏览..." (Browse) button next to the path input
-- **THEN** a native OS folder selection dialog opens.
-- **WHEN** a folder is selected
-- **THEN** the input field updates to show the newly selected path (but it is not yet applied).
+#### Requirement: Save Preferences
+The system SHALL save editor appearance, image handling, and file/window behavior preferences without changing the user's current folder.
 
 ##### Scenario: Save Configuration
-- **WHEN** the user clicks the "保存" (Save) button
-- **THEN** the new `workspaceDir` is saved to the SQLite `app_settings` table.
-- **THEN** the left Explorer Sidebar is immediately refreshed to load the new directory.
+- **WHEN** the user changes settings and clicks the "保存" (Save) button
+- **THEN** the changed preferences are saved to the application settings layer.
+- **THEN** the left Explorer Sidebar keeps showing only the folder the user explicitly opened.
 - **THEN** the Settings Drawer closes.

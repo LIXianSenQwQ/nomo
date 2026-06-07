@@ -3,17 +3,17 @@
 > This document is used by AI and developers to break down and track atomic tasks. Before starting coding, be sure to complete this checklist and check them off one by one during execution.
 
 ## Phase 1: Tauri Backend & Core Types
-- [ ] Task 1.1: Extend SQLite `app_settings` and `models.rs` to support `workspaceDir`.
-- [ ] Task 1.2: Add Tauri command in `file_system.rs` (or create a new domain module) to get/initialize the default workspace directory (OS-specific Documents folder).
+- [ ] Task 1.1: Keep SQLite `app_settings` limited to preferences, tab state, and migration cleanup for deprecated settings.
+- [ ] Task 1.2: Do not add a default workspace initialization command; folder trees are loaded only after an explicit user folder selection.
 - [ ] Task 1.3: Add Tauri commands for recursive directory reading (`read_dir_recursive`), directory creation (`create_group`), file creation (`create_file`), file content writing (`write_file`), and file/folder renaming (`rename_file`).
 
 ## Phase 2: Frontend State & Initialization
-- [ ] Task 2.1: Create `workspaceStore` or update existing settings logic to fetch and store `workspaceDir` on App mount.
-- [ ] Task 2.2: Implement initialization logic: if `workspaceDir` is missing, call Tauri to initialize it, save to SQLite, and load it.
+- [ ] Task 2.1: Keep frontend folder state as the current explicitly opened folder, not a persisted storage root.
+- [ ] Task 2.2: Implement initialization logic that restores tabs/preferences without creating or auto-loading a default folder.
 - [ ] Task 2.3: Define `FileNode` recursive type for Svelte and implement state logic to manage the recursive directory tree.
 
 ## Phase 3: Left Panel UI (Explorer Sidebar)
-- [ ] Task 3.1: Update `ExplorerSidebar.svelte` to display the workspace directory tree recursively (nested folders).
+- [ ] Task 3.1: Update `ExplorerSidebar.svelte` to display the explicitly opened folder tree recursively (nested folders).
 - [ ] Task 3.2: Implement "Add Folder" UI: "Create Folder" icon in header and next to existing folders. Displays an inline input underneath, auto-expanding the parent.
 - [ ] Task 3.3: Implement double-click to rename existing folders.
 - [ ] Task 3.4: Integrate "Add Folder" and rename UI with Tauri backend commands. Handle empty input fallback (e.g., "新建文件夹").

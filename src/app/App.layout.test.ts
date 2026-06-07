@@ -34,6 +34,19 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/src/window/menu.rs'),
     'utf-8',
   );
+  const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
+  const tauriFileSystemSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/file_system.rs'),
+    'utf-8',
+  );
+  const tauriDatabaseSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/database.rs'),
+    'utf-8',
+  );
+  const tauriStorageSource = readFileSync(
+    resolve(__dirname, '../lib/desktop/tauriStorage.ts'),
+    'utf-8',
+  );
   const outlineInteractionSource = readFileSync(
     resolve(__dirname, 'services/outlineInteractionController.ts'),
     'utf-8',
@@ -321,6 +334,24 @@ describe('App outline layout', () => {
     expect(appSource).toContain('filePreviewEnabled = true');
     expect(appSource).toContain("updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled)");
     expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
+  });
+
+  it('removes application-level workspace storage path configuration', () => {
+    expect(settingsDrawerSource).not.toContain('工作区存储路径');
+    expect(settingsDrawerSource).not.toContain('workspaceDir');
+    expect(settingsDrawerSource).not.toContain('browseFolder');
+    expect(settingsDrawerSource).not.toContain('selectedDir');
+
+    expect(appSource).not.toContain("updateAppSetting('workspaceDir'");
+    expect(appSource).not.toContain("settings.find((s) => s.key === 'workspaceDir')");
+    expect(appSource).not.toContain('getDefaultWorkspaceDir');
+    expect(tauriStorageSource).not.toContain('getDefaultWorkspaceDir');
+    expect(tauriStorageSource).not.toContain('get_default_workspace_dir');
+    expect(tauriLibSource).not.toContain('get_default_workspace_dir');
+    expect(tauriFileSystemSource).not.toContain('get_default_workspace_dir');
+    expect(tauriDatabaseSource).toContain(
+      "DELETE FROM app_settings WHERE key = 'workspaceDir'",
+    );
   });
 
   it('keeps automatic local image cleanup behind an image setting toggle', () => {

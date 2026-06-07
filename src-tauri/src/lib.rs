@@ -40,7 +40,6 @@ pub fn run() {
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
             crate::file_system::list_folder_markdown_files,
-            crate::file_system::get_default_workspace_dir,
             crate::file_system::create_folder,
             crate::file_system::rename_file,
             crate::file_system::delete_file,

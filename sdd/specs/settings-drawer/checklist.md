@@ -1,4 +1,4 @@
-# Verification Checklist: Settings Drawer & Workspace Path
+# Verification Checklist: Settings Drawer
 
 > This checklist is used to verify that ALL features are implemented correctly before marking the requirement as completed. Every item must be objectively verifiable. It must be fully checked before closing the requirement.
 
@@ -8,10 +8,9 @@
 - [ ] The drawer has a semi-transparent backdrop covering the main app.
 - [ ] The drawer has an exit button on the top-left that closes it without saving.
 - [ ] The drawer has a "保存" button on the bottom-right.
-- [ ] Clicking "浏览..." opens a native OS folder selection dialog.
-- [ ] Selecting a folder updates the displayed path in the drawer.
-- [ ] Clicking "保存" applies the new path, refreshes the sidebar tree, and closes the drawer.
-- [ ] Restarting the app persists the newly selected workspace path.
+- [ ] The drawer does not display a workspace storage path field or a folder browse button.
+- [ ] Clicking "保存" persists supported preferences and closes the drawer.
+- [ ] Saving preferences does not change the current Explorer Sidebar folder.
 
 ## Code Quality
 - [ ] No new TypeScript type errors introduced.

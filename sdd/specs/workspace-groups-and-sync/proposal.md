@@ -2,12 +2,12 @@
 
 ## 1. Context & Problem Statement
 *Describe the current state of the system. What problem is the user facing? Why do we need this feature?*
-- **Current State**: The application currently uses a traditional "Open File/Folder" model where users must manually navigate the local file system to open directories and files. New tabs are created as empty files but do not automatically persist to a specific workspace directory without manual "Save As" actions.
-- **Pain Points**: Users want a notebook-like experience (similar to Notion or Bear) where they can quickly create "Groups" (folders) and "Files" (.md files) without worrying about file system dialogs. Furthermore, having to manually type a file name and then type an H1 title inside the document is redundant.
+- **Current State**: The application uses an explicit "Open File/Folder" model where users choose local files and folders directly. This matches the Markdown-first product direction and avoids an application-managed storage root.
+- **Pain Points**: After a folder is explicitly opened, users still need efficient local folder navigation, quick file/folder creation, and title synchronization without turning the app into a notebook database or managed workspace.
 
 ## 2. Value Proposition
 *What are the benefits of building this feature?*
-- Improves the experience of note-taking by providing a seamless, out-of-the-box Workspace mode.
+- Improves the local-folder writing experience after the user explicitly opens a folder.
 - Reduces the cost of managing files by automatically syncing document H1 titles to actual filenames on disk.
 - Automatically saves content with a debounce mechanism, preventing data loss and eliminating the need for manual `Ctrl+S` saving.
 
@@ -18,7 +18,7 @@
 
 ## 4. Success Metrics
 *How do we measure the success of this feature?*
-- [ ] Users can define a default storage directory.
+- [ ] Users can explicitly open a local folder and see it in the Explorer Sidebar.
 - [ ] Users can create groups and files seamlessly from the left sidebar.
 - [ ] The first H1 in a document automatically becomes the `.md` filename on disk.
 - [ ] Content and filename sync happens automatically via debounce without blocking the UI.

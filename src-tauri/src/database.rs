@@ -240,6 +240,15 @@ fn init_database(connection: &Connection) -> Result<(), String> {
 
     // 迁移：旧 documents 表 -> recent_entries
     migrate_from_documents_table(connection)?;
+    remove_deprecated_workspace_dir_setting(connection)?;
+
+    Ok(())
+}
+
+fn remove_deprecated_workspace_dir_setting(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute("DELETE FROM app_settings WHERE key = 'workspaceDir'", [])
+        .map_err(|error| format!("清理旧工作区路径设置失败：{error}"))?;
 
     Ok(())
 }

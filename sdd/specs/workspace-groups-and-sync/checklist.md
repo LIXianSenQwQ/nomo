@@ -3,7 +3,8 @@
 > This checklist is used to verify that ALL features are implemented correctly before marking the requirement as completed. Every item must be objectively verifiable. It must be fully checked before closing the requirement.
 
 ## Functional Verification
-- [ ] First launch auto-initializes the workspace directory in OS Documents folder.
+- [ ] First launch does not auto-initialize a workspace directory in the OS Documents folder.
+- [ ] Opening a folder explicitly loads that folder into the Explorer Sidebar.
 - [ ] Clicking "Create Folder" in Explorer header adds a new group folder on disk.
 - [ ] Clicking "Create Folder" next to an existing folder adds a nested folder underneath it and auto-expands the parent.
 - [ ] Creating a file or folder with an empty name (triggering blur) correctly falls back to a default name (e.g., "新建文件夹" or "无标题").

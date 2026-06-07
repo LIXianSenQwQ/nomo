@@ -2,21 +2,6 @@ pub(crate) mod image_assets;
 
 use crate::models::{DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo};
 use std::{fs, path::Path, time::UNIX_EPOCH};
-use tauri::{AppHandle, Manager};
-
-#[tauri::command]
-pub(crate) fn get_default_workspace_dir(app: AppHandle) -> Result<String, String> {
-    let document_dir = app
-        .path()
-        .document_dir()
-        .map_err(|error| format!("无法获取文档目录：{error}"))?;
-    let workspace_dir = document_dir.join("NewMd");
-    if !workspace_dir.exists() {
-        fs::create_dir_all(&workspace_dir)
-            .map_err(|error| format!("无法创建工作区目录：{error}"))?;
-    }
-    Ok(workspace_dir.to_string_lossy().to_string())
-}
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {

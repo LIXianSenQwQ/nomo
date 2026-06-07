@@ -299,11 +299,6 @@ export async function updateWindowState(state: WindowState): Promise<void> {
   });
 }
 
-export async function getDefaultWorkspaceDir(): Promise<string> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<string>('get_default_workspace_dir');
-}
-
 export async function openExternalLink(href: string): Promise<void> {
   if (!isTauriRuntime()) {
     window.open(href, '_blank', 'noopener,noreferrer');

@@ -2,7 +2,7 @@
 
 ## 1. Architecture
 The feature bridges the Svelte frontend and the Tauri Rust backend:
-- **Tauri Settings API**: Stores the default workspace path.
+- **Tauri Settings API**: Stores UI preferences and tab state, but not a default workspace path.
 - **Tauri FS API**: Handles creating directories, renaming files/folders, and writing file contents. Supports recursive directory reading.
 - **Svelte Store/Controllers**: `folderExplorerController` will manage the abstract "Groups" UI using a recursive tree structure. `documentActionsController` will handle the debounced auto-save and H1 extraction.
 - **ProseMirror Editor**: Triggers `onChange` events from which we extract the first heading node to sync the title.
@@ -10,11 +10,6 @@ The feature bridges the Svelte frontend and the Tauri Rust backend:
 ## 2. Data Model & Interfaces
 
 ```typescript
-// Tauri App Settings
-interface AppSettings {
-  workspaceDir: string; // The root directory for the workspace
-}
-
 // Recursive File Node for Explorer
 interface FileNode {
   name: string;
@@ -33,8 +28,8 @@ interface EditorChangeEvent {
 ```
 
 ## 3. Data Flow & Interaction
-1. **App Initialization**: App reads `workspaceDir` from SQLite via Tauri. If missing, it resolves default `~/Documents/NewMd` (Mac) or `C:\Users\Username\Documents\NewMd` (Win), creates it, and saves it to settings.
-2. **Read Workspace**: Tauri reads the workspace directory recursively (or lazily on expand) and returns a tree structure to Svelte.
+1. **App Initialization**: App restores tabs and preferences from SQLite, but does not create or bind a default workspace directory.
+2. **Read Folder**: When the user explicitly opens a folder, Tauri reads that directory recursively (or lazily on expand) and returns a tree structure to Svelte.
 3. **Create Folder (Nested)**: 
    - User clicks "Create Folder" on sidebar header or next to a folder -> UI shows an inline input as a child node.
    - On blur/Enter, if empty, defaults to "新建文件夹".

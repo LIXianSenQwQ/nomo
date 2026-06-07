@@ -25,7 +25,6 @@
   }
 
   export let isOpen: boolean;
-  export let currentWorkspaceDir: string;
   export let imageSettings: ImageHandlingSettings;
   export let fontSize: number;
   export let lineHeight: number;
@@ -38,13 +37,11 @@
   export let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
   export let closeSettings: () => void;
   export let saveSettings: (
-    newWorkspaceDir: string,
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
     nextWorkspaceBehaviorSettings: WorkspaceBehaviorSettings,
   ) => void;
 
-  let selectedDir: string = currentWorkspaceDir;
   let draftImageSettings: ImageHandlingSettings = normalizeImageSettings(imageSettings);
   let draftFontSize: number = fontSize;
   let draftLineHeight: number = lineHeight;
@@ -57,9 +54,8 @@
   let draftFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
     folderOpenDefaultBehavior;
 
-  // Whenever the drawer opens, reset the selected path to the current one
+  // Whenever the drawer opens, reset draft settings to the current persisted values.
   $: if (isOpen) {
-    selectedDir = currentWorkspaceDir;
     draftImageSettings = normalizeImageSettings(imageSettings);
     draftFontSize = fontSize;
     draftLineHeight = lineHeight;
@@ -72,25 +68,8 @@
     draftFolderBehavior = folderOpenDefaultBehavior;
   }
 
-  async function browseFolder() {
-    try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const result = await open({
-        directory: true,
-        multiple: false,
-        defaultPath: selectedDir,
-      });
-      if (result && typeof result === 'string') {
-        selectedDir = result;
-      }
-    } catch (err) {
-      console.error('Failed to open folder dialog:', err);
-    }
-  }
-
   function handleSave() {
     saveSettings(
-      selectedDir,
       normalizeImageSettings(draftImageSettings),
       {
         fontSize: draftFontSize,
@@ -206,23 +185,6 @@
       </header>
 
       <div class="drawer-body">
-        <div class="setting-group">
-          <label for="workspaceDir">工作区存储路径</label>
-          <div class="path-picker">
-            <input
-              id="workspaceDir"
-              type="text"
-              class="path-input"
-              value={selectedDir}
-              readonly
-            />
-            <button type="button" class="browse-btn" on:click={browseFolder}>
-              浏览...
-            </button>
-          </div>
-          <p class="setting-desc">这是存放所有 Markdown 文件和分组的根目录。</p>
-        </div>
-
         <section class="setting-group" aria-labelledby="folderBehaviorTitle">
           <div class="setting-heading">
             <h3 id="folderBehaviorTitle">文件与窗口</h3>
@@ -733,25 +695,6 @@
     font-weight: 500;
   }
 
-  .path-picker {
-    display: flex;
-    gap: 8px;
-  }
-
-  .path-input {
-    flex: 1;
-    min-width: 0;
-    height: 32px;
-    padding: 0 12px;
-    border: 1px solid var(--md-editor-border);
-    border-radius: var(--md-editor-radius-sm);
-    background: var(--md-editor-surface);
-    color: var(--md-editor-fg);
-    font-family: inherit;
-    font-size: 13px;
-    outline: none;
-  }
-
   .setting-input {
     width: 100%;
     min-width: 0;
@@ -767,8 +710,7 @@
   }
 
   .setting-input:focus-visible,
-  .range-setting input:focus-visible,
-  .path-input:focus-visible {
+  .range-setting input:focus-visible {
     border-color: var(--md-editor-accent);
     outline: 2px solid color-mix(in srgb, var(--md-editor-accent) 34%, transparent);
     outline-offset: 1px;
@@ -815,7 +757,6 @@
   .folder-behavior-options button:focus-visible,
   .segmented-control button:focus-visible,
   .provider-switch button:focus-visible,
-  .browse-btn:focus-visible,
   .save-btn:focus-visible,
   .icon-btn:focus-visible {
     outline: 2px solid var(--md-editor-accent);
@@ -862,29 +803,6 @@
     background: var(--md-editor-bg);
     color: var(--md-editor-accent-strong);
     box-shadow: 0 1px 8px color-mix(in srgb, #020617 10%, transparent);
-  }
-
-  .browse-btn {
-    height: 32px;
-    padding: 0 16px;
-    border: 1px solid var(--md-editor-border);
-    border-radius: var(--md-editor-radius-sm);
-    background: var(--md-editor-bg);
-    color: var(--md-editor-fg);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
-  .browse-btn:hover {
-    background: var(--md-editor-surface);
-  }
-
-  .setting-desc {
-    margin: 0;
-    font-size: 12px;
-    color: var(--md-editor-muted-fg);
   }
 
   .drawer-footer {
