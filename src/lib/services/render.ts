@@ -53,6 +53,7 @@ export type ImageUploadProvider = 'picgo' | 'picgo-core';
 
 export interface ImageHandlingSettings {
   imageInsertStrategy: ImageInsertStrategy;
+  autoDeleteUnusedLocalImages: boolean;
   uploadProvider: ImageUploadProvider;
   picgoServerUrl: string;
   picgoCoreCommand: string;
@@ -61,6 +62,7 @@ export interface ImageHandlingSettings {
 
 export const DEFAULT_IMAGE_HANDLING_SETTINGS: ImageHandlingSettings = {
   imageInsertStrategy: 'copy-assets',
+  autoDeleteUnusedLocalImages: true,
   uploadProvider: 'picgo',
   picgoServerUrl: 'http://127.0.0.1:36677/upload',
   picgoCoreCommand: 'picgo',

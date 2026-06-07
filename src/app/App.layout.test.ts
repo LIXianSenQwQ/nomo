@@ -311,9 +311,30 @@ describe('App outline layout', () => {
     expect(settingsDrawerSource).toContain('aria-label="提示块样式"');
     expect(settingsDrawerSource).toContain('draftFolderBehavior = folderOpenDefaultBehavior');
     expect(settingsDrawerSource).toContain('打开文件夹默认行为');
+    expect(settingsDrawerSource).toContain('文件预览标签');
+    expect(settingsDrawerSource).toContain('toggleFilePreviewEnabled');
     expect(settingsDrawerSource).toContain('draftFolderBehavior,');
+    expect(settingsDrawerSource).toContain('draftFilePreviewEnabled,');
     expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
     expect(appSource).toContain('updateLineHeightValue(nextAppearanceSettings.lineHeight)');
     expect(appSource).toContain('updateBlockStyle(nextAppearanceSettings.blockStyle)');
+    expect(appSource).toContain('filePreviewEnabled = true');
+    expect(appSource).toContain("updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled)");
+    expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
+  });
+
+  it('keeps automatic local image cleanup behind an image setting toggle', () => {
+    const imageSettingsSource = readFileSync(
+      resolve(__dirname, '../lib/services/render.ts'),
+      'utf-8',
+    );
+    const appSettingsSource = readFileSync(resolve(__dirname, 'services/settings.ts'), 'utf-8');
+
+    expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: boolean');
+    expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: true');
+    expect(appSettingsSource).toContain('autoDeleteUnusedLocalImages');
+    expect(settingsDrawerSource).toContain('自动清理本地图片');
+    expect(settingsDrawerSource).toContain('toggleAutoDeleteUnusedLocalImages');
+    expect(appSource).toContain('!imageSettings.autoDeleteUnusedLocalImages');
   });
 });

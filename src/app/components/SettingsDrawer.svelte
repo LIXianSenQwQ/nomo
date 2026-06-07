@@ -20,6 +20,7 @@
   export let fontSize: number;
   export let lineHeight: number;
   export let blockStyle: 'classic' | 'modern';
+  export let filePreviewEnabled: boolean;
   export let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
   export let closeSettings: () => void;
   export let saveSettings: (
@@ -27,6 +28,7 @@
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
     nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
+    nextFilePreviewEnabled: boolean,
   ) => void;
 
   let selectedDir: string = currentWorkspaceDir;
@@ -34,6 +36,7 @@
   let draftFontSize: number = fontSize;
   let draftLineHeight: number = lineHeight;
   let draftBlockStyle: 'classic' | 'modern' = blockStyle;
+  let draftFilePreviewEnabled = filePreviewEnabled;
   let draftFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
     folderOpenDefaultBehavior;
 
@@ -44,6 +47,7 @@
     draftFontSize = fontSize;
     draftLineHeight = lineHeight;
     draftBlockStyle = blockStyle;
+    draftFilePreviewEnabled = filePreviewEnabled;
     draftFolderBehavior = folderOpenDefaultBehavior;
   }
 
@@ -73,6 +77,7 @@
         blockStyle: draftBlockStyle,
       },
       draftFolderBehavior,
+      draftFilePreviewEnabled,
     );
   }
 
@@ -82,10 +87,21 @@
     draftFolderBehavior = value;
   }
 
+  function toggleFilePreviewEnabled(event: Event) {
+    draftFilePreviewEnabled = (event.currentTarget as HTMLInputElement).checked;
+  }
+
   function setImageStrategy(strategy: ImageInsertStrategy) {
     draftImageSettings = {
       ...draftImageSettings,
       imageInsertStrategy: strategy,
+    };
+  }
+
+  function toggleAutoDeleteUnusedLocalImages(event: Event) {
+    draftImageSettings = {
+      ...draftImageSettings,
+      autoDeleteUnusedLocalImages: (event.currentTarget as HTMLInputElement).checked,
     };
   }
 
@@ -199,6 +215,20 @@
               </button>
             </div>
           </div>
+
+          <label class="toggle-setting" for="filePreviewEnabled">
+            <span>
+              <span class="toggle-title">文件预览标签</span>
+              <span class="toggle-desc">单击文件时复用预览标签，编辑或双击后固定。</span>
+            </span>
+            <input
+              id="filePreviewEnabled"
+              type="checkbox"
+              checked={draftFilePreviewEnabled}
+              on:change={toggleFilePreviewEnabled}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
         </section>
 
         <section
@@ -308,6 +338,20 @@
               </button>
             </div>
           </div>
+
+          <label class="toggle-setting" for="autoDeleteUnusedLocalImages">
+            <span>
+              <span class="toggle-title">自动清理本地图片</span>
+              <span class="toggle-desc">图片引用完全移除后，同步删除对应本地文件。</span>
+            </span>
+            <input
+              id="autoDeleteUnusedLocalImages"
+              type="checkbox"
+              checked={draftImageSettings.autoDeleteUnusedLocalImages}
+              on:change={toggleAutoDeleteUnusedLocalImages}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
 
           {#if draftImageSettings.imageInsertStrategy === 'upload'}
             <div class="setting-field">
@@ -477,6 +521,78 @@
   .setting-field {
     display: grid;
     gap: 8px;
+  }
+
+  .toggle-setting {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    cursor: pointer;
+  }
+
+  .toggle-title,
+  .toggle-desc {
+    display: block;
+  }
+
+  .toggle-title {
+    color: var(--md-editor-fg);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .toggle-desc {
+    margin-top: 3px;
+    color: var(--md-editor-muted-fg);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .toggle-setting input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid var(--md-editor-border);
+    background: color-mix(in srgb, var(--md-editor-muted-fg) 16%, var(--md-editor-bg));
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease;
+  }
+
+  .toggle-switch::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--md-editor-bg);
+    box-shadow: 0 1px 4px color-mix(in srgb, #020617 20%, transparent);
+    transition: transform 160ms ease;
+  }
+
+  .toggle-setting input:checked + .toggle-switch {
+    border-color: var(--md-editor-accent);
+    background: var(--md-editor-accent);
+  }
+
+  .toggle-setting input:checked + .toggle-switch::before {
+    transform: translateX(18px);
+  }
+
+  .toggle-setting input:focus-visible + .toggle-switch {
+    outline: 2px solid var(--md-editor-accent);
+    outline-offset: 2px;
   }
 
   .range-setting {

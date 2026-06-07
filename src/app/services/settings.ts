@@ -153,6 +153,10 @@ export function normalizeImageSettings(
     imageInsertStrategy: isImageInsertStrategy(strategy)
       ? strategy
       : DEFAULT_IMAGE_HANDLING_SETTINGS.imageInsertStrategy,
+    autoDeleteUnusedLocalImages:
+      typeof value?.autoDeleteUnusedLocalImages === 'boolean'
+        ? value.autoDeleteUnusedLocalImages
+        : DEFAULT_IMAGE_HANDLING_SETTINGS.autoDeleteUnusedLocalImages,
     uploadProvider: isImageUploadProvider(provider)
       ? provider
       : DEFAULT_IMAGE_HANDLING_SETTINGS.uploadProvider,

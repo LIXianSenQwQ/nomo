@@ -179,6 +179,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
+  let filePreviewEnabled = true;
   let windowLabel = '';
 
   function persistWorkspaceState() {
@@ -566,6 +567,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     nextImageSettings: ImageHandlingSettings,
     nextAppearanceSettings: EditorAppearanceSettings,
     nextFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time',
+    nextFilePreviewEnabled: boolean,
   ) {
     if (newWorkspaceDir && newWorkspaceDir !== currentFolderPath) {
       await updateAppSetting('workspaceDir', newWorkspaceDir).catch(() => undefined);
@@ -580,6 +582,14 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
     if (nextFolderBehavior !== folderOpenDefaultBehavior) {
       folderOpenDefaultBehavior = nextFolderBehavior;
       await updateAppSetting('folderOpenDefaultBehavior', nextFolderBehavior).catch(() => undefined);
+    }
+    if (nextFilePreviewEnabled !== filePreviewEnabled) {
+      filePreviewEnabled = nextFilePreviewEnabled;
+      if (!filePreviewEnabled) {
+        previewTabId = null;
+        persistWorkspaceState();
+      }
+      await updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled).catch(() => undefined);
     }
     closeSettings();
   }
@@ -610,16 +620,17 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
       saveActiveTabState();
     }
 
-    // 复用现有预览标签页或新建
+    // 复用现有预览标签页或按设置直接创建固定标签页
     let targetTab: Tab;
-    const existingPreview = previewTabId ? tabs.find((t) => t.id === previewTabId) : undefined;
+    const existingPreview =
+      filePreviewEnabled && previewTabId ? tabs.find((t) => t.id === previewTabId) : undefined;
 
     if (existingPreview) {
       targetTab = existingPreview;
     } else {
       targetTab = createBlankTab('', '');
       tabs = [...tabs, targetTab];
-      previewTabId = targetTab.id;
+      previewTabId = filePreviewEnabled ? targetTab.id : null;
     }
 
     const isLargeDocument =
@@ -1196,6 +1207,21 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
         }
       }
 
+      const filePreviewSetting = settings.find((s) => s.key === 'filePreviewEnabled');
+      if (filePreviewSetting) {
+        try {
+          const value = JSON.parse(filePreviewSetting.valueJson);
+          if (typeof value === 'boolean') {
+            filePreviewEnabled = value;
+            if (!filePreviewEnabled) {
+              previewTabId = null;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
       const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
       if (pendingFolderSetting) {
@@ -1517,7 +1543,11 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
 
   function handleDeletedImageResources(event: EditorImageDeletionEvent) {
     const loader = getImageLoader();
-    if (!loader?.remove || event.srcs.length === 0) {
+    if (
+      !imageSettings.autoDeleteUnusedLocalImages ||
+      !loader?.remove ||
+      event.srcs.length === 0
+    ) {
       return;
     }
 
@@ -1717,6 +1747,7 @@ import { readMarkdownFromPath, rememberNativeFolder, pickFolderPath } from './se
   {fontSize}
   {lineHeight}
   {blockStyle}
+  {filePreviewEnabled}
   folderOpenDefaultBehavior={folderOpenDefaultBehavior}
   {closeSettings}
   saveSettings={handleSaveSettings}
