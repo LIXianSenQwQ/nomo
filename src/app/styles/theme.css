@@ -135,3 +135,47 @@
   --md-scrollbar-thumb-hover: #66717d;
   --md-scrollbar-thumb-active: #828d99;
 }
+
+.app-layout,
+.titlebar,
+.rail,
+.editor-shell,
+.menu-bar,
+.topbar,
+.toolbar,
+.statusbar,
+.dropdown-menu,
+.context-menu,
+.settings-drawer,
+.confirm-dialog,
+.front-matter-card,
+.content-outline,
+.quick-link-popover,
+.desktop-alert {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-layout,
+  .titlebar,
+  .rail,
+  .editor-shell,
+  .menu-bar,
+  .topbar,
+  .toolbar,
+  .statusbar,
+  .dropdown-menu,
+  .context-menu,
+  .settings-drawer,
+  .confirm-dialog,
+  .front-matter-card,
+  .content-outline,
+  .quick-link-popover,
+  .desktop-alert {
+    transition: none;
+  }
+}

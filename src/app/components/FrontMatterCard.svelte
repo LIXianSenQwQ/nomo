@@ -1,7 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { FileText, PencilLine, Trash2 } from '@lucide/svelte';
+  import { fade } from 'svelte/transition';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
+  import { motionIn, transitionDuration } from '../actions/motion';
 
   export let frontMatter: FrontMatterBlock;
   export let editing: boolean;
@@ -66,6 +68,8 @@
   <section
     class="front-matter-card is-editing"
     aria-label="文档元数据编辑态"
+    use:motionIn={{ kind: 'panel', y: 8 }}
+    transition:fade={{ duration: transitionDuration('mode') }}
     on:focusout={handleFocusOut}
   >
     <div class="front-matter-editor-shell">
@@ -87,6 +91,8 @@
   <section
     class="front-matter-card"
     aria-label={readonly ? '查看文档元数据' : '编辑文档元数据'}
+    use:motionIn={{ kind: 'panel', y: 8 }}
+    transition:fade={{ duration: transitionDuration('mode') }}
   >
     <span class="front-matter-icon" aria-hidden="true"><FileText size={18} /></span>
     <button

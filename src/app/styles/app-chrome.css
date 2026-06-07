@@ -76,12 +76,34 @@
 }
 
 .tabs-container {
+  --tab-indicator-x: 0px;
+  --tab-indicator-width: 0px;
+  position: relative;
   display: flex;
   align-items: flex-end;
   flex: 1;
   min-width: 0;
   height: 100%;
   overflow: hidden;
+}
+
+.tabs-container::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 3;
+  width: var(--tab-indicator-width);
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--md-editor-accent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--tab-indicator-x));
+}
+
+.tabs-container[data-indicator-ready='true']::after {
+  opacity: 1;
 }
 
 .tab-measure-area {
@@ -109,9 +131,12 @@
   font-weight: 500;
   cursor: pointer;
   position: relative;
+  z-index: 1;
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    opacity 0.15s,
+    transform 0.15s;
   box-sizing: border-box;
 }
 
@@ -124,7 +149,6 @@
   background: var(--md-editor-surface);
   color: var(--md-editor-heading-fg);
   font-weight: 600;
-  border-bottom: 2px solid var(--md-editor-accent);
 }
 
 .doc-tab.active:hover {
@@ -157,6 +181,7 @@
   border-radius: 50%;
   background-color: var(--md-editor-accent, #007acc);
   flex-shrink: 0;
+  transition: transform 140ms ease, opacity 140ms ease;
 }
 
 .close-tab-btn {
@@ -291,6 +316,9 @@
 }
 
 .mode-switch {
+  --mode-indicator-x: 2px;
+  --mode-indicator-width: 34px;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, 34px);
   flex-shrink: 0;
@@ -298,6 +326,20 @@
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
   background: var(--md-editor-chrome);
+}
+
+.mode-switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: var(--mode-indicator-width);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  pointer-events: none;
+  transform: translateX(var(--mode-indicator-x));
 }
 
 .mode-switch button,
@@ -314,6 +356,8 @@
 }
 
 .mode-switch button {
+  position: relative;
+  z-index: 1;
   min-width: 34px;
   padding: 0;
   color: var(--md-editor-muted-fg);
@@ -326,6 +370,10 @@
 .toolbar button.active {
   background: var(--md-editor-surface);
   color: var(--md-editor-accent-strong);
+}
+
+.mode-switch button.active {
+  background: transparent;
 }
 
 .icon-button {
@@ -624,6 +672,7 @@
   background: color-mix(in srgb, var(--md-editor-danger) 9%, var(--md-editor-bg));
   color: var(--md-editor-fg);
   font-size: 13px;
+  will-change: transform, opacity;
 }
 
 .desktop-alert strong {
@@ -663,6 +712,7 @@
   transition:
     opacity 200ms ease,
     transform 200ms ease;
+  will-change: transform, opacity;
 }
 
 .app-toast.visible {

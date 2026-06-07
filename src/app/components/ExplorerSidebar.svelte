@@ -1,8 +1,10 @@
 <script lang="ts">
   import { FileText, FolderOpen, FolderPlus, FilePlus, RefreshCw, ChevronsUp } from '@lucide/svelte';
+  import { slide } from 'svelte/transition';
   import type { FileTreeNode } from '../types';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import { createEventDispatcher } from 'svelte';
+  import { motionIn, pulseOnChange, transitionDuration } from '../actions/motion';
   import ContextMenu from './ContextMenu.svelte';
 
   export let currentFolderPath: string;
@@ -358,6 +360,7 @@
                   on:blur={commitRenaming}
                   on:keydown={handleRenamingKeydown}
                   class="rename-input"
+                  use:motionIn={{ kind: 'micro', y: -2 }}
                   on:click|stopPropagation
                 />
               {:else}
@@ -373,7 +376,12 @@
               {/if}
             </div>
             {#if creatingParentPath === node.path}
-              <div class="tree-creating" style="padding-left: {34 + depth * 12}px">
+              <div
+                class="tree-creating"
+                style="padding-left: {34 + depth * 12}px"
+                use:motionIn={{ kind: 'row', y: -4 }}
+                transition:slide={{ duration: transitionDuration('row') }}
+              >
                 {#if creatingType === 'folder'}
                   <FolderOpen size={13} />
                 {:else}
@@ -390,7 +398,9 @@
               </div>
             {/if}
             {#if isExpanded && node.children && node.children.length > 0}
-              {@render renderTree(node.children, depth + 1)}
+              <div class="tree-children" transition:slide={{ duration: transitionDuration('row') }}>
+                {@render renderTree(node.children, depth + 1)}
+              </div>
             {/if}
           </div>
         {:else}
@@ -401,6 +411,7 @@
             class:preview={previewNativePath === node.path}
             style="padding-left: {34 + depth * 12}px"
             title={node.path}
+            use:pulseOnChange={nativePath === node.path || previewNativePath === node.path}
             on:click={() => handleFileClick(node.path)}
             on:dblclick={() => handleFileDblClick(node.path)}
             on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
@@ -479,7 +490,12 @@
         </div>
 
         {#if creatingParentPath === currentFolderPath}
-          <div class="tree-creating" style="padding-left: 34px">
+          <div
+            class="tree-creating"
+            style="padding-left: 34px"
+            use:motionIn={{ kind: 'row', y: -4 }}
+            transition:slide={{ duration: transitionDuration('row') }}
+          >
             {#if creatingType === 'folder'}
               <FolderOpen size={13} />
             {:else}
@@ -497,7 +513,10 @@
         {/if}
 
         {#if rootFolderExpanded}
-          <div class="recent-tree recursive-tree-container">
+          <div
+            class="recent-tree recursive-tree-container"
+            transition:slide={{ duration: transitionDuration('panel') }}
+          >
             {@render renderTree(folderTree, 1)}
           </div>
         {/if}
@@ -526,7 +545,12 @@
         </div>
 
         {#if rootFolderExpanded}
-          <button type="button" class="tree-file active" title={filePath}>
+          <button
+            type="button"
+            class="tree-file active"
+            title={filePath}
+            use:pulseOnChange={dirty}
+          >
             <FileText size={13} />
             <span>{fileName}</span>
           </button>

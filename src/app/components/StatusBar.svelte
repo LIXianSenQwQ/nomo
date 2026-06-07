@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EditorMode } from '../../lib/editor-core';
   import type { DocumentStats } from '../../lib/outline/outlineService';
+  import { pulseOnChange } from '../actions/motion';
 
   export let dirty: boolean;
   export let statusMessage: string;
@@ -11,8 +12,8 @@
 </script>
 
 <footer class="statusbar">
-  <span>{dirty ? '未保存更改' : '已同步'}</span>
-  <span>{statusMessage}</span>
+  <span use:pulseOnChange={dirty}>{dirty ? '未保存更改' : '已同步'}</span>
+  <span use:pulseOnChange={statusMessage}>{statusMessage}</span>
   <span>version {version}</span>
   <span>{stats.chars} chars</span>
   <span>{stats.words} words</span>

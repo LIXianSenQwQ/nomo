@@ -1,12 +1,21 @@
 <script lang="ts">
   import { ChevronDown } from '@lucide/svelte';
+  import { slide } from 'svelte/transition';
   import type { EditorMode } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
+  import {
+    modePaneMotion,
+    motionIn,
+    outlinePanelTransition,
+    outlineRowTransition,
+    transitionDuration,
+  } from '../actions/motion';
   import FrontMatterCard from './FrontMatterCard.svelte';
 
   export let mode: EditorMode;
   export let markdown: string;
+  export let largeDocumentMode: boolean;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
@@ -48,14 +57,23 @@
 </script>
 
 {#if externalFileWarning}
-  <div class="desktop-alert" role="status">
+  <div
+    class="desktop-alert"
+    role="status"
+    use:motionIn={{ kind: 'panel', y: -8 }}
+    transition:slide={{ duration: transitionDuration('panel') }}
+  >
     <strong>文件状态</strong>
     <span>{externalFileWarning}</span>
     <button on:click={() => saveMarkdownFile(true)}>另存为</button>
   </div>
 {/if}
 
-<div class="editor-grid" class:source-only={mode === 'source'}>
+<div
+  class="editor-grid"
+  class:source-only={mode === 'source'}
+  use:modePaneMotion={{ mode, disabled: largeDocumentMode }}
+>
   <section
     bind:this={sourcePane}
     class="editor-pane source-pane"
@@ -102,7 +120,10 @@
   </section>
 
   {#if outlineVisible}
-    <aside class="content-outline" aria-label="文档大纲">
+    <aside class="content-outline"
+      aria-label="文档大纲"
+      transition:outlinePanelTransition
+    >
       <strong>文档大纲</strong>
       {#if outline.length > 0}
         <div class="content-outline-list">
@@ -112,6 +133,7 @@
                 class:active={activeOutlineId === item.id}
                 class="content-outline-row"
                 style={`padding-left: ${(item.level - 1) * 16}px`}
+                transition:outlineRowTransition
               >
                 {#if isOutlineItemExpandable(index)}
                   <button

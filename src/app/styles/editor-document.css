@@ -75,6 +75,7 @@
 
 .front-matter-card {
   align-items: start;
+  will-change: transform, opacity;
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
@@ -163,6 +164,7 @@
   margin: 0;
   color: var(--md-editor-warning);
   font-size: 12px;
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .front-matter-edit-hint {
@@ -1093,6 +1095,7 @@
   justify-content: center;
   padding: 28px 24px 24px;
   background: color-mix(in srgb, #020617 72%, transparent);
+  animation: fullscreen-overlay-in 180ms ease-out;
 }
 
 .mermaid-fullscreen-panel,
@@ -1110,6 +1113,9 @@
   background: var(--md-editor-surface);
   color: var(--md-editor-fg);
   box-shadow: 0 24px 70px color-mix(in srgb, #020617 34%, transparent);
+  animation: fullscreen-panel-in 200ms cubic-bezier(0.2, 0, 0, 1);
+  transform-origin: center;
+  will-change: transform, opacity;
 }
 
 .mermaid-fullscreen-close-button,
@@ -1159,6 +1165,7 @@
   max-width: none;
   zoom: var(--mermaid-fullscreen-scale, 1.25);
   transition: filter 120ms ease;
+  will-change: transform;
 }
 
 .image-fullscreen-zoom-surface {
@@ -1235,6 +1242,33 @@
   .mermaid-fullscreen-zoom-surface,
   .image-fullscreen-zoom-surface {
     transition: none;
+  }
+
+  .mermaid-fullscreen-overlay,
+  .image-fullscreen-overlay,
+  .mermaid-fullscreen-panel,
+  .image-fullscreen-panel {
+    animation: none;
+  }
+}
+
+@keyframes fullscreen-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fullscreen-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

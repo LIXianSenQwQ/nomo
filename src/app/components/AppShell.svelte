@@ -11,6 +11,7 @@
   import ExplorerSidebar from './ExplorerSidebar.svelte';
   import LinkQuickEditor from './LinkQuickEditor.svelte';
   import StatusBar from './StatusBar.svelte';
+  import { workspaceSidebarMotion } from '../actions/motion';
 
   export let focusMode: boolean;
   export let isResizing: boolean;
@@ -40,6 +41,7 @@
   export let activeTabId: string;
   export let previewTabId: string | null;
   export let markdown: string;
+  export let largeDocumentMode: boolean;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
@@ -169,7 +171,11 @@
     {openSettings}
   />
 
-  <main class="workspace" style="--sidebar-width: {sidebarWidth}px">
+  <main
+    class="workspace"
+    style="--sidebar-width: {sidebarWidth}px"
+    use:workspaceSidebarMotion={{ focusMode, isResizing }}
+  >
     <ExplorerSidebar
       {currentFolderPath}
       {rootFolderExpanded}
@@ -233,6 +239,7 @@
         bind:editorHost
         {mode}
         {markdown}
+        {largeDocumentMode}
         {frontMatter}
         {frontMatterEditing}
         {readonlyDocumentMode}

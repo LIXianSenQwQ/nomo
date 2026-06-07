@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronDown, FileText, Plus, X } from '@lucide/svelte';
   import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { motionIn, pulseOnChange, tabIndicator } from '../actions/motion';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
   import ContextMenu from './ContextMenu.svelte';
@@ -259,7 +260,9 @@
 </div>
 
 <header class="topbar" aria-label="文档标签">
-  <div class="tabs-container" bind:this={tabsContainer}>
+  <div class="tabs-container" bind:this={tabsContainer}
+    use:tabIndicator={{ activeTabId, visibleStart: visibleRange.start, visibleEnd: visibleRange.end }}
+  >
     {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
       <button
         type="button"
@@ -267,6 +270,7 @@
         class:active={activeTabId === tab.id}
         class:preview={previewTabId === tab.id}
         title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
+        use:motionIn={{ kind: 'row', y: 5 }}
         on:click={() => switchTab(tab.id)}
         on:dblclick={() => {
           if (previewTabId === tab.id) pinPreviewTab();
@@ -276,7 +280,12 @@
         <FileText size={13} />
         <span class="tab-title">{tab.fileName}</span>
         {#if tab.dirty}
-          <span class="dirty-indicator" title="未保存修改"></span>
+          <span
+            class="dirty-indicator"
+            title="未保存修改"
+            use:motionIn={{ kind: 'micro', y: 0, scale: 0.8 }}
+            use:pulseOnChange={tab.dirty}
+          ></span>
         {/if}
         <span
           class="close-tab-btn"
@@ -325,6 +334,7 @@
         class:preview={previewTabId === tab.id}
         role="menuitem"
         title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
+        use:motionIn={{ kind: 'row', y: -3 }}
         on:click={() => selectHiddenTab(tab.id)}
         on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
       >

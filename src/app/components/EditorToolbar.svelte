@@ -31,6 +31,7 @@
     type InlinePendingMarks,
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
+  import { modeSwitchIndicator } from '../actions/motion';
 
   export let mode: EditorMode;
   export let contentWidthPercent: number;
@@ -310,7 +311,7 @@
       on:input={updateContentWidth}
     />
   </label>
-  <div class="mode-switch" aria-label="编辑模式">
+  <div class="mode-switch" aria-label="编辑模式" use:modeSwitchIndicator={{ mode }}>
     <button
       title="语义编辑"
       aria-label="切换到语义编辑"

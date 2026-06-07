@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
   import { Trash2, X, AlertTriangle } from '@lucide/svelte';
+  import { motionIn } from '../actions/motion';
 
   export let open: boolean;
   export let title: string = '确认删除';
@@ -32,6 +33,7 @@
       role="alertdialog"
       aria-modal="true"
       tabindex="-1"
+      use:motionIn={{ kind: 'popover', y: 0, scale: 0.98 }}
       on:click|stopPropagation
       on:keydown={handleKeydown}
     >

@@ -17,6 +17,7 @@
   backdrop-filter: blur(10px);
   color: var(--md-editor-muted-fg);
   font-size: 12px;
+  will-change: transform, opacity;
 }
 
 .content-outline strong {
@@ -28,8 +29,7 @@
 }
 
 .content-outline-list {
-  display: grid;
-  gap: 8px;
+  display: block;
 }
 
 .content-outline-row {
@@ -42,6 +42,16 @@
   color: inherit;
   overflow: hidden;
   box-sizing: border-box;
+  margin-bottom: 8px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.content-outline-row:last-child {
+  margin-bottom: 0;
 }
 
 .content-outline-row.active {

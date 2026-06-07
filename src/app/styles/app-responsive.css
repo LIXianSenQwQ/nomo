@@ -400,7 +400,8 @@
   cursor: pointer;
   transition:
     background-color 0.15s,
-    color 0.15s;
+    color 0.15s,
+    transform 0.15s;
   border-radius: 4px;
   box-sizing: border-box;
 }
@@ -462,7 +463,10 @@
   cursor: pointer;
   border-radius: 4px;
   margin: 1px 0;
-  transition: background 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.15s;
   font-family: inherit;
   min-width: 0;
   box-sizing: border-box;
@@ -522,7 +526,8 @@
   width: calc(100% - 8px);
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    transform 0.15s;
   min-width: 0;
   box-sizing: border-box;
 }
@@ -535,6 +540,12 @@
   background: rgba(0, 122, 204, 0.12) !important;
   color: var(--md-editor-accent, #007acc) !important;
   font-weight: 500;
+}
+
+.file-tree button.tree-file:active,
+.tree-folder.nested-dir:active,
+.tree-folder-root-title:active {
+  transform: scale(0.992);
 }
 
 .file-tree button.tree-file.active svg {

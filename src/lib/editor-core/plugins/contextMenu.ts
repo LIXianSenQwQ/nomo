@@ -48,7 +48,7 @@ type MenuFactory = () => ContextMenuItem[];
  * NodeView 在渲染时调用此方法，使其 DOM 支持右键菜单。
  */
 export function mountContextMenuFactory(dom: HTMLElement, factory: MenuFactory): void {
-  (dom as Record<string, unknown>)[MENU_FACTORY_KEY] = factory;
+  (dom as unknown as Record<string, unknown>)[MENU_FACTORY_KEY] = factory;
 }
 
 export interface ContextMenuPluginOptions {
@@ -112,7 +112,7 @@ function findMenuFactory(
 ): { dom: HTMLElement; factory: MenuFactory } | null {
   let current: HTMLElement | null = target;
   while (current && current !== editorDom) {
-    const factory = (current as Record<string, unknown>)[MENU_FACTORY_KEY] as
+    const factory = (current as unknown as Record<string, unknown>)[MENU_FACTORY_KEY] as
       | MenuFactory
       | undefined;
     if (typeof factory === 'function') {

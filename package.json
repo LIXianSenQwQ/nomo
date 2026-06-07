@@ -18,6 +18,7 @@
     "@lucide/svelte": "^1.0.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "gsap": "^3.15.0",
     "katex": "^0.17.0",
     "markdown-it": "^14.2.0",
     "mermaid": "^11.15.0",

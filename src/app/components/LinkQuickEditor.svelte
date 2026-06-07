@@ -1,7 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { slide } from 'svelte/transition';
   import { Check, Trash2, X } from '@lucide/svelte';
   import { clickOutside } from '../actions/clickOutside';
+  import { motionIn, transitionDuration } from '../actions/motion';
 
   export let open: boolean;
   export let text: string;
@@ -58,6 +60,7 @@
     aria-label="编辑超链接"
     tabindex="-1"
     use:clickOutside={closeLinkPicker}
+    use:motionIn={{ kind: 'popover', y: -4, scale: 0.98 }}
     on:keydown={handleKeydown}
   >
     <form class:has-remove={canRemove} on:submit|preventDefault={applyLink}>
@@ -117,7 +120,14 @@
       </div>
     </form>
     {#if error}
-      <p id="quick-link-error" class="quick-link-error" role="alert">{error}</p>
+      <p
+        id="quick-link-error"
+        class="quick-link-error"
+        role="alert"
+        transition:slide={{ duration: transitionDuration('micro') }}
+      >
+        {error}
+      </p>
     {/if}
   </div>
 {/if}

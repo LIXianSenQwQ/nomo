@@ -281,11 +281,16 @@
   backdrop-filter: blur(10px);
   pointer-events: auto;
   opacity: 0;
-  transition: opacity 0.15s;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+  will-change: transform, opacity;
 }
 
 .table-inline-controls.visible .table-util-bar {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .table-util-separator {
@@ -313,7 +318,8 @@
   transition:
     background-color 0.14s,
     color 0.14s,
-    border-color 0.14s;
+    border-color 0.14s,
+    transform 0.14s;
 }
 
 .table-util-bar .boundary-insert-btn {
@@ -451,6 +457,7 @@
   border-color: transparent;
   background: color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
   color: var(--md-editor-accent-strong);
+  transform: scale(1.04);
 }
 
 .table-util-bar .boundary-insert-btn:focus-visible,
