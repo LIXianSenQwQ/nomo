@@ -306,11 +306,6 @@
   color: var(--md-editor-muted-fg);
 }
 
-.tree-file small {
-  color: var(--md-editor-muted-fg);
-  font-size: 11px;
-  white-space: nowrap;
-}
 
 .tree-section-title {
   margin: 22px 8px 8px;

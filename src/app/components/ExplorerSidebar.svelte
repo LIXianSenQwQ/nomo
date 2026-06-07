@@ -407,9 +407,6 @@
           >
             <FileText size={13} />
             <span>{node.name}</span>
-            {#if nativePath === node.path}
-              <small>{dirty ? '未保存' : '已同步'}</small>
-            {/if}
           </button>
         {/if}
       {/each}
@@ -532,7 +529,6 @@
           <button type="button" class="tree-file active" title={filePath}>
             <FileText size={13} />
             <span>{fileName}</span>
-            <small>{dirty ? '未保存' : '已同步'}</small>
           </button>
         {/if}
       {/if}
