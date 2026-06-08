@@ -14,7 +14,12 @@ pub fn run() {
                 args,
                 Some(std::path::PathBuf::from(cwd)),
             );
+            let should_restore_window =
+                targets.markdown_paths.is_empty() && targets.folder_paths.is_empty();
             let _ = crate::window::external_open::route_external_open_targets(app, targets);
+            if should_restore_window {
+                crate::window::tray::show_main_window(app);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {

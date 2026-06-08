@@ -119,13 +119,23 @@ pub(crate) fn close_to_tray_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
     database_bool_setting(app, "closeToTrayEnabled").unwrap_or(false)
 }
 
-fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    let mut has_document_window = false;
+
     for (_label, window) in app.webview_windows() {
+        if !crate::window::external_open::is_document_window_label(window.label()) {
+            continue;
+        }
+
+        has_document_window = true;
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
-    set_tray_active(app, true);
+
+    if has_document_window {
+        set_tray_active(app, true);
+    }
 }
 
 fn database_bool_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<bool> {
