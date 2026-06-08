@@ -4,7 +4,7 @@ mod file_system;
 mod models;
 mod window;
 
-use tauri::{Manager, WindowEvent};
+use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,12 +28,20 @@ pub fn run() {
             }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
-                if crate::window::external_open::is_document_window_label(label)
-                    && crate::window::tray::close_to_tray_enabled(window.app_handle())
-                {
-                    api.prevent_close();
+                if !crate::window::external_open::is_document_window_label(label) {
+                    return;
+                }
+                if crate::window::commands::consume_next_close(label) {
+                    return;
+                }
+
+                api.prevent_close();
+                if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
+                    let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
                     crate::window::tray::set_tray_active(window.app_handle(), false);
+                } else {
+                    let _ = window.emit("nomo://request-close-window", ());
                 }
             }
             _ => {}
@@ -49,6 +57,9 @@ pub fn run() {
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             crate::window::state::restore_window_state(app.handle(), "main");
             if let Some(window) = app.get_webview_window("main") {
+                window
+                    .set_skip_taskbar(false)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
                 window
                     .show()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;

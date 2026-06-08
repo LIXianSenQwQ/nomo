@@ -1,6 +1,6 @@
 use crate::window::commands::update_window_state;
 use crate::{database, models::WindowStateInput};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 const MIN_WINDOW_WIDTH: u32 = 920;
 const MIN_WINDOW_HEIGHT: u32 = 640;
@@ -31,7 +31,7 @@ pub(crate) fn persist_current_window_state(window: &tauri::Window) {
     let _ = update_window_state(window.app_handle().clone(), key, input);
 }
 
-pub(crate) fn restore_window_state(app: &AppHandle, label: &str) {
+pub(crate) fn restore_window_state<R: Runtime>(app: &AppHandle<R>, label: &str) {
     let Some(window) = app.get_webview_window(label) else {
         return;
     };
@@ -123,7 +123,7 @@ fn is_window_visible_on_any_monitor(
 }
 
 fn centered_position_on_primary_monitor(
-    window: &tauri::WebviewWindow,
+    window: &tauri::WebviewWindow<impl Runtime>,
     width: u32,
     height: u32,
 ) -> Option<tauri::PhysicalPosition<i32>> {

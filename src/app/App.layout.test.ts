@@ -718,12 +718,11 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('nomo-tray-dark-inactive-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-light-active-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-light-inactive-24-preview.png');
-    expect(tauriTraySource).toContain('nomo-app-light-256.png');
-    expect(tauriTraySource).toContain('nomo-app-dark-256.png');
     expect(tauriTraySource).toContain('set_tray_active');
     expect(tauriTraySource).toContain('set_desktop_icon_theme');
-    expect(tauriTraySource).toContain('apply_window_icons');
-    expect(tauriTraySource).toContain('.set_icon(icon.clone())');
+    expect(tauriTraySource).not.toContain('apply_window_icons');
+    expect(tauriTraySource).not.toContain('refresh_taskbar_icon');
+    expect(tauriTraySource).not.toContain('set_skip_taskbar');
     expect(tauriLibSource).toContain('crate::window::commands::set_desktop_icon_theme');
     expect(desktopWindowSource).toContain("invoke('set_desktop_icon_theme'");
     expect(appSource).toContain('syncDesktopIconTheme(theme)');

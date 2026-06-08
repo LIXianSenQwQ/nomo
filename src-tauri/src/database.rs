@@ -348,10 +348,8 @@ mod tests {
     }
 
     fn unique_test_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "nomo-db-{name}-{}",
-            crate::database::now_ts()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("nomo-db-{name}-{}", crate::database::now_ts()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

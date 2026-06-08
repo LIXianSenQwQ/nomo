@@ -14,4 +14,4 @@ pub(crate) fn window_decorations() -> bool {
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-pub(crate) fn setup_window(_window: &tauri::WebviewWindow) {}
+pub(crate) fn setup_window<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}

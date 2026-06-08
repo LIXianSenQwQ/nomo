@@ -25,7 +25,8 @@
           "y": 14
         },
         "hiddenTitle": true,
-        "visible": false
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

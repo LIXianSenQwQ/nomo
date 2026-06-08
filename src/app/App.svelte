@@ -130,6 +130,7 @@
   } from '../lib/services/render';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
+  const CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY = 'closeToTrayPromptAnswered';
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
@@ -232,6 +233,7 @@
   let filePreviewEnabled = DEFAULT_APP_PREFERENCES.filePreviewEnabled;
   let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
   let closeToTrayEnabled = DEFAULT_APP_PREFERENCES.closeToTrayEnabled;
+  let closeToTrayPromptAnswered = false;
   let windowLabel = '';
 
   function persistWorkspaceState() {
@@ -373,7 +375,7 @@
 
   const minimizeWindow = () => minimizeAppWindow(desktopEnabled);
   const maximizeWindow = () => maximizeAppWindow(desktopEnabled);
-  const closeAppWindow = () => closeDesktopWindow(desktopEnabled, closeToTrayEnabled);
+  const closeAppWindow = () => closeCurrentWindow();
   const exitApp = () => requestExitApp();
   const createNewWindow = (folderPath?: string) => createAppWindow(desktopEnabled, folderPath);
 
@@ -490,13 +492,32 @@
   }
 
   async function closeCurrentWindow() {
+    const shouldHideToTray = await resolveCloseToTrayForCloseRequest();
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
-    if (!closeToTrayEnabled && dirtyTabs.length > 0) {
+    if (!shouldHideToTray && dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
       const ok = confirm(`以下文件有未保存修改：${names}。关闭窗口将丢失这些更改，是否继续？`);
       if (!ok) return;
     }
-    closeAppWindow();
+    await closeDesktopWindow(desktopEnabled, shouldHideToTray);
+  }
+
+  async function resolveCloseToTrayForCloseRequest() {
+    if (!desktopEnabled || closeToTrayEnabled || closeToTrayPromptAnswered) {
+      return closeToTrayEnabled;
+    }
+
+    const shouldHideToTray = confirm(
+      '第一次关闭主窗口时，是否将 Nomo 隐藏到系统托盘？\n\n确定：隐藏到托盘，并记住此选择。\n取消：直接关闭窗口，之后也可在偏好设置中开启。',
+    );
+    closeToTrayEnabled = shouldHideToTray;
+    closeToTrayPromptAnswered = true;
+    await Promise.all([
+      updateAppSetting('closeToTrayEnabled', shouldHideToTray),
+      updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true),
+    ]).catch(() => undefined);
+
+    return shouldHideToTray;
   }
 
   async function requestExitApp() {
@@ -1389,6 +1410,8 @@
   async function reloadAppPreferencesFromSettingsWindow() {
     const preferences = await loadAppPreferences(desktopEnabled);
     applyAppPreferences(preferences, { applyEditorMode: true });
+    closeToTrayPromptAnswered = true;
+    await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
   }
 
   async function maybeOpenFirstRunSample(state: FirstRunSampleState) {
@@ -1431,6 +1454,9 @@
       await invoke('refresh_window_menu').catch(() => undefined);
 
       settings = await listAppSettings().catch(() => []);
+      closeToTrayPromptAnswered =
+        settings.some((s) => s.key === 'closeToTrayEnabled') ||
+        settings.some((s) => s.key === CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY);
       // 优先读取窗口独立的状态，兼容旧的全局 key
       const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
       const workspaceTabsSetting =
@@ -1778,6 +1804,7 @@
       dropUnlisten,
       settingsUnlisten,
       exitRequestUnlisten,
+      closeRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,
@@ -1794,6 +1821,9 @@
       }).catch(() => null),
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
+      }).catch(() => null),
+      listen('nomo://request-close-window', () => {
+        closeCurrentWindow().catch(() => undefined);
       }).catch(() => null),
       listenDesktopOpenDocuments((paths) => {
         if (windowLabel) {
@@ -1820,6 +1850,7 @@
       dropUnlisten,
       settingsUnlisten,
       exitRequestUnlisten,
+      closeRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,

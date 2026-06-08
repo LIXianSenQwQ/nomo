@@ -38,6 +38,13 @@ pub(crate) fn install_window_menu<R: Runtime>(
                 let _ = crate::window::commands::emit_exit_request(window.app_handle());
                 return;
             }
+            if command == "open-settings" {
+                let app = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::window::commands::open_settings_window_for_app(app).await;
+                });
+                return;
+            }
 
             let _ = window.emit("nomo://menu-command", command);
         });
@@ -58,6 +65,13 @@ fn install_app_menu_event<R: Runtime>(app: &AppHandle<R>) {
         let command = event.id().as_ref().to_string();
         if command == "quit" {
             let _ = crate::window::commands::emit_exit_request(app);
+            return;
+        }
+        if command == "open-settings" {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = crate::window::commands::open_settings_window_for_app(app).await;
+            });
             return;
         }
 

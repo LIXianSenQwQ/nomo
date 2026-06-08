@@ -17,10 +17,6 @@ const TRAY_LIGHT_ACTIVE_ICON_BYTES: &[u8] =
     include_bytes!("../../icons/nomo/tray/nomo-tray-light-active-24-preview.png");
 const TRAY_LIGHT_INACTIVE_ICON_BYTES: &[u8] =
     include_bytes!("../../icons/nomo/tray/nomo-tray-light-inactive-24-preview.png");
-const WINDOW_LIGHT_ICON_BYTES: &[u8] =
-    include_bytes!("../../icons/nomo/source/nomo-app-light-256.png");
-const WINDOW_DARK_ICON_BYTES: &[u8] =
-    include_bytes!("../../icons/nomo/source/nomo-app-dark-256.png");
 
 #[derive(Clone, Copy)]
 enum TrayTheme {
@@ -111,7 +107,6 @@ pub(crate) fn set_desktop_icon_theme<R: Runtime>(
     };
 
     let state = update_tray_state(|state| state.theme = next_theme)?;
-    apply_window_icons(app, next_theme)?;
     apply_tray_icon(app, state)
 }
 
@@ -171,16 +166,6 @@ fn apply_tray_icon<R: Runtime>(app: &AppHandle<R>, state: TrayVisualState) -> Re
         .map_err(|error| format!("设置 Nomo 托盘图标失败：{error}"))
 }
 
-fn apply_window_icons<R: Runtime>(app: &AppHandle<R>, theme: TrayTheme) -> Result<(), String> {
-    let icon = window_theme_icon(theme)?;
-    for (_label, window) in app.webview_windows() {
-        window
-            .set_icon(icon.clone())
-            .map_err(|error| format!("设置 Nomo 窗口图标失败：{error}"))?;
-    }
-    Ok(())
-}
-
 fn tray_state_icon(state: TrayVisualState) -> Result<Image<'static>, String> {
     let bytes = match (state.theme, state.active) {
         (TrayTheme::Light, true) => TRAY_LIGHT_ACTIVE_ICON_BYTES,
@@ -192,15 +177,4 @@ fn tray_state_icon(state: TrayVisualState) -> Result<Image<'static>, String> {
     Image::from_bytes(bytes)
         .map(Image::to_owned)
         .map_err(|error| format!("读取 Nomo 托盘图标失败：{error}"))
-}
-
-fn window_theme_icon(theme: TrayTheme) -> Result<Image<'static>, String> {
-    let bytes = match theme {
-        TrayTheme::Light => WINDOW_LIGHT_ICON_BYTES,
-        TrayTheme::Dark => WINDOW_DARK_ICON_BYTES,
-    };
-
-    Image::from_bytes(bytes)
-        .map(Image::to_owned)
-        .map_err(|error| format!("读取 Nomo 窗口图标失败：{error}"))
 }

@@ -123,6 +123,7 @@ pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result
 
     let label = window.label().to_string();
     let _ = persist_pending_external_open(app, &label, &paths);
+    let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;
@@ -167,6 +168,7 @@ pub(crate) fn route_external_folder_open(
 
     let label = window.label().to_string();
     let _ = persist_pending_external_folder_open(app, &label, &folder_path);
+    let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;

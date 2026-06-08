@@ -2,7 +2,7 @@ pub(crate) fn window_decorations() -> bool {
     true
 }
 
-pub(crate) fn setup_window(window: &tauri::WebviewWindow) {
+pub(crate) fn setup_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
     // macOS 使用原生红黄绿按钮。只有文档窗口需要透明叠加标题栏，
     // 用来在红黄绿右侧承载资源管理器开关等应用内控件；设置窗口保留原生标题栏布局。
     let _ = window.set_decorations(window_decorations());

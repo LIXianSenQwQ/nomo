@@ -1,9 +1,15 @@
 use crate::window::menu::install_window_menu;
 use crate::{database, models::WindowStateInput};
+use std::collections::HashSet;
 use std::path::PathBuf;
-use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+use tauri::{
+    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 
 const SETTINGS_WINDOW_LABEL: &str = "window-settings";
+static FORCE_CLOSE_LABELS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[tauri::command]
 pub(crate) fn update_window_state(
@@ -61,17 +67,18 @@ pub(crate) fn create_new_window(
 
 #[tauri::command]
 pub(crate) async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    open_settings_window_for_app(app).await
+}
+
+pub(crate) async fn open_settings_window_for_app<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
-        window
-            .show()
-            .map_err(|error| format!("显示偏好设置窗口失败：{error}"))?;
-        window
-            .set_focus()
-            .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
+        bring_settings_window_to_front(&window)?;
         return Ok(());
     }
 
-    let window = WebviewWindowBuilder::new(
+    let mut builder = WebviewWindowBuilder::new(
         &app,
         SETTINGS_WINDOW_LABEL,
         WebviewUrl::App(PathBuf::from("index.html?view=settings")),
@@ -82,19 +89,23 @@ pub(crate) async fn open_settings_window(app: AppHandle) -> Result<(), String> {
     .center()
     .decorations(crate::window::os::window_decorations())
     .resizable(true)
-    .visible(false)
-    .build()
-    .map_err(|error| format!("创建偏好设置窗口失败：{error}"))?;
+    .skip_taskbar(true)
+    .visible(false);
+
+    if let Some(owner) = settings_owner_window(&app) {
+        builder = builder
+            .owner(&owner)
+            .map_err(|error| format!("绑定偏好设置父窗口失败：{error}"))?;
+    }
+
+    let window = builder
+        .build()
+        .map_err(|error| format!("创建偏好设置窗口失败：{error}"))?;
 
     // 先在隐藏状态下完成系统窗口适配和历史位置恢复，避免用户看到居中位置再跳到保存位置。
     crate::window::os::setup_window(&window);
     crate::window::state::restore_window_state(&app, window.label());
-    window
-        .show()
-        .map_err(|error| format!("显示偏好设置窗口失败：{error}"))?;
-    window
-        .set_focus()
-        .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
+    bring_settings_window_to_front(&window)?;
 
     Ok(())
 }
@@ -124,13 +135,22 @@ pub(crate) fn maximize_window(window: tauri::WebviewWindow) -> Result<(), String
 
 #[tauri::command]
 pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
-    window
+    let label = window.label().to_string();
+    allow_next_close(&label)?;
+    let result = window
         .close()
-        .map_err(|error| format!("关闭窗口失败：{error}"))
+        .map_err(|error| format!("关闭窗口失败：{error}"));
+    if result.is_err() {
+        clear_next_close(&label);
+    }
+    result
 }
 
 #[tauri::command]
 pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
+    window
+        .set_skip_taskbar(true)
+        .map_err(|error| format!("从任务栏隐藏窗口失败：{error}"))?;
     window
         .hide()
         .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))?;
@@ -151,6 +171,71 @@ pub(crate) fn request_exit_app(app: AppHandle) -> Result<(), String> {
 pub(crate) fn emit_exit_request<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     app.emit("nomo://request-exit-app", ())
         .map_err(|error| format!("请求退出应用失败：{error}"))
+}
+
+pub(crate) fn consume_next_close(label: &str) -> bool {
+    force_close_labels()
+        .lock()
+        .map(|mut labels| labels.remove(label))
+        .unwrap_or(false)
+}
+
+fn allow_next_close(label: &str) -> Result<(), String> {
+    force_close_labels()
+        .lock()
+        .map(|mut labels| {
+            labels.insert(label.to_string());
+        })
+        .map_err(|error| format!("记录窗口关闭状态失败：{error}"))
+}
+
+fn clear_next_close(label: &str) {
+    let _ = force_close_labels().lock().map(|mut labels| {
+        labels.remove(label);
+    });
+}
+
+fn force_close_labels() -> &'static Mutex<HashSet<String>> {
+    FORCE_CLOSE_LABELS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn settings_owner_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
+    for (label, window) in app.webview_windows() {
+        if crate::window::external_open::is_document_window_label(&label)
+            && window.is_focused().unwrap_or(false)
+        {
+            return Some(window);
+        }
+    }
+
+    app.get_webview_window("main")
+}
+
+fn bring_settings_window_to_front<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
+    // 步骤1：先恢复并聚焦偏好设置。新建窗口已绑定 owner，Windows 会保证它在主窗口上方。
+    window
+        .set_skip_taskbar(true)
+        .map_err(|error| format!("从任务栏隐藏偏好设置窗口失败：{error}"))?;
+    window
+        .show()
+        .map_err(|error| format!("显示偏好设置窗口失败：{error}"))?;
+    window
+        .unminimize()
+        .map_err(|error| format!("还原偏好设置窗口失败：{error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
+
+    // 步骤2：菜单收起或 WebView 初始化后可能再触发一次激活，延迟补一次聚焦。
+    let window_for_focus = window.clone();
+    tauri::async_runtime::spawn(async move {
+        std::thread::sleep(Duration::from_millis(120));
+        let _ = window_for_focus.show();
+        let _ = window_for_focus.unminimize();
+        let _ = window_for_focus.set_focus();
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
