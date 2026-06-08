@@ -67,6 +67,7 @@
   --md-scrollbar-size: 12px;
   --md-scrollbar-radius: 999px;
   --md-scrollbar-track: transparent;
+  --md-scrollbar-thumb-idle: rgba(200, 205, 210, 0.42);
   --md-scrollbar-thumb: #c8cdd2;
   --md-scrollbar-thumb-hover: #aeb5bc;
   --md-scrollbar-thumb-active: #9099a3;
@@ -133,6 +134,7 @@
 
   /* Windows 资源管理器式滚动条（暗色） */
   --md-scrollbar-track: transparent;
+  --md-scrollbar-thumb-idle: rgba(75, 85, 97, 0.46);
   --md-scrollbar-thumb: #4b5561;
   --md-scrollbar-thumb-hover: #66717d;
   --md-scrollbar-thumb-active: #828d99;

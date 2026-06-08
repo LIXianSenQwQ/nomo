@@ -25,6 +25,10 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/DocumentTabs.svelte'),
     'utf-8',
   );
+  const explorerSidebarSource = readFileSync(
+    resolve(__dirname, 'components/ExplorerSidebar.svelte'),
+    'utf-8',
+  );
   const frontMatterCardSource = readFileSync(
     resolve(__dirname, 'components/FrontMatterCard.svelte'),
     'utf-8',
@@ -319,6 +323,20 @@ describe('App outline layout', () => {
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).toMatch(/\.app-logo\s*\{[\s\S]*?width:\s*20px;/);
+  });
+
+  it('keeps explorer rows constrained to the visible tree width', () => {
+    expect(explorerSidebarSource).toContain('class="folder-actions"');
+    expect(styles).toMatch(/\.file-tree\s*\{[\s\S]*?scrollbar-gutter:\s*stable;/);
+    expect(styles).toMatch(/--explorer-scrollbar-safe-area:\s*8px;/);
+    expect(styles).toMatch(/\.tree-root,\s*\.recent-tree\s*\{[\s\S]*?min-width:\s*0;/);
+    expect(styles).toMatch(/\.recursive-tree-container\s*\{[\s\S]*?min-width:\s*0;/);
+    expect(styles).toMatch(/\.recursive-tree-container\s*\{[\s\S]*?max-width:\s*100%;/);
+    expect(styles).toMatch(/\.tree-folder-wrapper\s*\{[\s\S]*?min-width:\s*0;/);
+    expect(styles).toMatch(/\.tree-folder-wrapper\s*\{[\s\S]*?max-width:\s*100%;/);
+    expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?max-width:\s*100%;/);
+    expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?overflow:\s*hidden;/);
+    expect(styles).toMatch(/\.file-tree button\.tree-file\s*\{[\s\S]*?max-width:\s*calc\(100% - 4px\);/);
   });
 
   it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {

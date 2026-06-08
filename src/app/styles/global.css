@@ -1,7 +1,11 @@
 * {
   box-sizing: border-box;
-  scrollbar-color: var(--md-scrollbar-thumb) var(--md-scrollbar-track);
+  scrollbar-color: var(--md-scrollbar-thumb-idle) var(--md-scrollbar-track);
   scrollbar-width: thin;
+}
+
+*:focus-within {
+  scrollbar-color: var(--md-scrollbar-thumb) var(--md-scrollbar-track);
 }
 
 *::-webkit-scrollbar {
@@ -16,6 +20,11 @@
 *::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: var(--md-scrollbar-radius);
+  background: var(--md-scrollbar-thumb-idle);
+  background-clip: content-box;
+}
+
+*:focus-within::-webkit-scrollbar-thumb {
   background: var(--md-scrollbar-thumb);
   background-clip: content-box;
 }

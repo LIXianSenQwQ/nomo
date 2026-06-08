@@ -74,7 +74,7 @@
   align-items: center;
   justify-content: space-between;
   min-height: 42px;
-  padding: 0 10px 0 12px;
+  padding: 0 14px 0 12px;
   border-bottom: 1px solid var(--md-editor-border);
   color: var(--md-editor-heading-fg);
   font-size: 13px;
@@ -138,10 +138,21 @@
 }
 
 .file-tree {
+  --explorer-scrollbar-size: 8px;
+  --explorer-scrollbar-safe-area: 8px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 6px 8px 10px;
+  scrollbar-gutter: stable;
+  padding: 6px var(--explorer-scrollbar-safe-area) 10px 8px;
+}
+
+.file-tree::-webkit-scrollbar {
+  width: var(--explorer-scrollbar-size);
+}
+
+.file-tree::-webkit-scrollbar-thumb {
+  border-width: 2px;
 }
 
 .tree-file:hover {
@@ -152,12 +163,15 @@
 .recent-tree {
   display: grid;
   gap: 1px;
+  min-width: 0;
   margin-top: 0;
 }
 
 /* 文件夹展开子树的层级引导线 */
 .tree-folder-wrapper {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tree-folder-wrapper.expanded::before {
@@ -179,6 +193,8 @@
   align-items: center;
   gap: 5px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 26px;
   padding: 0 6px;
   border: 0;
@@ -255,13 +271,18 @@
 
 .folder-actions {
   display: flex;
+  flex: 0 0 auto;
   opacity: 0;
-  gap: 4px;
+  pointer-events: none;
+  gap: 2px;
 }
 
 .tree-folder:hover .folder-actions,
-.tree-folder-root-title:hover .folder-actions {
+.tree-folder-root-title:hover .folder-actions,
+.tree-folder.active .folder-actions,
+.tree-folder-root-title.active .folder-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .action-btn {
@@ -279,6 +300,11 @@
 .action-btn:hover {
   background: var(--md-editor-surface);
   color: var(--md-editor-accent-strong);
+}
+
+.folder-actions .action-btn {
+  width: 20px;
+  height: 20px;
 }
 
 .rename-input {
@@ -324,6 +350,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-width: 100%;
 }
 
 @keyframes edit-field-in {
