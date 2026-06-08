@@ -4,16 +4,35 @@ import { MermaidBlockNodeView } from '../../lib/editor-core/nodeViews/MermaidBlo
 import type { DiagramType } from '../../lib/editor-core/diagramTemplates';
 import {
   DEFAULT_IMAGE_HANDLING_SETTINGS,
+  type ImageDefaultAlign,
   type ImageHandlingSettings,
   type ImageInsertStrategy,
   type ImageUploadProvider,
 } from '../../lib/services/render';
 
-export type ThemePreference = 'light' | 'dark';
+export type ThemePreference = 'light' | 'dark' | 'system';
+export type EffectiveTheme = 'light' | 'dark';
 export type EditorModePreference = 'semantic' | 'source';
 export type BlockStylePreference = 'classic' | 'modern';
 export type FolderOpenDefaultBehavior = 'current-window' | 'new-window' | 'ask-every-time';
 export type WritingStatsMetric = 'lines' | 'words' | 'chars';
+export type ImageDefaultAlignPreference = ImageDefaultAlign;
+export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
+
+export type ShortcutCommandId =
+  | 'new-file'
+  | 'open-file'
+  | 'save-file'
+  | 'toggle-source'
+  | 'toggle-theme'
+  | 'toggle-focus'
+  | 'insert-code-block'
+  | 'insert-table'
+  | 'insert-math-block'
+  | 'menu-link'
+  | 'menu-clear-format';
+
+export type ShortcutPreferences = Record<ShortcutCommandId, string>;
 
 export interface PersistedEditorSettings {
   theme?: ThemePreference;
@@ -44,8 +63,28 @@ export interface AppPreferences {
   readingTimeVisible: boolean;
   defaultCodeBlockLanguage: string;
   defaultDiagramType: DiagramType;
+  zoomPercent: number;
+  ctrlWheelZoomEnabled: boolean;
+  outlineDefaultExpandLevel: number;
+  codeBlockLineNumbersVisible: boolean;
+  codeBlockIndent: CodeBlockIndentPreference;
+  shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
 }
+
+export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
+  'new-file': 'Ctrl+N',
+  'open-file': 'Ctrl+O',
+  'save-file': 'Ctrl+S',
+  'toggle-source': 'Ctrl+E',
+  'toggle-theme': 'Ctrl+Shift+L',
+  'toggle-focus': 'Ctrl+Shift+F',
+  'insert-code-block': 'Ctrl+Shift+K',
+  'insert-table': 'Ctrl+Shift+T',
+  'insert-math-block': 'Ctrl+Shift+M',
+  'menu-link': 'Ctrl+K',
+  'menu-clear-format': 'Ctrl+\\',
+};
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   theme: 'light',
@@ -68,6 +107,12 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   readingTimeVisible: false,
   defaultCodeBlockLanguage: 'ts',
   defaultDiagramType: 'flowchart',
+  zoomPercent: 100,
+  ctrlWheelZoomEnabled: true,
+  outlineDefaultExpandLevel: 6,
+  codeBlockLineNumbersVisible: true,
+  codeBlockIndent: 'spaces-2',
+  shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
 };
 
@@ -98,7 +143,7 @@ export async function loadPersistedEditorSettings(
     parseSetting<string>(settings, 'blockStyle') ?? localStorage.getItem('nomo-block-style');
 
   return {
-    theme: savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : undefined,
+    theme: isThemePreference(savedTheme) ? savedTheme : undefined,
     fontSize:
       Number.isFinite(savedFontSize) && savedFontSize >= 14 && savedFontSize <= 22
         ? savedFontSize
@@ -175,6 +220,12 @@ export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPr
     readingTimeVisible: parseSetting<unknown>(settings, 'readingTimeVisible'),
     defaultCodeBlockLanguage: parseSetting<unknown>(settings, 'defaultCodeBlockLanguage'),
     defaultDiagramType: parseSetting<unknown>(settings, 'defaultDiagramType'),
+    zoomPercent: parseSetting<unknown>(settings, 'zoomPercent'),
+    ctrlWheelZoomEnabled: parseSetting<unknown>(settings, 'ctrlWheelZoomEnabled'),
+    outlineDefaultExpandLevel: parseSetting<unknown>(settings, 'outlineDefaultExpandLevel'),
+    codeBlockLineNumbersVisible: parseSetting<unknown>(settings, 'codeBlockLineNumbersVisible'),
+    codeBlockIndent: parseSetting<unknown>(settings, 'codeBlockIndent'),
+    shortcutPreferences: parseSetting<unknown>(settings, 'shortcutPreferences'),
     imageHandlingSettings:
       parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
       parseLocalImageSettings(),
@@ -272,10 +323,39 @@ export function normalizeAppPreferences(
     defaultDiagramType: isDiagramTypePreference(value.defaultDiagramType)
       ? value.defaultDiagramType
       : DEFAULT_APP_PREFERENCES.defaultDiagramType,
+    zoomPercent: clampNumber(value.zoomPercent, 80, 160, DEFAULT_APP_PREFERENCES.zoomPercent),
+    ctrlWheelZoomEnabled:
+      typeof value.ctrlWheelZoomEnabled === 'boolean'
+        ? value.ctrlWheelZoomEnabled
+        : DEFAULT_APP_PREFERENCES.ctrlWheelZoomEnabled,
+    outlineDefaultExpandLevel: clampNumber(
+      value.outlineDefaultExpandLevel,
+      1,
+      6,
+      DEFAULT_APP_PREFERENCES.outlineDefaultExpandLevel,
+    ),
+    codeBlockLineNumbersVisible:
+      typeof value.codeBlockLineNumbersVisible === 'boolean'
+        ? value.codeBlockLineNumbersVisible
+        : DEFAULT_APP_PREFERENCES.codeBlockLineNumbersVisible,
+    codeBlockIndent: isCodeBlockIndentPreference(value.codeBlockIndent)
+      ? value.codeBlockIndent
+      : DEFAULT_APP_PREFERENCES.codeBlockIndent,
+    shortcutPreferences: normalizeShortcutPreferences(value.shortcutPreferences),
     imageHandlingSettings: normalizeImageSettings(
       value.imageHandlingSettings as Partial<ImageHandlingSettings> | null | undefined,
     ),
   };
+}
+
+export function resolveThemePreference(theme: ThemePreference): EffectiveTheme {
+  if (theme !== 'system') {
+    return theme;
+  }
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export function applyThemeSetting(theme: ThemePreference, options?: { transition?: boolean }) {
@@ -290,10 +370,13 @@ export function applyThemeSetting(theme: ThemePreference, options?: { transition
     }, THEME_TRANSITION_MS + 40);
   }
 
-  document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
+  const effectiveTheme = resolveThemePreference(theme);
+  document.documentElement.dataset.theme = effectiveTheme === 'dark' ? 'dark' : '';
+  document.documentElement.dataset.themePreference = theme;
   // 通知代码块更新语法高亮主题
   CodeBlockNodeView.updateTheme();
   MermaidBlockNodeView.updateTheme();
+  return effectiveTheme;
 }
 
 function prefersReducedMotion(): boolean {
@@ -314,6 +397,14 @@ export function applyEditorLayoutSettings(contentWidthPercent: number) {
     '--md-editor-content-width-percent',
     String(contentWidthPercent),
   );
+}
+
+export function applyZoomSetting(zoomPercent: number) {
+  document.documentElement.style.setProperty('--md-editor-zoom', String(zoomPercent / 100));
+}
+
+export function applyCodeBlockLineNumberSetting(visible: boolean) {
+  document.documentElement.dataset.codeLineNumbers = visible ? 'visible' : 'hidden';
 }
 
 export function applyBlockStyleSetting(blockStyle: BlockStylePreference) {
@@ -342,6 +433,12 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     readingTimeVisible: preferences.readingTimeVisible,
     defaultCodeBlockLanguage: preferences.defaultCodeBlockLanguage,
     defaultDiagramType: preferences.defaultDiagramType,
+    zoomPercent: preferences.zoomPercent,
+    ctrlWheelZoomEnabled: preferences.ctrlWheelZoomEnabled,
+    outlineDefaultExpandLevel: preferences.outlineDefaultExpandLevel,
+    codeBlockLineNumbersVisible: preferences.codeBlockLineNumbersVisible,
+    codeBlockIndent: preferences.codeBlockIndent,
+    shortcutPreferences: preferences.shortcutPreferences,
     imageHandlingSettings: preferences.imageHandlingSettings,
   };
 }
@@ -429,6 +526,10 @@ export function normalizeImageSettings(
         : DEFAULT_IMAGE_HANDLING_SETTINGS.picgoCoreCommand,
     picgoCoreConfigPath:
       typeof value?.picgoCoreConfigPath === 'string' ? value.picgoCoreConfigPath.trim() : '',
+    defaultImageWidth: normalizeImageDefaultWidth(value?.defaultImageWidth),
+    defaultImageAlign: isImageDefaultAlign(value?.defaultImageAlign)
+      ? value.defaultImageAlign
+      : DEFAULT_IMAGE_HANDLING_SETTINGS.defaultImageAlign,
   };
 }
 
@@ -445,6 +546,61 @@ function isImageUploadProvider(value: unknown): value is ImageUploadProvider {
   return value === 'picgo' || value === 'picgo-core';
 }
 
+function isImageDefaultAlign(value: unknown): value is ImageDefaultAlignPreference {
+  return value === 'none' || value === 'left' || value === 'center' || value === 'right';
+}
+
+function normalizeImageDefaultWidth(value: unknown): string {
+  if (typeof value !== 'string') {
+    return DEFAULT_IMAGE_HANDLING_SETTINGS.defaultImageWidth;
+  }
+  const width = value.trim();
+  if (!width) {
+    return '';
+  }
+  if (/^\d+$/.test(width)) {
+    return `${Math.min(2400, Math.max(1, Number(width)))}px`;
+  }
+  if (/^\d+px$/.test(width)) {
+    const numberValue = Number(width.slice(0, -2));
+    return `${Math.min(2400, Math.max(1, numberValue))}px`;
+  }
+  if (/^\d+%$/.test(width)) {
+    const numberValue = Number(width.slice(0, -1));
+    return `${Math.min(100, Math.max(1, numberValue))}%`;
+  }
+  return DEFAULT_IMAGE_HANDLING_SETTINGS.defaultImageWidth;
+}
+
+function isCodeBlockIndentPreference(value: unknown): value is CodeBlockIndentPreference {
+  return value === 'spaces-2' || value === 'spaces-4' || value === 'tab';
+}
+
+function normalizeShortcutPreferences(value: unknown): ShortcutPreferences {
+  const source =
+    value && typeof value === 'object' ? (value as Partial<Record<ShortcutCommandId, unknown>>) : {};
+  const normalized = { ...DEFAULT_SHORTCUT_PREFERENCES };
+  for (const key of Object.keys(DEFAULT_SHORTCUT_PREFERENCES) as ShortcutCommandId[]) {
+    const shortcut = source[key];
+    if (typeof shortcut === 'string' && isValidShortcut(shortcut)) {
+      normalized[key] = normalizeShortcutText(shortcut);
+    }
+  }
+  return normalized;
+}
+
+function isValidShortcut(value: string): boolean {
+  return /^[A-Za-z0-9+\\\-\[\]` ]{3,40}$/.test(value.trim());
+}
+
+function normalizeShortcutText(value: string): string {
+  return value
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('+');
+}
+
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const numberValue = typeof value === 'string' ? Number(value) : Number(value);
   if (!Number.isFinite(numberValue)) {
@@ -454,7 +610,7 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
 }
 
 function isThemePreference(value: unknown): value is ThemePreference {
-  return value === 'light' || value === 'dark';
+  return value === 'light' || value === 'dark' || value === 'system';
 }
 
 function isEditorModePreference(value: unknown): value is EditorModePreference {

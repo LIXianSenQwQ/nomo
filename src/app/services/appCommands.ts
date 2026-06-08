@@ -1,4 +1,9 @@
 import { isDiagramType, type EditorCommand, type EditorMode } from '../../lib/editor-core';
+import {
+  DEFAULT_SHORTCUT_PREFERENCES,
+  type ShortcutCommandId,
+  type ShortcutPreferences,
+} from './settings';
 
 export interface AppCommandHandlers {
   createNewFile: () => void;
@@ -21,6 +26,17 @@ export interface AppCommandHandlers {
   getDefaultCodeBlockLanguage: () => string;
   getDefaultDiagramType: () => Parameters<typeof isDiagramType>[0];
 }
+
+type ShortcutParts = {
+  ctrl: boolean;
+  shift: boolean;
+  alt: boolean;
+  key: string;
+};
+
+const shortcutCommandOrder = Object.keys(
+  DEFAULT_SHORTCUT_PREFERENCES,
+) as ShortcutCommandId[];
 
 export function executeDesktopCommand(command: string, handlers: AppCommandHandlers) {
   if (command === 'new-file') {
@@ -142,8 +158,19 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   }
 }
 
-export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandHandlers) {
+export function handleGlobalShortcut(
+  event: KeyboardEvent,
+  handlers: AppCommandHandlers,
+  shortcuts: ShortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
+) {
   if (event.defaultPrevented) {
+    return;
+  }
+
+  const customCommand = findShortcutCommand(event, shortcuts);
+  if (customCommand) {
+    event.preventDefault();
+    executeDesktopCommand(customCommand, handlers);
     return;
   }
 
@@ -242,4 +269,66 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
     event.preventDefault();
     handlers.runCommand({ type: 'insertHorizontalRule' });
   }
+}
+
+function findShortcutCommand(
+  event: KeyboardEvent,
+  shortcuts: ShortcutPreferences,
+): ShortcutCommandId | null {
+  for (const commandId of shortcutCommandOrder) {
+    if (matchesShortcut(event, shortcuts[commandId])) {
+      return commandId;
+    }
+  }
+  return null;
+}
+
+function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+  const parsed = parseShortcut(shortcut);
+  if (!parsed) {
+    return false;
+  }
+  return (
+    event.ctrlKey === parsed.ctrl &&
+    event.shiftKey === parsed.shift &&
+    event.altKey === parsed.alt &&
+    normalizeEventKey(event) === parsed.key
+  );
+}
+
+function parseShortcut(shortcut: string): ShortcutParts | null {
+  const parts = shortcut
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const key = parts.pop();
+  if (!key) {
+    return null;
+  }
+  return {
+    ctrl: parts.some((part) => /^ctrl$/i.test(part)),
+    shift: parts.some((part) => /^shift$/i.test(part)),
+    alt: parts.some((part) => /^alt$/i.test(part)),
+    key: normalizeShortcutKey(key),
+  };
+}
+
+function normalizeEventKey(event: KeyboardEvent): string {
+  if (event.code === 'Backslash') {
+    return '\\';
+  }
+  if (event.code === 'BracketLeft') {
+    return '[';
+  }
+  if (event.code === 'BracketRight') {
+    return ']';
+  }
+  if (event.key === ' ') {
+    return 'space';
+  }
+  return normalizeShortcutKey(event.key);
+}
+
+function normalizeShortcutKey(key: string): string {
+  return key.trim().toLowerCase().replace(/^key/, '');
 }

@@ -28,12 +28,18 @@
     saveAppPreferences,
     type AppPreferences,
     type BlockStylePreference,
+    type CodeBlockIndentPreference,
     type EditorModePreference,
     type FolderOpenDefaultBehavior,
+    type ShortcutCommandId,
     type ThemePreference,
     type WritingStatsMetric,
   } from '../services/settings';
-  import type { ImageInsertStrategy, ImageUploadProvider } from '../../lib/services/render';
+  import type {
+    ImageDefaultAlign,
+    ImageInsertStrategy,
+    ImageUploadProvider,
+  } from '../../lib/services/render';
 
   type CategoryId =
     | 'general'
@@ -70,18 +76,42 @@
   let activeCategory: CategoryId = 'general';
   let draftSettings: AppPreferences = { ...DEFAULT_APP_PREFERENCES };
   let loaded = false;
-  let saving = false;
   let statusMessage = '';
   let statusTimer: number | null = null;
+  let autoSaveTimer: number | null = null;
+  let saveInFlight = false;
+  let saveQueued = false;
+  let activeSavePromise: Promise<void> | null = null;
   let desktopEnabled = false;
+  let isWin = false;
+  let picgoTesting = false;
+  let bindingMdAssociation = false;
+
+  const shortcutItems: Array<{ id: ShortcutCommandId; label: string }> = [
+    { id: 'new-file', label: '新建 Markdown' },
+    { id: 'open-file', label: '打开文件' },
+    { id: 'save-file', label: '保存' },
+    { id: 'toggle-source', label: '切换源码模式' },
+    { id: 'toggle-theme', label: '主动切换浅 / 深色' },
+    { id: 'toggle-focus', label: '显示 / 隐藏资源管理器' },
+    { id: 'insert-code-block', label: '插入代码块' },
+    { id: 'insert-table', label: '插入表格' },
+    { id: 'insert-math-block', label: '插入公式块' },
+    { id: 'menu-link', label: '编辑超链接' },
+    { id: 'menu-clear-format', label: '清除样式' },
+  ];
 
   onMount(() => {
     desktopEnabled = isTauriRuntime();
+    isWin = navigator.userAgent.includes('Win');
     void loadPreferences();
 
     return () => {
       if (statusTimer !== null) {
         window.clearTimeout(statusTimer);
+      }
+      if (autoSaveTimer !== null) {
+        window.clearTimeout(autoSaveTimer);
       }
     };
   });
@@ -92,22 +122,69 @@
     loaded = true;
   }
 
-  async function handleSave() {
-    saving = true;
-    try {
-      const saved = await saveAppPreferences(desktopEnabled, draftSettings);
-      draftSettings = saved;
-      applySettingsToThisWindow(saved);
-      await emitSettingsUpdated();
-      showStatus('设置已保存');
-    } catch (error) {
-      showStatus(error instanceof Error ? error.message : '保存设置失败');
-    } finally {
-      saving = false;
+  async function saveLatestSettings() {
+    if (!loaded) {
+      return;
     }
+
+    if (saveInFlight) {
+      saveQueued = true;
+      return activeSavePromise ?? Promise.resolve();
+    }
+
+    saveInFlight = true;
+    activeSavePromise = (async () => {
+      try {
+        do {
+          saveQueued = false;
+          const settingsToSave = draftSettings;
+          try {
+            const saved = await saveAppPreferences(desktopEnabled, settingsToSave);
+            if (draftSettings === settingsToSave) {
+              draftSettings = saved;
+              applySettingsToThisWindow(saved);
+            }
+            await emitSettingsUpdated();
+            showStatus('已自动保存');
+          } catch (error) {
+            showStatus(error instanceof Error ? error.message : '保存设置失败');
+          }
+        } while (saveQueued);
+      } finally {
+        saveInFlight = false;
+        activeSavePromise = null;
+      }
+    })();
+
+    return activeSavePromise;
   }
 
-  async function handleCancel() {
+  function scheduleAutoSave() {
+    if (!loaded) {
+      return;
+    }
+
+    if (autoSaveTimer !== null) {
+      window.clearTimeout(autoSaveTimer);
+    }
+    showStatus('保存中...');
+    autoSaveTimer = window.setTimeout(() => {
+      autoSaveTimer = null;
+      void saveLatestSettings();
+    }, 350);
+  }
+
+  async function flushPendingSettingsSave() {
+    if (autoSaveTimer !== null) {
+      window.clearTimeout(autoSaveTimer);
+      autoSaveTimer = null;
+    }
+
+    await saveLatestSettings();
+  }
+
+  async function handleClose() {
+    await flushPendingSettingsSave();
     await closeCurrentWindow();
   }
 
@@ -147,11 +224,15 @@
   }
 
   function updateDraft(patch: Partial<AppPreferences>) {
-    draftSettings = normalizeAppPreferences({
+    const nextSettings = normalizeAppPreferences({
       ...draftSettings,
       ...patch,
       imageHandlingSettings: patch.imageHandlingSettings ?? draftSettings.imageHandlingSettings,
     });
+
+    draftSettings = nextSettings;
+    applySettingsToThisWindow(nextSettings);
+    scheduleAutoSave();
   }
 
   function updateImageSettings(patch: Partial<AppPreferences['imageHandlingSettings']>) {
@@ -161,6 +242,37 @@
         ...patch,
       },
     });
+  }
+
+  async function minimizeCurrentWindow() {
+    if (!desktopEnabled) {
+      return;
+    }
+
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('minimize_window').catch(() => undefined);
+  }
+
+  async function handleWindowDrag(event: MouseEvent) {
+    if (!desktopEnabled || event.buttons !== 1 || event.detail > 1) {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+    if (target.closest('button,input,select,textarea,label,a')) {
+      return;
+    }
+
+    if (!target.closest('[data-drag-region]')) {
+      return;
+    }
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().startDragging();
+    } catch {
+      // ignore
+    }
   }
 
   function setTheme(theme: ThemePreference) {
@@ -191,6 +303,23 @@
     updateImageSettings({ uploadProvider });
   }
 
+  function setImageDefaultAlign(defaultImageAlign: ImageDefaultAlign) {
+    updateImageSettings({ defaultImageAlign });
+  }
+
+  function setCodeBlockIndent(codeBlockIndent: CodeBlockIndentPreference) {
+    updateDraft({ codeBlockIndent });
+  }
+
+  function updateShortcut(commandId: ShortcutCommandId, event: Event) {
+    updateDraft({
+      shortcutPreferences: {
+        ...draftSettings.shortcutPreferences,
+        [commandId]: (event.currentTarget as HTMLInputElement).value,
+      },
+    });
+  }
+
   function updateNumberSetting(key: keyof AppPreferences, event: Event) {
     updateDraft({ [key]: Number((event.currentTarget as HTMLInputElement).value) });
   }
@@ -213,6 +342,46 @@
   function toggleImageSetting(key: keyof AppPreferences['imageHandlingSettings'], event: Event) {
     updateImageSettings({ [key]: (event.currentTarget as HTMLInputElement).checked });
   }
+
+  async function testPicgoConnection() {
+    if (!desktopEnabled || picgoTesting) {
+      return;
+    }
+    picgoTesting = true;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ ok: boolean; message: string }>('test_picgo_connection', {
+        input: {
+          provider: draftSettings.imageHandlingSettings.uploadProvider,
+          server_url: draftSettings.imageHandlingSettings.picgoServerUrl,
+          command: draftSettings.imageHandlingSettings.picgoCoreCommand,
+        },
+      });
+      showStatus(result.message);
+    } catch (error) {
+      showStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      picgoTesting = false;
+    }
+  }
+
+  async function bindMarkdownAssociation() {
+    if (!desktopEnabled || bindingMdAssociation) {
+      return;
+    }
+    bindingMdAssociation = true;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ ok: boolean; message: string }>(
+        'register_markdown_file_association',
+      );
+      showStatus(result.message);
+    } catch (error) {
+      showStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      bindingMdAssociation = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -221,7 +390,12 @@
 
 <div class="settings-window-shell">
   <aside class="settings-nav" aria-label="设置分类">
-    <div class="settings-brand" data-tauri-drag-region>
+    <div
+      class="settings-brand"
+      data-drag-region
+      role="presentation"
+      on:mousedown={handleWindowDrag}
+    >
       <MonitorCog size={20} aria-hidden="true" />
       <span>偏好设置</span>
     </div>
@@ -245,14 +419,56 @@
   </aside>
 
   <section class="settings-main" aria-labelledby="settings-title">
-    <header class="settings-header" data-tauri-drag-region>
-      <div>
+    <header
+      class="settings-header"
+      data-drag-region
+      role="presentation"
+      on:mousedown={handleWindowDrag}
+    >
+      <div class="settings-header-title" data-drag-region>
         <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
-        <p>调整 Nomo 的本地编辑、窗口和渲染偏好。</p>
+        <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
       </div>
-      <button type="button" class="close-button" aria-label="关闭偏好设置" on:click={handleCancel}>
-        <X size={18} />
-      </button>
+      {#if desktopEnabled && isWin}
+        <div class="settings-window-controls" aria-label="窗口控制">
+          <button
+            type="button"
+            class="settings-control-button"
+            title="最小化"
+            aria-label="最小化"
+            on:click={minimizeCurrentWindow}
+          >
+            <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
+              <line
+                x1="0"
+                y1="0.5"
+                x2="10"
+                y2="0.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="settings-control-button close"
+            title="关闭"
+            aria-label="关闭偏好设置"
+            on:click={handleClose}
+          >
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      {:else}
+        <button
+          type="button"
+          class="close-button"
+          aria-label="关闭偏好设置"
+          on:click={handleClose}
+        >
+          <X size={18} />
+        </button>
+      {/if}
     </header>
 
     {#if !loaded}
@@ -267,7 +483,7 @@
                 <span class="setting-label">主题</span>
                 <p>保存后同步到主窗口和渲染服务。</p>
               </div>
-              <div class="segmented-control" role="group" aria-label="主题">
+              <div class="triple-control" role="group" aria-label="主题">
                 <button
                   type="button"
                   class:active={draftSettings.theme === 'light'}
@@ -279,6 +495,12 @@
                   class:active={draftSettings.theme === 'dark'}
                   aria-pressed={draftSettings.theme === 'dark'}
                   on:click={() => setTheme('dark')}>深色</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.theme === 'system'}
+                  aria-pressed={draftSettings.theme === 'system'}
+                  on:click={() => setTheme('system')}>跟随系统</button
                 >
               </div>
             </div>
@@ -352,6 +574,14 @@
               />
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
+
+            <div class="disabled-row" aria-disabled="true">
+              <div>
+                <span class="setting-label">界面语言</span>
+                <p>后续支持在中文和英文之间切换。</p>
+              </div>
+              <span class="disabled-pill">中 / 英</span>
+            </div>
           </div>
         {:else if activeCategory === 'editor'}
           <div class="settings-group">
@@ -452,17 +682,84 @@
                 <span>字符 / 字节</span>
               </div>
             </div>
+
+            <div class="setting-row">
+              <div>
+                <span class="setting-label">默认缩进</span>
+                <p>代码块编辑态按 Tab 时使用。</p>
+              </div>
+              <div class="triple-control" role="group" aria-label="默认缩进">
+                <button
+                  type="button"
+                  class:active={draftSettings.codeBlockIndent === 'spaces-2'}
+                  aria-pressed={draftSettings.codeBlockIndent === 'spaces-2'}
+                  on:click={() => setCodeBlockIndent('spaces-2')}>2 空格</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.codeBlockIndent === 'spaces-4'}
+                  aria-pressed={draftSettings.codeBlockIndent === 'spaces-4'}
+                  on:click={() => setCodeBlockIndent('spaces-4')}>4 空格</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.codeBlockIndent === 'tab'}
+                  aria-pressed={draftSettings.codeBlockIndent === 'tab'}
+                  on:click={() => setCodeBlockIndent('tab')}>Tab</button
+                >
+              </div>
+            </div>
+
+            <label class="toggle-row" for="codeBlockLineNumbersVisible">
+              <span>
+                <span class="toggle-title">代码块行号</span>
+                <span class="toggle-desc">控制语义编辑区代码块是否显示行号。</span>
+              </span>
+              <input
+                id="codeBlockLineNumbersVisible"
+                type="checkbox"
+                checked={draftSettings.codeBlockLineNumbersVisible}
+                on:change={(event) => toggleSetting('codeBlockLineNumbersVisible', event)}
+              />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
           </div>
         {:else if activeCategory === 'appearance'}
           <div class="settings-group">
-            <h2>视觉占位</h2>
-            <div class="disabled-row" aria-disabled="true">
+            <h2>视觉缩放</h2>
+            <div class="setting-row">
               <div>
-                <span class="setting-label">系统主题跟随</span>
-                <p>后续版本支持。当前使用手动浅色 / 深色切换。</p>
+                <label for="zoomPercent" class="setting-label">缩放级别</label>
+                <p>调整正文编辑区和源码模式的整体显示比例。</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <div class="range-setting">
+                <input
+                  id="zoomPercent"
+                  type="range"
+                  min="80"
+                  max="160"
+                  step="5"
+                  value={draftSettings.zoomPercent}
+                  on:input={(event) => updateNumberSetting('zoomPercent', event)}
+                />
+                <output for="zoomPercent">{draftSettings.zoomPercent}%</output>
+              </div>
             </div>
+
+            <label class="toggle-row" for="ctrlWheelZoomEnabled">
+              <span>
+                <span class="toggle-title">Ctrl 滚轮缩放</span>
+                <span class="toggle-desc">按住 Ctrl 并滚动鼠标滚轮调整缩放。</span>
+              </span>
+              <input
+                id="ctrlWheelZoomEnabled"
+                type="checkbox"
+                checked={draftSettings.ctrlWheelZoomEnabled}
+                on:change={(event) => toggleSetting('ctrlWheelZoomEnabled', event)}
+              />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
+
             <div class="disabled-row" aria-disabled="true">
               <div>
                 <span class="setting-label">自定义 CSS 主题</span>
@@ -542,6 +839,21 @@
               />
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
+
+            <div class="setting-row">
+              <div>
+                <span class="setting-label">绑定 .md 默认打开方式</span>
+                <p>将当前 Nomo 程序注册为 Windows Markdown 默认打开应用。</p>
+              </div>
+              <button
+                type="button"
+                class="action-button"
+                disabled={!desktopEnabled || !isWin || bindingMdAssociation}
+                on:click={bindMarkdownAssociation}
+              >
+                {bindingMdAssociation ? '绑定中...' : '绑定 .md'}
+              </button>
+            </div>
           </div>
         {:else if activeCategory === 'images'}
           <div class="settings-group">
@@ -669,21 +981,67 @@
                   />
                 </div>
               {/if}
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">连接测试</span>
+                  <p>检查当前 PicGo 配置能否被 Nomo 调用。</p>
+                </div>
+                <button
+                  type="button"
+                  class="action-button"
+                  disabled={!desktopEnabled || picgoTesting}
+                  on:click={testPicgoConnection}
+                >
+                  {picgoTesting ? '测试中...' : '测试连接'}
+                </button>
+              </div>
             {/if}
 
-            <div class="disabled-row" aria-disabled="true">
+            <div class="setting-row">
               <div>
-                <span class="setting-label">图片默认宽度</span>
-                <p>后续会接入图片节点属性默认值。</p>
+                <label for="defaultImageWidth" class="setting-label">图片默认宽度</label>
+                <p>插入图片时自动写入宽度属性，可填 640px、80% 或留空。</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <input
+                id="defaultImageWidth"
+                class="text-input compact"
+                type="text"
+                placeholder="留空"
+                value={draftSettings.imageHandlingSettings.defaultImageWidth}
+                on:input={(event) => updateImageStringSetting('defaultImageWidth', event)}
+              />
             </div>
-            <div class="disabled-row" aria-disabled="true">
+            <div class="setting-row">
               <div>
                 <span class="setting-label">图片默认对齐</span>
-                <p>后续会接入图片节点属性默认值。</p>
+                <p>插入图片时自动写入对齐属性。</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <div class="quad-control" role="group" aria-label="图片默认对齐">
+                <button
+                  type="button"
+                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
+                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
+                  on:click={() => setImageDefaultAlign('none')}>跟随正文</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
+                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
+                  on:click={() => setImageDefaultAlign('left')}>左对齐</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
+                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
+                  on:click={() => setImageDefaultAlign('center')}>居中</button
+                >
+                <button
+                  type="button"
+                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
+                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
+                  on:click={() => setImageDefaultAlign('right')}>右对齐</button
+                >
+              </div>
             </div>
           </div>
         {:else if activeCategory === 'stats'}
@@ -758,12 +1116,27 @@
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
 
-            <div class="disabled-row" aria-disabled="true">
+            <div class="setting-row">
               <div>
-                <span class="setting-label">大纲默认展开层级</span>
-                <p>后续会接入 Outline 展开状态策略。</p>
+                <label for="outlineDefaultExpandLevel" class="setting-label"
+                  >大纲默认展开层级</label
+                >
+                <p>打开或切换文档时默认展示到指定标题层级。</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <div class="range-setting">
+                <input
+                  id="outlineDefaultExpandLevel"
+                  type="range"
+                  min="1"
+                  max="6"
+                  step="1"
+                  value={draftSettings.outlineDefaultExpandLevel}
+                  on:input={(event) => updateNumberSetting('outlineDefaultExpandLevel', event)}
+                />
+                <output for="outlineDefaultExpandLevel"
+                  >H{draftSettings.outlineDefaultExpandLevel}</output
+                >
+              </div>
             </div>
           </div>
         {:else if activeCategory === 'advanced'}
@@ -801,12 +1174,26 @@
               </select>
             </div>
 
-            <div class="disabled-row" aria-disabled="true">
-              <div>
-                <span class="setting-label">自定义快捷键</span>
-                <p>当前快捷键仍由应用菜单和命令系统固定定义。</p>
-              </div>
-              <span class="disabled-pill">后续版本支持</span>
+            <div class="shortcut-settings">
+              <h2>自定义快捷键</h2>
+              {#each shortcutItems as shortcut}
+                <div class="setting-row compact-row">
+                  <div>
+                    <label for={`shortcut-${shortcut.id}`} class="setting-label"
+                      >{shortcut.label}</label
+                    >
+                    <p>使用 Ctrl、Shift、Alt 与一个按键组合。</p>
+                  </div>
+                  <input
+                    id={`shortcut-${shortcut.id}`}
+                    class="text-input compact"
+                    type="text"
+                    spellcheck="false"
+                    value={draftSettings.shortcutPreferences[shortcut.id]}
+                    on:input={(event) => updateShortcut(shortcut.id, event)}
+                  />
+                </div>
+              {/each}
             </div>
             <div class="disabled-row" aria-disabled="true">
               <div>
@@ -834,23 +1221,19 @@
                 <dd>当前版本优先保证 Windows 的文件、窗口和快捷键体验。</dd>
               </div>
             </dl>
+
+            <div class="disabled-row" aria-disabled="true">
+              <div>
+                <span class="setting-label">更新检查</span>
+                <p>后续支持检查 Nomo 新版本并提示更新。</p>
+              </div>
+              <span class="disabled-pill">后续版本支持</span>
+            </div>
           </div>
         {/if}
       </div>
     {/if}
 
-    <footer class="settings-footer">
-      <span class:visible={statusMessage} role="status">{statusMessage}</span>
-      <button type="button" class="secondary-button" on:click={handleCancel}>取消</button>
-      <button
-        type="button"
-        class="primary-button"
-        disabled={saving || !loaded}
-        on:click={handleSave}
-      >
-        {saving ? '保存中...' : '保存'}
-      </button>
-    </footer>
   </section>
 </div>
 
@@ -879,13 +1262,13 @@
   }
 
   .settings-brand {
-    height: 64px;
+    height: 42px;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 0 18px;
+    padding: 0 14px;
     color: var(--md-editor-fg);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     border-bottom: 1px solid var(--md-editor-border);
     user-select: none;
@@ -933,37 +1316,53 @@
 
   .settings-main {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
     min-height: 0;
     background: var(--md-editor-bg);
   }
 
   .settings-header {
-    height: 64px;
+    height: 42px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 0 22px;
+    gap: 10px;
+    padding: 0 0 0 16px;
     border-bottom: 1px solid var(--md-editor-border);
     user-select: none;
+  }
+
+  .settings-header-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
 
   .settings-header h1 {
     margin: 0;
     color: var(--md-editor-heading-fg);
-    font-size: 18px;
+    font-size: 14px;
     line-height: 1.2;
-    font-weight: 750;
+    font-weight: 700;
     letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .settings-header p {
-    margin: 4px 0 0;
+  .settings-header-title span {
+    flex-shrink: 0;
     color: var(--md-editor-muted-fg);
     font-size: 12px;
-    line-height: 1.45;
+    line-height: 1.2;
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .settings-header-title span.visible {
+    opacity: 1;
   }
 
   .close-button {
@@ -976,11 +1375,45 @@
     background: transparent;
     color: var(--md-editor-muted-fg);
     cursor: pointer;
+    margin-right: 14px;
   }
 
   .close-button:hover {
     background: var(--md-editor-surface);
     color: var(--md-editor-fg);
+  }
+
+  .settings-window-controls {
+    display: flex;
+    align-self: stretch;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+
+  .settings-control-button {
+    width: 46px;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--md-editor-muted-fg);
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .settings-control-button:hover {
+    background: rgba(128, 128, 128, 0.15);
+    color: var(--md-editor-fg);
+  }
+
+  .settings-control-button.close:hover {
+    background: #e81123;
+    color: #ffffff;
   }
 
   .settings-content,
@@ -1020,6 +1453,17 @@
     gap: 22px;
     padding: 14px 0;
     border-top: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
+  }
+
+  .compact-row {
+    min-height: 54px;
+    padding: 10px 0;
+  }
+
+  .shortcut-settings {
+    display: grid;
+    gap: 0;
+    padding-top: 16px;
   }
 
   .toggle-row {
@@ -1146,8 +1590,40 @@
   }
 
   .text-input.compact {
-    max-width: 140px;
+    max-width: 180px;
     justify-self: end;
+  }
+
+  .action-button {
+    justify-self: end;
+    min-width: 116px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-sm);
+    background: var(--md-editor-accent);
+    color: #ffffff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+      opacity 160ms ease,
+      transform 160ms ease,
+      background-color 160ms ease;
+  }
+
+  .action-button:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+
+  .action-button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .action-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
   .toggle-row input {
@@ -1249,57 +1725,6 @@
     color: var(--md-editor-fg);
     font-size: 13px;
     line-height: 1.55;
-  }
-
-  .settings-footer {
-    min-height: 58px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    padding: 10px 22px;
-    border-top: 1px solid var(--md-editor-border);
-    background: color-mix(in srgb, var(--md-editor-bg) 94%, var(--md-editor-surface));
-  }
-
-  .settings-footer span {
-    margin-right: auto;
-    color: var(--md-editor-muted-fg);
-    font-size: 12px;
-    opacity: 0;
-    transition: opacity 160ms ease;
-  }
-
-  .settings-footer span.visible {
-    opacity: 1;
-  }
-
-  .primary-button,
-  .secondary-button {
-    min-width: 76px;
-    height: 34px;
-    border-radius: var(--md-editor-radius-sm);
-    font: inherit;
-    font-size: 13px;
-    font-weight: 650;
-    cursor: pointer;
-  }
-
-  .primary-button {
-    border: 1px solid var(--md-editor-accent);
-    background: var(--md-editor-accent);
-    color: white;
-  }
-
-  .primary-button:disabled {
-    cursor: not-allowed;
-    opacity: 0.62;
-  }
-
-  .secondary-button {
-    border: 1px solid var(--md-editor-border);
-    background: var(--md-editor-surface);
-    color: var(--md-editor-fg);
   }
 
   button:focus-visible,

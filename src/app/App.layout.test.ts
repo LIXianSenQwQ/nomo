@@ -34,6 +34,7 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
+  const settingsServiceSource = readFileSync(resolve(__dirname, 'services/settings.ts'), 'utf-8');
   const desktopWindowSource = readFileSync(
     resolve(__dirname, 'services/desktopWindow.ts'),
     'utf-8',
@@ -45,6 +46,14 @@ describe('App outline layout', () => {
   const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
   const tauriTraySource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/tray.rs'),
+    'utf-8',
+  );
+  const tauriWindowCommandsSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/commands.rs'),
+    'utf-8',
+  );
+  const tauriImageAssetsSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/file_system/image_assets.rs'),
     'utf-8',
   );
   const tauriFileSystemSource = readFileSync(
@@ -101,7 +110,6 @@ describe('App outline layout', () => {
     }
     throw new Error(`CSS block not closed: ${selector}`);
   }
-
 
   it('keeps the document outline out of the document layout flow', () => {
     const documentLayouts =
@@ -266,7 +274,10 @@ describe('App outline layout', () => {
     expect(tauriCommandsSource).toContain('install_window_menu(&app, &window)');
     expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
     expect(tauriMenuSource).toContain('window.emit("nomo://menu-command", command)');
-    expect(tauriMenuSource).toContain('window.app_handle().exit(0)');
+    expect(tauriMenuSource).toContain('emit_exit_request(window.app_handle())');
+    expect(tauriCommandsSource).toContain('app.emit("nomo://request-exit-app", ())');
+    expect(appSource).toContain("listen('nomo://request-exit-app'");
+    expect(appSource).toContain('requestExitApp()');
     expect(tauriMenuSource).toContain('format!("open-recent:{}:{}", entry.entry_type, entry.path)');
     expect(appCommandsSource).toContain("command === 'new-window'");
     expect(appCommandsSource).toContain("command.startsWith('open-recent:')");
@@ -430,6 +441,40 @@ describe('App outline layout', () => {
     expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
   });
 
+  it('wires the first and second batch settings to runtime behavior instead of placeholders', () => {
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('light')}>浅色");
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('dark')}>深色");
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('system')}>跟随系统");
+    expect(settingsWindowSource).toContain('id="zoomPercent"');
+    expect(settingsWindowSource).toContain('ctrlWheelZoomEnabled');
+    expect(settingsWindowSource).toContain('codeBlockLineNumbersVisible');
+    expect(settingsWindowSource).toContain('setCodeBlockIndent');
+    expect(settingsWindowSource).toContain('id="defaultImageWidth"');
+    expect(settingsWindowSource).toContain('setImageDefaultAlign');
+    expect(settingsWindowSource).toContain('testPicgoConnection');
+    expect(settingsWindowSource).toContain('bindMarkdownAssociation');
+    expect(settingsWindowSource).toContain('id="outlineDefaultExpandLevel"');
+    expect(settingsWindowSource).toContain('shortcutItems');
+    expect(settingsWindowSource).toContain('updateShortcut');
+
+    expect(settingsServiceSource).toContain("type ThemePreference = 'light' | 'dark' | 'system'");
+    expect(appSource).toContain('setupSystemThemeListener');
+    expect(appSource).toContain('handleGlobalWheel');
+    expect(appSource).toContain('applyZoomSetting(zoomPercent)');
+    expect(appSource).toContain('applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible)');
+    expect(appSource).toContain('document.documentElement.dataset.codeBlockIndent = codeBlockIndent');
+    expect(appSource).toContain('applyOutlineDefaultExpansion');
+    expect(appSource).toContain('shortcutPreferences');
+    expect(appSource).toContain('requestExitApp()');
+
+    expect(tauriImageAssetsSource).toContain('pub(crate) fn test_picgo_connection');
+    expect(tauriImageAssetsSource).toContain('create_picgo_core_command(command)');
+    expect(tauriWindowCommandsSource).toContain('pub(crate) fn register_markdown_file_association');
+    expect(tauriWindowCommandsSource).toContain('pub(crate) fn request_exit_app');
+    expect(tauriTraySource).toContain('emit_exit_request(app)');
+    expect(tauriMenuSource).toContain('emit_exit_request(window.app_handle())');
+  });
+
   it('supports closing windows to the system tray when enabled', () => {
     expect(tauriLibSource).toContain('crate::window::tray::install_app_tray');
     expect(tauriLibSource).toContain('crate::window::commands::hide_window_to_tray');
@@ -441,6 +486,7 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('nomo-tray-dark-inactive-24-preview.png');
     expect(tauriTraySource).toContain('set_tray_active');
     expect(tauriTraySource).toContain('"退出"');
+    expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
     expect(tauriTraySource).toContain('closeToTrayEnabled');
   });

@@ -97,6 +97,17 @@ function countLines(text: string): number {
   return lines;
 }
 
+function getCodeBlockIndentText(): string {
+  const indent = document.documentElement.dataset.codeBlockIndent;
+  if (indent === 'tab') {
+    return '\t';
+  }
+  if (indent === 'spaces-4') {
+    return '    ';
+  }
+  return '  ';
+}
+
 function runWhenIdle(callback: () => void, timeout = 500): () => void {
   if ('requestIdleCallback' in window) {
     const id = window.requestIdleCallback(callback, { timeout });
@@ -755,20 +766,21 @@ export class CodeBlockNodeView {
       return;
     }
 
-    // Tab：插入 2 个空格（用 execCommand 保留浏览器 undo 栈）
+    // Tab：按用户偏好的缩进插入（用 execCommand 保留浏览器 undo 栈）
     if (e.key === 'Tab' && !e.shiftKey) {
       e.preventDefault();
-      document.execCommand('insertText', false, '  ');
+      document.execCommand('insertText', false, getCodeBlockIndentText());
       return;
     }
 
-    // Shift+Tab：当前行减少一级缩进（2 个前导空格）
+    // Shift+Tab：当前行减少一级缩进
     if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
       const { selectionStart, value } = this.textarea;
       const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
-      if (value.slice(lineStart, lineStart + 2) === '  ') {
-        this.textarea.setSelectionRange(lineStart, lineStart + 2);
+      const indentText = getCodeBlockIndentText();
+      if (value.slice(lineStart, lineStart + indentText.length) === indentText) {
+        this.textarea.setSelectionRange(lineStart, lineStart + indentText.length);
         document.execCommand('insertText', false, '');
       }
       return;

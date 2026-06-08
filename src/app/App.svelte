@@ -85,11 +85,17 @@
     DEFAULT_APP_PREFERENCES,
     SETTINGS_UPDATED_EVENT,
     applyBlockStyleSetting,
+    applyCodeBlockLineNumberSetting,
     applyEditorLayoutSettings,
     applyThemeSetting,
     applyTypographySettings,
+    applyZoomSetting,
     loadAppPreferences,
+    resolveThemePreference,
     type AppPreferences,
+    type CodeBlockIndentPreference,
+    type ShortcutPreferences,
+    type ThemePreference,
   } from './services/settings';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
@@ -116,7 +122,8 @@
     dirty = false,
     version = 0;
   let mode: EditorMode = DEFAULT_APP_PREFERENCES.editorMode;
-  let theme: 'light' | 'dark' = DEFAULT_APP_PREFERENCES.theme;
+  let themePreference: ThemePreference = DEFAULT_APP_PREFERENCES.theme;
+  let theme: 'light' | 'dark' = resolveThemePreference(themePreference);
   let fileName = '',
     filePath = '';
   let nativePath: string | null = null;
@@ -144,6 +151,12 @@
   let createSnapshotBeforeSave = DEFAULT_APP_PREFERENCES.createSnapshotBeforeSave;
   let defaultCodeBlockLanguage = DEFAULT_APP_PREFERENCES.defaultCodeBlockLanguage;
   let defaultDiagramType = DEFAULT_APP_PREFERENCES.defaultDiagramType;
+  let zoomPercent = DEFAULT_APP_PREFERENCES.zoomPercent;
+  let ctrlWheelZoomEnabled = DEFAULT_APP_PREFERENCES.ctrlWheelZoomEnabled;
+  let outlineDefaultExpandLevel = DEFAULT_APP_PREFERENCES.outlineDefaultExpandLevel;
+  let codeBlockLineNumbersVisible = DEFAULT_APP_PREFERENCES.codeBlockLineNumbersVisible;
+  let codeBlockIndent: CodeBlockIndentPreference = DEFAULT_APP_PREFERENCES.codeBlockIndent;
+  let shortcutPreferences: ShortcutPreferences = { ...DEFAULT_APP_PREFERENCES.shortcutPreferences };
   let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
   let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
     DEFAULT_APP_PREFERENCES.folderOpenDefaultBehavior;
@@ -255,7 +268,7 @@
 
       outline = extractOutline(markdown);
       activeOutlineId = outline[0]?.id ?? '';
-      pruneCollapsedOutlineIds();
+      applyOutlineDefaultExpansion();
       stats = calculateDocumentStats(markdown);
       syncSourceTextareaHeight();
     } finally {
@@ -333,7 +346,7 @@
   const minimizeWindow = () => minimizeAppWindow(desktopEnabled);
   const maximizeWindow = () => maximizeAppWindow(desktopEnabled);
   const closeAppWindow = () => closeDesktopWindow(desktopEnabled, closeToTrayEnabled);
-  const exitApp = () => exitDesktopApp(desktopEnabled);
+  const exitApp = () => requestExitApp();
   const createNewWindow = (folderPath?: string) => createAppWindow(desktopEnabled, folderPath);
 
   function resolveFolderName(path: string): string {
@@ -452,6 +465,16 @@
     closeAppWindow();
   }
 
+  async function requestExitApp() {
+    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(`以下文件有未保存修改：${names}。退出应用将丢失这些更改，是否继续？`);
+      if (!ok) return;
+    }
+    await exitDesktopApp(desktopEnabled);
+  }
+
   function persistEditorModePreference(nextMode: EditorMode) {
     updateAppSetting('editorMode', nextMode).catch(() => undefined);
   }
@@ -552,6 +575,8 @@
     missingRecentPaths = new Set<string>();
   }
   let fileCheckTimer: number | null = null;
+  let systemThemeMediaQuery: MediaQueryList | null = null;
+  let systemThemeChangeHandler: (() => void) | null = null;
 
   function handleContextMenuOpen(event: ContextMenuOpenEvent) {
     contextMenuX = event.x;
@@ -596,7 +621,8 @@
     getEditor: () => editor,
     getTheme: () => theme,
     setTheme: (value) => {
-      theme = value;
+      themePreference = value;
+      theme = resolveThemePreference(value);
     },
     getFontSize: () => fontSize,
     setFontSize: (value) => {
@@ -906,7 +932,14 @@
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
-  const toggleTheme = editorSettings.toggleTheme;
+  function toggleTheme() {
+    const nextTheme: ThemePreference = theme === 'light' ? 'dark' : 'light';
+    themePreference = nextTheme;
+    theme = applyThemeSetting(themePreference, { transition: true });
+    localStorage.setItem('nomo-theme', themePreference);
+    updateAppSetting('theme', themePreference).catch(() => undefined);
+    editor.updateTheme({ name: theme });
+  }
   const updateContentWidth = editorSettings.updateContentWidth;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
@@ -1172,7 +1205,8 @@
     preferences: AppPreferences,
     options: { applyEditorMode?: boolean } = {},
   ) {
-    theme = preferences.theme;
+    themePreference = preferences.theme;
+    theme = applyThemeSetting(themePreference, { transition: true });
     fontSize = preferences.fontSize;
     lineHeight = preferences.lineHeight;
     contentWidthPercent = preferences.contentWidthPercent;
@@ -1191,6 +1225,12 @@
     createSnapshotBeforeSave = preferences.createSnapshotBeforeSave;
     defaultCodeBlockLanguage = preferences.defaultCodeBlockLanguage;
     defaultDiagramType = preferences.defaultDiagramType;
+    zoomPercent = preferences.zoomPercent;
+    ctrlWheelZoomEnabled = preferences.ctrlWheelZoomEnabled;
+    outlineDefaultExpandLevel = preferences.outlineDefaultExpandLevel;
+    codeBlockLineNumbersVisible = preferences.codeBlockLineNumbersVisible;
+    codeBlockIndent = preferences.codeBlockIndent;
+    shortcutPreferences = preferences.shortcutPreferences;
 
     if (!filePreviewEnabled) {
       previewTabId = null;
@@ -1200,11 +1240,27 @@
     }
     autoSaveEnabled = preferences.autoSaveEnabled;
 
-    applyThemeSetting(theme, { transition: true });
     applyTypographySettings(fontSize, lineHeight);
     applyEditorLayoutSettings(contentWidthPercent);
     applyBlockStyleSetting(blockStyle);
+    applyZoomSetting(zoomPercent);
+    applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible);
+    document.documentElement.dataset.codeBlockIndent = codeBlockIndent;
     editor.updateTheme({ name: theme });
+    applyOutlineDefaultExpansion();
+
+    const shouldBeLargeDocument = markdown.length > largeDocumentLimit;
+    if (!shouldBeLargeDocument && largeDocumentMode) {
+      largeDocumentMode = false;
+      readonlyDocumentMode = false;
+      editor.updateOptions({ mode });
+    } else if (shouldBeLargeDocument && !largeDocumentMode) {
+      largeDocumentMode = true;
+      readonlyDocumentMode = true;
+      mode = 'source';
+      editor.updateOptions({ mode: 'source' });
+      statusMessage = '当前文档已按大文件阈值切换为只读源码模式';
+    }
 
     if (options.applyEditorMode && !largeDocumentMode) {
       mode = preferences.editorMode;
@@ -1214,6 +1270,22 @@
     persistWorkspaceState();
   }
 
+  function applyOutlineDefaultExpansion() {
+    if (outlineDefaultExpandLevel >= 6) {
+      collapsedOutlineIds = new Set();
+      return;
+    }
+
+    const nextCollapsedIds = new Set<string>();
+    outline.forEach((item, index) => {
+      const next = outline[index + 1];
+      if (item.level >= outlineDefaultExpandLevel && next && next.level > item.level) {
+        nextCollapsedIds.add(item.id);
+      }
+    });
+    collapsedOutlineIds = nextCollapsedIds;
+  }
+
   async function reloadAppPreferencesFromSettingsWindow() {
     const preferences = await loadAppPreferences(desktopEnabled);
     applyAppPreferences(preferences, { applyEditorMode: true });
@@ -1221,6 +1293,8 @@
 
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
+    window.addEventListener('wheel', handleGlobalWheel, { passive: false });
+    setupSystemThemeListener();
     let persistedEditorMode: EditorMode | null = null;
 
     if (desktopEnabled) {
@@ -1304,6 +1378,10 @@
     if (toastTimer !== null) window.clearTimeout(toastTimer);
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
+    window.removeEventListener('wheel', handleGlobalWheel);
+    if (systemThemeMediaQuery && systemThemeChangeHandler) {
+      systemThemeMediaQuery.removeEventListener('change', systemThemeChangeHandler);
+    }
     sidebarResize.destroy();
     unsubscribe();
     editor.destroy();
@@ -1540,7 +1618,7 @@
     }
 
     const { listen } = await import('@tauri-apps/api/event');
-    const [menuUnlisten, dropUnlisten, settingsUnlisten] = await Promise.all([
+    const [menuUnlisten, dropUnlisten, settingsUnlisten, exitRequestUnlisten] = await Promise.all([
       listenDesktopMenuCommands((command) => {
         executeDesktopCommand(command);
       }).catch(() => null),
@@ -1550,9 +1628,12 @@
       listen(SETTINGS_UPDATED_EVENT, () => {
         reloadAppPreferencesFromSettingsWindow().catch(() => undefined);
       }).catch(() => null),
+      listen('nomo://request-exit-app', () => {
+        requestExitApp().catch(() => undefined);
+      }).catch(() => null),
     ]);
 
-    desktopUnlisteners = [menuUnlisten, dropUnlisten, settingsUnlisten].filter(
+    desktopUnlisteners = [menuUnlisten, dropUnlisten, settingsUnlisten, exitRequestUnlisten].filter(
       (value): value is () => void => Boolean(value),
     );
   }
@@ -1562,7 +1643,44 @@
   }
 
   function handleGlobalShortcut(event: KeyboardEvent) {
-    handleGlobalAppShortcut(event, commandHandlers);
+    handleGlobalAppShortcut(event, commandHandlers, shortcutPreferences);
+  }
+
+  function handleGlobalWheel(event: WheelEvent) {
+    if (!ctrlWheelZoomEnabled || !event.ctrlKey) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.editor-grid')) {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextZoom = Math.min(160, Math.max(80, zoomPercent + direction * 5));
+    if (nextZoom === zoomPercent) {
+      return;
+    }
+    zoomPercent = nextZoom;
+    applyZoomSetting(zoomPercent);
+    updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
+    statusMessage = `缩放 ${zoomPercent}%`;
+  }
+
+  function setupSystemThemeListener() {
+    if (typeof window.matchMedia !== 'function') {
+      return;
+    }
+    systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    systemThemeChangeHandler = () => {
+      if (themePreference !== 'system') {
+        return;
+      }
+      theme = applyThemeSetting(themePreference, { transition: true });
+      editor.updateTheme({ name: theme });
+    };
+    systemThemeMediaQuery.addEventListener('change', systemThemeChangeHandler);
   }
 
   async function loadFolder(folderPath: string) {

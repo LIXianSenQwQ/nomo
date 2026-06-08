@@ -671,6 +671,8 @@ export function executeEditorCommand(
         src: command.src,
         alt: command.alt ?? null,
         title: command.title ?? null,
+        width: command.width ?? null,
+        align: command.align ?? null,
       });
     case 'insertFootnote':
       return insertFootnote(view);

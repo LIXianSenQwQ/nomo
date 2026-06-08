@@ -81,10 +81,17 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
         insertSourceMarkdown(imported);
       } else {
         for (const item of imported) {
+          const imageSettings = context.settings;
+          const defaultAlign =
+            imageSettings?.defaultImageAlign && imageSettings.defaultImageAlign !== 'none'
+              ? imageSettings.defaultImageAlign
+              : null;
           editor.execute({
             type: 'insertImage',
             src: item.src,
             alt: item.alt,
+            width: imageSettings?.defaultImageWidth || null,
+            align: defaultAlign,
           });
         }
         editor.focus();
@@ -103,7 +110,12 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     const markdown = options.getEditor().getMarkdown();
     const start = textarea?.selectionStart ?? markdown.length;
     const end = textarea?.selectionEnd ?? start;
-    const snippet = items.map((item) => createImageMarkdown(item.alt, item.src)).join('\n');
+    const imageSettings = options.getImageContext().settings;
+    const attrs = createImageAttributeText(
+      imageSettings?.defaultImageWidth || '',
+      imageSettings?.defaultImageAlign ?? 'none',
+    );
+    const snippet = items.map((item) => `${createImageMarkdown(item.alt, item.src)}${attrs}`).join('\n');
     const prefix = markdown.slice(0, start);
     const suffix = markdown.slice(end);
     const before = prefix.endsWith('\n') || prefix.length === 0 ? '' : '\n';
@@ -120,6 +132,17 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
       textarea.setSelectionRange(nextSelection, nextSelection);
       options.syncSourceTextareaHeight();
     });
+  }
+
+  function createImageAttributeText(width: string, align: string) {
+    const attributes: string[] = [];
+    if (width) {
+      attributes.push(`width=${width}`);
+    }
+    if (align === 'left' || align === 'center' || align === 'right') {
+      attributes.push(`align=${align}`);
+    }
+    return attributes.length > 0 ? `{${attributes.join(' ')}}` : '';
   }
 
   function getInsertFileName(file: File, index: number) {

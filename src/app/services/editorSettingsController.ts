@@ -6,6 +6,7 @@ import {
   applyTypographySettings,
   loadPersistedEditorSettings,
   persistEditorSetting,
+  type ThemePreference,
 } from './settings';
 
 type Theme = 'light' | 'dark';
@@ -14,7 +15,7 @@ interface EditorSettingsControllerOptions {
   getDesktopEnabled(): boolean;
   getEditor(): EditorCore;
   getTheme(): Theme;
-  setTheme(theme: Theme): void;
+  setTheme(theme: ThemePreference): void;
   getFontSize(): number;
   setFontSize(value: number): void;
   getLineHeight(): number;
@@ -31,8 +32,8 @@ export function createEditorSettingsController(options: EditorSettingsController
 
     if (settings.theme) {
       options.setTheme(settings.theme);
-      applyThemeSetting(settings.theme);
-      options.getEditor().updateTheme({ name: settings.theme });
+      const effectiveTheme = applyThemeSetting(settings.theme);
+      options.getEditor().updateTheme({ name: effectiveTheme });
     }
     if (settings.fontSize) {
       options.setFontSize(settings.fontSize);

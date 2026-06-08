@@ -4,6 +4,7 @@
 
 .source-editor {
   width: 100%;
+  zoom: var(--md-editor-zoom);
   height: 100%;
   min-width: 0;
   min-height: 0;

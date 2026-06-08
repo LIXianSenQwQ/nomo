@@ -171,3 +171,16 @@ pub(crate) struct PicgoServerUploadInput {
 pub(crate) struct ImageUploadPayload {
     pub(crate) url: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PicgoConnectionTestInput {
+    pub(crate) provider: String,
+    pub(crate) server_url: Option<String>,
+    pub(crate) command: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DesktopActionPayload {
+    pub(crate) ok: bool,
+    pub(crate) message: String,
+}

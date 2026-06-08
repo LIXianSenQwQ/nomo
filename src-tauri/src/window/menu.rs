@@ -16,7 +16,7 @@ pub(crate) fn install_window_menu<R: Runtime>(
     window.on_menu_event(|window, event| {
         let command = event.id().as_ref().to_string();
         if command == "quit" {
-            window.app_handle().exit(0);
+            let _ = crate::window::commands::emit_exit_request(window.app_handle());
             return;
         }
 

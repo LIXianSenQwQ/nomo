@@ -31,7 +31,9 @@ pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Str
         .tooltip("Nomo")
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_OPEN_ID => show_main_window(app),
-            TRAY_EXIT_ID => app.exit(0),
+            TRAY_EXIT_ID => {
+                let _ = crate::window::commands::emit_exit_request(app);
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| match event {

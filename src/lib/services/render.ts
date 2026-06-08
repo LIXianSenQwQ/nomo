@@ -50,6 +50,7 @@ export type ImageInsertStrategy =
   | 'upload';
 
 export type ImageUploadProvider = 'picgo' | 'picgo-core';
+export type ImageDefaultAlign = 'none' | 'left' | 'center' | 'right';
 
 export interface ImageHandlingSettings {
   imageInsertStrategy: ImageInsertStrategy;
@@ -58,6 +59,8 @@ export interface ImageHandlingSettings {
   picgoServerUrl: string;
   picgoCoreCommand: string;
   picgoCoreConfigPath: string;
+  defaultImageWidth: string;
+  defaultImageAlign: ImageDefaultAlign;
 }
 
 export const DEFAULT_IMAGE_HANDLING_SETTINGS: ImageHandlingSettings = {
@@ -67,6 +70,8 @@ export const DEFAULT_IMAGE_HANDLING_SETTINGS: ImageHandlingSettings = {
   picgoServerUrl: 'http://127.0.0.1:36677/upload',
   picgoCoreCommand: 'picgo',
   picgoCoreConfigPath: '',
+  defaultImageWidth: '',
+  defaultImageAlign: 'none',
 };
 
 export interface CodeTokenizeInput {

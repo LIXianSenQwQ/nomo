@@ -97,7 +97,14 @@ export type EditorCommand =
   | { type: 'toggleTaskList' }
   | { type: 'insertLink'; href: string; title?: string; text?: string }
   | { type: 'removeLink' }
-  | { type: 'insertImage'; src: string; alt?: string; title?: string }
+  | {
+      type: 'insertImage';
+      src: string;
+      alt?: string;
+      title?: string;
+      width?: string | null;
+      align?: 'left' | 'center' | 'right' | null;
+    }
   | { type: 'insertFootnote' }
   | { type: 'insertCommentInline'; content?: string }
   | { type: 'insertCommentBlock'; content?: string }

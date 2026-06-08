@@ -75,4 +75,28 @@ describe('settings', () => {
       DEFAULT_APP_PREFERENCES.defaultCodeBlockLanguage,
     );
   });
+
+  it('normalizes first and second batch preference fields', () => {
+    const normalized = normalizeAppPreferences({
+      theme: 'system',
+      zoomPercent: 500,
+      outlineDefaultExpandLevel: 0,
+      codeBlockIndent: 'tab',
+      shortcutPreferences: {
+        'toggle-source': 'Ctrl+Alt+E',
+      },
+      imageHandlingSettings: {
+        defaultImageWidth: '2000%',
+        defaultImageAlign: 'center',
+      } as never,
+    });
+
+    expect(normalized.theme).toBe('system');
+    expect(normalized.zoomPercent).toBe(160);
+    expect(normalized.outlineDefaultExpandLevel).toBe(1);
+    expect(normalized.codeBlockIndent).toBe('tab');
+    expect(normalized.shortcutPreferences['toggle-source']).toBe('Ctrl+Alt+E');
+    expect(normalized.imageHandlingSettings.defaultImageWidth).toBe('100%');
+    expect(normalized.imageHandlingSettings.defaultImageAlign).toBe('center');
+  });
 });

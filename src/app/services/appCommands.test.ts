@@ -144,4 +144,33 @@ describe('appCommands', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(handlers.commands).toEqual([{ type: 'clearInlineStyles' }]);
   });
+
+  it('支持使用设置覆盖常用快捷键', () => {
+    const handlers = createHandlers();
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      altKey: true,
+      key: 'e',
+      code: 'KeyE',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers, {
+      'new-file': 'Ctrl+N',
+      'open-file': 'Ctrl+O',
+      'save-file': 'Ctrl+S',
+      'toggle-source': 'Ctrl+Alt+E',
+      'toggle-theme': 'Ctrl+Shift+L',
+      'toggle-focus': 'Ctrl+Shift+F',
+      'insert-code-block': 'Ctrl+Shift+K',
+      'insert-table': 'Ctrl+Shift+T',
+      'insert-math-block': 'Ctrl+Shift+M',
+      'menu-link': 'Ctrl+K',
+      'menu-clear-format': 'Ctrl+\\',
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.setMode).toHaveBeenCalledWith('source');
+  });
 });

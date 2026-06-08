@@ -48,6 +48,7 @@
   margin: 0 auto;
   padding: 0;
   background: transparent;
+  zoom: var(--md-editor-zoom);
 }
 
 .front-matter-card {

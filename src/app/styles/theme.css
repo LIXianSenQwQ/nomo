@@ -55,6 +55,7 @@
   --md-editor-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
   --md-editor-font-size: 16px;
   --md-editor-line-height: 1.7;
+  --md-editor-zoom: 1;
 
   /* 顶栏与菜单变量（亮色） */
   --md-titlebar-bg: #fcfcfc;
@@ -138,6 +139,10 @@
   --md-scrollbar-thumb: #4b5561;
   --md-scrollbar-thumb-hover: #66717d;
   --md-scrollbar-thumb-active: #828d99;
+}
+
+:root[data-code-line-numbers='hidden'] .line-numbers-gutter {
+  display: none;
 }
 
 :root.theme-transitioning body,

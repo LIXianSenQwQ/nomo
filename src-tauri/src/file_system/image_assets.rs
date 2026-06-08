@@ -1,6 +1,8 @@
 use crate::models::{
+    DesktopActionPayload,
     ImageAssetInput, ImageAssetPayload, ImageDeleteInput, ImageDeletePayload, ImageResolveInput,
-    ImageResolvePayload, ImageUploadPayload, PicgoCoreUploadInput, PicgoServerUploadInput,
+    ImageResolvePayload, ImageUploadPayload, PicgoConnectionTestInput, PicgoCoreUploadInput,
+    PicgoServerUploadInput,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -191,7 +193,7 @@ pub(crate) fn upload_image_via_picgo_core(
         return Err("PicGo-Core 命令不能为空".to_string());
     }
 
-    let mut process = Command::new(command);
+    let mut process = create_picgo_core_command(command);
     process
         .arg("upload")
         .arg(temp_path.to_string_lossy().to_string());
@@ -251,6 +253,90 @@ pub(crate) fn upload_image_via_picgo_server(
     parse_picgo_server_url(&response)
         .map(|url| ImageUploadPayload { url })
         .ok_or_else(|| "PicGo Server 未返回图片 URL".to_string())
+}
+
+#[tauri::command]
+pub(crate) fn test_picgo_connection(
+    input: PicgoConnectionTestInput,
+) -> Result<DesktopActionPayload, String> {
+    match input.provider.as_str() {
+        "picgo" => {
+            let server_url = input
+                .server_url
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "PicGo Server 地址不能为空".to_string())?;
+            let endpoint = parse_http_endpoint(server_url)?;
+            TcpStream::connect((&endpoint.host[..], endpoint.port))
+                .map_err(|error| format!("连接 PicGo Server 失败：{error}"))?;
+            Ok(DesktopActionPayload {
+                ok: true,
+                message: "PicGo Server 可以连接".to_string(),
+            })
+        }
+        "picgo-core" => {
+            let command = input
+                .command
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| "PicGo-Core 命令不能为空".to_string())?;
+            let output = create_picgo_core_command(command)
+                .arg("--version")
+                .output()
+                .map_err(|error| format!("调用 PicGo-Core 失败：{error}"))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                return Err(if stderr.is_empty() {
+                    format!("PicGo-Core 测试失败，退出码：{}", output.status)
+                } else {
+                    format!("PicGo-Core 测试失败：{stderr}")
+                });
+            }
+            Ok(DesktopActionPayload {
+                ok: true,
+                message: "PicGo-Core 命令可以调用".to_string(),
+            })
+        }
+        _ => Err("未知图片上传方式".to_string()),
+    }
+}
+
+fn create_picgo_core_command(command: &str) -> Command {
+    let mut parts = split_command_line(command);
+    let executable = parts
+        .first()
+        .cloned()
+        .unwrap_or_else(|| command.trim().to_string());
+    let mut process = Command::new(executable);
+    for part in parts.drain(1..) {
+        process.arg(part);
+    }
+    process
+}
+
+fn split_command_line(command: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for ch in command.chars() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ch if ch.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+    parts
 }
 
 struct ImageAssetTarget {
@@ -626,6 +712,26 @@ mod tests {
         let url = extract_first_url("Upload success: https://img.test/a.png");
 
         assert_eq!(url.as_deref(), Some("https://img.test/a.png"));
+    }
+
+    #[test]
+    fn splits_picgo_core_command_with_quoted_windows_path() {
+        let parts = split_command_line(r#""C:\Program Files\picgo\picgo.exe" upload"#);
+
+        assert_eq!(
+            parts,
+            vec![
+                r#"C:\Program Files\picgo\picgo.exe"#.to_string(),
+                "upload".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn splits_picgo_core_command_with_runner_and_package() {
+        let parts = split_command_line("npx picgo");
+
+        assert_eq!(parts, vec!["npx".to_string(), "picgo".to_string()]);
     }
 
     #[test]
