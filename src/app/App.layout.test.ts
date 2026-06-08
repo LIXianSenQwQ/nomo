@@ -150,6 +150,12 @@ describe('App outline layout', () => {
     );
   });
 
+  it('keeps front matter aligned with the zoomed document body', () => {
+    expect(styles).toMatch(
+      /\.front-matter-card\s*\{[\s\S]*?max-width:\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\);[\s\S]*?margin:\s*0 auto 22px;[\s\S]*?zoom:\s*var\(--md-editor-zoom\);/,
+    );
+  });
+
   it('keeps document stats as a floating editor card', () => {
     expect(styles).toMatch(
       /\.editor-shell\s*\{[\s\S]*?grid-template-rows:\s*auto auto minmax\(0,\s*1fr\);/,

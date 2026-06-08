@@ -58,7 +58,8 @@
   gap: 12px;
   width: 100%;
   min-height: 76px;
-  margin: 0 0 22px;
+  max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
+  margin: 0 auto 22px;
   padding: 14px 16px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 84%, var(--md-editor-accent) 16%);
   border-radius: var(--md-editor-radius-md);
@@ -72,6 +73,7 @@
   box-shadow: 0 10px 24px rgba(24, 38, 52, 0.06);
   color: var(--md-editor-fg);
   text-align: left;
+  zoom: var(--md-editor-zoom);
 }
 
 .front-matter-card {
