@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 
 /** 块级 Markdown 注释 NodeView：展示为低调卡片，点击后编辑完整注释内容。 */
@@ -16,6 +17,7 @@ export class CommentBlockNodeView {
   private originalContent = '';
   private textarea: HTMLTextAreaElement | null = null;
   private activeEditExitFn: (() => void) | null = null;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
     this.node = node;
@@ -45,6 +47,14 @@ export class CommentBlockNodeView {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         this.enterEdit();
+      }
+    });
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.dom.setAttribute('aria-label', this.createAriaLabel());
+      if (this.editing && this.textarea) {
+        this.textarea.setAttribute('aria-label', t.editBlockComment());
+      } else {
+        this.renderDisplay();
       }
     });
 
@@ -86,6 +96,7 @@ export class CommentBlockNodeView {
   }
 
   destroy(): void {
+    this.unsubscribeLocale();
     this.cleanupEdit();
   }
 
@@ -96,11 +107,11 @@ export class CommentBlockNodeView {
 
     const label = document.createElement('span');
     label.className = 'comment-block-label';
-    label.textContent = '注释';
+    label.textContent = t.comment();
 
     const preview = document.createElement('span');
     preview.className = 'comment-block-preview';
-    preview.textContent = content || '点击填写注释';
+    preview.textContent = content || t.fillComment();
 
     this.dom.append(label, preview);
   }
@@ -120,7 +131,7 @@ export class CommentBlockNodeView {
     this.textarea.className = 'comment-block-textarea';
     this.textarea.value = this.originalContent;
     this.textarea.rows = Math.max(2, Math.min(8, this.originalContent.split('\n').length + 1));
-    this.textarea.setAttribute('aria-label', '编辑块级注释');
+    this.textarea.setAttribute('aria-label', t.editBlockComment());
 
     this.dom.textContent = '';
     this.dom.appendChild(this.textarea);
@@ -192,7 +203,7 @@ export class CommentBlockNodeView {
 
   private createAriaLabel(): string {
     const content = this.getContent().trim();
-    return content ? `块级注释：${content}` : '块级注释';
+    return content ? t.blockCommentWithContent({ content }) : t.blockComment();
   }
 }
 

@@ -39,6 +39,22 @@ pub(crate) fn refresh_window_menu(
 }
 
 #[tauri::command]
+pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), String> {
+    for (_label, window) in app.webview_windows() {
+        if crate::window::external_open::is_document_window_label(window.label()) {
+            crate::window::os::setup_window(&window);
+            install_window_menu(&app, &window)?;
+        } else if window.label() == SETTINGS_WINDOW_LABEL {
+            window
+                .set_title(crate::i18n::app_text(&app, "settings_window_title"))
+                .map_err(|error| format!("刷新偏好设置窗口标题失败：{error}"))?;
+        }
+    }
+    crate::window::tray::refresh_tray_menu(&app)?;
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) fn set_desktop_icon_theme(app: AppHandle, theme: String) -> Result<(), String> {
     crate::window::tray::set_desktop_icon_theme(&app, &theme)
 }
@@ -83,7 +99,7 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
         SETTINGS_WINDOW_LABEL,
         WebviewUrl::App(PathBuf::from("index.html?view=settings")),
     )
-    .title("偏好设置 - Nomo")
+    .title(crate::i18n::app_text(&app, "settings_window_title"))
     .inner_size(860.0, 620.0)
     .min_inner_size(760.0, 520.0)
     .center()
@@ -240,24 +256,28 @@ fn bring_settings_window_to_front<R: Runtime>(window: &WebviewWindow<R>) -> Resu
 
 #[tauri::command]
 pub(crate) fn get_markdown_file_association_status(
+    app: AppHandle,
 ) -> Result<crate::models::MarkdownAssociationStatus, String> {
-    crate::window::file_association::get_markdown_file_association_status()
+    crate::window::file_association::get_markdown_file_association_status(&app)
 }
 
 #[tauri::command]
 pub(crate) fn register_markdown_file_association(
+    app: AppHandle,
 ) -> Result<crate::models::DesktopActionPayload, String> {
-    crate::window::file_association::register_markdown_file_association()
+    crate::window::file_association::register_markdown_file_association(&app)
 }
 
 #[tauri::command]
 pub(crate) fn get_windows_context_menu_status(
+    app: AppHandle,
 ) -> Result<crate::models::WindowsContextMenuStatus, String> {
-    crate::window::file_association::get_windows_context_menu_status()
+    crate::window::file_association::get_windows_context_menu_status(&app)
 }
 
 #[tauri::command]
-pub(crate) fn register_windows_context_menu() -> Result<crate::models::DesktopActionPayload, String>
-{
-    crate::window::file_association::register_windows_context_menu()
+pub(crate) fn register_windows_context_menu(
+    app: AppHandle,
+) -> Result<crate::models::DesktopActionPayload, String> {
+    crate::window::file_association::register_windows_context_menu(&app)
 }

@@ -2,9 +2,11 @@
   import type { DocumentStats } from '../../lib/outline/outlineService';
   import { clickOutside } from '../actions/clickOutside';
   import { pulseOnChange } from '../actions/motion';
+  import { t } from '../i18n';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
 
+  export let interfaceLocale: string;
   export let stats: DocumentStats;
   export let activeMetric: StatsMetric = 'words';
   export let readingTimeVisible = false;
@@ -13,9 +15,9 @@
   let statsOpen = false;
 
   $: statsOptions = [
-    { key: 'lines' as const, label: '行数', value: stats.lines, unit: '行' },
-    { key: 'words' as const, label: '词数', value: stats.words, unit: '词' },
-    { key: 'chars' as const, label: '字符', value: stats.chars, unit: '字符' },
+    { key: 'lines' as const, label: t.lines(), value: stats.lines, unit: t.lineUnit() },
+    { key: 'words' as const, label: t.words(), value: stats.words, unit: t.wordUnit() },
+    { key: 'chars' as const, label: t.chars(), value: stats.chars, unit: t.charUnit() },
   ];
 
   $: activeStatsOption =
@@ -41,7 +43,8 @@
   }
 </script>
 
-<div class="statusbar" aria-label="文档统计">
+{#key interfaceLocale}
+<div class="statusbar" aria-label={t.documentStats()} data-interface-locale={interfaceLocale}>
   <div class="statusbar-stats" use:clickOutside={closeStats}>
     <button
       class="statusbar-stats-trigger"
@@ -49,7 +52,7 @@
       aria-haspopup="dialog"
       aria-expanded={statsOpen}
       aria-controls="writing-stats-popover"
-      title="字数统计"
+      title={t.wordCountStats()}
       use:pulseOnChange={activeStatsOption.value}
       on:click={toggleStats}
       on:keydown={handleStatsKeydown}
@@ -65,11 +68,11 @@
         role="dialog"
         aria-labelledby="writing-stats-title"
       >
-        <h2 id="writing-stats-title">文档统计</h2>
+        <h2 id="writing-stats-title">{t.documentStats()}</h2>
         {#if readingTimeVisible}
-          <div class="reading-time">预计阅读 {stats.readingMinutes} 分钟</div>
+          <div class="reading-time">{t.estimatedReadingMinutes({ minutes: stats.readingMinutes })}</div>
         {/if}
-        <div class="writing-stats-options" role="group" aria-label="选择显示的统计类型">
+        <div class="writing-stats-options" role="group" aria-label={t.selectStatsMetric()}>
           {#each statsOptions as option (option.key)}
             <button
               class="writing-stats-option"
@@ -87,3 +90,4 @@
     {/if}
   </div>
 </div>
+{/key}

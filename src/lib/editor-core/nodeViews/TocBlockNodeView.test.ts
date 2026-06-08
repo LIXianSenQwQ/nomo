@@ -57,7 +57,9 @@ describe('TocBlockNodeView', () => {
     expect(link?.querySelector('.toc-text')?.textContent).toBe('标题');
     expect(link?.querySelector('.toc-leader')).not.toBeNull();
     expect(link?.querySelector('.toc-page')?.textContent).toBe('1');
-    expect(nodeView.dom.querySelector('.toc-delete')?.getAttribute('aria-label')).toBe('删除目录');
+    expect(nodeView.dom.querySelector('.toc-delete')?.getAttribute('aria-label')).toBe(
+      'Delete table of contents',
+    );
   });
 });
 

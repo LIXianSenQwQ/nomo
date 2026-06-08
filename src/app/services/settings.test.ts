@@ -32,7 +32,7 @@ describe('settings', () => {
     );
 
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.autoSaveEnabled');
-    expect(settingsWindowSource).toContain('自动保存');
+    expect(settingsWindowSource).toContain('t.autoSave()');
     expect(settingsWindowSource).toContain('autoSaveDelayMs');
     expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');
     expect(documentActionsSource).toContain('if (!options.getAutoSaveEnabled()) return;');
@@ -47,9 +47,9 @@ describe('settings', () => {
       'utf-8',
     );
 
-    expect(settingsWindowSource).toContain('启动默认编辑模式');
-    expect(settingsWindowSource).toContain('启动时隐藏资源管理器侧边栏');
-    expect(settingsWindowSource).toContain('显示文档大纲');
+    expect(settingsWindowSource).toContain('t.editorModeDefault()');
+    expect(settingsWindowSource).toContain('t.hideExplorerOnLaunch()');
+    expect(settingsWindowSource).toContain('t.showDocumentOutline()');
     expect(settingsWindowSource).toContain('setEditorMode');
     expect(settingsWindowSource).toContain('sidebarHidden');
     expect(settingsWindowSource).toContain('outlineVisible');
@@ -62,12 +62,14 @@ describe('settings', () => {
 
   it('normalizes new preference boundaries and invalid enum values', () => {
     const normalized = normalizeAppPreferences({
+      interfaceLanguage: 'zh-TW',
       autoSaveDelayMs: 50,
       largeDocumentLimit: 5_000_000,
       defaultDiagramType: 'unknown' as never,
       defaultCodeBlockLanguage: 'ts script!' as never,
     });
 
+    expect(normalized.interfaceLanguage).toBe('zh-TW');
     expect(normalized.autoSaveDelayMs).toBe(500);
     expect(normalized.largeDocumentLimit).toBe(1_000_000);
     expect(normalized.defaultDiagramType).toBe(DEFAULT_APP_PREFERENCES.defaultDiagramType);
@@ -101,6 +103,14 @@ describe('settings', () => {
     expect(normalized.shortcutPreferences['toggle-source']).toBe('Ctrl+Alt+E');
     expect(normalized.imageHandlingSettings.defaultImageWidth).toBe('100%');
     expect(normalized.imageHandlingSettings.defaultImageAlign).toBe('center');
+  });
+
+  it('falls back to system interface language for invalid preference values', () => {
+    const normalized = normalizeAppPreferences({
+      interfaceLanguage: 'xx-XX' as never,
+    });
+
+    expect(normalized.interfaceLanguage).toBe('system');
   });
 
   it('falls back to enabled inline code rendering for invalid preference values', () => {

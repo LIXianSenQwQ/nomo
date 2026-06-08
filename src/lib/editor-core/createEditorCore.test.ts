@@ -161,7 +161,9 @@ describe('createEditorCore', () => {
     editor.execute({ type: 'insertToc' });
 
     expect(editor.getMarkdown()).toContain('<!-- toc -->\n<!-- /toc -->');
-    expect(target.querySelector('.toc-empty')?.textContent).toContain('当前文档还没有标题');
+    expect(target.querySelector('.toc-empty')?.textContent).toContain(
+      'This document has no headings yet',
+    );
   });
 
   it('keeps toc marker examples in inline code as ordinary Markdown text', () => {

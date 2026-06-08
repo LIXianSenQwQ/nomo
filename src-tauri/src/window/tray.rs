@@ -1,10 +1,12 @@
 use std::sync::{Mutex, OnceLock};
 use tauri::{
     image::Image,
-    menu::MenuBuilder,
+    menu::{Menu, MenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
 };
+
+use crate::i18n;
 
 const TRAY_ID: &str = "nomo-main-tray";
 const TRAY_OPEN_ID: &str = "tray-open-main-window";
@@ -46,12 +48,7 @@ pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Str
         return Ok(());
     }
 
-    let menu = MenuBuilder::new(app)
-        .text(TRAY_OPEN_ID, "打开 Nomo")
-        .separator()
-        .text(TRAY_EXIT_ID, "退出")
-        .build()
-        .map_err(|error| format!("构建托盘菜单失败：{error}"))?;
+    let menu = build_tray_menu(app)?;
 
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
@@ -87,6 +84,24 @@ pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Str
         .build(app)
         .map_err(|error| format!("创建托盘图标失败：{error}"))?;
     Ok(())
+}
+
+pub(crate) fn refresh_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let menu = build_tray_menu(app)?;
+        tray.set_menu(Some(menu))
+            .map_err(|error| format!("刷新托盘菜单失败：{error}"))?;
+    }
+    Ok(())
+}
+
+fn build_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<Menu<R>, String> {
+    MenuBuilder::new(app)
+        .text(TRAY_OPEN_ID, i18n::app_text(app, "tray_open"))
+        .separator()
+        .text(TRAY_EXIT_ID, i18n::app_text(app, "tray_exit"))
+        .build()
+        .map_err(|error| format!("构建托盘菜单失败：{error}"))
 }
 
 pub(crate) fn set_tray_active<R: Runtime>(app: &AppHandle<R>, active: bool) {

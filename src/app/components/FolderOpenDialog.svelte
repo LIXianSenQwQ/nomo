@@ -1,7 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let open: boolean;
   export let folderPath: string;
   export let folderName: string;
@@ -34,10 +36,16 @@
   }
 </script>
 
+{#key interfaceLocale}
 {#if open}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="folder-dialog-backdrop" transition:fade={{ duration: 150 }} on:click={cancel}>
+  <div
+    class="folder-dialog-backdrop"
+    data-interface-locale={interfaceLocale}
+    transition:fade={{ duration: 150 }}
+    on:click={cancel}
+  >
     <div
       class="folder-dialog"
       role="alertdialog"
@@ -47,26 +55,27 @@
       on:click|stopPropagation
       on:keydown={handleKeydown}
     >
-      <h3 id="folder-dialog-title">如何打开文件夹 “{folderName}”？</h3>
+      <h3 id="folder-dialog-title">{t.folderOpenQuestion({ folderName })}</h3>
       <p class="folder-dialog-path">{folderPath}</p>
 
       <div class="folder-dialog-actions">
         <button type="button" class="folder-dialog-btn" on:click={() => choose('current-window')}>
-          当前窗口打开
+          {t.openInCurrentWindow()}
         </button>
         <button type="button" class="folder-dialog-btn primary" on:click={() => choose('new-window')}>
-          新窗口打开
+          {t.openInNewWindow()}
         </button>
-        <button type="button" class="folder-dialog-btn" on:click={cancel}> 取消 </button>
+        <button type="button" class="folder-dialog-btn" on:click={cancel}> {t.cancel()} </button>
       </div>
 
       <label class="folder-dialog-remember">
         <input type="checkbox" bind:checked={rememberChoice} />
-        <span>不再询问，并记住我的选择</span>
+        <span>{t.rememberFolderOpenChoice()}</span>
       </label>
     </div>
   </div>
 {/if}
+{/key}
 
 <style>
   .folder-dialog-backdrop {

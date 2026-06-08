@@ -15,6 +15,7 @@ import {
 } from './documentFiles';
 import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
+import { t } from '../i18n';
 
 interface DocumentActionsOptions {
   recoveryKey: string;
@@ -60,21 +61,21 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   async function openDroppedMarkdown(paths: string[]) {
     const target = findDroppedMarkdownPath(paths);
     if (!target) {
-      options.setStatusMessage('拖放文件未包含 Markdown / 文本文件');
+      options.setStatusMessage(t.dragDropNoMarkdown());
       return;
     }
     if (options.getDirty()) {
       options.writeRecoveryDraft('drag-open-blocked');
-      options.setStatusMessage('当前文档有未保存修改，已保留恢复副本；请先保存后再拖放打开');
+      options.setStatusMessage(t.dragOpenBlockedUnsaved());
       return;
     }
 
-    const { document, error } = await readMarkdownFromPath(target, '拖放打开失败');
+    const { document, error } = await readMarkdownFromPath(target, t.dragOpenFailed());
     if (error) {
       options.setStatusMessage(error);
     }
     if (document) {
-      await applyNativeDocument(document, '已通过拖放打开 Markdown 文件');
+      await applyNativeDocument(document, t.openedByDragDrop());
     }
   }
 
@@ -88,7 +89,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         options.setStatusMessage(error);
       }
       if (document) {
-        await applyNativeDocument(document, '已通过 Tauri 打开 Markdown 文件');
+        await applyNativeDocument(document, t.openedByTauri());
       }
       return;
     }
@@ -112,7 +113,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const targetTab = browserFileTarget.targetTab;
 
     targetTab.fileName = file.name;
-    targetTab.filePath = `本地浏览器文件：${file.name}`;
+    targetTab.filePath = t.localBrowserFile({ name: file.name });
     targetTab.nativePath = null;
     targetTab.markdown = text;
     targetTab.dirty = false;
@@ -124,20 +125,20 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setTabs([...options.getTabs()]);
     options.loadTabState(targetTab);
 
-    options.setStatusMessage('已打开 Markdown 文件');
+    options.setStatusMessage(t.markdownFileOpened());
     input.value = '';
   }
 
   async function saveMarkdownFile(saveAs = false) {
     const activeTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
     if (activeTab?.largeDocumentMode && !saveAs) {
-      options.setStatusMessage('大文件处于只读源码模式，请使用另存为或缩小文件后再继续编辑');
+      options.setStatusMessage(t.largeDocumentReadonlySaveBlocked());
       return;
     }
 
     if (options.getDesktopEnabled()) {
       if (!saveAs && hasExternalFileChange()) {
-        options.setStatusMessage('检测到外部文件变更，请先选择重新载入、另存为或覆盖外部版本');
+        options.setStatusMessage(t.externalChangeChooseAction());
         return;
       }
 
@@ -155,14 +156,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       }
       if (document) {
         localStorage.removeItem(options.recoveryKey);
-        await applySavedNativeDocument(document, markdownToSave, '已通过 Tauri 保存 Markdown 文件');
+        await applySavedNativeDocument(document, markdownToSave, t.savedByTauri());
       }
       return;
     }
 
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
     exportMarkdownInBrowser(markdownToSave, options.getFileName());
-    options.setStatusMessage('已导出 Markdown 文件');
+    options.setStatusMessage(t.markdownExported());
     options.setMarkdown(markdownToSave);
     options.setDirty(false);
   }
@@ -172,13 +173,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       return;
     }
 
-    const { document, error } = await readMarkdownFromPath(path, '打开最近文件失败');
+    const { document, error } = await readMarkdownFromPath(path, t.openRecentFailed());
     if (error) {
       options.setStatusMessage(error);
     }
 
     if (document) {
-      await applyNativeDocument(document, '已打开最近文件');
+      await applyNativeDocument(document, t.recentFileOpened());
     }
   }
 
@@ -189,7 +190,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
     if (existingTab && !saved) {
       options.switchTab(existingTab.id);
-      options.setStatusMessage('已切换到已打开的标签页');
+      options.setStatusMessage(t.switchedToOpenedTab());
       return;
     }
 
@@ -223,11 +224,11 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     await rememberNativeDocument(document, calculateDocumentStats(document.markdown).words);
     await refreshRecentFiles();
     if (isLargeDocument) {
-      options.setStatusMessage('大文件已用只读源码模式打开，避免语义解析阻塞界面');
+      options.setStatusMessage(t.largeDocumentReadonlyOpened());
     }
 
     const parentDir = getDirectoryLabel(document.path);
-    if (parentDir && parentDir !== '当前文件夹') {
+    if (parentDir && parentDir !== t.currentFolder()) {
       if (!options.getCurrentFolderPath()) {
         options.loadFolder(parentDir).catch(() => undefined);
       } else {
@@ -283,11 +284,11 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     await rememberNativeDocument(document, calculateDocumentStats(markdownToSave).words);
     await refreshRecentFiles();
     if (isLargeDocument) {
-      options.setStatusMessage('大文件已用只读源码模式打开，避免语义解析阻塞界面');
+      options.setStatusMessage(t.largeDocumentReadonlyOpened());
     }
 
     const parentDir = getDirectoryLabel(document.path);
-    if (parentDir && parentDir !== '当前文件夹') {
+    if (parentDir && parentDir !== t.currentFolder()) {
       if (!options.getCurrentFolderPath()) {
         options.loadFolder(parentDir).catch(() => undefined);
       } else {
@@ -299,7 +300,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   function createNewFile() {
     if (options.getDirty()) {
       options.writeRecoveryDraft('new-file-blocked');
-      options.setStatusMessage('当前文档有未保存修改，已保留恢复副本并新建文档');
+      options.setStatusMessage(t.newFileWithRecovery());
     }
 
     options.saveActiveTabState();
@@ -317,9 +318,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!tabToClose) return;
 
     if (tabToClose.dirty) {
-      const confirmClose = confirm(
-        `文件 "${tabToClose.fileName}" 已修改，是否确认关闭？您的修改可能会丢失。`,
-      );
+      const confirmClose = confirm(t.confirmCloseModifiedFile({ fileName: tabToClose.fileName }));
       if (!confirmClose) return;
     }
 
@@ -348,13 +347,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       return;
     }
 
-    const { document, error } = await readMarkdownFromPath(path, '重新载入外部版本失败');
+    const { document, error } = await readMarkdownFromPath(path, t.reloadExternalFailed());
     if (error) {
       options.setStatusMessage(error);
       return;
     }
     if (document) {
-      await applyNativeDocument(document, '已重新载入外部版本', true);
+      await applyNativeDocument(document, t.reloadedExternalVersion(), true);
     }
   }
 
@@ -364,7 +363,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       return;
     }
     if (options.getExternalFileChange().type !== 'modified') {
-      options.setStatusMessage('当前没有可覆盖的外部修改');
+      options.setStatusMessage(t.noExternalChangeToOverwrite());
       return;
     }
 
@@ -381,7 +380,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     }
     if (document) {
       localStorage.removeItem(options.recoveryKey);
-      await applySavedNativeDocument(document, markdownToSave, '已覆盖外部版本');
+      await applySavedNativeDocument(document, markdownToSave, t.overwrittenExternalVersion());
     }
   }
 
@@ -396,7 +395,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
     if (!tabId || !path) return;
     if (hasExternalFileChange()) {
-      options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+      options.setStatusMessage(t.externalChangeAutoSavePaused());
       return;
     }
 
@@ -409,7 +408,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       if (!options.getAutoSaveEnabled()) return;
       if (!options.getDesktopEnabled()) return;
       if (hasExternalFileChange()) {
-        options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+        options.setStatusMessage(t.externalChangeAutoSavePaused());
         return;
       }
 
@@ -424,14 +423,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
       if (error) {
         if (options.getActiveTabId() === tabId) {
-          options.setStatusMessage(`自动保存失败: ${error}`);
+          options.setStatusMessage(t.autoSaveFailed({ error }));
         }
         return;
       }
 
       if (document) {
         if (options.getActiveTabId() === tabId) {
-          options.setStatusMessage('已保存');
+          options.setStatusMessage(t.saved());
         }
 
         const tabs = options.getTabs();
@@ -525,7 +524,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (nextChange.type !== 'none') {
       cancelPendingAutoSaves();
       if (options.getDirty()) {
-        options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+        options.setStatusMessage(t.externalChangeAutoSavePaused());
       }
     }
   }

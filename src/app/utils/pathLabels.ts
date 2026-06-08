@@ -1,6 +1,8 @@
+import { t } from '../i18n';
+
 export function getFolderName(path: string) {
-  if (!path || path === '当前文件夹') {
-    return '当前文件夹';
+  if (!path || path === t.currentFolder()) {
+    return t.currentFolder();
   }
 
   const normalized = path.replace(/\\/g, '/');
@@ -18,7 +20,7 @@ export function getDirectoryLabel(path: string) {
   const normalizedPath = path.replace(/\//g, '\\');
   const separatorIndex = normalizedPath.lastIndexOf('\\');
   if (separatorIndex <= 0) {
-    return '当前文件夹';
+    return t.currentFolder();
   }
 
   return normalizedPath.slice(0, separatorIndex);

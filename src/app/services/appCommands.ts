@@ -4,6 +4,7 @@ import {
   type ShortcutCommandId,
   type ShortcutPreferences,
 } from './settings';
+import { t } from '../i18n';
 
 export interface AppCommandHandlers {
   createNewFile: () => void;
@@ -145,7 +146,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-underline') {
     handlers.runCommand({ type: 'toggleUnderline' });
   } else if (command === 'menu-inline-math') {
-    handlers.showUnavailableFeature('行公式');
+    handlers.showUnavailableFeature(t.inlineMath());
   } else if (command === 'menu-strikethrough') {
     handlers.runCommand({ type: 'toggleStrikethrough' });
   } else if (command === 'menu-highlight') {
@@ -157,7 +158,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-link') {
     handlers.openLinkPicker();
   } else if (command === 'menu-image') {
-    handlers.showUnavailableFeature('图像');
+    handlers.showUnavailableFeature(t.imageMenu());
   } else if (command === 'menu-clear-format') {
     handlers.runCommand({ type: 'clearInlineStyles' });
   } else if (command === 'toggle-source') {

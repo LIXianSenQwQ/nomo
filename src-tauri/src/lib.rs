@@ -1,6 +1,7 @@
 mod database;
 mod external_link;
 mod file_system;
+mod i18n;
 mod models;
 mod window;
 
@@ -99,6 +100,7 @@ pub fn run() {
             crate::database::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
+            crate::window::commands::refresh_interface_language_chrome,
             crate::window::commands::set_desktop_icon_theme,
             crate::file_system::list_folder_markdown_files,
             crate::file_system::create_folder,

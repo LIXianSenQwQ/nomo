@@ -9,6 +9,11 @@ import {
   type ImageInsertStrategy,
   type ImageUploadProvider,
 } from '../../lib/services/render';
+import {
+  DEFAULT_INTERFACE_LANGUAGE,
+  isInterfaceLanguagePreference,
+  type InterfaceLanguagePreference,
+} from '../i18n';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type EffectiveTheme = 'light' | 'dark';
@@ -18,6 +23,7 @@ export type FolderOpenDefaultBehavior = 'current-window' | 'new-window' | 'ask-e
 export type WritingStatsMetric = 'lines' | 'words' | 'chars';
 export type ImageDefaultAlignPreference = ImageDefaultAlign;
 export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
+export type { InterfaceLanguagePreference };
 
 export type ShortcutCommandId =
   | 'new-file'
@@ -44,6 +50,7 @@ export interface PersistedEditorSettings {
 
 export interface AppPreferences {
   theme: ThemePreference;
+  interfaceLanguage: InterfaceLanguagePreference;
   editorMode: EditorModePreference;
   autoSaveEnabled: boolean;
   autoSaveDelayMs: number;
@@ -89,6 +96,7 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   theme: 'light',
+  interfaceLanguage: DEFAULT_INTERFACE_LANGUAGE,
   editorMode: 'semantic',
   autoSaveEnabled: false,
   autoSaveDelayMs: 1000,
@@ -202,6 +210,7 @@ export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPr
 
   return normalizeAppPreferences({
     theme: parseSetting<unknown>(settings, 'theme') ?? local.theme,
+    interfaceLanguage: parseSetting<unknown>(settings, 'interfaceLanguage') ?? local.interfaceLanguage,
     editorMode: parseSetting<unknown>(settings, 'editorMode'),
     autoSaveEnabled: parseSetting<unknown>(settings, 'autoSaveEnabled'),
     autoSaveDelayMs: parseSetting<unknown>(settings, 'autoSaveDelayMs'),
@@ -259,6 +268,9 @@ export function normalizeAppPreferences(
 ): AppPreferences {
   return {
     theme: isThemePreference(value.theme) ? value.theme : DEFAULT_APP_PREFERENCES.theme,
+    interfaceLanguage: isInterfaceLanguagePreference(value.interfaceLanguage)
+      ? value.interfaceLanguage
+      : DEFAULT_APP_PREFERENCES.interfaceLanguage,
     editorMode: isEditorModePreference(value.editorMode)
       ? value.editorMode
       : DEFAULT_APP_PREFERENCES.editorMode,
@@ -421,6 +433,7 @@ export function applyBlockStyleSetting(blockStyle: BlockStylePreference) {
 function toPersistedPreferenceEntries(preferences: AppPreferences) {
   return {
     theme: preferences.theme,
+    interfaceLanguage: preferences.interfaceLanguage,
     editorMode: preferences.editorMode,
     autoSaveEnabled: preferences.autoSaveEnabled,
     autoSaveDelayMs: preferences.autoSaveDelayMs,
@@ -458,6 +471,7 @@ function readLocalPreferenceFallbacks(): Partial<AppPreferences> {
 
   return {
     theme: localStorage.getItem('nomo-theme') ?? undefined,
+    interfaceLanguage: localStorage.getItem('nomo-interface-language') ?? undefined,
     fontSize: localStorage.getItem('nomo-font-size') ?? undefined,
     lineHeight: localStorage.getItem('nomo-line-height') ?? undefined,
     contentWidthPercent: localStorage.getItem('nomo-content-width-percent') ?? undefined,
@@ -471,6 +485,7 @@ function writeLocalPreferenceFallbacks(preferences: AppPreferences) {
   }
 
   localStorage.setItem('nomo-theme', preferences.theme);
+  localStorage.setItem('nomo-interface-language', preferences.interfaceLanguage);
   localStorage.setItem('nomo-font-size', String(preferences.fontSize));
   localStorage.setItem('nomo-line-height', String(preferences.lineHeight));
   localStorage.setItem('nomo-content-width-percent', String(preferences.contentWidthPercent));

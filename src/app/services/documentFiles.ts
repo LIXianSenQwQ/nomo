@@ -18,6 +18,7 @@ import {
   type ExternalFileChangeState,
   type FileTreeNode,
 } from '../types';
+import { t } from '../i18n';
 
 export interface FolderIndexBatch {
   root_path: string;
@@ -39,7 +40,7 @@ export function findDroppedMarkdownPath(paths: string[]) {
 export async function openMarkdownFromDialog() {
   return openMarkdownWithDialog()
     .catch((error) => ({
-      error: error instanceof Error ? error.message : '打开文件失败',
+      error: error instanceof Error ? error.message : t.openFileFailed(),
       document: null,
     }))
     .then((result) => normalizeDocumentResult(result));
@@ -66,7 +67,7 @@ export async function saveNativeMarkdownFile(
 
   return saveMarkdownNative(path, markdown, fileName)
     .catch((error) => ({
-      error: error instanceof Error ? error.message : '保存文件失败',
+      error: error instanceof Error ? error.message : t.saveFileFailed(),
       document: null,
     }))
     .then((result) => normalizeDocumentResult(result));
@@ -123,7 +124,7 @@ export async function getExternalFileChange(
   }
 
   const status = await statMarkdownFile(nativePath).catch((error) => ({
-    error: error instanceof Error ? error.message : '文件状态检查失败',
+    error: error instanceof Error ? error.message : t.fileStatusCheckFailed(),
   }));
 
   if ('error' in status) {
@@ -163,7 +164,7 @@ export function resolveExternalFileChange(input: {
       path: nativePath,
       modifiedAt: 0,
       dirtyAtDetection: dirty,
-      message: '当前文件已被外部删除或移动，请另存为当前内容',
+      message: t.externalFileDeleted(),
     };
   }
 
@@ -173,9 +174,7 @@ export function resolveExternalFileChange(input: {
       path: nativePath,
       modifiedAt: status.modifiedAt,
       dirtyAtDetection: dirty,
-      message: dirty
-        ? '文件已被外部修改，自动保存已暂停；请选择重新载入、另存为或覆盖外部版本'
-        : '文件已被外部修改，请选择重新载入外部版本或保留当前内容',
+      message: dirty ? t.externalFileModifiedDirty() : t.externalFileModifiedClean(),
     };
   }
 
@@ -185,7 +184,7 @@ export function resolveExternalFileChange(input: {
 export async function pickFolderPath() {
   return openFolderWithDialog()
     .catch((error) => ({
-      error: error instanceof Error ? error.message : '打开文件夹失败',
+      error: error instanceof Error ? error.message : t.openFolderFailed(),
       folderPath: null,
     }))
     .then((result) => {
@@ -206,7 +205,7 @@ export async function loadFolderTree(path: string) {
 export async function loadFolderChildren(path: string, rootPath: string) {
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<FileTreeNode[]>('list_folder_children', { path, rootPath }).catch((error) => ({
-    error: error instanceof Error ? error.message : '载入文件夹文件树失败',
+    error: error instanceof Error ? error.message : t.loadFolderTreeFailed(),
     tree: [],
   }));
 }

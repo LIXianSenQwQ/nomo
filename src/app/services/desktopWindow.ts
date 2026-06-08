@@ -28,7 +28,7 @@ export async function minimizeAppWindow(desktopEnabled: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('minimize_window');
   } catch (error) {
-    console.error('最小化窗口失败:', error);
+    console.error('Failed to minimize window:', error);
   }
 }
 
@@ -41,7 +41,7 @@ export async function maximizeAppWindow(desktopEnabled: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('maximize_window');
   } catch (error) {
-    console.error('最大化窗口失败:', error);
+    console.error('Failed to maximize window:', error);
   }
 }
 
@@ -54,7 +54,7 @@ export async function closeAppWindow(desktopEnabled: boolean, closeToTrayEnabled
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke(closeToTrayEnabled ? 'hide_window_to_tray' : 'close_window');
   } catch (error) {
-    console.error('关闭窗口失败:', error);
+    console.error('Failed to close window:', error);
   }
 }
 
@@ -67,7 +67,7 @@ export async function exitApp(desktopEnabled: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('exit_app');
   } catch (error) {
-    console.error('退出应用失败:', error);
+    console.error('Failed to exit app:', error);
   }
 }
 
@@ -113,7 +113,7 @@ export async function createAppWindow(
     });
     return windowId;
   } catch (error) {
-    console.error('创建新窗口失败:', error);
+    console.error('Failed to create new window:', error);
     return undefined;
   }
 }
@@ -127,7 +127,7 @@ export async function openSettingsWindow(desktopEnabled: boolean) {
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('open_settings_window');
   } catch (error) {
-    console.error('打开偏好设置窗口失败:', error);
+    console.error('Failed to open settings window:', error);
   }
 }
 
@@ -140,7 +140,20 @@ export async function setDesktopIconTheme(desktopEnabled: boolean, theme: 'light
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('set_desktop_icon_theme', { theme });
   } catch (error) {
-    console.error('同步桌面图标主题失败:', error);
+    console.error('Failed to sync desktop icon theme:', error);
+  }
+}
+
+export async function refreshInterfaceLanguageChrome(desktopEnabled: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('refresh_interface_language_chrome');
+  } catch (error) {
+    console.error('Failed to refresh interface language chrome:', error);
   }
 }
 

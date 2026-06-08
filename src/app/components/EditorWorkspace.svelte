@@ -13,7 +13,9 @@
     transitionDuration,
   } from '../actions/motion';
   import FrontMatterCard from './FrontMatterCard.svelte';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let mode: EditorMode;
   export let markdown: string;
   export let largeDocumentMode: boolean;
@@ -59,6 +61,7 @@
   }
 </script>
 
+{#key interfaceLocale}
 {#if externalFileChange.type !== 'none'}
   <div
     class="desktop-alert"
@@ -66,16 +69,16 @@
     use:motionIn={{ kind: 'panel', y: -8 }}
     transition:slide={{ duration: transitionDuration('panel') }}
   >
-    <strong>外部文件变更</strong>
+    <strong>{t.externalFileChanged()}</strong>
     <span>{externalFileChange.message}</span>
     <div class="desktop-alert-actions">
       {#if externalFileChange.type === 'modified'}
-        <button type="button" on:click={reloadExternalFile}>重新载入外部版本</button>
+        <button type="button" on:click={reloadExternalFile}>{t.reloadExternalVersion()}</button>
       {/if}
-      <button type="button" on:click={() => saveMarkdownFile(true)}>另存为当前内容</button>
+      <button type="button" on:click={() => saveMarkdownFile(true)}>{t.saveAsCurrentContent()}</button>
       {#if externalFileChange.type === 'modified'}
         <button type="button" class="danger" on:click={overwriteExternalFile}>
-          覆盖外部版本
+          {t.overwriteExternalVersion()}
         </button>
       {/if}
     </div>
@@ -90,7 +93,7 @@
   <section
     bind:this={sourcePane}
     class="editor-pane source-pane"
-    aria-label="Markdown 源文本"
+    aria-label={t.markdownSource()}
     on:scroll={updateActiveOutlineFromSourceScroll}
   >
     <div class="document-layout">
@@ -110,7 +113,7 @@
   <section
     bind:this={semanticPane}
     class="semantic-pane"
-    aria-label="语义编辑区"
+    aria-label={t.semanticEditorArea()}
     on:scroll={updateActiveOutlineFromSemanticScroll}
     on:paste={handleEditorPaste}
     on:drop={handleEditorDrop}
@@ -120,6 +123,7 @@
       {#if frontMatter}
         <FrontMatterCard
           {frontMatter}
+          {interfaceLocale}
           editing={frontMatterEditing}
           readonly={readonlyDocumentMode}
           enterEdit={enterFrontMatterEdit}
@@ -133,8 +137,8 @@
   </section>
 
   {#if outlineVisible}
-    <aside class="content-outline" aria-label="文档大纲" transition:outlinePanelTransition>
-      <strong>文档大纲</strong>
+    <aside class="content-outline" aria-label={t.documentOutline()} transition:outlinePanelTransition>
+      <strong>{t.documentOutline()}</strong>
       {#if outline.length > 0}
         <div class="content-outline-list">
           {#each outline as item, index (item.id)}
@@ -150,10 +154,10 @@
                     type="button"
                     class:collapsed={collapsedOutlineIds.has(item.id)}
                     class="outline-toggle"
-                    title={collapsedOutlineIds.has(item.id) ? '展开标题' : '折叠标题'}
+                    title={collapsedOutlineIds.has(item.id) ? t.expandHeading() : t.collapseHeading()}
                     aria-label={collapsedOutlineIds.has(item.id)
-                      ? `展开 ${item.title}`
-                      : `折叠 ${item.title}`}
+                      ? t.expandNamedHeading({ title: item.title })
+                      : t.collapseNamedHeading({ title: item.title })}
                     aria-expanded={!collapsedOutlineIds.has(item.id)}
                     on:click={(event) => handleOutlineToggle(event, item)}
                   >
@@ -182,8 +186,9 @@
           {/each}
         </div>
       {:else}
-        <p>当前文档还没有标题</p>
+        <p>{t.documentHasNoHeadings()}</p>
       {/if}
     </aside>
   {/if}
 </div>
+{/key}

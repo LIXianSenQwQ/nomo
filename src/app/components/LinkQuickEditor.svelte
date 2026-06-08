@@ -4,7 +4,9 @@
   import { Check, Trash2, X } from '@lucide/svelte';
   import { clickOutside } from '../actions/clickOutside';
   import { motionIn, transitionDuration } from '../actions/motion';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let open: boolean;
   export let text: string;
   export let href: string;
@@ -52,12 +54,14 @@
   }
 </script>
 
+{#key interfaceLocale}
 {#if open}
   <div
     class="quick-link-popover"
+    data-interface-locale={interfaceLocale}
     style={positionStyle}
     role="dialog"
-    aria-label="编辑超链接"
+    aria-label={t.editLink()}
     tabindex="-1"
     use:clickOutside={closeLinkPicker}
     use:motionIn={{ kind: 'popover', y: -4, scale: 0.98 }}
@@ -69,8 +73,8 @@
         class="quick-link-title-input"
         type="text"
         value={text}
-        placeholder="标题（显示文字）"
-        aria-label="标题"
+        placeholder={t.linkTitlePlaceholder()}
+        aria-label={t.linkTitle()}
         on:input={updateText}
       />
       <div class="quick-link-url-row">
@@ -80,7 +84,7 @@
           type="text"
           value={href}
           placeholder="https://example.com"
-          aria-label="链接地址"
+          aria-label={t.linkHref()}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? 'quick-link-error' : undefined}
           on:input={updateHref}
@@ -88,8 +92,8 @@
         <button
           type="submit"
           class="quick-link-primary"
-          title="应用链接"
-          aria-label="应用链接"
+          title={t.applyLink()}
+          aria-label={t.applyLink()}
           tabindex="-1"
           on:mousedown|preventDefault
         >
@@ -98,8 +102,8 @@
         {#if canRemove}
           <button
             type="button"
-            title="移除链接"
-            aria-label="移除链接"
+            title={t.removeLink()}
+            aria-label={t.removeLink()}
             tabindex="-1"
             on:mousedown|preventDefault
             on:click={removeLink}
@@ -109,8 +113,8 @@
         {/if}
         <button
           type="button"
-          title="关闭"
-          aria-label="关闭链接编辑器"
+          title={t.close()}
+          aria-label={t.closeLinkEditor()}
           tabindex="-1"
           on:mousedown|preventDefault
           on:click={closeLinkPicker}
@@ -131,3 +135,4 @@
     {/if}
   </div>
 {/if}
+{/key}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../i18n';
 import { resolveExternalFileChange } from './documentFiles';
 
 describe('resolveExternalFileChange', () => {
@@ -36,7 +37,7 @@ describe('resolveExternalFileChange', () => {
       path: 'D:\\Demo\\Workspace\\demo.md',
       modifiedAt: 0,
       dirtyAtDetection: true,
-      message: '当前文件已被外部删除或移动，请另存为当前内容',
+      message: t.externalFileDeleted(),
     });
   });
 
@@ -51,7 +52,7 @@ describe('resolveExternalFileChange', () => {
       path: 'D:\\Demo\\Workspace\\demo.md',
       modifiedAt: 120,
       dirtyAtDetection: false,
-      message: '文件已被外部修改，请选择重新载入外部版本或保留当前内容',
+      message: t.externalFileModifiedClean(),
     });
   });
 

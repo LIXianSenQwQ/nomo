@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import type { ImageContext, ImageResolveResult } from '../../services/render';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { getImageLoader } from '../renderers';
 import {
   mountContextMenuFactory,
@@ -45,6 +46,7 @@ export class ImageNodeView {
   /** 最近一次右键菜单的鼠标位置，用于尺寸编辑器定位 */
   private lastContextMenuX = 0;
   private lastContextMenuY = 0;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(
     node: ProseMirrorNode,
@@ -59,6 +61,11 @@ export class ImageNodeView {
     this.dom.addEventListener('dblclick', (event) => this.handleDblClick(event));
     this.dom.addEventListener('contextmenu', (event) => this.handleContextMenu(event));
     mountContextMenuFactory(this.dom, () => this.getContextMenuItems());
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.closeFullscreen();
+      this.closeSizeEditor();
+      this.render();
+    });
     this.render();
   }
 
@@ -98,6 +105,7 @@ export class ImageNodeView {
   destroy(): void {
     this.closeFullscreen();
     this.closeSizeEditor();
+    this.unsubscribeLocale();
     this.renderId += 1;
   }
 
@@ -106,6 +114,7 @@ export class ImageNodeView {
     const src = String(this.node.attrs.src ?? '');
     const alt = String(this.node.attrs.alt ?? '');
     this.dom.dataset.src = src;
+    this.dom.dataset.loadingLabel = t.imageLoading();
     this.dom.replaceChildren();
     this.dom.classList.add('is-loading');
 
@@ -120,7 +129,7 @@ export class ImageNodeView {
       .then((result) => this.renderImage(result, renderId))
       .catch((error) => {
         if (renderId !== this.renderId) return;
-        this.renderError(error instanceof Error ? error.message : '图片解析失败', alt);
+        this.renderError(error instanceof Error ? error.message : t.imageParseFailed(), alt);
       });
   }
 
@@ -134,7 +143,7 @@ export class ImageNodeView {
     this.dom.replaceChildren();
 
     if (!result.exists) {
-      this.renderError(result.error ?? '图片文件不存在', String(this.node.attrs.alt ?? ''));
+      this.renderError(result.error ?? t.imageFileMissing(), String(this.node.attrs.alt ?? ''));
       return;
     }
 
@@ -170,13 +179,13 @@ export class ImageNodeView {
     img.decoding = 'async';
     img.addEventListener('error', () => {
       if (renderId !== this.renderId) return;
-      this.renderError('图片加载失败', String(this.node.attrs.alt ?? ''));
+      this.renderError(t.imageLoadFailed(), String(this.node.attrs.alt ?? ''));
     });
 
     const button = this.createIconButton(
       'image-node-fullscreen-button',
-      '全屏查看图片',
-      '放大',
+      t.fullscreenImage(),
+      t.enlarge(),
       'maximize',
     );
     button.addEventListener('click', (event) => {
@@ -251,47 +260,47 @@ export class ImageNodeView {
     return [
       // 对齐组
       {
-        label: '左对齐',
+        label: t.alignLeft(),
         action: () => setNodeAttr('align', 'left'),
         active: align === 'left',
       },
       {
-        label: '居中',
+        label: t.alignCenter(),
         action: () => setNodeAttr('align', 'center'),
         active: align === 'center',
       },
       {
-        label: '右对齐',
+        label: t.alignRight(),
         action: () => setNodeAttr('align', 'right'),
         active: align === 'right',
       },
       {
-        label: '原始尺寸',
+        label: t.originalSize(),
         action: () => setNodeAttr('width', null),
         active: !width,
         separator: true,
       },
       {
-        label: '设置尺寸...',
+        label: t.setSize(),
         action: () => this.openSizeEditor(),
       },
       // 文件操作组
       {
-        label: '打开图片所在位置',
+        label: t.openImageLocation(),
         action: () => this.openImageLocation(absolutePath),
         separator: true,
       },
       {
-        label: '复制图片',
+        label: t.copyImage(),
         action: () => this.copyImageToClipboard(displaySrc),
       },
       {
-        label: '复制图片路径',
+        label: t.copyImagePath(),
         action: () => this.copyImagePath(absolutePath),
       },
       // 危险操作
       {
-        label: '删除',
+        label: t.deleteAction(),
         action: removeNode,
         separator: true,
         danger: true,
@@ -358,14 +367,14 @@ export class ImageNodeView {
     input.type = 'text';
     input.className = 'image-size-editor-input';
     input.value = value;
-    input.placeholder = '宽度';
-    input.setAttribute('aria-label', '图片宽度');
+    input.placeholder = t.width();
+    input.setAttribute('aria-label', t.imageWidth());
 
     const unitBtn = document.createElement('button');
     unitBtn.type = 'button';
     unitBtn.className = 'image-size-editor-unit';
     unitBtn.textContent = unit;
-    unitBtn.title = '切换单位';
+    unitBtn.title = t.switchUnit();
     unitBtn.addEventListener('click', () => {
       unit = unit === 'px' ? '%' : 'px';
       unitBtn.textContent = unit;
@@ -390,7 +399,7 @@ export class ImageNodeView {
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
     resetBtn.className = 'image-size-editor-reset';
-    resetBtn.textContent = '重置';
+    resetBtn.textContent = t.reset();
     resetBtn.addEventListener('click', () => {
       this.setImageWidth(null);
       this.closeSizeEditor();
@@ -399,7 +408,7 @@ export class ImageNodeView {
     const confirmBtn = document.createElement('button');
     confirmBtn.type = 'button';
     confirmBtn.className = 'image-size-editor-confirm';
-    confirmBtn.textContent = '确定';
+    confirmBtn.textContent = t.ok();
     confirmBtn.addEventListener('click', () => {
       const num = parseFloat(input.value);
       if (isNaN(num) || num <= 0) {
@@ -501,10 +510,13 @@ export class ImageNodeView {
     const placeholder = document.createElement('span');
     placeholder.className = 'image-node-placeholder';
     placeholder.setAttribute('role', 'img');
-    placeholder.setAttribute('aria-label', alt ? `图片加载失败：${alt}` : '图片加载失败');
+    placeholder.setAttribute(
+      'aria-label',
+      alt ? `${t.imageLoadFailed()}: ${alt}` : t.imageLoadFailed(),
+    );
 
     const title = document.createElement('strong');
-    title.textContent = alt || '图片';
+    title.textContent = alt || t.image();
     const detail = document.createElement('span');
     detail.textContent = message;
     placeholder.append(title, detail);
@@ -525,15 +537,15 @@ export class ImageNodeView {
     overlayEl.className = 'image-fullscreen-overlay';
     overlayEl.setAttribute('role', 'dialog');
     overlayEl.setAttribute('aria-modal', 'true');
-    overlayEl.setAttribute('aria-label', '全屏图片预览');
+    overlayEl.setAttribute('aria-label', t.fullscreenImagePreview());
 
     const panelEl = document.createElement('div');
     panelEl.className = 'image-fullscreen-panel';
 
     const closeButton = this.createIconButton(
       'image-fullscreen-close-button',
-      '关闭全屏图片',
-      '关闭',
+      t.closeFullscreenImage(),
+      t.close(),
       'close',
     );
     closeButton.addEventListener('click', (event) => {

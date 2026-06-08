@@ -4,6 +4,7 @@ import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { getCodeTokenizer } from '../renderers';
 import type { CodeTokenLine } from '../../services/render';
 import { escapeHtml } from '../utils/html';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 
 /**
  * code_block 节点的 NodeView —— 展示态 / 编辑态
@@ -196,6 +197,7 @@ export class CodeBlockNodeView {
   private cancelPendingHighlight: (() => void) | null = null;
   private langSelector: HTMLElement | null = null;
   private copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
     this.node = node;
@@ -213,7 +215,7 @@ export class CodeBlockNodeView {
     this.langLabel = document.createElement('span');
     this.langLabel.textContent = getLangLabel(this.language);
     this.langLabel.style.cursor = 'pointer';
-    this.langLabel.title = '选择语言';
+    this.langLabel.title = t.chooseLanguage();
     this.langLabel.addEventListener('click', (event) => {
       event.stopPropagation();
       this.showLangSelector();
@@ -226,9 +228,9 @@ export class CodeBlockNodeView {
 
     const copyBtn = document.createElement('button');
     copyBtn.type = 'button';
-    copyBtn.title = '复制代码';
+    copyBtn.title = t.copyCode();
     copyBtn.className = 'code-copy-button';
-    copyBtn.setAttribute('aria-label', '复制代码');
+    copyBtn.setAttribute('aria-label', t.copyCode());
     copyBtn.appendChild(createCopyIcon());
     copyBtn.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -273,6 +275,10 @@ export class CodeBlockNodeView {
 
     // 标记首次选中时自动进入编辑态（如 InputRule 从 ``` 创建 或快捷键插入）
     this.needsAutoEdit = true;
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.hideLangSelector();
+      this.updateLocalizedChrome();
+    });
 
     // 初始渲染展示态
     this.renderDisplay();
@@ -334,6 +340,7 @@ export class CodeBlockNodeView {
 
   destroy(): void {
     CodeBlockNodeView.instances.delete(this);
+    this.unsubscribeLocale();
     this.cancelScheduledHighlight();
     if (this.copyFeedbackTimer) clearTimeout(this.copyFeedbackTimer);
     this.cleanupEdit();
@@ -814,7 +821,7 @@ export class CodeBlockNodeView {
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.className = 'lang-selector-search';
-    searchInput.placeholder = '搜索语言…';
+    searchInput.placeholder = t.searchLanguage();
     searchInput.value = this.language;
     this.langSelector.appendChild(searchInput);
 
@@ -850,7 +857,8 @@ export class CodeBlockNodeView {
       if (lowerFilter && !matched.some((l) => l.value === lowerFilter)) {
         const customLi = document.createElement('li');
         customLi.className = 'lang-selector-item lang-selector-custom';
-        customLi.textContent = `使用: ${filter.trim()}`;
+        customLi.dataset.value = filter.trim();
+        customLi.textContent = t.useLanguage({ language: filter.trim() });
         customLi.addEventListener('mousedown', (e) => {
           e.preventDefault();
           this.applyLanguage(filter.trim());
@@ -868,7 +876,7 @@ export class CodeBlockNodeView {
         e.preventDefault();
         // 选中当前高亮项或使用输入值
         const activeItem = listEl.querySelector('.lang-selector-item') as HTMLElement | null;
-        const value = activeItem?.textContent?.startsWith('使用:')
+        const value = activeItem?.classList.contains('lang-selector-custom')
           ? searchInput.value.trim()
           : (LANGUAGES.find((l) => l.label === activeItem?.textContent)?.value ??
             searchInput.value.trim());
@@ -986,19 +994,38 @@ export class CodeBlockNodeView {
 
     button.classList.remove('is-copied', 'is-copy-error');
     button.classList.add(copied ? 'is-copied' : 'is-copy-error');
-    button.title = copied ? '已复制' : '复制失败';
-    button.setAttribute('aria-label', copied ? '已复制' : '复制失败');
+    button.title = copied ? t.copied() : t.copyFailed();
+    button.setAttribute('aria-label', copied ? t.copied() : t.copyFailed());
     button.replaceChildren(copied ? createCheckIcon() : createCopyIcon());
 
     this.copyFeedbackTimer = setTimeout(
       () => {
         button.classList.remove('is-copied', 'is-copy-error');
-        button.title = '复制代码';
-        button.setAttribute('aria-label', '复制代码');
+        button.title = t.copyCode();
+        button.setAttribute('aria-label', t.copyCode());
         button.replaceChildren(createCopyIcon());
         this.copyFeedbackTimer = null;
       },
       copied ? 1200 : 1500,
     );
+  }
+
+  private updateLocalizedChrome(): void {
+    this.langLabel.title = t.chooseLanguage();
+
+    for (const button of this.dom.querySelectorAll<HTMLButtonElement>('.code-copy-button')) {
+      if (button.classList.contains('is-copied')) {
+        button.title = t.copied();
+        button.setAttribute('aria-label', t.copied());
+        continue;
+      }
+      if (button.classList.contains('is-copy-error')) {
+        button.title = t.copyFailed();
+        button.setAttribute('aria-label', t.copyFailed());
+        continue;
+      }
+      button.title = t.copyCode();
+      button.setAttribute('aria-label', t.copyCode());
+    }
   }
 }

@@ -7,6 +7,7 @@ import {
   type ImageLoader,
   type ImageResolveResult,
 } from '../../lib/services/render';
+import { t } from '../i18n';
 
 interface NativeImageAssetPayload {
   markdown_src: string;
@@ -78,7 +79,7 @@ export function createDesktopImageLoader(): ImageLoader {
       }
 
       if (!context.documentPath) {
-        throw new Error('请先保存 Markdown 文件，再插入本地图片');
+        throw new Error(t.desktopImageInsertRequiresSavedFile());
       }
 
       const bytes = await readImportBytes(input);
@@ -132,7 +133,7 @@ async function uploadImage(
   context: ImageContext,
 ): Promise<ImageImportResult> {
   if (!isTauriRuntime()) {
-    throw new Error('上传图片需要在桌面端使用 PicGo 或 PicGo-Core');
+    throw new Error(t.imageUploadRequiresDesktop());
   }
 
   const settings = {
@@ -170,7 +171,7 @@ async function readImportBytes(input: ImageImportInput): Promise<Uint8Array> {
     return input.bytes;
   }
 
-  throw new Error('图片内容为空，无法导入');
+  throw new Error(t.imageContentEmpty());
 }
 
 function isRemoteImageSrc(src: string): boolean {

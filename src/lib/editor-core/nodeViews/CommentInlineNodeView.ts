@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 
 const COMMENT_INLINE_PREVIEW_LENGTH = 12;
@@ -21,6 +22,7 @@ export class CommentInlineNodeView {
   private originalContent = '';
   private input: HTMLInputElement | null = null;
   private activeEditExitFn: (() => void) | null = null;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
     this.node = node;
@@ -50,6 +52,14 @@ export class CommentInlineNodeView {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         this.enterEdit();
+      }
+    });
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.syncAccessibleLabels();
+      if (this.editing && this.input) {
+        this.input.setAttribute('aria-label', t.editInlineComment());
+      } else {
+        this.renderDisplay();
       }
     });
 
@@ -97,6 +107,7 @@ export class CommentInlineNodeView {
   }
 
   destroy(): void {
+    this.unsubscribeLocale();
     this.cleanupEdit();
   }
 
@@ -128,7 +139,7 @@ export class CommentInlineNodeView {
     this.input.type = 'text';
     this.input.className = 'comment-inline-input';
     this.input.value = this.originalContent;
-    this.input.setAttribute('aria-label', '编辑行内注释');
+    this.input.setAttribute('aria-label', t.editInlineComment());
     this.updateInputWidth();
 
     this.dom.textContent = '';
@@ -232,12 +243,12 @@ export class CommentInlineNodeView {
 
   private createAriaLabel(): string {
     const content = this.getContent().trim();
-    return content ? `行内注释：${content}` : '行内注释';
+    return content ? t.inlineCommentWithContent({ content }) : t.inlineComment();
   }
 
   private syncAccessibleLabels(): void {
     this.dom.setAttribute('aria-label', this.createAriaLabel());
-    this.dom.title = this.getContent().trim() || '空注释';
+    this.dom.title = this.getContent().trim() || t.emptyComment();
   }
 }
 
@@ -247,9 +258,11 @@ function sanitizeCommentContent(content: string): string {
 
 function createCommentPreviewText(content: string): string {
   const normalized = content.trim();
-  if (!normalized) return '空注释';
+  if (!normalized) return t.emptyComment();
 
   const chars = Array.from(normalized);
   const preview = chars.slice(0, COMMENT_INLINE_PREVIEW_LENGTH).join('');
-  return `注释：${preview}${chars.length > COMMENT_INLINE_PREVIEW_LENGTH ? '…' : ''}`;
+  return t.commentPreview({
+    preview: `${preview}${chars.length > COMMENT_INLINE_PREVIEW_LENGTH ? '…' : ''}`,
+  });
 }

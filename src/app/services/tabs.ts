@@ -1,4 +1,5 @@
 import { createEmptyExternalFileChange, type ExternalFileChangeState, type Tab } from '../types';
+import { t } from '../i18n';
 
 export interface ActiveTabState {
   fileName: string;
@@ -13,7 +14,7 @@ export interface ActiveTabState {
   version: number;
 }
 
-export function createBlankTab(fileName = 'untitled.md', filePath = '无标题.md'): Tab {
+export function createBlankTab(fileName = 'untitled.md', filePath = t.untitledMarkdown()): Tab {
   return {
     id: createTabId(),
     fileName,

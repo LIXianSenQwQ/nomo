@@ -1841,7 +1841,7 @@
 }
 
 .image-node.is-loading::before {
-  content: '图片加载中';
+  content: attr(data-loading-label);
   display: inline-grid;
   place-items: center;
   min-width: 160px;
@@ -2493,7 +2493,7 @@
 }
 
 .footnote-def-content:empty::before {
-  content: '输入脚注内容';
+  content: attr(data-placeholder);
   color: var(--md-editor-muted-fg);
 }
 

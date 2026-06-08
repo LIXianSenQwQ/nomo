@@ -231,23 +231,23 @@ describe('App outline layout', () => {
 
   it('exposes toc insertion and deletion as accessible UI actions', () => {
     expect(toolbarSource).toContain("runCommand({ type: 'insertToc' })");
-    expect(toolbarSource).toContain('aria-label="插入目录"');
+    expect(toolbarSource).toContain('aria-label={t.insertToc()}');
     expect(toolbarSource).toContain('TableOfContents');
     expect(titleBarSource).toContain("runCommand({ type: 'insertToc' })");
     expect(titleBarSource).not.toContain("comingSoon('正文目录'");
     expect(appCommandsSource).toContain("command === 'menu-content-directory'");
     expect(appCommandsSource).toContain("handlers.runCommand({ type: 'insertToc' });");
     expect(tocNodeViewSource).toContain("this.dom.className = 'toc-block'");
-    expect(tocNodeViewSource).toContain("deleteButton.setAttribute('aria-label', '删除目录')");
-    expect(tocNodeViewSource).toContain("textContent = '当前文档还没有标题'");
+    expect(tocNodeViewSource).toContain("deleteButton.setAttribute('aria-label', t.deleteToc())");
+    expect(tocNodeViewSource).toContain('empty.textContent = t.documentHasNoHeadings()');
   });
 
   it('wires Mermaid diagram insertion through toolbar, titlebar and native menu', () => {
     expect(toolbarSource).toContain('DIAGRAM_TEMPLATES');
     expect(toolbarSource).toContain("type: 'insertMermaidBlock'");
-    expect(toolbarSource).toContain('空白图表');
+    expect(toolbarSource).toContain('t.blankDiagram()');
     expect(toolbarSource).toContain("type: 'insertDiagramBlock'");
-    expect(toolbarSource).toContain('aria-label="插入图表"');
+    expect(toolbarSource).toContain('aria-label={t.insertDiagram()}');
     expect(titleBarSource).toContain('DIAGRAM_TEMPLATES');
     expect(titleBarSource).toContain('insertBlankDiagram');
     expect(titleBarSource).toContain('insertDiagram(template.type');
@@ -256,8 +256,8 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("type: 'insertMermaidBlock'");
     expect(appCommandsSource).toContain("command.startsWith('menu-chart:')");
     expect(appCommandsSource).toContain("type: 'insertDiagramBlock'");
-    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "图表")');
-    expect(tauriMenuSource).toContain('"menu-chart", "空白图表"');
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, tr(locale, "menu_chart"))');
+    expect(tauriMenuSource).toContain('"menu-chart", tr(locale, "menu_chart_blank")');
     expect(tauriMenuSource).toContain('menu-chart:flowchart');
     expect(tauriMenuSource).toContain('menu-chart:erDiagram');
   });
@@ -270,15 +270,15 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command === 'menu-highlight'");
     expect(appCommandsSource).toContain("handlers.runCommand({ type: 'toggleHighlight' });");
     expect(tauriMenuSource).toContain('"menu-highlight"');
-    expect(tauriMenuSource).toContain('"高亮"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_highlight")');
   });
 
   it('wires link editing through toolbar, titlebar and shortcuts', () => {
     expect(toolbarSource).toContain('Link');
-    expect(toolbarSource).toContain('aria-label="编辑超链接"');
+    expect(toolbarSource).toContain('aria-label={t.editLink()}');
     expect(linkQuickEditorSource).toContain('role="dialog"');
     expect(linkQuickEditorSource).toContain('role="alert"');
-    expect(linkQuickEditorSource).toContain('placeholder="标题（显示文字）"');
+    expect(linkQuickEditorSource).toContain('placeholder={t.linkTitlePlaceholder()}');
     expect(linkQuickEditorSource).toContain('placeholder="https://example.com"');
     expect(appSource).toContain('getLinkPickerPositionStyle(editor.getSelectionAnchorRect())');
     expect(titleBarSource).toContain('finish(openLinkPicker,');
@@ -287,7 +287,7 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain('handlers.openLinkPicker();');
     expect(appCommandsSource).toContain("key === 'k' && !event.shiftKey");
     expect(tauriMenuSource).toContain('"menu-link"');
-    expect(tauriMenuSource).toContain('"超链接"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_link")');
     expect(appSource).toContain('editor.getActiveLink()');
     expect(appSource).toContain("type: 'insertLink'");
     expect(appSource).toContain('text: linkText');
@@ -298,7 +298,7 @@ describe('App outline layout', () => {
   it('wires Markdown comments through toolbar, titlebar and native menu', () => {
     expect(toolbarSource).toContain('MessageSquare');
     expect(toolbarSource).toContain("type: 'insertCommentInline'");
-    expect(toolbarSource).toContain('aria-label="插入行内注释"');
+    expect(toolbarSource).toContain('aria-label={t.insertInlineComment()}');
     expect(titleBarSource).toContain("type: 'insertCommentInline'");
     expect(titleBarSource).toContain("type: 'insertCommentBlock'");
     expect(titleBarSource).not.toContain("comingSoon('注释'");
@@ -307,9 +307,9 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command === 'menu-comment-block'");
     expect(appCommandsSource).toContain("type: 'insertCommentBlock'");
     expect(tauriMenuSource).toContain('"menu-comment"');
-    expect(tauriMenuSource).toContain('"注释"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_comment")');
     expect(tauriMenuSource).toContain('"menu-comment-block"');
-    expect(tauriMenuSource).toContain('"注释块"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_comment_block")');
   });
 
   it('forwards native menu events to desktop command handlers', () => {
@@ -450,15 +450,15 @@ describe('App outline layout', () => {
     expect(appShellSource).toContain('{#if desktopEnabled}');
     expect(appShellSource).toContain('<AppTitleBar');
     expect(tauriMenuSource).toContain('static APP_MENU_EVENT_INSTALLED');
-    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "段落")');
-    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "设置")');
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, tr(locale, "menu_paragraph"))');
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, tr(locale, "menu_settings"))');
     expect(tauriMenuSource).toContain('"set-heading-1"');
     expect(tauriMenuSource).toContain('"set-heading-6"');
     expect(tauriMenuSource).toContain('"insert-callout",');
     expect(tauriMenuSource).toContain('"toggle-ordered-list",');
     expect(tauriMenuSource).toContain('"toggle-bullet-list",');
     expect(tauriMenuSource).toContain('"toggle-task-list",');
-    expect(tauriMenuSource).toContain('"open-settings", "偏好设置..."');
+    expect(tauriMenuSource).toContain('"open-settings", tr(locale, "menu_preferences")');
     expect(tauriMenuSource).toContain('Some("CmdOrCtrl+N")');
     expect(tauriMenuSource).toContain('"Cmd+Q"');
     expect(tauriMenuSource).toContain('"Alt+F4"');
@@ -474,19 +474,19 @@ describe('App outline layout', () => {
     expect(appSource).toContain("editor.execute({ type: 'insertFrontMatter' })");
     expect(titleBarSource).toContain('finish(editFrontMatter,');
     expect(titleBarSource).not.toContain("comingSoon('YAML Front Matter'");
-    expect(titleBarSource).toContain('文档元数据');
+    expect(titleBarSource).toContain('t.frontMatter()');
     expect(appCommandsSource).toContain("command === 'menu-yaml-front-matter'");
     expect(appCommandsSource).toContain('handlers.editFrontMatter();');
-    expect(frontMatterCardSource).toContain('aria-label="文档元数据编辑态"');
-    expect(frontMatterCardSource).toContain("'编辑文档元数据'");
-    expect(frontMatterCardSource).toContain("'查看文档元数据'");
+    expect(frontMatterCardSource).toContain('aria-label={t.documentMetadataEditing()}');
+    expect(frontMatterCardSource).toContain('t.editDocumentMetadata()');
+    expect(frontMatterCardSource).toContain('t.viewDocumentMetadata()');
     expect(frontMatterCardSource).not.toContain('YAML Front Matter');
     expect(frontMatterCardSource).toContain('readonly={readonly}');
     expect(frontMatterCardSource).toContain('on:focus={enterEdit}');
     expect(frontMatterCardSource).toContain('on:focusout={handleFocusOut}');
     expect(frontMatterCardSource).toContain('on:input={handleInput}');
     expect(frontMatterCardSource).toContain('deleteFrontMatter');
-    expect(frontMatterCardSource).toContain('确认删除');
+    expect(frontMatterCardSource).toContain('t.confirmDeleteMetadata()');
     expect(frontMatterCardSource).toContain('frontMatter.fields.parseWarning');
   });
 
@@ -513,8 +513,10 @@ describe('App outline layout', () => {
   it('uses semantic icons for mode, outline and toc controls in the editor toolbar', () => {
     expect(toolbarSource).toContain('BookOpenText');
     expect(toolbarSource).toContain('CodeXml');
-    expect(toolbarSource).toContain('aria-label="切换到语义编辑"');
-    expect(toolbarSource).toContain('aria-label="切换到源码模式"');
+    expect(toolbarSource).toContain('title={t.semanticEditingTitle()}');
+    expect(toolbarSource).toContain('title={t.sourceModeTitle()}');
+    expect(toolbarSource).toContain('aria-label={t.semanticEditing()}');
+    expect(toolbarSource).toContain('aria-label={t.sourceMode()}');
     expect(toolbarSource).toContain("setMode('semantic')");
     expect(toolbarSource).toContain("setMode('source')");
     expect(toolbarSource).toContain('ListTree size={18}');
@@ -531,10 +533,13 @@ describe('App outline layout', () => {
     expect(titleBarSource).not.toContain('<img class="app-logo"');
     expect(titleBarSource).toContain('Nomo</span>');
     expect(titleBarSource).not.toContain('<span class="app-logo">M</span>');
-    expect(titleBarSource).toContain('资源管理器侧边栏');
+    expect(titleBarSource).toContain('t.showExplorerSidebar()');
+    expect(titleBarSource).toContain('t.hideExplorerSidebar()');
     expect(titleBarSource).toContain('export let focusMode: boolean');
-    expect(titleBarSource).toContain("title={isMaximized ? '还原窗口' : '最大化'}");
-    expect(titleBarSource).toContain("aria-label={isMaximized ? '还原窗口' : '最大化'}");
+    expect(titleBarSource).toContain('title={isMaximized ? t.restoreWindow() : t.maximize()}');
+    expect(titleBarSource).toContain(
+      'aria-label={isMaximized ? t.restoreWindow() : t.maximize()}',
+    );
     expect(titleBarSource).toContain('handleMaximizeWindow');
     expect(titleBarSource).toContain('syncWindowState');
     expect(desktopWindowSource).toContain("title: 'Nomo'");
@@ -642,22 +647,22 @@ describe('App outline layout', () => {
   it('opens preferences in a dedicated settings window', () => {
     expect(appSource).not.toContain('SettingsDrawer');
     expect(desktopWindowSource).toContain('openSettingsWindow');
-    expect(settingsWindowSource).toContain('偏好设置');
+    expect(settingsWindowSource).toContain('t.settingsTitle()');
     expect(settingsWindowSource).toContain('settings-nav');
-    expect(settingsWindowSource).toContain('保存前创建快照');
-    expect(settingsWindowSource).toContain('自动保存延迟');
-    expect(settingsWindowSource).toContain('大文件阈值');
-    expect(settingsWindowSource).toContain('打开文件夹默认行为');
-    expect(settingsWindowSource).toContain('文件预览标签');
-    expect(settingsWindowSource).toContain('显示文档统计');
-    expect(settingsWindowSource).toContain('默认统计类型');
-    expect(settingsWindowSource).toContain('阅读时间');
-    expect(settingsWindowSource).toContain('关闭到托盘');
-    expect(settingsWindowSource).toContain('图片默认宽度');
-    expect(settingsWindowSource).toContain('后续版本支持');
-    expect(settingsWindowSource).toContain('自动清理本地图片');
-    expect(settingsWindowSource).toContain('代码块默认语言');
-    expect(settingsWindowSource).toContain('Mermaid 默认图表类型');
+    expect(settingsWindowSource).toContain('t.createSnapshotBeforeSave()');
+    expect(settingsWindowSource).toContain('autoSaveDelayMs');
+    expect(settingsWindowSource).toContain('t.largeDocumentLimit()');
+    expect(settingsWindowSource).toContain('t.folderOpenDefaultBehavior()');
+    expect(settingsWindowSource).toContain('filePreviewEnabled');
+    expect(settingsWindowSource).toContain('writingStatsVisible');
+    expect(settingsWindowSource).toContain('writingStatsMetric');
+    expect(settingsWindowSource).toContain('readingTimeVisible');
+    expect(settingsWindowSource).toContain('closeToTrayEnabled');
+    expect(settingsWindowSource).toContain('defaultImageWidth');
+    expect(settingsWindowSource).toContain('disabled-pill');
+    expect(settingsWindowSource).toContain('t.autoCleanLocalImages()');
+    expect(settingsWindowSource).toContain('t.defaultCodeBlockLanguage()');
+    expect(settingsWindowSource).toContain('t.defaultDiagramType()');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.filePreviewEnabled');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.autoSaveEnabled');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.closeToTrayEnabled');
@@ -668,14 +673,14 @@ describe('App outline layout', () => {
   });
 
   it('wires the first and second batch settings to runtime behavior instead of placeholders', () => {
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('light')}>浅色");
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('dark')}>深色");
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('system')}>跟随系统");
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('light')}>{t.themeLight()}");
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('dark')}>{t.themeDark()}");
+    expect(settingsWindowSource).toContain("on:click={() => setTheme('system')}>{t.themeSystem()}");
     expect(settingsWindowSource).toContain('id="zoomPercent"');
     expect(settingsWindowSource).toContain('ctrlWheelZoomEnabled');
     expect(settingsWindowSource).toContain('codeBlockLineNumbersVisible');
     expect(settingsWindowSource).toContain('inlineCodeRenderingEnabled');
-    expect(settingsWindowSource).toContain('渲染行内代码');
+    expect(settingsWindowSource).toContain('inlineCodeRenderingEnabled');
     expect(settingsWindowSource).toContain('setCodeBlockIndent');
     expect(settingsWindowSource).toContain('id="defaultImageWidth"');
     expect(settingsWindowSource).toContain('setImageDefaultAlign');
@@ -713,7 +718,7 @@ describe('App outline layout', () => {
     expect(tauriLibSource).toContain('crate::window::tray::set_tray_active');
     expect(tauriLibSource).toContain('WindowEvent::CloseRequested');
     expect(tauriTraySource).toContain('TrayIconBuilder::with_id');
-    expect(tauriTraySource).toContain('"打开 Nomo"');
+    expect(tauriTraySource).toContain('i18n::app_text(app, "tray_open")');
     expect(tauriTraySource).toContain('nomo-tray-dark-active-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-dark-inactive-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-light-active-24-preview.png');
@@ -726,7 +731,7 @@ describe('App outline layout', () => {
     expect(tauriLibSource).toContain('crate::window::commands::set_desktop_icon_theme');
     expect(desktopWindowSource).toContain("invoke('set_desktop_icon_theme'");
     expect(appSource).toContain('syncDesktopIconTheme(theme)');
-    expect(tauriTraySource).toContain('"退出"');
+    expect(tauriTraySource).toContain('i18n::app_text(app, "tray_exit")');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
     expect(tauriTraySource).toContain('closeToTrayEnabled');
@@ -773,7 +778,7 @@ describe('App outline layout', () => {
     expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: boolean');
     expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: true');
     expect(appSettingsSource).toContain('autoDeleteUnusedLocalImages');
-    expect(settingsWindowSource).toContain('自动清理本地图片');
+    expect(settingsWindowSource).toContain('autoDeleteUnusedLocalImages');
     expect(settingsWindowSource).toContain('autoDeleteUnusedLocalImages');
     expect(appSource).toContain('!imageSettings.autoDeleteUnusedLocalImages');
   });

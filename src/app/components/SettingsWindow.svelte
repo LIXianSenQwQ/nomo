@@ -30,10 +30,18 @@
     type CodeBlockIndentPreference,
     type EditorModePreference,
     type FolderOpenDefaultBehavior,
+    type InterfaceLanguagePreference,
     type ShortcutCommandId,
     type ThemePreference,
     type WritingStatsMetric,
   } from '../services/settings';
+  import {
+    INTERFACE_LANGUAGE_OPTIONS,
+    applyInterfaceLanguagePreference,
+    getDiagramTypeLabel,
+    t,
+    type EffectiveInterfaceLocale,
+  } from '../i18n';
   import type {
     ImageDefaultAlign,
     ImageInsertStrategy,
@@ -68,29 +76,22 @@
   };
 
   const categories = [
-    { id: 'general' as const, label: '通用', icon: Settings2 },
-    { id: 'editor' as const, label: '编辑器', icon: BookOpenText },
-    { id: 'appearance' as const, label: '外观', icon: Palette },
-    { id: 'files' as const, label: '文件与窗口', icon: FolderOpen },
-    { id: 'images' as const, label: '图片', icon: FileImage },
-    { id: 'stats' as const, label: '统计与大纲', icon: BarChart3 },
-    { id: 'advanced' as const, label: '高级', icon: SlidersHorizontal },
-    { id: 'about' as const, label: '关于', icon: Info },
+    { id: 'general' as const, labelKey: 'settingsCategoryGeneral', icon: Settings2 },
+    { id: 'editor' as const, labelKey: 'settingsCategoryEditor', icon: BookOpenText },
+    { id: 'appearance' as const, labelKey: 'settingsCategoryAppearance', icon: Palette },
+    { id: 'files' as const, labelKey: 'settingsCategoryFiles', icon: FolderOpen },
+    { id: 'images' as const, labelKey: 'settingsCategoryImages', icon: FileImage },
+    { id: 'stats' as const, labelKey: 'settingsCategoryStats', icon: BarChart3 },
+    { id: 'advanced' as const, labelKey: 'settingsCategoryAdvanced', icon: SlidersHorizontal },
+    { id: 'about' as const, labelKey: 'settingsCategoryAbout', icon: Info },
   ];
-
-  const categoryTitles: Record<CategoryId, string> = {
-    general: '通用',
-    editor: '编辑器',
-    appearance: '外观',
-    files: '文件与窗口',
-    images: '图片',
-    stats: '统计与大纲',
-    advanced: '高级',
-    about: '关于 Nomo',
-  };
 
   let activeCategory: CategoryId = 'general';
   let draftSettings: AppPreferences = { ...DEFAULT_APP_PREFERENCES };
+  let interfaceLocale: EffectiveInterfaceLocale = applyInterfaceLanguagePreference(
+    draftSettings.interfaceLanguage,
+  );
+  $: categoryTitles = createCategoryTitles(interfaceLocale);
   let loaded = false;
   let statusMessage = '';
   let statusTimer: number | null = null;
@@ -110,18 +111,31 @@
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
 
-  const shortcutItems: Array<{ id: ShortcutCommandId; label: string }> = [
-    { id: 'new-file', label: '新建 Markdown' },
-    { id: 'open-file', label: '打开文件' },
-    { id: 'save-file', label: '保存' },
-    { id: 'toggle-source', label: '切换源码模式' },
-    { id: 'toggle-theme', label: '主动切换浅 / 深色' },
-    { id: 'toggle-focus', label: '显示 / 隐藏资源管理器' },
-    { id: 'insert-code-block', label: '插入代码块' },
-    { id: 'insert-table', label: '插入表格' },
-    { id: 'insert-math-block', label: '插入公式块' },
-    { id: 'menu-link', label: '编辑超链接' },
-    { id: 'menu-clear-format', label: '清除样式' },
+  function createCategoryTitles(_locale: EffectiveInterfaceLocale): Record<CategoryId, string> {
+    return {
+      general: t.settingsCategoryGeneral(),
+      editor: t.settingsCategoryEditor(),
+      appearance: t.settingsCategoryAppearance(),
+      files: t.settingsCategoryFiles(),
+      images: t.settingsCategoryImages(),
+      stats: t.settingsCategoryStats(),
+      advanced: t.settingsCategoryAdvanced(),
+      about: t.settingsCategoryAboutTitle(),
+    };
+  }
+
+  const shortcutItems: Array<{ id: ShortcutCommandId; labelKey: string }> = [
+    { id: 'new-file', labelKey: 'newMarkdown' },
+    { id: 'open-file', labelKey: 'openFile' },
+    { id: 'save-file', labelKey: 'save' },
+    { id: 'toggle-source', labelKey: 'toggleSourceMode' },
+    { id: 'toggle-theme', labelKey: 'toggleThemeLightDark' },
+    { id: 'toggle-focus', labelKey: 'showHideExplorer' },
+    { id: 'insert-code-block', labelKey: 'insertCodeBlock' },
+    { id: 'insert-table', labelKey: 'insertTable' },
+    { id: 'insert-math-block', labelKey: 'insertMathBlock' },
+    { id: 'menu-link', labelKey: 'editLink' },
+    { id: 'menu-clear-format', labelKey: 'clearStyle' },
   ];
 
   onMount(() => {
@@ -179,9 +193,9 @@
               applySettingsToThisWindow(saved);
             }
             await emitSettingsUpdated();
-            showStatus('已自动保存');
+            showStatus(t.settingsSaved());
           } catch (error) {
-            showStatus(error instanceof Error ? error.message : '保存设置失败');
+            showStatus(error instanceof Error ? error.message : t.settingsSaveFailed());
           }
         } while (saveQueued);
       } finally {
@@ -201,7 +215,7 @@
     if (autoSaveTimer !== null) {
       window.clearTimeout(autoSaveTimer);
     }
-    showStatus('保存中...');
+    showStatus(t.settingsSaving());
     autoSaveTimer = window.setTimeout(() => {
       autoSaveTimer = null;
       void saveLatestSettings();
@@ -227,6 +241,8 @@
       return;
     }
     const { emit } = await import('@tauri-apps/api/event');
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('refresh_interface_language_chrome').catch(() => undefined);
     await emit(SETTINGS_UPDATED_EVENT, { source: 'settings-window' }).catch(() => undefined);
   }
 
@@ -240,6 +256,7 @@
   }
 
   function applySettingsToThisWindow(settings: AppPreferences) {
+    interfaceLocale = applyInterfaceLanguagePreference(settings.interfaceLanguage);
     applyThemeSetting(settings.theme);
     applyTypographySettings(settings.fontSize, settings.lineHeight);
     applyEditorLayoutSettings(settings.contentWidthPercent);
@@ -311,6 +328,17 @@
 
   function setTheme(theme: ThemePreference) {
     updateDraft({ theme });
+  }
+
+  function setInterfaceLanguage(interfaceLanguage: InterfaceLanguagePreference) {
+    updateDraft({ interfaceLanguage });
+  }
+
+  function handleInterfaceLanguageChange(event: Event) {
+    const nextLanguage = (event.currentTarget as HTMLSelectElement).value;
+    if (nextLanguage === 'system' || INTERFACE_LANGUAGE_OPTIONS.some((item) => item.value === nextLanguage)) {
+      setInterfaceLanguage(nextLanguage as InterfaceLanguagePreference);
+    }
   }
 
   function setEditorMode(editorMode: EditorModePreference) {
@@ -424,53 +452,53 @@
 
   function getMarkdownAssociationLabel() {
     if (!desktopEnabled || !platformCapabilities.isWindows) {
-      return '不支持';
+      return t.unsupported();
     }
     if (checkingMdAssociation && !mdAssociationStatus) {
-      return '检测中';
+      return t.checking();
     }
     if (mdAssociationError) {
-      return '检测失败';
+      return t.checkFailed();
     }
     if (mdAssociationStatus?.is_default) {
-      return '已绑定';
+      return t.bound();
     }
     if (mdAssociationStatus?.registered) {
-      return '待选择';
+      return t.pendingSelection();
     }
-    return '未绑定';
+    return t.unbound();
   }
 
   function getMarkdownAssociationDescription() {
     if (!desktopEnabled) {
-      return '仅 Windows 桌面版可绑定系统默认打开方式。';
+      return t.mdAssociationDesktopOnly();
     }
     if (!platformCapabilities.isWindows) {
-      return '当前默认打开方式绑定仅支持 Windows。';
+      return t.mdAssociationWindowsOnly();
     }
     if (mdAssociationError) {
       return mdAssociationError;
     }
     if (checkingMdAssociation && !mdAssociationStatus) {
-      return '正在读取 Windows 当前 .md 默认打开方式。';
+      return t.mdAssociationCheckingDescription();
     }
     return (
       mdAssociationStatus?.message ??
-      '将 Nomo 注册到 Windows 默认应用候选列表，并在系统设置中完成确认。'
+      t.mdAssociationDefaultDescription()
     );
   }
 
   function getMarkdownAssociationButtonLabel() {
     if (bindingMdAssociation) {
-      return '打开中...';
+      return t.opening();
     }
     if (mdAssociationStatus?.is_default) {
-      return '已绑定';
+      return t.bound();
     }
     if (mdAssociationStatus?.registered) {
-      return '去选择 Nomo';
+      return t.chooseNomo();
     }
-    return '绑定 .md';
+    return t.bindMd();
   }
 
   function getMarkdownAssociationPillClass() {
@@ -509,43 +537,43 @@
 
   function getContextMenuLabel() {
     if (!desktopEnabled || !platformCapabilities.isWindows) {
-      return '不支持';
+      return t.unsupported();
     }
     if (checkingContextMenu && !contextMenuStatus) {
-      return '检测中';
+      return t.checking();
     }
     if (contextMenuError) {
-      return '检测失败';
+      return t.checkFailed();
     }
-    return contextMenuStatus?.registered ? '已注册' : '未注册';
+    return contextMenuStatus?.registered ? t.registered() : t.unregistered();
   }
 
   function getContextMenuDescription() {
     if (!desktopEnabled) {
-      return '仅 Windows 桌面版可注册系统右键菜单。';
+      return t.contextMenuDesktopOnly();
     }
     if (!platformCapabilities.isWindows) {
-      return '当前右键菜单注册仅支持 Windows。';
+      return t.contextMenuWindowsOnly();
     }
     if (contextMenuError) {
       return contextMenuError;
     }
     if (checkingContextMenu && !contextMenuStatus) {
-      return '正在读取 Windows 当前右键菜单注册状态。';
+      return t.contextMenuCheckingDescription();
     }
     return (
-      contextMenuStatus?.message ?? '在 .md / .markdown 文件和文件夹右键菜单中加入 Nomo。'
+      contextMenuStatus?.message ?? t.contextMenuDefaultDescription()
     );
   }
 
   function getContextMenuButtonLabel() {
     if (registeringContextMenu) {
-      return '注册中...';
+      return t.registering();
     }
     if (contextMenuStatus?.registered) {
-      return '已注册';
+      return t.registered();
     }
-    return '注册右键菜单';
+    return t.registerContextMenu();
   }
 
   function getContextMenuPillClass() {
@@ -607,11 +635,14 @@
 </script>
 
 <svelte:head>
-  <title>偏好设置 - Nomo</title>
+  {#key interfaceLocale}
+    <title>{t.settingsWindowTitle()}</title>
+  {/key}
 </svelte:head>
 
-<div class="settings-window-shell">
-  <aside class="settings-nav" aria-label="设置分类">
+{#key interfaceLocale}
+<div class="settings-window-shell" data-interface-locale={interfaceLocale}>
+  <aside class="settings-nav" aria-label={t.settingsTitle()}>
     <div
       class="settings-brand"
       data-drag-region
@@ -622,7 +653,7 @@
         <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
         <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
       </span>
-      <span>偏好设置</span>
+      <span>{t.settingsTitle()}</span>
     </div>
 
     <nav>
@@ -630,14 +661,14 @@
         <button
           type="button"
           class:active={activeCategory === category.id}
-          aria-label={category.label}
+          aria-label={t[category.labelKey]()}
           aria-current={activeCategory === category.id ? 'page' : undefined}
           on:click={() => {
             activeCategory = category.id;
           }}
         >
           <svelte:component this={category.icon} size={16} aria-hidden="true" />
-          <span>{category.label}</span>
+          <span>{t[category.labelKey]()}</span>
         </button>
       {/each}
     </nav>
@@ -655,12 +686,12 @@
         <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
       </div>
       {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
-        <div class="settings-window-controls" aria-label="窗口控制">
+        <div class="settings-window-controls" aria-label={t.windowControls()}>
           <button
             type="button"
             class="settings-control-button"
-            title="最小化"
-            aria-label="最小化"
+            title={t.minimize()}
+            aria-label={t.minimize()}
             on:click={minimizeCurrentWindow}
           >
             <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
@@ -670,79 +701,79 @@
           <button
             type="button"
             class="settings-control-button close"
-            title="关闭"
-            aria-label="关闭偏好设置"
+            title={t.close()}
+            aria-label={t.close()}
             on:click={handleClose}
           >
             <X size={15} aria-hidden="true" />
           </button>
         </div>
       {:else if !desktopEnabled}
-        <button type="button" class="close-button" aria-label="关闭偏好设置" on:click={handleClose}>
+        <button type="button" class="close-button" aria-label={t.close()} on:click={handleClose}>
           <X size={18} />
         </button>
       {/if}
     </header>
 
     {#if !loaded}
-      <div class="settings-loading" role="status">正在读取设置...</div>
+      <div class="settings-loading" role="status">{t.settingsLoading()}</div>
     {:else}
       <div class="settings-content">
         {#if activeCategory === 'general'}
           <div class="settings-group">
-            <h2>基础行为</h2>
+            <h2>{t.basicBehavior()}</h2>
             <div class="setting-row">
               <div>
-                <span class="setting-label">主题</span>
-                <p>保存后同步到主窗口和渲染服务。</p>
+                <span class="setting-label">{t.theme()}</span>
+                <p>{t.themeDescription()}</p>
               </div>
-              <div class="triple-control" role="group" aria-label="主题">
+              <div class="triple-control" role="group" aria-label={t.theme()}>
                 <button
                   type="button"
                   class:active={draftSettings.theme === 'light'}
                   aria-pressed={draftSettings.theme === 'light'}
-                  on:click={() => setTheme('light')}>浅色</button
+                  on:click={() => setTheme('light')}>{t.themeLight()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.theme === 'dark'}
                   aria-pressed={draftSettings.theme === 'dark'}
-                  on:click={() => setTheme('dark')}>深色</button
+                  on:click={() => setTheme('dark')}>{t.themeDark()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.theme === 'system'}
                   aria-pressed={draftSettings.theme === 'system'}
-                  on:click={() => setTheme('system')}>跟随系统</button
+                  on:click={() => setTheme('system')}>{t.themeSystem()}</button
                 >
               </div>
             </div>
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">启动默认编辑模式</span>
-                <p>用于下次打开文档时的默认编辑形态。</p>
+                <span class="setting-label">{t.editorModeDefault()}</span>
+                <p>{t.editorModeDefaultDescription()}</p>
               </div>
-              <div class="segmented-control" role="group" aria-label="启动默认编辑模式">
+              <div class="segmented-control" role="group" aria-label={t.editorModeDefault()}>
                 <button
                   type="button"
                   class:active={draftSettings.editorMode === 'semantic'}
                   aria-pressed={draftSettings.editorMode === 'semantic'}
-                  on:click={() => setEditorMode('semantic')}>语义编辑</button
+                  on:click={() => setEditorMode('semantic')}>{t.semanticEditing()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.editorMode === 'source'}
                   aria-pressed={draftSettings.editorMode === 'source'}
-                  on:click={() => setEditorMode('source')}>源码模式</button
+                  on:click={() => setEditorMode('source')}>{t.sourceMode()}</button
                 >
               </div>
             </div>
 
             <label class="toggle-row" for="autoSaveEnabled">
               <span>
-                <span class="toggle-title">自动保存</span>
-                <span class="toggle-desc">编辑后自动写入当前本地文件。</span>
+                <span class="toggle-title">{t.autoSave()}</span>
+                <span class="toggle-desc">{t.autoSaveDescription()}</span>
               </span>
               <input
                 id="autoSaveEnabled"
@@ -755,8 +786,8 @@
 
             <div class="setting-row">
               <div>
-                <label for="autoSaveDelayMs" class="setting-label">自动保存延迟</label>
-                <p>输入停止后等待多久再保存。</p>
+                <label for="autoSaveDelayMs" class="setting-label">{t.autoSaveDelay()}</label>
+                <p>{t.autoSaveDelayDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -774,10 +805,8 @@
 
             <label class="toggle-row" for="createSnapshotBeforeSave">
               <span>
-                <span class="toggle-title">保存前创建快照</span>
-                <span class="toggle-desc"
-                  >保存本地文件前记录一份 Markdown 快照，便于恢复误覆盖。</span
-                >
+                <span class="toggle-title">{t.createSnapshotBeforeSave()}</span>
+                <span class="toggle-desc">{t.createSnapshotBeforeSaveDescription()}</span>
               </span>
               <input
                 id="createSnapshotBeforeSave"
@@ -788,21 +817,30 @@
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
 
-            <div class="disabled-row" aria-disabled="true">
+            <div class="setting-row">
               <div>
-                <span class="setting-label">界面语言</span>
-                <p>后续支持在中文和英文之间切换。</p>
+                <span class="setting-label">{t.interfaceLanguage()}</span>
+                <p>{t.interfaceLanguageDescription()}</p>
               </div>
-              <span class="disabled-pill">中 / 英</span>
+              <select
+                class="select-input"
+                aria-label={t.interfaceLanguage()}
+                value={draftSettings.interfaceLanguage}
+                on:change={handleInterfaceLanguageChange}
+              >
+                {#each INTERFACE_LANGUAGE_OPTIONS as language}
+                  <option value={language.value}>{t[language.labelKey]()}</option>
+                {/each}
+              </select>
             </div>
           </div>
         {:else if activeCategory === 'editor'}
           <div class="settings-group">
-            <h2>编辑尺度</h2>
+            <h2>{t.editorScale()}</h2>
             <div class="setting-row">
               <div>
-                <label for="fontSize" class="setting-label">字号</label>
-                <p>影响语义编辑区和源码模式的正文大小。</p>
+                <label for="fontSize" class="setting-label">{t.fontSize()}</label>
+                <p>{t.fontSizeDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -820,8 +858,8 @@
 
             <div class="setting-row">
               <div>
-                <label for="lineHeight" class="setting-label">行高</label>
-                <p>提升长文档阅读和编辑的舒适度。</p>
+                <label for="lineHeight" class="setting-label">{t.lineHeight()}</label>
+                <p>{t.lineHeightDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -839,8 +877,8 @@
 
             <div class="setting-row">
               <div>
-                <label for="contentWidthPercent" class="setting-label">内容宽度</label>
-                <p>控制编辑正文在窗口中的最大占比。</p>
+                <label for="contentWidthPercent" class="setting-label">{t.contentWidth()}</label>
+                <p>{t.contentWidthDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -858,29 +896,29 @@
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">Callout 样式</span>
-                <p>控制提示块和引用块的视觉密度。</p>
+                <span class="setting-label">{t.calloutStyle()}</span>
+                <p>{t.calloutStyleDescription()}</p>
               </div>
-              <div class="segmented-control" role="group" aria-label="Callout 样式">
+              <div class="segmented-control" role="group" aria-label={t.calloutStyle()}>
                 <button
                   type="button"
                   class:active={draftSettings.blockStyle === 'classic'}
                   aria-pressed={draftSettings.blockStyle === 'classic'}
-                  on:click={() => setBlockStyle('classic')}>经典</button
+                  on:click={() => setBlockStyle('classic')}>{t.classic()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.blockStyle === 'modern'}
                   aria-pressed={draftSettings.blockStyle === 'modern'}
-                  on:click={() => setBlockStyle('modern')}>现代</button
+                  on:click={() => setBlockStyle('modern')}>{t.modern()}</button
                 >
               </div>
             </div>
 
             <div class="setting-row">
               <div>
-                <label for="largeDocumentLimit" class="setting-label">大文件阈值</label>
-                <p>超过阈值后使用只读源码模式，避免语义解析阻塞窗口。</p>
+                <label for="largeDocumentLimit" class="setting-label">{t.largeDocumentLimit()}</label>
+                <p>{t.largeDocumentLimitDescription()}</p>
               </div>
               <div class="number-field">
                 <input
@@ -892,27 +930,27 @@
                   value={draftSettings.largeDocumentLimit}
                   on:input={(event) => updateNumberSetting('largeDocumentLimit', event)}
                 />
-                <span>字符 / 字节</span>
+                <span>{t.charByte()}</span>
               </div>
             </div>
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">默认缩进</span>
-                <p>代码块编辑态按 Tab 时使用。</p>
+                <span class="setting-label">{t.defaultIndent()}</span>
+                <p>{t.defaultIndentDescription()}</p>
               </div>
-              <div class="triple-control" role="group" aria-label="默认缩进">
+              <div class="triple-control" role="group" aria-label={t.defaultIndent()}>
                 <button
                   type="button"
                   class:active={draftSettings.codeBlockIndent === 'spaces-2'}
                   aria-pressed={draftSettings.codeBlockIndent === 'spaces-2'}
-                  on:click={() => setCodeBlockIndent('spaces-2')}>2 空格</button
+                  on:click={() => setCodeBlockIndent('spaces-2')}>{t.twoSpaces()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.codeBlockIndent === 'spaces-4'}
                   aria-pressed={draftSettings.codeBlockIndent === 'spaces-4'}
-                  on:click={() => setCodeBlockIndent('spaces-4')}>4 空格</button
+                  on:click={() => setCodeBlockIndent('spaces-4')}>{t.fourSpaces()}</button
                 >
                 <button
                   type="button"
@@ -925,8 +963,8 @@
 
             <label class="toggle-row" for="codeBlockLineNumbersVisible">
               <span>
-                <span class="toggle-title">代码块行号</span>
-                <span class="toggle-desc">控制语义编辑区代码块是否显示行号。</span>
+                <span class="toggle-title">{t.codeBlockLineNumbers()}</span>
+                <span class="toggle-desc">{t.codeBlockLineNumbersDescription()}</span>
               </span>
               <input
                 id="codeBlockLineNumbersVisible"
@@ -939,10 +977,8 @@
 
             <label class="toggle-row" for="inlineCodeRenderingEnabled">
               <span>
-                <span class="toggle-title">渲染行内代码</span>
-                <span class="toggle-desc"
-                  >开启后显示行内代码样式；关闭后显示原始 Markdown 反引号文本。</span
-                >
+                <span class="toggle-title">{t.inlineCodeRendering()}</span>
+                <span class="toggle-desc">{t.inlineCodeRenderingDescription()}</span>
               </span>
               <input
                 id="inlineCodeRenderingEnabled"
@@ -955,11 +991,11 @@
           </div>
         {:else if activeCategory === 'appearance'}
           <div class="settings-group">
-            <h2>视觉缩放</h2>
+            <h2>{t.visualZoom()}</h2>
             <div class="setting-row">
               <div>
-                <label for="zoomPercent" class="setting-label">缩放级别</label>
-                <p>调整正文编辑区和源码模式的整体显示比例。</p>
+                <label for="zoomPercent" class="setting-label">{t.zoomLevel()}</label>
+                <p>{t.zoomLevelDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -977,8 +1013,8 @@
 
             <label class="toggle-row" for="ctrlWheelZoomEnabled">
               <span>
-                <span class="toggle-title">Ctrl 滚轮缩放</span>
-                <span class="toggle-desc">按住 Ctrl 并滚动鼠标滚轮调整缩放。</span>
+                <span class="toggle-title">{t.ctrlWheelZoom()}</span>
+                <span class="toggle-desc">{t.ctrlWheelZoomDescription()}</span>
               </span>
               <input
                 id="ctrlWheelZoomEnabled"
@@ -991,46 +1027,46 @@
 
             <div class="disabled-row" aria-disabled="true">
               <div>
-                <span class="setting-label">自定义 CSS 主题</span>
-                <p>后续接入主题文件后开放，不影响当前 CSS 变量主题。</p>
+                <span class="setting-label">{t.customCssTheme()}</span>
+                <p>{t.customCssThemeDescription()}</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <span class="disabled-pill">{t.futureVersionSupport()}</span>
             </div>
           </div>
         {:else if activeCategory === 'files'}
           <div class="settings-group">
-            <h2>文件与窗口</h2>
+            <h2>{t.filesAndWindows()}</h2>
             <div class="setting-row">
               <div>
-                <span class="setting-label">打开文件夹默认行为</span>
-                <p>选择是否复用当前窗口，或总是打开新窗口。</p>
+                <span class="setting-label">{t.folderOpenDefaultBehavior()}</span>
+                <p>{t.folderOpenDefaultBehaviorDescription()}</p>
               </div>
-              <div class="triple-control" role="group" aria-label="打开文件夹默认行为">
+              <div class="triple-control" role="group" aria-label={t.folderOpenDefaultBehavior()}>
                 <button
                   type="button"
                   class:active={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
                   aria-pressed={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
-                  on:click={() => setFolderBehavior('ask-every-time')}>每次询问</button
+                  on:click={() => setFolderBehavior('ask-every-time')}>{t.askEveryTime()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.folderOpenDefaultBehavior === 'current-window'}
                   aria-pressed={draftSettings.folderOpenDefaultBehavior === 'current-window'}
-                  on:click={() => setFolderBehavior('current-window')}>当前窗口</button
+                  on:click={() => setFolderBehavior('current-window')}>{t.currentWindow()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.folderOpenDefaultBehavior === 'new-window'}
                   aria-pressed={draftSettings.folderOpenDefaultBehavior === 'new-window'}
-                  on:click={() => setFolderBehavior('new-window')}>新窗口</button
+                  on:click={() => setFolderBehavior('new-window')}>{t.newWindow()}</button
                 >
               </div>
             </div>
 
             <label class="toggle-row" for="filePreviewEnabled">
               <span>
-                <span class="toggle-title">文件预览标签</span>
-                <span class="toggle-desc">单击文件时复用预览标签，编辑或双击后固定。</span>
+                <span class="toggle-title">{t.filePreviewTab()}</span>
+                <span class="toggle-desc">{t.filePreviewTabDescription()}</span>
               </span>
               <input
                 id="filePreviewEnabled"
@@ -1043,8 +1079,8 @@
 
             <label class="toggle-row" for="sidebarHidden">
               <span>
-                <span class="toggle-title">启动时隐藏资源管理器侧边栏</span>
-                <span class="toggle-desc">下次打开后保持侧边栏收起。</span>
+                <span class="toggle-title">{t.hideExplorerOnLaunch()}</span>
+                <span class="toggle-desc">{t.hideExplorerOnLaunchDescription()}</span>
               </span>
               <input
                 id="sidebarHidden"
@@ -1057,8 +1093,8 @@
 
             <label class="toggle-row" for="closeToTrayEnabled">
               <span>
-                <span class="toggle-title">关闭到托盘</span>
-                <span class="toggle-desc">关闭主编辑窗口时隐藏到系统托盘，退出应用不受影响。</span>
+                <span class="toggle-title">{t.closeToTray()}</span>
+                <span class="toggle-desc">{t.closeToTrayDescription()}</span>
               </span>
               <input
                 id="closeToTrayEnabled"
@@ -1071,7 +1107,7 @@
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">绑定 .md 默认打开方式</span>
+                <span class="setting-label">{t.bindMdDefaultApp()}</span>
                 <p>{getMarkdownAssociationDescription()}</p>
               </div>
               <div class="association-action">
@@ -1095,7 +1131,7 @@
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">注册 .md 与文件夹右键菜单</span>
+                <span class="setting-label">{t.registerMdContextMenu()}</span>
                 <p>{getContextMenuDescription()}</p>
               </div>
               <div class="association-action">
@@ -1119,20 +1155,20 @@
           </div>
         {:else if activeCategory === 'images'}
           <div class="settings-group">
-            <h2>图片导入</h2>
+            <h2>{t.imageImport()}</h2>
             <div class="setting-row">
               <div>
-                <span class="setting-label">图片处理方式</span>
-                <p>粘贴、拖放和上传图片时使用的默认策略。</p>
+                <span class="setting-label">{t.imageHandlingStrategy()}</span>
+                <p>{t.imageHandlingStrategyDescription()}</p>
               </div>
-              <div class="quad-control" role="group" aria-label="图片处理方式">
+              <div class="quad-control" role="group" aria-label={t.imageHandlingStrategy()}>
                 <button
                   type="button"
                   class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
                     'copy-current-folder'}
                   aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
                     'copy-current-folder'}
-                  on:click={() => setImageStrategy('copy-current-folder')}>当前文件夹</button
+                  on:click={() => setImageStrategy('copy-current-folder')}>{t.currentFolder()}</button
                 >
                 <button
                   type="button"
@@ -1140,7 +1176,7 @@
                     'copy-assets'}
                   aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
                     'copy-assets'}
-                  on:click={() => setImageStrategy('copy-assets')}>assets</button
+                  on:click={() => setImageStrategy('copy-assets')}>{t.assetsFolder()}</button
                 >
                 <button
                   type="button"
@@ -1148,7 +1184,7 @@
                     'copy-document-assets'}
                   aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
                     'copy-document-assets'}
-                  on:click={() => setImageStrategy('copy-document-assets')}>文档.assets</button
+                  on:click={() => setImageStrategy('copy-document-assets')}>{t.documentAssetsFolder()}</button
                 >
                 <button
                   type="button"
@@ -1156,15 +1192,15 @@
                     'upload'}
                   aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
                     'upload'}
-                  on:click={() => setImageStrategy('upload')}>上传</button
+                  on:click={() => setImageStrategy('upload')}>{t.upload()}</button
                 >
               </div>
             </div>
 
             <label class="toggle-row" for="autoDeleteUnusedLocalImages">
               <span>
-                <span class="toggle-title">自动清理本地图片</span>
-                <span class="toggle-desc">图片引用完全移除后，同步删除对应本地文件。</span>
+                <span class="toggle-title">{t.autoCleanLocalImages()}</span>
+                <span class="toggle-desc">{t.autoCleanLocalImagesDescription()}</span>
               </span>
               <input
                 id="autoDeleteUnusedLocalImages"
@@ -1178,10 +1214,10 @@
             {#if draftSettings.imageHandlingSettings.imageInsertStrategy === 'upload'}
               <div class="setting-row">
                 <div>
-                  <span class="setting-label">上传方式</span>
-                  <p>PicGo 适合常驻服务，PicGo-Core 适合命令行工作流。</p>
+                  <span class="setting-label">{t.uploadProvider()}</span>
+                  <p>{t.uploadProviderDescription()}</p>
                 </div>
-                <div class="segmented-control" role="group" aria-label="图片上传方式">
+                <div class="segmented-control" role="group" aria-label={t.uploadProvider()}>
                   <button
                     type="button"
                     class:active={draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
@@ -1202,8 +1238,8 @@
               {#if draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
                 <div class="setting-row">
                   <div>
-                    <label for="picgoServerUrl" class="setting-label">PicGo Server 地址</label>
-                    <p>用于调用本机 PicGo 服务上传图片。</p>
+                    <label for="picgoServerUrl" class="setting-label">{t.picgoServerUrl()}</label>
+                    <p>{t.picgoServerUrlDescription()}</p>
                   </div>
                   <input
                     id="picgoServerUrl"
@@ -1216,8 +1252,8 @@
               {:else}
                 <div class="setting-row">
                   <div>
-                    <label for="picgoCoreCommand" class="setting-label">PicGo-Core 命令</label>
-                    <p>例如 picgo、npx picgo 或完整可执行文件路径。</p>
+                    <label for="picgoCoreCommand" class="setting-label">{t.picgoCoreCommand()}</label>
+                    <p>{t.picgoCoreCommandDescription()}</p>
                   </div>
                   <input
                     id="picgoCoreCommand"
@@ -1230,9 +1266,9 @@
                 <div class="setting-row">
                   <div>
                     <label for="picgoCoreConfigPath" class="setting-label"
-                      >PicGo-Core 配置文件路径</label
+                      >{t.picgoCoreConfigPath()}</label
                     >
-                    <p>可留空，使用 PicGo-Core 默认配置。</p>
+                    <p>{t.picgoCoreConfigPathDescription()}</p>
                   </div>
                   <input
                     id="picgoCoreConfigPath"
@@ -1245,8 +1281,8 @@
               {/if}
               <div class="setting-row">
                 <div>
-                  <span class="setting-label">连接测试</span>
-                  <p>检查当前 PicGo 配置能否被 Nomo 调用。</p>
+                  <span class="setting-label">{t.connectionTest()}</span>
+                  <p>{t.connectionTestDescription()}</p>
                 </div>
                 <button
                   type="button"
@@ -1254,65 +1290,65 @@
                   disabled={!desktopEnabled || picgoTesting}
                   on:click={testPicgoConnection}
                 >
-                  {picgoTesting ? '测试中...' : '测试连接'}
+                  {picgoTesting ? t.testing() : t.testConnection()}
                 </button>
               </div>
             {/if}
 
             <div class="setting-row">
               <div>
-                <label for="defaultImageWidth" class="setting-label">图片默认宽度</label>
-                <p>插入图片时自动写入宽度属性，可填 640px、80% 或留空。</p>
+                <label for="defaultImageWidth" class="setting-label">{t.imageDefaultWidth()}</label>
+                <p>{t.imageDefaultWidthDescription()}</p>
               </div>
               <input
                 id="defaultImageWidth"
                 class="text-input compact"
                 type="text"
-                placeholder="留空"
+                placeholder={t.emptyPlaceholder()}
                 value={draftSettings.imageHandlingSettings.defaultImageWidth}
                 on:input={(event) => updateImageStringSetting('defaultImageWidth', event)}
               />
             </div>
             <div class="setting-row">
               <div>
-                <span class="setting-label">图片默认对齐</span>
-                <p>插入图片时自动写入对齐属性。</p>
+                <span class="setting-label">{t.imageDefaultAlign()}</span>
+                <p>{t.imageDefaultAlignDescription()}</p>
               </div>
-              <div class="quad-control" role="group" aria-label="图片默认对齐">
+              <div class="quad-control" role="group" aria-label={t.imageDefaultAlign()}>
                 <button
                   type="button"
                   class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
                   aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
-                  on:click={() => setImageDefaultAlign('none')}>跟随正文</button
+                  on:click={() => setImageDefaultAlign('none')}>{t.followText()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
                   aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
-                  on:click={() => setImageDefaultAlign('left')}>左对齐</button
+                  on:click={() => setImageDefaultAlign('left')}>{t.alignLeft()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
                   aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
-                  on:click={() => setImageDefaultAlign('center')}>居中</button
+                  on:click={() => setImageDefaultAlign('center')}>{t.alignCenter()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
                   aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
-                  on:click={() => setImageDefaultAlign('right')}>右对齐</button
+                  on:click={() => setImageDefaultAlign('right')}>{t.alignRight()}</button
                 >
               </div>
             </div>
           </div>
         {:else if activeCategory === 'stats'}
           <div class="settings-group">
-            <h2>统计与导航</h2>
+            <h2>{t.statsAndNavigation()}</h2>
             <label class="toggle-row" for="outlineVisible">
               <span>
-                <span class="toggle-title">显示文档大纲</span>
-                <span class="toggle-desc">在编辑区右侧显示当前文档标题导航。</span>
+                <span class="toggle-title">{t.showDocumentOutline()}</span>
+                <span class="toggle-desc">{t.showDocumentOutlineDescription()}</span>
               </span>
               <input
                 id="outlineVisible"
@@ -1325,8 +1361,8 @@
 
             <label class="toggle-row" for="writingStatsVisible">
               <span>
-                <span class="toggle-title">显示文档统计</span>
-                <span class="toggle-desc">在正文右下角显示当前文档的轻量统计。</span>
+                <span class="toggle-title">{t.showDocumentStats()}</span>
+                <span class="toggle-desc">{t.showDocumentStatsDescription()}</span>
               </span>
               <input
                 id="writingStatsVisible"
@@ -1339,35 +1375,35 @@
 
             <div class="setting-row">
               <div>
-                <span class="setting-label">默认统计类型</span>
-                <p>决定状态栏默认展示行数、词数或字符数。</p>
+                <span class="setting-label">{t.defaultStatsMetric()}</span>
+                <p>{t.defaultStatsMetricDescription()}</p>
               </div>
-              <div class="triple-control" role="group" aria-label="默认统计类型">
+              <div class="triple-control" role="group" aria-label={t.defaultStatsMetric()}>
                 <button
                   type="button"
                   class:active={draftSettings.writingStatsMetric === 'lines'}
                   aria-pressed={draftSettings.writingStatsMetric === 'lines'}
-                  on:click={() => setStatsMetric('lines')}>行数</button
+                  on:click={() => setStatsMetric('lines')}>{t.lines()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.writingStatsMetric === 'words'}
                   aria-pressed={draftSettings.writingStatsMetric === 'words'}
-                  on:click={() => setStatsMetric('words')}>词数</button
+                  on:click={() => setStatsMetric('words')}>{t.words()}</button
                 >
                 <button
                   type="button"
                   class:active={draftSettings.writingStatsMetric === 'chars'}
                   aria-pressed={draftSettings.writingStatsMetric === 'chars'}
-                  on:click={() => setStatsMetric('chars')}>字符</button
+                  on:click={() => setStatsMetric('chars')}>{t.chars()}</button
                 >
               </div>
             </div>
 
             <label class="toggle-row" for="readingTimeVisible">
               <span>
-                <span class="toggle-title">阅读时间</span>
-                <span class="toggle-desc">在统计弹层中显示由当前 Markdown 派生的阅读时长。</span>
+                <span class="toggle-title">{t.readingTime()}</span>
+                <span class="toggle-desc">{t.readingTimeDescription()}</span>
               </span>
               <input
                 id="readingTimeVisible"
@@ -1380,9 +1416,9 @@
 
             <div class="setting-row">
               <div>
-                <label for="outlineDefaultExpandLevel" class="setting-label">大纲默认展开层级</label
+                <label for="outlineDefaultExpandLevel" class="setting-label">{t.outlineDefaultExpandLevel()}</label
                 >
-                <p>打开或切换文档时默认展示到指定标题层级。</p>
+                <p>{t.outlineDefaultExpandLevelDescription()}</p>
               </div>
               <div class="range-setting">
                 <input
@@ -1402,11 +1438,11 @@
           </div>
         {:else if activeCategory === 'advanced'}
           <div class="settings-group">
-            <h2>默认插入行为</h2>
+            <h2>{t.defaultInsertBehavior()}</h2>
             <div class="setting-row">
               <div>
-                <label for="defaultCodeBlockLanguage" class="setting-label">代码块默认语言</label>
-                <p>菜单或快捷键插入代码块时使用。</p>
+                <label for="defaultCodeBlockLanguage" class="setting-label">{t.defaultCodeBlockLanguage()}</label>
+                <p>{t.defaultCodeBlockLanguageDescription()}</p>
               </div>
               <input
                 id="defaultCodeBlockLanguage"
@@ -1420,8 +1456,8 @@
 
             <div class="setting-row">
               <div>
-                <label for="defaultDiagramType" class="setting-label">Mermaid 默认图表类型</label>
-                <p>菜单插入图表时使用。</p>
+                <label for="defaultDiagramType" class="setting-label">{t.defaultDiagramType()}</label>
+                <p>{t.defaultDiagramTypeDescription()}</p>
               </div>
               <select
                 id="defaultDiagramType"
@@ -1430,20 +1466,20 @@
                 on:change={(event) => updateStringSetting('defaultDiagramType', event)}
               >
                 {#each DIAGRAM_TEMPLATES as template}
-                  <option value={template.type}>{template.label}</option>
+                  <option value={template.type}>{getDiagramTypeLabel(template.type)}</option>
                 {/each}
               </select>
             </div>
 
             <div class="shortcut-settings">
-              <h2>自定义快捷键</h2>
+              <h2>{t.customShortcuts()}</h2>
               {#each shortcutItems as shortcut}
                 <div class="setting-row compact-row">
                   <div>
                     <label for={`shortcut-${shortcut.id}`} class="setting-label"
-                      >{shortcut.label}</label
+                      >{t[shortcut.labelKey]()}</label
                     >
-                    <p>使用 Ctrl、Shift、Alt 与一个按键组合。</p>
+                    <p>{t.shortcutDescription()}</p>
                   </div>
                   <input
                     id={`shortcut-${shortcut.id}`}
@@ -1458,10 +1494,10 @@
             </div>
             <div class="disabled-row" aria-disabled="true">
               <div>
-                <span class="setting-label">导出设置</span>
-                <p>完整导出管线不在当前阶段。</p>
+                <span class="setting-label">{t.exportSettings()}</span>
+                <p>{t.exportSettingsDescription()}</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <span class="disabled-pill">{t.futureVersionSupport()}</span>
             </div>
           </div>
         {:else if activeCategory === 'about'}
@@ -1473,25 +1509,25 @@
             </div>
             <dl>
               <div>
-                <dt>版本</dt>
+                <dt>{t.version()}</dt>
                 <dd>{packageInfo.version}</dd>
               </div>
               <div>
-                <dt>定位</dt>
-                <dd>本地优先、Markdown-first 的轻量桌面 Markdown 编辑器。</dd>
+                <dt>{t.positioning()}</dt>
+                <dd>{t.positioningDescription()}</dd>
               </div>
               <div>
-                <dt>平台策略</dt>
-                <dd>当前版本优先保证 Windows 的文件、窗口和快捷键体验。</dd>
+                <dt>{t.platformStrategy()}</dt>
+                <dd>{t.platformStrategyDescription()}</dd>
               </div>
             </dl>
 
             <div class="disabled-row" aria-disabled="true">
               <div>
-                <span class="setting-label">更新检查</span>
-                <p>后续支持检查 Nomo 新版本并提示更新。</p>
+                <span class="setting-label">{t.updateCheck()}</span>
+                <p>{t.updateCheckDescription()}</p>
               </div>
-              <span class="disabled-pill">后续版本支持</span>
+              <span class="disabled-pill">{t.futureVersionSupport()}</span>
             </div>
           </div>
         {/if}
@@ -1499,6 +1535,7 @@
     {/if}
   </section>
 </div>
+{/key}
 
 <style>
   :global(body) {

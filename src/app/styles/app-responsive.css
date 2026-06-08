@@ -256,7 +256,7 @@
 }
 
 .recent-entry.recent-missing .recent-label::after {
-  content: '（已失效）';
+  content: attr(data-missing-label);
   margin-left: 6px;
   font-size: 11px;
   color: var(--md-editor-muted-fg);

@@ -18,6 +18,7 @@ import { CommentInlineNodeView } from './nodeViews/CommentInlineNodeView';
 import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { createLinkAttrs } from './link';
+import { t } from '../../app/i18n';
 
 /**
  * 在当前块的下方插入一个新的空段落，并将光标移入。
@@ -1128,7 +1129,7 @@ function insertInlineComment(view: EditorView, content?: string): boolean {
     ? ''
     : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
   const node = schema.nodes.comment_inline.create({
-    content: content ?? (selectedText || '这里是行内注释'),
+    content: content ?? (selectedText || t.inlineComment()),
   });
   const tr = state.tr.replaceSelectionWith(node, false);
   const nodePos = tr.mapping.map(state.selection.from, -1);
@@ -1147,7 +1148,7 @@ function insertBlockComment(view: EditorView, content?: string): boolean {
     ? ''
     : state.doc.textBetween(state.selection.from, state.selection.to, '\n');
   const node = schema.nodes.comment_block.create({
-    content: content ?? (selectedText || '这里是块级注释'),
+    content: content ?? (selectedText || t.blockComment()),
   });
 
   let tr: Transaction;

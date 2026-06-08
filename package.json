@@ -38,6 +38,8 @@
     "svelte": "^5.0.0"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "2.18.2",
+    "@inlang/plugin-message-format": "4.4.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tauri-apps/cli": "^2.0.0",
     "@testing-library/svelte": "^5.0.0",

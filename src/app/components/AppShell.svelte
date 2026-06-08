@@ -12,9 +12,11 @@
   import LinkQuickEditor from './LinkQuickEditor.svelte';
   import StatusBar from './StatusBar.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
+  import { t } from '../i18n';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
 
+  export let interfaceLocale: string;
   export let focusMode: boolean;
   export let isResizing: boolean;
   export let contentWidthPercent: number;
@@ -143,6 +145,7 @@
 
   {#if desktopEnabled}
     <AppTitleBar
+      {interfaceLocale}
       {theme}
       {desktopEnabled}
       {activeMenu}
@@ -187,6 +190,7 @@
     use:workspaceSidebarMotion={{ focusMode, isResizing }}
   >
     <ExplorerSidebar
+      {interfaceLocale}
       {currentFolderPath}
       {rootFolderExpanded}
       {folderTree}
@@ -213,8 +217,9 @@
       on:deleteNode
     />
 
-    <section class="editor-shell" aria-label="编辑器">
+    <section class="editor-shell" aria-label={t.semanticEditorArea()}>
       <DocumentTabs
+        {interfaceLocale}
         {tabs}
         {activeTabId}
         {previewTabId}
@@ -229,6 +234,7 @@
       />
 
       <EditorToolbar
+        {interfaceLocale}
         {mode}
         {contentWidthPercent}
         {outlineVisible}
@@ -245,6 +251,7 @@
       />
 
       <EditorWorkspace
+        {interfaceLocale}
         bind:sourcePane
         bind:semanticPane
         bind:sourceTextarea
@@ -279,6 +286,7 @@
       />
 
       <LinkQuickEditor
+        {interfaceLocale}
         open={linkPickerOpen}
         text={linkText}
         href={linkHref}
@@ -294,6 +302,7 @@
 
       {#if writingStatsVisible}
         <StatusBar
+          {interfaceLocale}
           {stats}
           activeMetric={writingStatsMetric}
           {readingTimeVisible}

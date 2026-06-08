@@ -1,6 +1,7 @@
 import { DOMSerializer, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 
 type FootnoteDefinitionLocation = {
   node: ProseMirrorNode;
@@ -20,6 +21,7 @@ export class FootnoteRefNodeView {
   private previewContent: HTMLElement | null = null;
   private positionHandler: (() => void) | null = null;
   private closeTimer: number | null = null;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView) {
     this.node = node;
@@ -49,6 +51,13 @@ export class FootnoteRefNodeView {
     this.dom.addEventListener('mouseleave', () => this.scheduleClosePreview());
     this.dom.addEventListener('focus', () => this.openPreview());
     this.dom.addEventListener('blur', () => this.scheduleClosePreview());
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.render();
+      if (this.previewCard) {
+        this.renderPreviewContent();
+        this.updatePreviewPosition();
+      }
+    });
 
     this.render();
   }
@@ -81,14 +90,15 @@ export class FootnoteRefNodeView {
   }
 
   destroy(): void {
+    this.unsubscribeLocale();
     this.closePreview();
   }
 
   private render(): void {
     const id = this.id;
     this.dom.setAttribute('data-footnote-id', id);
-    this.dom.setAttribute('aria-label', `脚注 ${id}，点击跳转到底部定义`);
-    this.dom.title = '查看脚注';
+    this.dom.setAttribute('aria-label', t.footnoteJumpToDefinition({ id }));
+    this.dom.title = t.viewFootnote();
     this.dom.textContent = id;
   }
 
@@ -182,13 +192,15 @@ export class FootnoteRefNodeView {
     if (!this.previewContent) return;
 
     if (this.previewTitle) {
-      this.previewTitle.textContent = `脚注 ${this.id}`;
+      this.previewTitle.textContent = t.footnoteTitle({ id: this.id });
     }
     this.previewContent.textContent = '';
     const definition = this.findDefinition();
     if (!definition || definition.node.content.size === 0) {
       this.previewContent.classList.add('is-missing');
-      this.previewContent.textContent = definition ? '脚注内容为空' : `未找到脚注 ${this.id}`;
+      this.previewContent.textContent = definition
+        ? t.footnoteEmpty()
+        : t.footnoteMissing({ id: this.id });
       return;
     }
 

@@ -5,7 +5,9 @@
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
   import ContextMenu from './ContextMenu.svelte';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let tabs: Tab[];
   export let activeTabId: string;
   export let previewTabId: string | null = null;
@@ -61,7 +63,7 @@
 
     // 步骤1：基础关闭操作
     items.push({
-      label: '关闭',
+      label: t.close(),
       action: () => closeTab(tab.id),
       shortcut: isPreview ? undefined : 'Ctrl+W',
     });
@@ -70,7 +72,7 @@
     const otherTabs = tabs.filter((t) => t.id !== tab.id);
     if (otherTabs.length > 0) {
       items.push({
-        label: '关闭其他标签页',
+        label: t.closeOtherTabs(),
         action: () => dispatch('closeOtherTabs', { tabId: tab.id }),
       });
     }
@@ -78,13 +80,13 @@
     const rightTabs = tabs.slice(tabIndex + 1);
     if (rightTabs.length > 0) {
       items.push({
-        label: '关闭右侧标签页',
+        label: t.closeTabsToRight(),
         action: () => dispatch('closeTabsToRight', { tabId: tab.id }),
       });
     }
 
     items.push({
-      label: '关闭全部标签页',
+      label: t.closeAllTabs(),
       action: () => dispatch('closeAllTabs'),
       danger: true,
     });
@@ -94,7 +96,7 @@
     if (path) {
       items.push({ label: '', action: () => {}, separator: true });
       items.push({
-        label: '复制路径',
+        label: t.copyPath(),
         action: () => {
           navigator.clipboard.writeText(path).catch(() => {});
         },
@@ -245,6 +247,7 @@
 
 <svelte:window on:click={handleWindowClick} />
 
+{#key interfaceLocale}
 <!-- 隐藏的测量区域：渲染所有标签以测量宽度 -->
 <div class="tab-measure-area" bind:this={measureArea}>
   {#each tabs as tab (tab.id)}
@@ -259,7 +262,7 @@
   {/each}
 </div>
 
-<header class="topbar" aria-label="文档标签">
+<header class="topbar" aria-label={t.documentTabs()} data-interface-locale={interfaceLocale}>
   <div class="tabs-container" bind:this={tabsContainer}
     use:tabIndicator={{ activeTabId, visibleStart: visibleRange.start, visibleEnd: visibleRange.end }}
   >
@@ -282,7 +285,7 @@
         {#if tab.dirty}
           <span
             class="dirty-indicator"
-            title="未保存修改"
+            title={t.unsavedChanges()}
             use:motionIn={{ kind: 'micro', y: 0, scale: 0.8 }}
             use:pulseOnChange={tab.dirty}
           ></span>
@@ -291,7 +294,7 @@
           class="close-tab-btn"
           role="button"
           tabindex="0"
-          title="关闭标签页"
+          title={t.closeTab()}
           on:click|stopPropagation={(event) => closeTab(tab.id, event)}
           on:keydown|stopPropagation={(event) => {
             if (event.key === 'Enter') closeTab(tab.id, event);
@@ -306,8 +309,8 @@
         <button
           type="button"
           class="tab-dropdown-btn"
-          title="显示隐藏的标签页"
-          aria-label="显示隐藏的标签页"
+          title={t.showHiddenTabs()}
+          aria-label={t.showHiddenTabs()}
           bind:this={dropdownBtnEl}
           on:click={toggleDropdown}
         >
@@ -316,7 +319,7 @@
       </div>
     {/if}
     {#if showAddButton}
-      <button type="button" class="tab-add" title="新建文件" aria-label="新建文件" on:click={createNewFile}>
+      <button type="button" class="tab-add" title={t.newFile()} aria-label={t.newFile()} on:click={createNewFile}>
         <Plus size={16} />
       </button>
     {/if}
@@ -341,7 +344,7 @@
         <FileText size={13} />
         <span class="tab-dropdown-item-name">{tab.fileName}</span>
         {#if tab.dirty}
-          <span class="dirty-indicator" title="未保存修改"></span>
+          <span class="dirty-indicator" title={t.unsavedChanges()}></span>
         {/if}
       </button>
     {/each}
@@ -351,3 +354,4 @@
 {#if tabContextMenuOpen}
   <ContextMenu x={tabContextMenuX} y={tabContextMenuY} items={tabContextMenuItems} onClose={closeTabContextMenu} />
 {/if}
+{/key}

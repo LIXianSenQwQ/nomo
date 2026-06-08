@@ -2,12 +2,13 @@
   import { fade } from 'svelte/transition';
   import { Trash2, X, AlertTriangle } from '@lucide/svelte';
   import { motionIn } from '../actions/motion';
+  import { t } from '../i18n';
 
   export let open: boolean;
-  export let title: string = '确认删除';
+  export let title: string = t.confirmDelete();
   export let message: string = '';
   export let detail: string = '';
-  export let confirmLabel: string = '删除';
+  export let confirmLabel: string = t.delete();
   export let danger: boolean = true;
 
   export let onConfirm: () => void;
@@ -58,7 +59,7 @@
       <div class="confirm-actions">
         <button type="button" class="confirm-btn cancel" on:click={onCancel}>
           <X size={14} />
-          取消
+          {t.cancel()}
         </button>
         <button type="button" class="confirm-btn" class:danger on:click={onConfirm}>
           <Trash2 size={14} />

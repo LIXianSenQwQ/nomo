@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { getDiagramRenderer } from '../renderers';
 
 /**
@@ -38,6 +39,7 @@ export class MermaidBlockNodeView {
   private fullscreenSvgBaseSize: { width: number; height: number } | null = null;
   private fullscreenScale = MermaidBlockNodeView.FULLSCREEN_DEFAULT_SCALE;
   private fullscreenKeydown: ((event: KeyboardEvent) => void) | null = null;
+  private unsubscribeLocale: () => void = () => undefined;
   private fullscreenDrag: {
     pointerId: number;
     startX: number;
@@ -64,6 +66,12 @@ export class MermaidBlockNodeView {
       this.enterEdit();
     });
 
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => {
+      this.closeFullscreen();
+      if (!this.editing) {
+        void this.renderMermaid();
+      }
+    });
     this.renderMermaid();
   }
 
@@ -140,6 +148,7 @@ export class MermaidBlockNodeView {
   destroy(): void {
     this.closeFullscreen();
     this.cleanupEdit();
+    this.unsubscribeLocale();
     MermaidBlockNodeView.instances.delete(this);
   }
 
@@ -171,7 +180,7 @@ export class MermaidBlockNodeView {
       }
     } catch (error) {
       if (this.editing || id !== this.renderId) return;
-      this.renderError(error instanceof Error ? error.message : 'Mermaid 渲染失败', code);
+      this.renderError(error instanceof Error ? error.message : t.mermaidRenderFailed(), code);
     }
   }
 
@@ -377,7 +386,7 @@ export class MermaidBlockNodeView {
       }
     } catch (error) {
       if (!this.editing || !this.previewEl || id !== this.previewRenderId) return;
-      this.setPreviewContent(error instanceof Error ? error.message : 'Mermaid 渲染失败', {
+      this.setPreviewContent(error instanceof Error ? error.message : t.mermaidRenderFailed(), {
         error: true,
         renderId: id,
       });
@@ -441,8 +450,8 @@ export class MermaidBlockNodeView {
 
     const fullscreenButton = this.createIconButton(
       'mermaid-block-fullscreen-button',
-      '全屏查看图表',
-      '放大',
+      t.fullscreenDiagram(),
+      t.enlarge(),
       'maximize',
     );
     fullscreenButton.addEventListener('click', (event) => {
@@ -502,15 +511,15 @@ export class MermaidBlockNodeView {
     overlayEl.className = 'mermaid-fullscreen-overlay';
     overlayEl.setAttribute('role', 'dialog');
     overlayEl.setAttribute('aria-modal', 'true');
-    overlayEl.setAttribute('aria-label', '全屏图表预览');
+    overlayEl.setAttribute('aria-label', t.fullscreenDiagramPreview());
 
     const panelEl = document.createElement('div');
     panelEl.className = 'mermaid-fullscreen-panel';
 
     const closeButton = this.createIconButton(
       'mermaid-fullscreen-close-button',
-      '关闭全屏图表',
-      '关闭',
+      t.closeFullscreenDiagram(),
+      t.close(),
       'close',
     );
     closeButton.addEventListener('click', (event) => {

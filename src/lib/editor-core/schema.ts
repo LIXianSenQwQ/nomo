@@ -3,6 +3,7 @@ import { schema as markdownSchema } from 'prosemirror-markdown';
 import { tableNodes } from 'prosemirror-tables';
 import { calloutNodeSpec } from './callout/calloutSchema';
 import { createLinkAttrs } from './link';
+import { t } from '../../app/i18n';
 
 export type TableColumnAlignment = 'left' | 'center' | 'right';
 
@@ -100,8 +101,8 @@ export const schema = new Schema({
           return [
             'div',
             { class: 'comment-block', 'data-comment': node.attrs.content },
-            ['span', { class: 'comment-block-label' }, '注释'],
-            ['span', { class: 'comment-block-preview' }, node.attrs.content || '点击填写注释'],
+            ['span', { class: 'comment-block-label' }, t.comment()],
+            ['span', { class: 'comment-block-preview' }, node.attrs.content || t.fillComment()],
           ];
         },
         parseDOM: [
@@ -154,7 +155,7 @@ export const schema = new Schema({
           return [
             'span',
             { class: 'comment-inline', 'data-comment': node.attrs.content },
-            ['span', { class: 'comment-inline-label' }, '注释'],
+            ['span', { class: 'comment-inline-label' }, t.comment()],
           ];
         },
         parseDOM: [
@@ -203,7 +204,7 @@ export const schema = new Schema({
             'div',
             { class: 'footnote-def', 'data-footnote-id': id },
             ['span', { class: 'footnote-def-marker' }, id],
-            ['span', { class: 'footnote-def-content' }, 0],
+            ['span', { class: 'footnote-def-content', 'data-placeholder': t.footnoteContentPlaceholder() }, 0],
           ];
         },
         parseDOM: [
@@ -227,7 +228,7 @@ export const schema = new Schema({
           content: { default: '' },
         },
         toDOM(node) {
-          return ['div', { class: 'toc-block', 'data-content': node.attrs.content }, '目录'];
+          return ['div', { class: 'toc-block', 'data-content': node.attrs.content }, t.toc()];
         },
       },
       math_block: {

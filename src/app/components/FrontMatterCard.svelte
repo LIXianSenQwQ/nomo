@@ -4,7 +4,9 @@
   import { fade } from 'svelte/transition';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import { motionIn, transitionDuration } from '../actions/motion';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let frontMatter: FrontMatterBlock;
   export let editing: boolean;
   export let readonly = false;
@@ -64,10 +66,12 @@
   }
 </script>
 
+{#key interfaceLocale}
 {#if editing}
   <section
     class="front-matter-card is-editing"
-    aria-label="文档元数据编辑态"
+    data-interface-locale={interfaceLocale}
+    aria-label={t.documentMetadataEditing()}
     use:motionIn={{ kind: 'panel', y: 8 }}
     transition:fade={{ duration: transitionDuration('mode') }}
     on:focusout={handleFocusOut}
@@ -75,7 +79,7 @@
     <div class="front-matter-editor-shell">
       <textarea
         bind:this={textarea}
-        aria-label="编辑文档元数据内容"
+        aria-label={t.editDocumentMetadataContent()}
         spellcheck="false"
         readonly={readonly}
         value={frontMatter.content}
@@ -90,7 +94,8 @@
 {:else}
   <section
     class="front-matter-card"
-    aria-label={readonly ? '查看文档元数据' : '编辑文档元数据'}
+    data-interface-locale={interfaceLocale}
+    aria-label={readonly ? t.viewDocumentMetadata() : t.editDocumentMetadata()}
     use:motionIn={{ kind: 'panel', y: 8 }}
     transition:fade={{ duration: transitionDuration('mode') }}
   >
@@ -103,24 +108,24 @@
       on:click={enterEdit}
     >
       <span class="front-matter-kicker">
-        <strong class="front-matter-title">{frontMatter.fields.title || '文档元数据'}</strong>
+        <strong class="front-matter-title">{frontMatter.fields.title || t.documentMetadata()}</strong>
         {#if frontMatter.fields.status}
           <span class="front-matter-status">{frontMatter.fields.status}</span>
         {/if}
       </span>
       <span class="front-matter-meta">
         {#if frontMatter.fields.created}
-          <span>创建 {frontMatter.fields.created}</span>
+          <span>{t.metadataCreated({ date: frontMatter.fields.created })}</span>
         {/if}
         {#if frontMatter.fields.updated}
-          <span>更新 {frontMatter.fields.updated}</span>
+          <span>{t.metadataUpdated({ date: frontMatter.fields.updated })}</span>
         {/if}
         {#if frontMatter.fields.extraFieldCount > 0}
-          <span>更多元数据 {frontMatter.fields.extraFieldCount}</span>
+          <span>{t.metadataMoreFields({ count: frontMatter.fields.extraFieldCount })}</span>
         {/if}
       </span>
       {#if frontMatter.fields.tags.length > 0}
-        <span class="front-matter-tags" aria-label="标签">
+        <span class="front-matter-tags" aria-label={t.tags()}>
           {#each frontMatter.fields.tags as tag}
             <span>{tag}</span>
           {/each}
@@ -137,13 +142,13 @@
         class:confirming={confirmingDelete}
         class="front-matter-delete"
         disabled={readonly}
-        title={confirmingDelete ? '确认删除元数据' : '删除元数据'}
-        aria-label={confirmingDelete ? '确认删除元数据' : '删除元数据'}
+        title={confirmingDelete ? t.confirmDeleteMetadata() : t.deleteMetadata()}
+        aria-label={confirmingDelete ? t.confirmDeleteMetadata() : t.deleteMetadata()}
         on:click={requestDelete}
         on:blur={resetDeleteConfirmation}
       >
         {#if confirmingDelete}
-          <span>确认删除</span>
+          <span>{t.confirmDelete()}</span>
         {:else}
           <Trash2 size={16} />
         {/if}
@@ -151,3 +156,4 @@
     </span>
   </section>
 {/if}
+{/key}

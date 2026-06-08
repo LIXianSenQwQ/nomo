@@ -2,6 +2,7 @@ import { tick } from 'svelte';
 import type { EditorCommand, EditorCore, EditorMode } from '../../lib/editor-core';
 import type { OutlineItem } from '../../lib/outline/outlineService';
 import { createTocBlock } from '../../lib/toc/tocService';
+import { t } from '../i18n';
 import {
   getSemanticScrollAnchor,
   getSourceScrollAnchor,
@@ -27,7 +28,7 @@ interface EditorInteractionOptions {
 export function createEditorInteractionController(options: EditorInteractionOptions) {
   async function setMode(nextMode: EditorMode) {
     if (options.getLargeDocumentMode() && nextMode === 'semantic') {
-      options.setStatusMessage('大文件已进入只读源码模式，暂不切回语义编辑以避免卡顿');
+      options.setStatusMessage(t.largeDocumentStayReadonlySource());
       return;
     }
     if (nextMode === options.getMode()) {

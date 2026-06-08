@@ -1,6 +1,7 @@
 import { TextSelection } from 'prosemirror-state';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { slugifyHeading } from '../../toc/tocService';
 
 interface TocRow {
@@ -14,6 +15,7 @@ interface TocRow {
 export class TocBlockNodeView {
   dom: HTMLElement;
   private node: ProseMirrorNode;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(
     node: ProseMirrorNode,
@@ -24,6 +26,7 @@ export class TocBlockNodeView {
     this.dom = document.createElement('section');
     this.dom.className = 'toc-block';
     this.dom.setAttribute('contenteditable', 'false');
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => this.render());
     this.render();
   }
 
@@ -51,21 +54,23 @@ export class TocBlockNodeView {
     return true;
   }
 
-  destroy(): void {}
+  destroy(): void {
+    this.unsubscribeLocale();
+  }
 
   private render(): void {
     this.dom.replaceChildren();
 
     const header = document.createElement('header');
     const title = document.createElement('strong');
-    title.textContent = '目录';
+    title.textContent = t.toc();
     header.appendChild(title);
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'toc-delete';
-    deleteButton.title = '删除目录';
-    deleteButton.setAttribute('aria-label', '删除目录');
+    deleteButton.title = t.deleteToc();
+    deleteButton.setAttribute('aria-label', t.deleteToc());
     deleteButton.addEventListener('click', () => this.deleteBlock());
     header.appendChild(deleteButton);
     this.dom.appendChild(header);
@@ -74,7 +79,7 @@ export class TocBlockNodeView {
     if (rows.length === 0) {
       const empty = document.createElement('p');
       empty.className = 'toc-empty';
-      empty.textContent = '当前文档还没有标题';
+      empty.textContent = t.documentHasNoHeadings();
       this.dom.appendChild(empty);
       return;
     }
@@ -88,7 +93,7 @@ export class TocBlockNodeView {
       button.dataset.level = String(row.level);
       button.style.setProperty('--toc-indent', `${(row.level - 1) * 28}px`);
       button.title = row.title;
-      button.setAttribute('aria-label', `跳转到 ${row.title}`);
+      button.setAttribute('aria-label', t.jumpToHeading({ title: row.title }));
 
       const bullet = document.createElement('span');
       bullet.className = 'toc-bullet';

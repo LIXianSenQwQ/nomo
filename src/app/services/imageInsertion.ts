@@ -1,6 +1,7 @@
 import type { EditorCore, EditorMode } from '../../lib/editor-core';
 import { getImageLoader } from '../../lib/editor-core/renderers';
 import type { ImageContext } from '../../lib/services/render';
+import { t } from '../i18n';
 import { createImageMarkdown, getImageFiles } from './imageMarkdown';
 
 interface ImageInsertionOptions {
@@ -40,17 +41,17 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
   async function insertImageFiles(files: File[]) {
     const loader = getImageLoader();
     if (!loader) {
-      options.setStatusMessage('图片服务未初始化，无法插入图片');
+      options.setStatusMessage(t.imageServiceNotReady());
       return;
     }
 
     const context = options.getImageContext();
     const strategy = context.settings?.imageInsertStrategy ?? 'copy-assets';
     if (strategy !== 'upload' && !options.getNativePath()) {
-      options.setStatusMessage('请先保存 Markdown 文件，再插入本地图片');
+      options.setStatusMessage(t.saveBeforeInsertLocalImage());
       await options.saveMarkdownFile(true);
       if (!options.getNativePath()) {
-        options.setStatusMessage('已取消图片插入');
+        options.setStatusMessage(t.imageInsertCancelled());
         return;
       }
     }
@@ -99,9 +100,11 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     }
 
     if (failed > 0) {
-      options.setStatusMessage(`已插入 ${imported.length} 张图片，${failed} 张失败`);
+      options.setStatusMessage(
+        t.imagesInsertedWithFailures({ inserted: imported.length, failed }),
+      );
     } else {
-      options.setStatusMessage(`已插入 ${imported.length} 张图片`);
+      options.setStatusMessage(t.imagesInserted({ inserted: imported.length }));
     }
   }
 

@@ -9,6 +9,8 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime, WebviewWindow,
 };
 
+use crate::i18n::{self, InterfaceLocale};
+
 #[cfg(target_os = "macos")]
 static APP_MENU_EVENT_INSTALLED: AtomicBool = AtomicBool::new(false);
 
@@ -120,41 +122,42 @@ pub(crate) fn build_window_menu<R: Runtime>(
 
 fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let recent_entries = database::query_recent_entries(app).unwrap_or_default();
+    let locale = i18n::effective_locale(app);
 
-    let mut file_menu_builder = SubmenuBuilder::new(app, "文件(&F)")
+    let mut file_menu_builder = SubmenuBuilder::new(app, tr(locale, "menu_file"))
         .item(&menu_item(
             app,
             "new-file",
-            "新建(&N)",
+            tr(locale, "menu_new"),
             Some("CmdOrCtrl+N"),
         )?)
         .item(&menu_item(
             app,
             "new-window",
-            "新建窗口(&W)",
+            tr(locale, "menu_new_window"),
             Some("CmdOrCtrl+Shift+N"),
         )?)
         .item(&menu_item(
             app,
             "open-file",
-            "打开(&O)...",
+            tr(locale, "menu_open"),
             Some("CmdOrCtrl+O"),
         )?)
         .item(&menu_item(
             app,
             "open-directory",
-            "打开文件夹...",
+            tr(locale, "menu_open_folder"),
             Some("CmdOrCtrl+Shift+O"),
         )?);
 
     if !recent_entries.is_empty() {
-        let mut recent_submenu_builder = SubmenuBuilder::new(app, "打开最近");
+        let mut recent_submenu_builder = SubmenuBuilder::new(app, tr(locale, "menu_open_recent"));
         for entry in recent_entries.iter().take(8) {
             let label = entry.title.clone().unwrap_or_else(|| {
                 Path::new(&entry.path)
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .unwrap_or("未命名.md")
+                    .unwrap_or(tr(locale, "menu_untitled"))
                     .to_string()
             });
             let item_id = format!("open-recent:{}:{}", entry.entry_type, entry.path);
@@ -164,7 +167,7 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
         let recent_submenu = recent_submenu_builder.build().map_err(|e| e.to_string())?;
         file_menu_builder = file_menu_builder.item(&recent_submenu);
     } else {
-        let placeholder = MenuItemBuilder::with_id("no-recent", "暂无最近文件")
+        let placeholder = MenuItemBuilder::with_id("no-recent", tr(locale, "menu_no_recent"))
             .enabled(false)
             .build(app)
             .map_err(|e| e.to_string())?;
@@ -176,33 +179,33 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
         .item(&menu_item(
             app,
             "save-file",
-            "保存(&S)",
+            tr(locale, "menu_save"),
             Some("CmdOrCtrl+S"),
         )?)
         .item(&menu_item(
             app,
             "save-file-as",
-            "另存为(&A)...",
+            tr(locale, "menu_save_as"),
             Some("CmdOrCtrl+Shift+S"),
         )?)
         .separator()
         .item(&menu_item(
             app,
             "close-current-file",
-            "关闭当前文件",
+            tr(locale, "menu_close_file"),
             Some("CmdOrCtrl+W"),
         )?)
         .item(&menu_item(
             app,
             "close-current-window",
-            "关闭窗口",
+            tr(locale, "menu_close_window"),
             close_window_accelerator(),
         )?)
         .separator()
         .item(&menu_item(
             app,
             "quit",
-            "退出(&X)",
+            tr(locale, "menu_quit"),
             Some(quit_accelerator()),
         )?)
         .build()
@@ -210,9 +213,10 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
 }
 
 fn build_edit_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    SubmenuBuilder::new(app, "编辑(&E)")
-        .item(&menu_item(app, "undo", "撤销(&U)", Some("CmdOrCtrl+Z"))?)
-        .item(&menu_item(app, "redo", "重做(&R)", redo_accelerator())?)
+    let locale = i18n::effective_locale(app);
+    SubmenuBuilder::new(app, tr(locale, "menu_edit"))
+        .item(&menu_item(app, "undo", tr(locale, "menu_undo"), Some("CmdOrCtrl+Z"))?)
+        .item(&menu_item(app, "redo", tr(locale, "menu_redo"), redo_accelerator())?)
         .separator()
         .cut()
         .copy()
@@ -223,41 +227,42 @@ fn build_edit_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
 }
 
 fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    let heading_menu = SubmenuBuilder::new(app, "标题")
+    let locale = i18n::effective_locale(app);
+    let heading_menu = SubmenuBuilder::new(app, tr(locale, "menu_heading"))
         .item(&menu_item(
             app,
             "set-heading-1",
-            "一级标题",
+            tr(locale, "menu_heading_1"),
             Some("CmdOrCtrl+1"),
         )?)
         .item(&menu_item(
             app,
             "set-heading-2",
-            "二级标题",
+            tr(locale, "menu_heading_2"),
             Some("CmdOrCtrl+2"),
         )?)
         .item(&menu_item(
             app,
             "set-heading-3",
-            "三级标题",
+            tr(locale, "menu_heading_3"),
             Some("CmdOrCtrl+3"),
         )?)
         .item(&menu_item(
             app,
             "set-heading-4",
-            "四级标题",
+            tr(locale, "menu_heading_4"),
             Some("CmdOrCtrl+4"),
         )?)
         .item(&menu_item(
             app,
             "set-heading-5",
-            "五级标题",
+            tr(locale, "menu_heading_5"),
             Some("CmdOrCtrl+5"),
         )?)
         .item(&menu_item(
             app,
             "set-heading-6",
-            "六级标题",
+            tr(locale, "menu_heading_6"),
             Some("CmdOrCtrl+6"),
         )?)
         .build()
@@ -265,104 +270,104 @@ fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::S
 
     let diagram_menu = build_diagram_menu(app)?;
 
-    SubmenuBuilder::new(app, "段落")
+    SubmenuBuilder::new(app, tr(locale, "menu_paragraph"))
         .item(&heading_menu)
         .item(&menu_item(
             app,
             "set-paragraph",
-            "段落",
+            tr(locale, "menu_paragraph"),
             Some("CmdOrCtrl+0"),
         )?)
         .item(&menu_item(
             app,
             "menu-heading-up",
-            "提升标题",
+            tr(locale, "menu_lift_heading"),
             Some("CmdOrCtrl+="),
         )?)
         .item(&menu_item(
             app,
             "menu-heading-down",
-            "降低标题",
+            tr(locale, "menu_sink_heading"),
             Some("CmdOrCtrl+-"),
         )?)
         .separator()
         .item(&menu_item(
             app,
             "insert-table",
-            "表格",
+            tr(locale, "menu_table"),
             Some("CmdOrCtrl+Shift+T"),
         )?)
         .item(&menu_item(
             app,
             "insert-code-block",
-            "代码块",
+            tr(locale, "menu_code_block"),
             Some("CmdOrCtrl+Shift+K"),
         )?)
         .item(&menu_item(
             app,
             "insert-math-block",
-            "公式块",
+            tr(locale, "menu_math_block"),
             Some("CmdOrCtrl+Shift+M"),
         )?)
         .separator()
         .item(&menu_item(
             app,
             "toggle-blockquote",
-            "引用",
+            tr(locale, "menu_blockquote"),
             Some("CmdOrCtrl+Shift+Q"),
         )?)
         .item(&menu_item(
             app,
             "insert-callout",
-            "提示块",
+            tr(locale, "menu_callout"),
             Some("CmdOrCtrl+Shift+A"),
         )?)
-        .item(&menu_item(app, "menu-comment-block", "注释块", None)?)
+        .item(&menu_item(app, "menu-comment-block", tr(locale, "menu_comment_block"), None)?)
         .item(&menu_item(
             app,
             "toggle-ordered-list",
-            "有序列表",
+            tr(locale, "menu_ordered_list"),
             Some("CmdOrCtrl+Shift+["),
         )?)
         .item(&menu_item(
             app,
             "toggle-bullet-list",
-            "无序列表",
+            tr(locale, "menu_bullet_list"),
             Some("CmdOrCtrl+Shift+]"),
         )?)
         .item(&menu_item(
             app,
             "toggle-task-list",
-            "任务列表",
+            tr(locale, "menu_task_list"),
             Some("CmdOrCtrl+Shift+X"),
         )?)
         .separator()
         .item(&menu_item(
             app,
             "menu-insert-paragraph-before",
-            "上插段落",
+            tr(locale, "menu_insert_before"),
             Some("CmdOrCtrl+Shift+Enter"),
         )?)
         .item(&menu_item(
             app,
             "menu-insert-paragraph-after",
-            "下插段落",
+            tr(locale, "menu_insert_after"),
             Some("CmdOrCtrl+Enter"),
         )?)
         .separator()
         .item(&diagram_menu)
-        .item(&menu_item(app, "menu-footnote", "脚注", None)?)
+        .item(&menu_item(app, "menu-footnote", tr(locale, "menu_footnote"), None)?)
         .item(&menu_item(
             app,
             "menu-horizontal-rule",
-            "水平分割线",
+            tr(locale, "menu_horizontal_rule"),
             Some("CmdOrCtrl+Shift+H"),
         )?)
-        .item(&menu_item(app, "menu-content-directory", "正文目录", None)?)
+        .item(&menu_item(app, "menu-content-directory", tr(locale, "menu_toc"), None)?)
         .item(&menu_item(
             app,
             "menu-yaml-front-matter",
-            "文档元数据",
+            tr(locale, "menu_front_matter"),
             None,
         )?)
         .build()
@@ -370,44 +375,45 @@ fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::S
 }
 
 fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    SubmenuBuilder::new(app, "格式(&O)")
-        .item(&menu_item(app, "toggle-bold", "加粗", Some("CmdOrCtrl+B"))?)
+    let locale = i18n::effective_locale(app);
+    SubmenuBuilder::new(app, tr(locale, "menu_format"))
+        .item(&menu_item(app, "toggle-bold", tr(locale, "menu_bold"), Some("CmdOrCtrl+B"))?)
         .item(&menu_item(
             app,
             "toggle-italic",
-            "斜体",
+            tr(locale, "menu_italic"),
             Some("CmdOrCtrl+I"),
         )?)
         .item(&menu_item(
             app,
             "toggle-underline",
-            "下划线",
+            tr(locale, "menu_underline"),
             Some("CmdOrCtrl+U"),
         )?)
         .item(&menu_item(
             app,
             "toggle-inline-code",
-            "行代码",
+            tr(locale, "menu_inline_code"),
             Some("CmdOrCtrl+`"),
         )?)
-        .item(&menu_item(app, "menu-inline-math", "行公式", None)?)
+        .item(&menu_item(app, "menu-inline-math", tr(locale, "menu_inline_math"), None)?)
         .separator()
         .item(&menu_item(
             app,
             "toggle-strikethrough",
-            "删除线",
+            tr(locale, "menu_strike"),
             Some("Alt+Shift+5"),
         )?)
-        .item(&menu_item(app, "menu-highlight", "高亮", None)?)
-        .item(&menu_item(app, "menu-comment", "注释", None)?)
+        .item(&menu_item(app, "menu-highlight", tr(locale, "menu_highlight"), None)?)
+        .item(&menu_item(app, "menu-comment", tr(locale, "menu_comment"), None)?)
         .separator()
-        .item(&menu_item(app, "menu-link", "超链接", Some("CmdOrCtrl+K"))?)
-        .item(&menu_item(app, "menu-image", "图像", None)?)
+        .item(&menu_item(app, "menu-link", tr(locale, "menu_link"), Some("CmdOrCtrl+K"))?)
+        .item(&menu_item(app, "menu-image", tr(locale, "menu_image"), None)?)
         .separator()
         .item(&menu_item(
             app,
             "menu-clear-format",
-            "清除样式",
+            tr(locale, "menu_clear_format"),
             Some("CmdOrCtrl+\\"),
         )?)
         .build()
@@ -415,29 +421,30 @@ fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Subm
 }
 
 fn build_view_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    SubmenuBuilder::new(app, "查看(&V)")
+    let locale = i18n::effective_locale(app);
+    SubmenuBuilder::new(app, tr(locale, "menu_view"))
         .item(&menu_item(
             app,
             "toggle-source",
-            "切换源码模式",
+            tr(locale, "menu_toggle_source"),
             Some("CmdOrCtrl+E"),
         )?)
         .item(&menu_item(
             app,
             "toggle-outline",
-            "显示/隐藏文档大纲",
+            tr(locale, "menu_toggle_outline"),
             None,
         )?)
         .item(&menu_item(
             app,
             "toggle-theme",
-            "切换主题",
+            tr(locale, "menu_toggle_theme"),
             Some("CmdOrCtrl+Shift+L"),
         )?)
         .item(&menu_item(
             app,
             "toggle-focus",
-            "显示/隐藏资源管理器",
+            tr(locale, "menu_toggle_explorer"),
             Some("CmdOrCtrl+Shift+F"),
         )?)
         .build()
@@ -445,27 +452,29 @@ fn build_view_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
 }
 
 fn build_settings_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    SubmenuBuilder::new(app, "设置")
-        .item(&menu_item(app, "open-settings", "偏好设置...", None)?)
+    let locale = i18n::effective_locale(app);
+    SubmenuBuilder::new(app, tr(locale, "menu_settings"))
+        .item(&menu_item(app, "open-settings", tr(locale, "menu_preferences"), None)?)
         .build()
         .map_err(|e| e.to_string())
 }
 
 fn build_diagram_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    SubmenuBuilder::new(app, "图表")
-        .item(&menu_item(app, "menu-chart", "空白图表", None)?)
-        .item(&menu_item(app, "menu-chart:flowchart", "流程图", None)?)
+    let locale = i18n::effective_locale(app);
+    SubmenuBuilder::new(app, tr(locale, "menu_chart"))
+        .item(&menu_item(app, "menu-chart", tr(locale, "menu_chart_blank"), None)?)
+        .item(&menu_item(app, "menu-chart:flowchart", tr(locale, "menu_chart_flowchart"), None)?)
         .item(&menu_item(
             app,
             "menu-chart:sequenceDiagram",
-            "时序图",
+            tr(locale, "menu_chart_sequence"),
             None,
         )?)
-        .item(&menu_item(app, "menu-chart:classDiagram", "类图", None)?)
-        .item(&menu_item(app, "menu-chart:stateDiagram", "状态图", None)?)
-        .item(&menu_item(app, "menu-chart:pie", "饼图", None)?)
-        .item(&menu_item(app, "menu-chart:gantt", "甘特图", None)?)
-        .item(&menu_item(app, "menu-chart:erDiagram", "ER 图", None)?)
+        .item(&menu_item(app, "menu-chart:classDiagram", tr(locale, "menu_chart_class"), None)?)
+        .item(&menu_item(app, "menu-chart:stateDiagram", tr(locale, "menu_chart_state"), None)?)
+        .item(&menu_item(app, "menu-chart:pie", tr(locale, "menu_chart_pie"), None)?)
+        .item(&menu_item(app, "menu-chart:gantt", tr(locale, "menu_chart_gantt"), None)?)
+        .item(&menu_item(app, "menu-chart:erDiagram", tr(locale, "menu_chart_er"), None)?)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -481,6 +490,10 @@ fn menu_item<R: Runtime>(
         builder = builder.accelerator(accelerator);
     }
     builder.build(app).map_err(|e| e.to_string())
+}
+
+fn tr(locale: InterfaceLocale, key: &str) -> &'static str {
+    i18n::text(locale, key)
 }
 
 #[cfg(target_os = "macos")]

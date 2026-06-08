@@ -10,7 +10,9 @@
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
   import { getPlatformCapabilities } from '../services/platform';
+  import { getDiagramTypeLabel, t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let theme: 'light' | 'dark';
   export let desktopEnabled: boolean;
   export let activeMenu: string | null;
@@ -180,8 +182,10 @@
   }
 </script>
 
+{#key interfaceLocale}
 <header
   class="titlebar"
+  data-interface-locale={interfaceLocale}
   class:is-mac={platformCapabilities.isMac}
   class:is-win={platformCapabilities.isWindows}
   class:is-fullscreen={isFullscreen}
@@ -189,8 +193,8 @@
   <div class="titlebar-row top-row" data-drag-region role="presentation" on:mousedown={handleDrag}>
     <button
       class="icon-btn sidebar-toggle-btn"
-      title={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
-      aria-label={focusMode ? '显示资源管理器侧边栏' : '隐藏资源管理器侧边栏'}
+      title={focusMode ? t.showExplorerSidebar() : t.hideExplorerSidebar()}
+      aria-label={focusMode ? t.showExplorerSidebar() : t.hideExplorerSidebar()}
       aria-pressed={!focusMode}
       on:click={toggleFocusMode}
     >
@@ -211,25 +215,25 @@
         class:active={activeMenu === 'file'}
         use:clickOutside={() => closeMenu('file')}
       >
-        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('file')}>文件</button>
+        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('file')}>{t.file()}</button>
         {#if activeMenu === 'file'}
           <div class="dropdown-menu">
             <button on:click={() => finish(createNewFile, 'file')}
-              >新建 Markdown <span class="shortcut">Ctrl + N</span></button
+              >{t.newMarkdown()} <span class="shortcut">Ctrl + N</span></button
             >
             <button on:click={() => finish(createNewWindow, 'file')}
-              >新建窗口 <span class="shortcut">Ctrl + Shift + N</span></button
+              >{t.newWindow()} <span class="shortcut">Ctrl + Shift + N</span></button
             >
             <div class="divider"></div>
             <button on:click={() => finish(openFileDialog, 'file')}
-              >打开文件... <span class="shortcut">Ctrl + O</span></button
+              >{t.openFileEllipsis()} <span class="shortcut">Ctrl + O</span></button
             >
             <button on:click={() => finish(openFolderDialog, 'file')}
-              >打开文件夹... <span class="shortcut">Ctrl + Shift + O</span></button
+              >{t.openFolderEllipsis()} <span class="shortcut">Ctrl + Shift + O</span></button
             >
 
             <div class="nested-trigger">
-              <span>打开最近</span>
+              <span>{t.openRecent()}</span>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
                 ><path
                   d="M3 1l4 4-4 4"
@@ -246,7 +250,7 @@
                     class:recent-folder={recent.entryType === 'folder'}
                     class:recent-missing={isMissing}
                     disabled={isMissing}
-                    title={isMissing ? `${recent.path}（路径已失效，点击移除）` : recent.path}
+                    title={isMissing ? `${recent.path} (${t.pathInvalidRemove()})` : recent.path}
                     on:click={() =>
                       isMissing
                         ? finish(() => removeRecentEntry(recent.path), 'file')
@@ -259,13 +263,13 @@
                         📄
                       {/if}
                     </span>
-                    <span class="recent-label">
+                    <span class="recent-label" data-missing-label={t.unavailableSuffix()}>
                       {recent.title ?? getCompactPath(recent.path)}
                     </span>
                   </button>
                 {/each}
                 {#if recentFiles.length === 0}
-                  <span class="disabled-item">无最近打开的记录</span>
+                  <span class="disabled-item">{t.noRecentFiles()}</span>
                 {/if}
                 {#if recentFiles.length > 0}
                   <div class="divider"></div>
@@ -273,7 +277,7 @@
                     class="recent-clear"
                     on:click={() => finish(clearRecentEntriesList, 'file')}
                   >
-                    清除最近打开
+                    {t.clearRecentFiles()}
                   </button>
                 {/if}
               </div>
@@ -281,20 +285,20 @@
 
             <div class="divider"></div>
             <button on:click={() => finish(() => saveMarkdownFile(), 'file')}
-              >保存 <span class="shortcut">Ctrl + S</span></button
+              >{t.save()} <span class="shortcut">Ctrl + S</span></button
             >
             <button on:click={() => finish(() => saveMarkdownFile(true), 'file')}
-              >另存为... <span class="shortcut">Ctrl + Shift + S</span></button
+              >{t.saveAs()} <span class="shortcut">Ctrl + Shift + S</span></button
             >
             <div class="divider"></div>
             <button on:click={() => finish(closeCurrentFile, 'file')}
-              >关闭当前文件 <span class="shortcut">Ctrl + W</span></button
+              >{t.closeCurrentFile()} <span class="shortcut">Ctrl + W</span></button
             >
             <button on:click={() => finish(closeCurrentWindow, 'file')}
-              >关闭窗口 <span class="shortcut">Alt + F4</span></button
+              >{t.closeWindow()} <span class="shortcut">Alt + F4</span></button
             >
             <div class="divider"></div>
-            <button on:click={() => finish(exitApp, 'file')}>退出</button>
+            <button on:click={() => finish(exitApp, 'file')}>{t.quit()}</button>
           </div>
         {/if}
       </div>
@@ -304,14 +308,14 @@
         class:active={activeMenu === 'edit'}
         use:clickOutside={() => closeMenu('edit')}
       >
-        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('edit')}>编辑</button>
+        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('edit')}>{t.editMenu()}</button>
         {#if activeMenu === 'edit'}
           <div class="dropdown-menu">
             <button on:click={() => finish(() => runCommand({ type: 'undo' }), 'edit')}
-              >撤销 <span class="shortcut">Ctrl + Z</span></button
+              >{t.undo()} <span class="shortcut">Ctrl + Z</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'redo' }), 'edit')}
-              >重做 <span class="shortcut">Ctrl + Y</span></button
+              >{t.redo()} <span class="shortcut">Ctrl + Y</span></button
             >
           </div>
         {/if}
@@ -323,12 +327,12 @@
         use:clickOutside={() => closeMenu('paragraph')}
       >
         <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('paragraph')}
-          >段落</button
+          >{t.paragraph()}</button
         >
         {#if activeMenu === 'paragraph'}
           <div class="dropdown-menu">
             <div class="nested-trigger">
-              <span>标题</span>
+              <span>{t.heading()}</span>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
                 ><path
                   d="M3 1l4 4-4 4"
@@ -342,106 +346,106 @@
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 1 }), 'paragraph')}
-                  >一级标题 <span class="shortcut">Ctrl + 1</span></button
+                  >{t.heading1()} <span class="shortcut">Ctrl + 1</span></button
                 >
                 <button
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 2 }), 'paragraph')}
-                  >二级标题 <span class="shortcut">Ctrl + 2</span></button
+                  >{t.heading2()} <span class="shortcut">Ctrl + 2</span></button
                 >
                 <button
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 3 }), 'paragraph')}
-                  >三级标题 <span class="shortcut">Ctrl + 3</span></button
+                  >{t.heading3()} <span class="shortcut">Ctrl + 3</span></button
                 >
                 <button
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 4 }), 'paragraph')}
-                  >四级标题 <span class="shortcut">Ctrl + 4</span></button
+                  >{t.heading4()} <span class="shortcut">Ctrl + 4</span></button
                 >
                 <button
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 5 }), 'paragraph')}
-                  >五级标题 <span class="shortcut">Ctrl + 5</span></button
+                  >{t.heading5()} <span class="shortcut">Ctrl + 5</span></button
                 >
                 <button
                   on:mousedown|preventDefault
                   on:click={() =>
                     finish(() => runCommand({ type: 'setHeading', level: 6 }), 'paragraph')}
-                  >六级标题 <span class="shortcut">Ctrl + 6</span></button
+                  >{t.heading6()} <span class="shortcut">Ctrl + 6</span></button
                 >
               </div>
             </div>
             <button
               on:mousedown|preventDefault
               on:click={() => finish(() => runCommand({ type: 'setParagraph' }), 'paragraph')}
-              >段落 <span class="shortcut">Ctrl + 0</span></button
+              >{t.paragraph()} <span class="shortcut">Ctrl + 0</span></button
             >
             <button
               on:mousedown|preventDefault
               on:click={() =>
                 finish(() => runCommand({ type: 'increaseHeadingLevel' }), 'paragraph')}
-              >提升标题 <span class="shortcut">Ctrl + =</span></button
+              >{t.liftHeading()} <span class="shortcut">Ctrl + =</span></button
             >
             <button
               on:mousedown|preventDefault
               on:click={() =>
                 finish(() => runCommand({ type: 'decreaseHeadingLevel' }), 'paragraph')}
-              >降低标题 <span class="shortcut">Ctrl + -</span></button
+              >{t.sinkHeading()} <span class="shortcut">Ctrl + -</span></button
             >
             <div class="divider"></div>
             <button on:click={() => finish(openTablePicker, 'paragraph')}
-              >表格 <span class="shortcut">Ctrl + Shift + T</span></button
+              >{t.table()} <span class="shortcut">Ctrl + Shift + T</span></button
             >
             <button
               on:click={() =>
                 finish(() => runCommand({ type: 'insertCodeBlock', language: 'ts' }), 'paragraph')}
-              >代码块 <span class="shortcut">Ctrl + Shift + K</span></button
+              >{t.codeBlock()} <span class="shortcut">Ctrl + Shift + K</span></button
             >
             <button
               on:click={() =>
                 finish(() => runCommand({ type: 'insertMathBlock', tex: '' }), 'paragraph')}
-              >公式块 <span class="shortcut">Ctrl + Shift + M</span></button
+              >{t.insertMathBlock()} <span class="shortcut">Ctrl + Shift + M</span></button
             >
             <div class="divider"></div>
             <button
               on:click={() => finish(() => runCommand({ type: 'toggleBlockquote' }), 'paragraph')}
-              >引用 <span class="shortcut">Ctrl + Shift + Q</span></button
+              >{t.quote()} <span class="shortcut">Ctrl + Shift + Q</span></button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'insertCallout' }), 'paragraph')}
-              >提示块 <span class="shortcut">Ctrl + Shift + A</span></button
+              >{t.callout()} <span class="shortcut">Ctrl + Shift + A</span></button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'insertCommentBlock' }), 'paragraph')}
-              >注释块</button
+              >{t.inlineComment()}</button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
-              >有序列表 <span class="shortcut">Ctrl + Shift + [</span></button
+              >{t.taskList()} <span class="shortcut">Ctrl + Shift + [</span></button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'toggleBulletList' }), 'paragraph')}
-              >无序列表 <span class="shortcut">Ctrl + Shift + ]</span></button
+              >{t.list()} <span class="shortcut">Ctrl + Shift + ]</span></button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'paragraph')}
-              >任务列表 <span class="shortcut">Ctrl + Shift + X</span></button
+              >{t.taskList()} <span class="shortcut">Ctrl + Shift + X</span></button
             >
             <div class="divider"></div>
-            <button on:click={() => comingSoon('在上方插入段落', 'paragraph')}
-              >上插段落 <span class="shortcut">Ctrl + Shift + Enter</span></button
+            <button on:click={() => comingSoon(t.insertParagraphBefore(), 'paragraph')}
+              >{t.paragraphBefore()} <span class="shortcut">Ctrl + Shift + Enter</span></button
             >
-            <button on:click={() => comingSoon('在下方插入段落', 'paragraph')}
-              >下插段落 <span class="shortcut">Ctrl + Enter</span></button
+            <button on:click={() => comingSoon(t.insertParagraphAfter(), 'paragraph')}
+              >{t.paragraphAfter()} <span class="shortcut">Ctrl + Enter</span></button
             >
             <div class="divider"></div>
             <div class="nested-trigger">
-              <span>图表</span>
+              <span>{t.diagram()}</span>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
                 ><path
                   d="M3 1l4 4-4 4"
@@ -452,29 +456,29 @@
               >
               <div class="dropdown-menu nested">
                 <button on:click={() => insertBlankDiagram('paragraph')}>
-                  空白图表 <span class="shortcut">mermaid</span>
+                  {t.blankDiagram()} <span class="shortcut">mermaid</span>
                 </button>
                 <div class="divider"></div>
                 {#each DIAGRAM_TEMPLATES as template}
                   <button on:click={() => insertDiagram(template.type, 'paragraph')}>
-                    {template.label} <span class="shortcut">{template.type}</span>
+                    {getDiagramTypeLabel(template.type)} <span class="shortcut">{template.type}</span>
                   </button>
                 {/each}
               </div>
             </div>
             <button
               on:click={() => finish(() => runCommand({ type: 'insertFootnote' }), 'paragraph')}
-              >脚注</button
+              >{t.footnote()}</button
             >
             <button
               on:click={() =>
                 finish(() => runCommand({ type: 'insertHorizontalRule' }), 'paragraph')}
-              >水平分割线 <span class="shortcut">Ctrl + Shift + H</span></button
+              >{t.horizontalRule()} <span class="shortcut">Ctrl + Shift + H</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'insertToc' }), 'paragraph')}
-              >正文目录</button
+              >{t.toc()}</button
             >
-            <button on:click={() => finish(editFrontMatter, 'paragraph')}>文档元数据</button>
+            <button on:click={() => finish(editFrontMatter, 'paragraph')}>{t.frontMatter()}</button>
           </div>
         {/if}
       </div>
@@ -484,43 +488,43 @@
         class:active={activeMenu === 'format'}
         use:clickOutside={() => closeMenu('format')}
       >
-        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('format')}>格式</button>
+        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('format')}>{t.format()}</button>
         {#if activeMenu === 'format'}
           <div class="dropdown-menu">
             <button on:click={() => finish(() => runCommand({ type: 'toggleBold' }), 'format')}
-              >加粗 <span class="shortcut">Ctrl + B</span></button
+              >{t.bold()} <span class="shortcut">Ctrl + B</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleItalic' }), 'format')}
-              >斜体 <span class="shortcut">Ctrl + I</span></button
+              >{t.italic()} <span class="shortcut">Ctrl + I</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleUnderline' }), 'format')}
-              >下划线 <span class="shortcut">Ctrl + U</span></button
+              >{t.underline()} <span class="shortcut">Ctrl + U</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleCode' }), 'format')}
-              >行代码 <span class="shortcut">Ctrl + `</span></button
+              >{t.inlineCode()} <span class="shortcut">Ctrl + `</span></button
             >
-            <button on:click={() => comingSoon('行公式', 'format')}>行公式</button>
+            <button on:click={() => comingSoon(t.inlineMath(), 'format')}>{t.inlineMath()}</button>
             <div class="divider"></div>
             <button
               on:click={() => finish(() => runCommand({ type: 'toggleStrikethrough' }), 'format')}
-              >删除线 <span class="shortcut">Alt + Shift + 5</span></button
+              >{t.strikethrough()} <span class="shortcut">Alt + Shift + 5</span></button
             >
             <button on:click={() => finish(() => runCommand({ type: 'toggleHighlight' }), 'format')}
-              >高亮</button
+              >{t.highlight()}</button
             >
             <button
               on:click={() => finish(() => runCommand({ type: 'insertCommentInline' }), 'format')}
-              >注释</button
+              >{t.inlineComment()}</button
             >
             <div class="divider"></div>
             <button on:click={() => finish(openLinkPicker, 'format')}
-              >超链接 <span class="shortcut">Ctrl + K</span></button
+              >{t.link()} <span class="shortcut">Ctrl + K</span></button
             >
-            <button on:click={() => comingSoon('图像', 'format')}>图像</button>
+            <button on:click={() => comingSoon(t.imageMenu(), 'format')}>{t.imageMenu()}</button>
             <div class="divider"></div>
             <button
               on:click={() => finish(() => runCommand({ type: 'clearInlineStyles' }), 'format')}
-              >清除样式 <span class="shortcut">Ctrl + \</span></button
+              >{t.clearStyle()} <span class="shortcut">Ctrl + \</span></button
             >
           </div>
         {/if}
@@ -531,22 +535,22 @@
         class:active={activeMenu === 'view'}
         use:clickOutside={() => closeMenu('view')}
       >
-        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('view')}>查看</button>
+        <button class="menu-btn" on:click|stopPropagation={() => toggleMenu('view')}>{t.view()}</button>
         {#if activeMenu === 'view'}
           <div class="dropdown-menu">
             <button
               on:click={() =>
                 finish(() => setMode(mode === 'source' ? 'semantic' : 'source'), 'view')}
-              >切换源码模式 <span class="shortcut">Ctrl + E</span></button
+              >{t.toggleSourceMode()} <span class="shortcut">Ctrl + E</span></button
             >
             <button on:click={() => finish(toggleOutlineVisible, 'view')}
-              >{outlineVisible ? '隐藏文档大纲' : '显示文档大纲'}</button
+              >{outlineVisible ? t.hideOutline() : t.showOutline()}</button
             >
             <button on:click={() => finish(toggleTheme, 'view')}
-              >切换主题 <span class="shortcut">Ctrl + Shift + L</span></button
+              >{t.switchTheme()} <span class="shortcut">Ctrl + Shift + L</span></button
             >
             <button on:click={() => finish(toggleFocusMode, 'view')}
-              >显示/隐藏资源管理器 <span class="shortcut">Ctrl + Shift + F</span></button
+              >{t.showHideExplorer()} <span class="shortcut">Ctrl + Shift + F</span></button
             >
           </div>
         {/if}
@@ -554,7 +558,7 @@
 
       <div class="menu-item">
         <button class="menu-btn" on:click|stopPropagation={() => finish(openSettings, 'settings')}
-          >设置</button
+          >{t.settings()}</button
         >
       </div>
     </nav>
@@ -563,8 +567,8 @@
     <div class="titlebar-right">
       <button
         class="icon-btn theme-toggle-icon-btn"
-        title="切换主题"
-        aria-label="切换主题"
+        title={t.switchTheme()}
+        aria-label={t.switchTheme()}
         on:click={toggleTheme}
       >
         {#if theme === 'light'}
@@ -576,7 +580,7 @@
 
       {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
         <div class="window-controls">
-          <button class="control-btn" title="最小化" aria-label="最小化" on:click={minimizeWindow}>
+          <button class="control-btn" title={t.minimize()} aria-label={t.minimize()} on:click={minimizeWindow}>
             <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true"
               ><line
                 x1="0"
@@ -590,8 +594,8 @@
           </button>
           <button
             class="control-btn"
-            title={isMaximized ? '还原窗口' : '最大化'}
-            aria-label={isMaximized ? '还原窗口' : '最大化'}
+            title={isMaximized ? t.restoreWindow() : t.maximize()}
+            aria-label={isMaximized ? t.restoreWindow() : t.maximize()}
             on:click={handleMaximizeWindow}
           >
             {#if isMaximized}
@@ -628,8 +632,8 @@
           </button>
           <button
             class="control-btn close"
-            title="关闭"
-            aria-label="关闭"
+            title={t.close()}
+            aria-label={t.close()}
             on:click={closeAppWindow}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
@@ -648,3 +652,4 @@
     </div>
   </div>
 </header>
+{/key}

@@ -21,6 +21,7 @@ import {
   toggleExpandedFolder,
   updateFolderChildren,
 } from './folderTree';
+import { t } from '../i18n';
 
 interface FolderExplorerControllerOptions {
   getDesktopEnabled(): boolean;
@@ -52,7 +53,7 @@ export function createFolderExplorerController(options: FolderExplorerController
       const node = findTreeNode(options.getFolderTree(), folderPath);
       if (node?.is_dir && !node.children_loaded && !node.loading) {
         loadFolderChildrenIntoTree(folderPath).catch((error) => {
-          options.setStatusMessage(`载入子文件夹失败：${error}`);
+          options.setStatusMessage(t.loadSubfolderFailed({ error }));
         });
       }
     }
@@ -77,7 +78,7 @@ export function createFolderExplorerController(options: FolderExplorerController
 
     options.setFolderTree(normalizeFolderEntries(result));
     startFolderIndexing(folderPath).catch(() => undefined);
-    options.setStatusMessage(`已载入工作区：${getFolderName(folderPath)}，后台索引中`);
+    options.setStatusMessage(t.workspaceLoadedIndexing({ name: getFolderName(folderPath) }));
   }
 
   async function syncLoadedFolders() {
@@ -123,7 +124,7 @@ export function createFolderExplorerController(options: FolderExplorerController
     }
 
     if (missingPaths.length > 0) {
-      options.setStatusMessage(`已同步外部删除：${missingPaths.length} 项`);
+      options.setStatusMessage(t.syncedExternalDeletes({ count: missingPaths.length }));
     }
   }
 
@@ -142,7 +143,7 @@ export function createFolderExplorerController(options: FolderExplorerController
     options.setFolderTree(removeTreePaths(options.getFolderTree(), missingPaths));
     options.setExpandedFolders(pruneExpandedFolders(options.getExpandedFolders(), missingPaths));
     if (showMessage) {
-      options.setStatusMessage(`文件不存在，已从资源管理器移除：${getFolderName(missingPaths[0])}`);
+      options.setStatusMessage(t.missingPathRemoved({ name: getFolderName(missingPaths[0]) }));
     }
   }
 
@@ -151,7 +152,7 @@ export function createFolderExplorerController(options: FolderExplorerController
     options.setRootFolderExpanded(true);
     options.setExpandedFolders(new Set());
     options.setFolderTree([]);
-    options.setStatusMessage(`工作区不存在或已被移动：${rootPath}`);
+    options.setStatusMessage(t.workspaceMissing({ path: rootPath }));
   }
 
   async function loadFolderChildrenIntoTree(folderPath: string) {
@@ -186,7 +187,10 @@ export function createFolderExplorerController(options: FolderExplorerController
     }
     options.setFolderTree(applyIndexedDirectories(options.getFolderTree(), payload.directories));
     options.setStatusMessage(
-      `后台索引中：${payload.scanned_dirs} 个文件夹，${payload.scanned_files} 个文档`,
+      t.folderIndexingProgress({
+        dirs: payload.scanned_dirs,
+        files: payload.scanned_files,
+      }),
     );
   }
 
@@ -195,7 +199,10 @@ export function createFolderExplorerController(options: FolderExplorerController
       return;
     }
     options.setStatusMessage(
-      `文件夹索引完成：${payload.scanned_dirs} 个文件夹，${payload.scanned_files} 个文档`,
+      t.folderIndexingComplete({
+        dirs: payload.scanned_dirs,
+        files: payload.scanned_files,
+      }),
     );
   }
 

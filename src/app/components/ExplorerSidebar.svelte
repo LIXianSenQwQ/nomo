@@ -16,7 +16,9 @@
   import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';
   import { canExpandFolderNode } from '../services/folderTree';
   import ContextMenu from './ContextMenu.svelte';
+  import { t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let currentFolderPath: string;
   export let rootFolderExpanded: boolean;
   export let folderTree: FileTreeNode[];
@@ -235,35 +237,35 @@
     const items: ContextMenuItem[] = [];
 
     items.push({
-      label: '打开',
+      label: t.open(),
       action: () => openPreviewFile(node.path),
     });
     items.push({
-      label: '在新标签页打开',
+      label: t.openInNewTab(),
       action: () => openRecentEntry(node.path, 'file'),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '重命名',
+      label: t.rename(),
       action: () => startRenaming(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '复制路径',
+      label: t.copyPath(),
       action: () => {
         navigator.clipboard.writeText(node.path).catch(() => {});
       },
     });
     items.push({
-      label: '在文件夹中显示',
+      label: t.revealInFolder(),
       action: () => revealPathInFolder(node.path),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '删除',
+      label: t.deleteAction(),
       danger: true,
       action: () => {
         dispatch('deleteNode', { path: node.path, isDir: false });
@@ -278,39 +280,39 @@
     const items: ContextMenuItem[] = [];
 
     items.push({
-      label: '新建文件',
+      label: t.newFile(),
       action: () => startCreating(node.path, 'file'),
     });
     items.push({
-      label: '新建文件夹',
+      label: t.newFolder(),
       action: () => startCreating(node.path, 'folder'),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '重命名',
+      label: t.rename(),
       action: () => startRenaming(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '复制路径',
+      label: t.copyPath(),
       action: () => {
         navigator.clipboard.writeText(node.path).catch(() => {});
       },
     });
     items.push({
-      label: '在文件夹中显示',
+      label: t.revealInFolder(),
       action: () => revealPathInFolder(node.path),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
-      label: '刷新',
+      label: t.refresh(),
       action: () => dispatch('refreshFolder'),
     });
     items.push({
-      label: '删除',
+      label: t.deleteAction(),
       danger: true,
       action: () => {
         dispatch('deleteNode', { path: node.path, isDir: true });
@@ -345,14 +347,15 @@
   }
 </script>
 
-<aside class="rail" aria-label="资源管理器">
+{#key interfaceLocale}
+<aside class="rail" aria-label={t.explorer()} data-interface-locale={interfaceLocale}>
   <header class="explorer-header">
-    <span>资源管理器</span>
+    <span>{t.explorer()}</span>
     <div class="header-actions">
       <button
         type="button"
         class="action-btn"
-        title="刷新"
+        title={t.refresh()}
         on:click={() => dispatch('refreshFolder')}
       >
         <RefreshCw size={13} />
@@ -360,7 +363,7 @@
       <button
         type="button"
         class="action-btn"
-        title="折叠全部"
+        title={t.collapseAll()}
         on:click={() => dispatch('collapseAll')}
       >
         <ChevronsUp size={13} />
@@ -370,7 +373,7 @@
 
   <section
     class="file-tree"
-    aria-label="文件夹结构"
+    aria-label={t.folderStructure()}
     bind:clientHeight={fileTreeViewportHeight}
     on:scroll={handleFileTreeScroll}
   >
@@ -388,27 +391,27 @@
             // 根文件夹右键菜单：不包含重命名和删除
             const items: ContextMenuItem[] = [];
             items.push({
-              label: '新建文件',
+              label: t.newFile(),
               action: () => startCreating(currentFolderPath, 'file'),
             });
             items.push({
-              label: '新建文件夹',
+              label: t.newFolder(),
               action: () => startCreating(currentFolderPath, 'folder'),
             });
             items.push({ label: '', action: () => {}, separator: true });
             items.push({
-              label: '复制路径',
+              label: t.copyPath(),
               action: () => {
                 navigator.clipboard.writeText(currentFolderPath).catch(() => {});
               },
             });
             items.push({
-              label: '在文件夹中显示',
+              label: t.revealInFolder(),
               action: () => revealPathInFolder(currentFolderPath),
             });
             items.push({ label: '', action: () => {}, separator: true });
             items.push({
-              label: '刷新',
+              label: t.refresh(),
               action: () => dispatch('refreshFolder'),
             });
             explorerContextMenuX = event.clientX;
@@ -433,7 +436,7 @@
             <button
               type="button"
               class="action-btn"
-              title="新建文件"
+              title={t.newFile()}
               on:click={(e) => startCreating(currentFolderPath, 'file', e)}
             >
               <FilePlus size={12} />
@@ -441,7 +444,7 @@
             <button
               type="button"
               class="action-btn"
-              title="新建文件夹"
+              title={t.newFolder()}
               on:click={(e) => startCreating(currentFolderPath, 'folder', e)}
             >
               <FolderPlus size={12} />
@@ -467,7 +470,7 @@
               on:blur={commitCreating}
               on:keydown={handleCreatingKeydown}
               class="rename-input"
-              placeholder={creatingType === 'folder' ? '新建文件夹' : '无标题.md'}
+              placeholder={creatingType === 'folder' ? t.newFolder() : t.untitledMarkdown()}
             />
           </div>
         {/if}
@@ -545,7 +548,7 @@
                           <button
                             type="button"
                             class="action-btn"
-                            title="新建文件"
+                            title={t.newFile()}
                             on:click={(e) => startCreating(node.path, 'file', e)}
                           >
                             <FilePlus size={12} />
@@ -553,7 +556,7 @@
                           <button
                             type="button"
                             class="action-btn"
-                            title="新建文件夹"
+                            title={t.newFolder()}
                             on:click={(e) => startCreating(node.path, 'folder', e)}
                           >
                             <FolderPlus size={12} />
@@ -579,7 +582,7 @@
                       on:blur={commitCreating}
                       on:keydown={handleCreatingKeydown}
                       class="rename-input"
-                      placeholder={creatingType === 'folder' ? '新建文件夹' : '无标题.md'}
+                      placeholder={creatingType === 'folder' ? t.newFolder() : t.untitledMarkdown()}
                     />
                   </div>
                 {:else}
@@ -641,7 +644,7 @@
     type="button"
     class="sidebar-resizer"
     class:active={isResizing}
-    aria-label="调整侧边栏宽度"
+    aria-label={t.resizeSidebar()}
     on:mousedown={startResize}
   ></button>
 </aside>
@@ -654,3 +657,4 @@
     onClose={closeExplorerContextMenu}
   />
 {/if}
+{/key}

@@ -15,14 +15,14 @@ describe('external file change flow', () => {
     const saveSource = actionsSource.slice(saveStart, saveEnd);
 
     expect(saveSource).toContain('!saveAs && hasExternalFileChange()');
-    expect(saveSource).toContain('检测到外部文件变更，请先选择重新载入、另存为或覆盖外部版本');
+    expect(saveSource).toContain('t.externalChangeChooseAction()');
 
     const autosaveStart = actionsSource.indexOf('function debouncedAutoSave');
     const autosaveEnd = actionsSource.indexOf('function cancelPendingAutoSaves');
     const autosaveSource = actionsSource.slice(autosaveStart, autosaveEnd);
 
     expect(autosaveSource.match(/hasExternalFileChange\(\)/g)).toHaveLength(2);
-    expect(autosaveSource).toContain('检测到外部文件变更，已暂停自动保存');
+    expect(autosaveSource).toContain('t.externalChangeAutoSavePaused()');
   });
 
   it('exposes explicit reload, save-as and overwrite actions in the editor alert', () => {
@@ -31,8 +31,8 @@ describe('external file change flow', () => {
     expect(actionsSource).toContain("options.getExternalFileChange().type !== 'modified'");
 
     expect(workspaceSource).toContain("externalFileChange.type !== 'none'");
-    expect(workspaceSource).toContain('重新载入外部版本');
-    expect(workspaceSource).toContain('另存为当前内容');
-    expect(workspaceSource).toContain('覆盖外部版本');
+    expect(workspaceSource).toContain('t.reloadExternalVersion()');
+    expect(workspaceSource).toContain('t.saveAsCurrentContent()');
+    expect(workspaceSource).toContain('t.overwriteExternalVersion()');
   });
 });

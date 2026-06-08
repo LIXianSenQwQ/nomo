@@ -67,6 +67,7 @@
     maximizeAppWindow,
     minimizeAppWindow,
     openSettingsWindow,
+    refreshInterfaceLanguageChrome,
     setDesktopIconTheme,
     updateAppWindowTitle,
   } from './services/desktopWindow';
@@ -107,9 +108,11 @@
     resolveThemePreference,
     type AppPreferences,
     type CodeBlockIndentPreference,
+    type InterfaceLanguagePreference,
     type ShortcutPreferences,
     type ThemePreference,
   } from './services/settings';
+  import { applyInterfaceLanguagePreference, t, type EffectiveInterfaceLocale } from './i18n';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
   import {
@@ -144,6 +147,8 @@
   let mode: EditorMode = DEFAULT_APP_PREFERENCES.editorMode;
   let themePreference: ThemePreference = DEFAULT_APP_PREFERENCES.theme;
   let theme: 'light' | 'dark' = resolveThemePreference(themePreference);
+  let interfaceLanguage: InterfaceLanguagePreference = DEFAULT_APP_PREFERENCES.interfaceLanguage;
+  let interfaceLocale: EffectiveInterfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
   let fileName = '',
     filePath = '';
   let nativePath: string | null = null;
@@ -449,14 +454,14 @@
     if (!desktopEnabled) return;
 
     if (entryType === 'folder') {
-      if (!(await ensureExplorerPathExists(path, '文件夹不存在或已被移动'))) {
+      if (!(await ensureExplorerPathExists(path, t.folderMissing()))) {
         return;
       }
       await openFolderWithBehavior(path);
       return;
     }
 
-    if (!(await ensureExplorerPathExists(path, '文件不存在或已被移动'))) {
+    if (!(await ensureExplorerPathExists(path, t.fileMissing()))) {
       return;
     }
     await openRecentFile(path);
@@ -496,7 +501,7 @@
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (!shouldHideToTray && dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(`以下文件有未保存修改：${names}。关闭窗口将丢失这些更改，是否继续？`);
+      const ok = confirm(t.unsavedChangesCloseWindow({ names }));
       if (!ok) return;
     }
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
@@ -508,7 +513,7 @@
     }
 
     const shouldHideToTray = confirm(
-      '第一次关闭主窗口时，是否将 Nomo 隐藏到系统托盘？\n\n确定：隐藏到托盘，并记住此选择。\n取消：直接关闭窗口，之后也可在偏好设置中开启。',
+      t.closeToTrayFirstPrompt(),
     );
     closeToTrayEnabled = shouldHideToTray;
     closeToTrayPromptAnswered = true;
@@ -524,7 +529,7 @@
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(`以下文件有未保存修改：${names}。退出应用将丢失这些更改，是否继续？`);
+      const ok = confirm(t.unsavedChangesExitApp({ names }));
       if (!ok) return;
     }
     await exitDesktopApp(desktopEnabled);
@@ -747,7 +752,7 @@
   // 打开预览标签页（文件树单击）
   async function openPreviewFile(path: string) {
     if (!desktopEnabled) return;
-    if (!(await ensureExplorerPathExists(path, '文件不存在或已被移动'))) {
+    if (!(await ensureExplorerPathExists(path, t.fileMissing()))) {
       return;
     }
 
@@ -761,12 +766,12 @@
       return;
     }
 
-    const { document, error } = await readMarkdownFromPath(path, '预览打开失败');
+    const { document, error } = await readMarkdownFromPath(path, t.previewOpenFailed());
     if (error) {
       statusMessage = error;
       if (isMissingPathError(error)) {
         removeMissingExplorerPaths([path], false);
-        statusMessage = `${error}，已从资源管理器移除`;
+        statusMessage = t.removedFromExplorer({ message: error });
       }
       return;
     }
@@ -809,7 +814,7 @@
     loadTabState(targetTab);
 
     const parentDir = getDirectoryLabel(document.path);
-    if (parentDir && parentDir !== '当前文件夹') {
+    if (parentDir && parentDir !== t.currentFolder()) {
       if (!currentFolderPath) {
         loadFolder(parentDir).catch(() => undefined);
       } else {
@@ -834,7 +839,7 @@
     const dirtyTabs = tabs.filter((t) => t.id !== keepTabId && t.dirty && t.id !== previewTabId);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
       if (!ok) return;
     }
 
@@ -857,7 +862,7 @@
     const dirtyRightTabs = rightTabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (dirtyRightTabs.length > 0) {
       const names = dirtyRightTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
       if (!ok) return;
     }
 
@@ -880,7 +885,7 @@
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(`以下文件有未保存修改：${names}。关闭将丢失这些更改，是否继续？`);
+      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
       if (!ok) return;
     }
 
@@ -1174,7 +1179,7 @@
   async function executeDelete() {
     const path = deleteConfirmPath;
     const isDir = deleteConfirmIsDir;
-    const typeLabel = isDir ? '文件夹' : '文件';
+    const typeLabel = isDir ? t.folder() : t.file();
     deleteConfirmOpen = false;
 
     try {
@@ -1221,9 +1226,9 @@
       if (currentFolderPath) {
         await loadFolder(currentFolderPath);
       }
-      statusMessage = `已删除${typeLabel}`;
+      statusMessage = t.deletedType({ type: typeLabel });
     } catch (error) {
-      statusMessage = `删除失败: ${error}`;
+      statusMessage = t.deleteFailed({ error });
     }
   }
 
@@ -1235,9 +1240,9 @@
     event: CustomEvent<{ parentPath: string; type: 'folder' | 'file'; name: string }>,
   ) {
     const { parentPath, type, name } = event.detail;
-    let finalName = name || (type === 'folder' ? '新建文件夹' : '无标题.md');
+    let finalName = name || (type === 'folder' ? t.newFolder() : t.untitledMarkdown());
     finalName = finalName.replace(/[<>:"/\\|?*]/g, '');
-    if (!finalName) finalName = type === 'folder' ? '新建文件夹' : '无标题.md';
+    if (!finalName) finalName = type === 'folder' ? t.newFolder() : t.untitledMarkdown();
     if (type === 'file' && !finalName.toLowerCase().endsWith('.md')) {
       finalName += '.md';
     }
@@ -1264,7 +1269,7 @@
     if (type === 'folder') {
       const { createFolder } = await import('../lib/desktop/tauriStorage');
       await createFolder(targetPath).catch((err) => {
-        statusMessage = `创建文件夹失败: ${err}`;
+        statusMessage = t.createFolderFailed({ error: err });
       });
       await loadFolder(currentFolderPath);
       expandAncestors(targetPath, currentFolderPath);
@@ -1293,7 +1298,7 @@
 
     const { renameFile } = await import('../lib/desktop/tauriStorage');
     await renameFile(path, targetPath).catch((err) => {
-      statusMessage = `重命名失败: ${err}`;
+      statusMessage = t.renameFailed({ error: err });
     });
 
     await loadFolder(currentFolderPath);
@@ -1326,6 +1331,9 @@
     themePreference = preferences.theme;
     theme = applyThemeSetting(themePreference, { transition: true });
     syncDesktopIconTheme(theme);
+    interfaceLanguage = preferences.interfaceLanguage;
+    interfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
+    void refreshInterfaceLanguageChrome(desktopEnabled);
     fontSize = preferences.fontSize;
     lineHeight = preferences.lineHeight;
     contentWidthPercent = preferences.contentWidthPercent;
@@ -1380,7 +1388,7 @@
       readonlyDocumentMode = true;
       mode = 'source';
       editor.updateOptions({ mode: 'source' });
-      statusMessage = '当前文档已按大文件阈值切换为只读源码模式';
+      statusMessage = t.largeDocumentReadonly();
     }
 
     if (options.applyEditorMode && !largeDocumentMode) {
@@ -1421,14 +1429,14 @@
 
     if (shouldOpenFirstRunSample(state)) {
       const document = await installSampleDocument().catch((error) => {
-        statusMessage = error instanceof Error ? error.message : `打开实例文档失败：${error}`;
+        statusMessage = error instanceof Error ? error.message : t.sampleOpenFailed({ error });
         return null;
       });
       if (!document) {
         return;
       }
 
-      await documentActions.applyNativeDocument(document, '已打开实例文档');
+      await documentActions.applyNativeDocument(document, t.sampleOpened());
       await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
       return;
     }
@@ -1617,11 +1625,11 @@
 
   function openLinkPicker() {
     if (readonlyDocumentMode) {
-      statusMessage = '当前文档只读，无法编辑超链接';
+      statusMessage = t.readonlyCannotEditLink();
       return;
     }
     if (mode !== 'semantic') {
-      statusMessage = '请切换到语义模式后编辑超链接';
+      statusMessage = t.switchSemanticBeforeEditLink();
       return;
     }
 
@@ -1639,7 +1647,7 @@
   function openLinkFromEditor(href: string) {
     const token = ++linkOpeningToken;
     linkOpening = true;
-    statusMessage = '正在打开链接...';
+    statusMessage = t.openingLink();
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
 
     const minimumVisibleTime = new Promise<void>((resolve) => {
@@ -1648,7 +1656,7 @@
 
     Promise.all([
       openExternalLink(href).catch((error) => {
-        statusMessage = `打开链接失败：${error}`;
+        statusMessage = t.openLinkFailed({ error });
       }),
       minimumVisibleTime,
     ]).finally(() => {
@@ -1677,7 +1685,7 @@
 
   function applyLink() {
     if (!linkHref.trim()) {
-      linkError = '请输入链接地址';
+      linkError = t.linkHrefRequired();
       return;
     }
 
@@ -1688,7 +1696,7 @@
       text: linkText,
     });
     if (!applied) {
-      linkError = '链接地址不可用，请使用 http(s)、mailto、锚点或相对路径';
+      linkError = t.linkHrefInvalid();
       return;
     }
 
@@ -1719,7 +1727,7 @@
   function removeLink() {
     const removed = editor.execute({ type: 'removeLink' });
     if (!removed) {
-      linkError = '当前选区没有可移除的超链接';
+      linkError = t.linkNothingToRemove();
       return;
     }
 
@@ -1734,7 +1742,7 @@
 
   function editFrontMatter() {
     if (readonlyDocumentMode) {
-      statusMessage = '当前文档只读，无法编辑元数据';
+      statusMessage = t.readonlyCannotEditMetadata();
       return;
     }
     if (!extractFrontMatterBlock(editor.getMarkdown())) {
@@ -1745,7 +1753,7 @@
 
   function enterFrontMatterEdit() {
     if (readonlyDocumentMode) {
-      statusMessage = '当前文档只读，无法编辑元数据';
+      statusMessage = t.readonlyCannotEditMetadata();
       return;
     }
     frontMatterEditing = true;
@@ -1764,7 +1772,7 @@
 
   function deleteFrontMatter() {
     if (readonlyDocumentMode) {
-      statusMessage = '当前文档只读，无法删除元数据';
+      statusMessage = t.readonlyCannotDeleteMetadata();
       return;
     }
     frontMatterEditing = false;
@@ -1775,7 +1783,7 @@
     if (toastTimer !== null) {
       window.clearTimeout(toastTimer);
     }
-    toastMessage = `${featureName}功能开发中`;
+    toastMessage = t.featureComingSoon({ featureName });
     toastTimer = window.setTimeout(() => {
       toastMessage = '';
       toastTimer = null;
@@ -1896,7 +1904,7 @@
     zoomPercent = nextZoom;
     applyZoomSetting(zoomPercent);
     updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
-    statusMessage = `缩放 ${zoomPercent}%`;
+    statusMessage = t.zoomStatus({ percent: zoomPercent });
   }
 
   function setupSystemThemeListener() {
@@ -1941,11 +1949,11 @@
       ).length;
 
       if (removed > 0 && failed > 0) {
-        statusMessage = `已删除 ${removed} 个图片文件，${failed} 个删除失败`;
+        statusMessage = t.imageCleanupRemovedFailed({ removed, failed });
       } else if (removed > 0) {
-        statusMessage = `已删除 ${removed} 个图片文件`;
+        statusMessage = t.imageCleanupRemoved({ removed });
       } else if (failed > 0) {
-        statusMessage = `${failed} 个图片文件删除失败`;
+        statusMessage = t.imageCleanupFailed({ failed });
       }
     });
   }
@@ -2001,10 +2009,11 @@
 </script>
 
 <svelte:head>
-  <title>Nomo</title>
+  <title>{t.appName()}</title>
 </svelte:head>
 
 <AppShell
+  {interfaceLocale}
   bind:fileInput
   bind:sourcePane
   bind:semanticPane
@@ -2129,11 +2138,12 @@
 {#if linkOpening}
   <div class="link-opening-indicator" role="status" aria-live="polite">
     <span class="link-opening-spinner" aria-hidden="true"></span>
-    <span>正在打开链接</span>
+    <span>{t.openingLinkShort()}</span>
   </div>
 {/if}
 
 <FolderOpenDialog
+  {interfaceLocale}
   open={folderOpenDialogPath !== null}
   folderPath={folderOpenDialogPath ?? ''}
   folderName={resolveFolderName(folderOpenDialogPath ?? '')}
@@ -2155,10 +2165,13 @@
 
 <ConfirmDialog
   open={deleteConfirmOpen}
-  title="确认删除"
-  message={`确定要删除 ${deleteConfirmIsDir ? '文件夹' : '文件'} "${deleteConfirmName}" 吗？`}
+  title={t.confirmDelete()}
+  message={t.confirmDeleteMessage({
+    type: deleteConfirmIsDir ? t.folder() : t.file(),
+    name: deleteConfirmName,
+  })}
   detail={deleteConfirmPath}
-  confirmLabel="删除"
+  confirmLabel={t.delete()}
   danger={true}
   onConfirm={executeDelete}
   onCancel={closeDeleteConfirm}

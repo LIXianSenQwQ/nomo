@@ -32,7 +32,9 @@
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
   import { modeSwitchIndicator } from '../actions/motion';
+  import { getDiagramTypeLabel, t } from '../i18n';
 
+  export let interfaceLocale: string;
   export let mode: EditorMode;
   export let contentWidthPercent: number;
   export let outlineVisible: boolean;
@@ -92,18 +94,19 @@
   }
 </script>
 
-<div class="toolbar" aria-label="格式工具">
+{#key interfaceLocale}
+<div class="toolbar" aria-label={t.formatToolbar()} data-interface-locale={interfaceLocale}>
   <button
-    title="标题"
-    aria-label="设置为一级标题"
+    title={t.title()}
+    aria-label={t.setHeadingOne()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'setHeading', level: 1 })}
   >
     <Heading1 size={17} />
   </button>
   <button
-    title="粗体"
-    aria-label="切换粗体"
+    title={t.bold()}
+    aria-label={t.toggleBold()}
     class:active={pendingInlineMarks.strong}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBold' })}
@@ -111,8 +114,8 @@
     <Bold size={17} />
   </button>
   <button
-    title="斜体"
-    aria-label="切换斜体"
+    title={t.italic()}
+    aria-label={t.toggleItalic()}
     class:active={pendingInlineMarks.em}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleItalic' })}
@@ -120,8 +123,8 @@
     <Italic size={17} />
   </button>
   <button
-    title="删除线"
-    aria-label="切换删除线"
+    title={t.strikethrough()}
+    aria-label={t.toggleStrikethrough()}
     class:active={pendingInlineMarks.strikethrough}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleStrikethrough' })}
@@ -129,8 +132,8 @@
     <Strikethrough size={17} />
   </button>
   <button
-    title="下划线"
-    aria-label="切换下划线"
+    title={t.underline()}
+    aria-label={t.toggleUnderline()}
     class:active={pendingInlineMarks.underline}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleUnderline' })}
@@ -138,8 +141,8 @@
     <Underline size={17} />
   </button>
   <button
-    title="高亮"
-    aria-label="切换高亮"
+    title={t.highlight()}
+    aria-label={t.toggleHighlight()}
     class:active={pendingInlineMarks.highlight}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleHighlight' })}
@@ -147,48 +150,48 @@
     <Highlighter size={17} />
   </button>
   <button
-    title="超链接"
-    aria-label="编辑超链接"
+    title={t.link()}
+    aria-label={t.editLink()}
     on:mousedown|preventDefault
     on:click={openLinkPicker}
   >
     <Link size={17} />
   </button>
   <button
-    title="行内注释"
-    aria-label="插入行内注释"
+    title={t.inlineComment()}
+    aria-label={t.insertInlineComment()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertCommentInline' })}
   >
     <MessageSquare size={17} />
   </button>
   <button
-    title="引用"
-    aria-label="切换引用"
+    title={t.quote()}
+    aria-label={t.toggleQuote()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBlockquote' })}
   >
     <Quote size={17} />
   </button>
   <button
-    title="提示块"
-    aria-label="插入提示块"
+    title={t.callout()}
+    aria-label={t.insertCallout()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertCallout' })}
   >
     <Info size={17} />
   </button>
   <button
-    title="列表"
-    aria-label="切换列表"
+    title={t.list()}
+    aria-label={t.toggleList()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleBulletList' })}
   >
     <List size={17} />
   </button>
   <button
-    title="任务列表"
-    aria-label="切换任务列表"
+    title={t.taskList()}
+    aria-label={t.toggleTaskList()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'toggleTaskList' })}
   >
@@ -196,10 +199,10 @@
   </button>
   <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>
     <button
-      title="表格"
+      title={t.table()}
       aria-haspopup="dialog"
       aria-expanded={tablePickerOpen}
-      aria-label="插入表格"
+      aria-label={t.insertTable()}
       class:active={tablePickerOpen}
       on:click|stopPropagation={toggleTablePicker}
     >
@@ -209,22 +212,22 @@
       <div
         class="table-picker-popover"
         role="dialog"
-        aria-label="选择表格尺寸"
+        aria-label={t.chooseTableSize()}
         tabindex="-1"
         on:keydown={handleTablePickerKeydown}
       >
         <div class="table-picker-header">
-          <span>表格</span>
+          <span>{t.table()}</span>
           <strong>{previewRows} × {previewColumns}</strong>
         </div>
-        <div class="table-picker-grid" aria-label="表格行列">
+        <div class="table-picker-grid" aria-label={t.tableRowsColumns()}>
           {#each tableRows as row}
             {#each tableColumns as column}
               <button
                 type="button"
                 class="table-picker-cell"
                 class:active={row <= previewRows && column <= previewColumns}
-                aria-label={`插入 ${row} 行 ${column} 列表格`}
+                aria-label={t.insertTableSize({ rows: row, columns: column })}
                 on:mouseenter={() => {
                   previewRows = row;
                   previewColumns = column;
@@ -242,25 +245,25 @@
     {/if}
   </div>
   <button
-    title="代码块"
-    aria-label="插入代码块"
+    title={t.codeBlock()}
+    aria-label={t.insertCodeBlock()}
     on:click={() => runCommand({ type: 'insertCodeBlock' })}
   >
     <Code2 size={17} />
   </button>
   <button
-    title="数学公式"
-    aria-label="插入数学公式"
+    title={t.mathFormula()}
+    aria-label={t.insertMathFormula()}
     on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}
   >
     <Sigma size={17} />
   </button>
   <div class="diagram-picker-anchor" use:clickOutside={closeDiagramPicker}>
     <button
-      title="图表"
+      title={t.diagram()}
       aria-haspopup="menu"
       aria-expanded={diagramPickerOpen}
-      aria-label="插入图表"
+      aria-label={t.insertDiagram()}
       class:active={diagramPickerOpen}
       on:click|stopPropagation={() => {
         diagramPickerOpen = !diagramPickerOpen;
@@ -272,19 +275,19 @@
       <div
         class="diagram-picker-popover"
         role="menu"
-        aria-label="插入图表"
+        aria-label={t.insertDiagram()}
         tabindex="-1"
         on:keydown={handleDiagramPickerKeydown}
       >
-        <div class="diagram-picker-header">图表</div>
+        <div class="diagram-picker-header">{t.diagram()}</div>
         <button type="button" role="menuitem" on:click={insertBlankDiagram}>
-          <span>空白图表</span>
+          <span>{t.blankDiagram()}</span>
           <small>mermaid</small>
         </button>
-        <div class="diagram-picker-header">模板</div>
+        <div class="diagram-picker-header">{t.template()}</div>
         {#each DIAGRAM_TEMPLATES as template}
           <button type="button" role="menuitem" on:click={() => insertDiagram(template.type)}>
-            <span>{template.label}</span>
+            <span>{getDiagramTypeLabel(template.type)}</span>
             <small>{template.type}</small>
           </button>
         {/each}
@@ -292,16 +295,16 @@
     {/if}
   </div>
   <button
-    title="插入脚注"
-    aria-label="插入脚注"
+    title={t.insertFootnote()}
+    aria-label={t.insertFootnote()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertFootnote' })}
   >
     <Superscript size={17} />
   </button>
   <button
-    title="插入正文目录"
-    aria-label="插入目录"
+    title={t.insertToc()}
+    aria-label={t.insertToc()}
     on:mousedown|preventDefault
     on:click={() => runCommand({ type: 'insertToc' })}
   >
@@ -309,7 +312,7 @@
   </button>
   <span class="divider"></span>
   <span class="toolbar-spacer"></span>
-  <label class="range-control width-control" title="内容宽度">
+  <label class="range-control width-control" title={t.contentWidth()}>
     <AlignHorizontalSpaceAround size={16} aria-hidden="true" />
     <span>{contentWidthPercent}%</span>
     <input
@@ -321,10 +324,10 @@
       on:input={updateContentWidth}
     />
   </label>
-  <div class="mode-switch" aria-label="编辑模式" use:modeSwitchIndicator={{ mode }}>
+  <div class="mode-switch" aria-label={t.mode()} use:modeSwitchIndicator={{ mode }}>
     <button
-      title="语义编辑"
-      aria-label="切换到语义编辑"
+      title={t.semanticEditingTitle()}
+      aria-label={t.semanticEditing()}
       aria-pressed={mode === 'semantic'}
       class:active={mode === 'semantic'}
       on:click={() => setMode('semantic')}
@@ -332,8 +335,8 @@
       <BookOpenText size={17} />
     </button>
     <button
-      title="源码模式"
-      aria-label="切换到源码模式"
+      title={t.sourceModeTitle()}
+      aria-label={t.sourceMode()}
       aria-pressed={mode === 'source'}
       class:active={mode === 'source'}
       on:click={() => setMode('source')}
@@ -344,11 +347,12 @@
   <button
     class="icon-button"
     class:active={outlineVisible}
-    title={outlineVisible ? '隐藏文档大纲' : '显示文档大纲'}
-    aria-label={outlineVisible ? '隐藏文档大纲' : '显示文档大纲'}
+    title={outlineVisible ? t.hideOutline() : t.showOutline()}
+    aria-label={outlineVisible ? t.hideOutline() : t.showOutline()}
     aria-pressed={outlineVisible}
     on:click={toggleOutlineVisible}
   >
     <ListTree size={18} />
   </button>
 </div>
+{/key}

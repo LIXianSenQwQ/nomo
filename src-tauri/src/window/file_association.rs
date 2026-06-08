@@ -1,4 +1,5 @@
 use crate::models::{DesktopActionPayload, MarkdownAssociationStatus, WindowsContextMenuStatus};
+use tauri::{AppHandle, Runtime};
 
 #[cfg(target_os = "windows")]
 const NOMO_MARKDOWN_PROG_ID: &str = "Nomo.Markdown";
@@ -19,7 +20,10 @@ const CONTEXT_MENU_COMMAND_NAME: &str = "Nomo.Open";
 const FOLDER_CONTEXT_MENU_COMMAND_NAME: &str = "Nomo.OpenFolder";
 
 #[cfg(target_os = "windows")]
-pub(crate) fn get_markdown_file_association_status() -> Result<MarkdownAssociationStatus, String> {
+pub(crate) fn get_markdown_file_association_status<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<MarkdownAssociationStatus, String> {
+    let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe_file_name = exe_path
@@ -41,11 +45,11 @@ pub(crate) fn get_markdown_file_association_status() -> Result<MarkdownAssociati
         .unwrap_or(false);
 
     let message = if is_default {
-        ".md 默认打开方式已绑定到 Nomo。".to_string()
+        crate::i18n::text(locale, "md_assoc_registered_default").to_string()
     } else if registered {
-        "Nomo 已注册为可选 Markdown 应用，请在 Windows 默认应用中选择 Nomo。".to_string()
+        crate::i18n::text(locale, "md_assoc_registered_optional").to_string()
     } else {
-        "尚未注册 Nomo 的 .md 打开方式。".to_string()
+        crate::i18n::text(locale, "md_assoc_not_registered").to_string()
     };
 
     Ok(MarkdownAssociationStatus {
@@ -58,7 +62,10 @@ pub(crate) fn get_markdown_file_association_status() -> Result<MarkdownAssociati
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn register_markdown_file_association() -> Result<DesktopActionPayload, String> {
+pub(crate) fn register_markdown_file_association<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
@@ -74,7 +81,7 @@ pub(crate) fn register_markdown_file_association() -> Result<DesktopActionPayloa
     write_extension_registration(".md")?;
     write_extension_registration(".markdown")?;
     write_application_registration(&exe_file_name, &open_command)?;
-    write_default_apps_capabilities()?;
+    write_default_apps_capabilities(locale)?;
 
     // Windows 10/11 会保护 UserChoice 哈希，桌面应用不能可靠静默改默认应用。
     // 注册完成后打开系统默认应用页，让用户完成一次系统级确认。
@@ -82,21 +89,23 @@ pub(crate) fn register_markdown_file_association() -> Result<DesktopActionPayloa
 
     Ok(DesktopActionPayload {
         ok: true,
-        message: "已注册 Nomo，并打开 Windows 默认应用设置；请选择 Nomo 后这里会显示已绑定。"
-            .to_string(),
+        message: crate::i18n::text(locale, "md_assoc_registered_message").to_string(),
     })
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn get_windows_context_menu_status() -> Result<WindowsContextMenuStatus, String> {
+pub(crate) fn get_windows_context_menu_status<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<WindowsContextMenuStatus, String> {
+    let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
     let registered = is_windows_context_menu_registered(&exe)?;
     let message = if registered {
-        "已注册 .md 文件和文件夹的右键菜单。".to_string()
+        crate::i18n::text(locale, "context_menu_registered").to_string()
     } else {
-        "尚未注册 .md 文件和文件夹右键菜单。".to_string()
+        crate::i18n::text(locale, "context_menu_not_registered").to_string()
     };
 
     Ok(WindowsContextMenuStatus {
@@ -107,7 +116,10 @@ pub(crate) fn get_windows_context_menu_status() -> Result<WindowsContextMenuStat
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn register_windows_context_menu() -> Result<DesktopActionPayload, String> {
+pub(crate) fn register_windows_context_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
@@ -115,44 +127,52 @@ pub(crate) fn register_windows_context_menu() -> Result<DesktopActionPayload, St
     let background_open_command = format!("\"{exe}\" \"%V\"");
     let icon_value = format!("\"{exe}\",0");
 
-    write_file_context_menu(".md", &open_command, &icon_value)?;
-    write_file_context_menu(".markdown", &open_command, &icon_value)?;
-    write_folder_context_menu(&open_command, &background_open_command, &icon_value)?;
+    write_file_context_menu(locale, ".md", &open_command, &icon_value)?;
+    write_file_context_menu(locale, ".markdown", &open_command, &icon_value)?;
+    write_folder_context_menu(locale, &open_command, &background_open_command, &icon_value)?;
 
     Ok(DesktopActionPayload {
         ok: true,
-        message: "已注册 .md 文件和文件夹右键菜单。".to_string(),
+        message: crate::i18n::text(locale, "context_menu_registered").to_string(),
     })
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn get_markdown_file_association_status() -> Result<MarkdownAssociationStatus, String> {
+pub(crate) fn get_markdown_file_association_status<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<MarkdownAssociationStatus, String> {
     Ok(MarkdownAssociationStatus {
         supported: false,
         registered: false,
         is_default: false,
         default_prog_id: None,
-        message: "当前默认打开方式绑定仅支持 Windows。".to_string(),
+        message: crate::i18n::app_text(app, "windows_default_only").to_string(),
     })
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn register_markdown_file_association() -> Result<DesktopActionPayload, String> {
-    Err("当前默认打开方式绑定仅支持 Windows".to_string())
+pub(crate) fn register_markdown_file_association<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    Err(crate::i18n::app_text(app, "windows_default_only").to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn get_windows_context_menu_status() -> Result<WindowsContextMenuStatus, String> {
+pub(crate) fn get_windows_context_menu_status<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<WindowsContextMenuStatus, String> {
     Ok(WindowsContextMenuStatus {
         supported: false,
         registered: false,
-        message: "当前右键菜单注册仅支持 Windows。".to_string(),
+        message: crate::i18n::app_text(app, "windows_context_only").to_string(),
     })
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn register_windows_context_menu() -> Result<DesktopActionPayload, String> {
-    Err("当前右键菜单注册仅支持 Windows".to_string())
+pub(crate) fn register_windows_context_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    Err(crate::i18n::app_text(app, "windows_context_only").to_string())
 }
 
 #[cfg(target_os = "windows")]
@@ -249,7 +269,7 @@ fn write_application_registration(exe_file_name: &str, open_command: &str) -> Re
 }
 
 #[cfg(target_os = "windows")]
-fn write_default_apps_capabilities() -> Result<(), String> {
+fn write_default_apps_capabilities(locale: crate::i18n::InterfaceLocale) -> Result<(), String> {
     run_reg_add(&[
         APP_CAPABILITIES_KEY,
         "/v",
@@ -267,7 +287,7 @@ fn write_default_apps_capabilities() -> Result<(), String> {
         "/t",
         "REG_SZ",
         "/d",
-        "轻量 Markdown-first 编辑器",
+        crate::i18n::text(locale, "file_assoc_description"),
         "/f",
     ])?;
     run_reg_add(&[
@@ -304,6 +324,7 @@ fn write_default_apps_capabilities() -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn write_file_context_menu(
+    locale: crate::i18n::InterfaceLocale,
     extension: &str,
     open_command: &str,
     icon_value: &str,
@@ -319,7 +340,7 @@ fn write_file_context_menu(
         "/t",
         "REG_SZ",
         "/d",
-        "用 Nomo 打开",
+        crate::i18n::text(locale, "open_with_nomo"),
         "/f",
     ])?;
     run_reg_add(&[
@@ -338,12 +359,14 @@ fn write_file_context_menu(
 
 #[cfg(target_os = "windows")]
 fn write_folder_context_menu(
+    locale: crate::i18n::InterfaceLocale,
     open_command: &str,
     background_open_command: &str,
     icon_value: &str,
 ) -> Result<(), String> {
     write_single_folder_context_menu(
         &format!("HKCU\\Software\\Classes\\Directory\\shell\\{FOLDER_CONTEXT_MENU_COMMAND_NAME}"),
+        locale,
         open_command,
         icon_value,
     )?;
@@ -351,6 +374,7 @@ fn write_folder_context_menu(
         &format!(
             "HKCU\\Software\\Classes\\Directory\\Background\\shell\\{FOLDER_CONTEXT_MENU_COMMAND_NAME}"
         ),
+        locale,
         background_open_command,
         icon_value,
     )
@@ -359,6 +383,7 @@ fn write_folder_context_menu(
 #[cfg(target_os = "windows")]
 fn write_single_folder_context_menu(
     menu_key: &str,
+    locale: crate::i18n::InterfaceLocale,
     open_command: &str,
     icon_value: &str,
 ) -> Result<(), String> {
@@ -371,7 +396,7 @@ fn write_single_folder_context_menu(
         "/t",
         "REG_SZ",
         "/d",
-        "用 Nomo 打开文件夹",
+        crate::i18n::text(locale, "open_folder_with_nomo"),
         "/f",
     ])?;
     run_reg_add(&[

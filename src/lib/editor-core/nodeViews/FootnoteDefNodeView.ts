@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView, ViewMutationRecord } from 'prosemirror-view';
+import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 
 /**
  * 底部脚注定义 NodeView：展示定义标记、返回正文入口，并保留内容区原生编辑能力。
@@ -12,6 +13,7 @@ export class FootnoteDefNodeView {
   private node: ProseMirrorNode;
   private view: EditorView;
   private marker: HTMLButtonElement;
+  private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView) {
     this.node = node;
@@ -38,6 +40,7 @@ export class FootnoteDefNodeView {
     this.contentDOM.className = 'footnote-def-content';
 
     this.dom.append(this.marker, this.contentDOM);
+    this.unsubscribeLocale = onInterfaceLocaleChanged(() => this.render());
     this.render();
   }
 
@@ -57,14 +60,15 @@ export class FootnoteDefNodeView {
   }
 
   destroy(): void {
-    return;
+    this.unsubscribeLocale();
   }
 
   private render(): void {
     const id = this.id;
     this.dom.setAttribute('data-footnote-id', id);
-    this.marker.setAttribute('aria-label', `返回正文脚注 ${id}`);
-    this.marker.title = '返回正文脚注';
+    this.contentDOM.dataset.placeholder = t.footnoteContentPlaceholder();
+    this.marker.setAttribute('aria-label', t.returnToFootnoteReference({ id }));
+    this.marker.title = t.returnToFootnoteReference({ id });
     this.marker.textContent = id;
   }
 
