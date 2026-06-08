@@ -234,9 +234,11 @@
 
   function persistWorkspaceState() {
     if (desktopEnabled && windowLabel) {
-      updateAppSetting(`workspaceTabs:${windowLabel}`, { tabs, activeTabId }).catch(
-        () => undefined,
-      );
+      updateAppSetting(`workspaceTabs:${windowLabel}`, {
+        tabs,
+        activeTabId,
+        currentFolderPath,
+      }).catch(() => undefined);
     }
   }
 
@@ -332,6 +334,7 @@
     getCurrentFolderPath: () => currentFolderPath,
     setCurrentFolderPath: (value) => {
       currentFolderPath = value;
+      persistWorkspaceState();
     },
     setStatusMessage: (value) => {
       statusMessage = value;
@@ -1431,6 +1434,9 @@
       if (workspaceTabsSetting) {
         try {
           const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
+          if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
+            currentFolderPath = state.currentFolderPath;
+          }
           if (state.tabs && state.tabs.length > 0) {
             tabs = state.tabs;
             activeTabId = state.activeTabId;
@@ -1513,9 +1519,6 @@
 
     if (currentFolderPath) {
       loadFolder(currentFolderPath).catch(() => undefined);
-    } else {
-      const parentDir = getDirectoryLabel(filePath);
-      if (parentDir && parentDir !== '当前文件夹') loadFolder(parentDir).catch(() => undefined);
     }
   });
 

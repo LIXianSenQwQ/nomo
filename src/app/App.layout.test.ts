@@ -331,6 +331,24 @@ describe('App outline layout', () => {
     expect(tauriConfigSource).toContain('"role": "Editor"');
   });
 
+  it('keeps the explicit explorer root across restored workspace tabs', () => {
+    expect(appSource).toContain(`tabs,
+        activeTabId,
+        currentFolderPath`);
+    expect(appSource).toContain("typeof state.currentFolderPath === 'string'");
+    expect(appSource).toContain('currentFolderPath = state.currentFolderPath');
+    expect(appSource).not.toContain(
+      `const parentDir = getDirectoryLabel(filePath);
+      if (parentDir && parentDir !== '当前文件夹') loadFolder(parentDir).catch(() => undefined);`,
+    );
+  });
+
+  it('does not mark ancestor folders as selected when a file is active', () => {
+    expect(explorerSidebarSource).not.toContain('function isFolderActive');
+    expect(explorerSidebarSource).not.toContain('class:active={isFolderActive(');
+    expect(explorerSidebarSource).toContain('class:active={nativePath === node.path}');
+  });
+
   it('mirrors the app chrome menu into the native macOS menubar', () => {
     expect(appShellSource).toContain(
       "import { getPlatformCapabilities } from '../services/platform'",

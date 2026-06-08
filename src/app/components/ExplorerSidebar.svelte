@@ -220,15 +220,6 @@
     }
   }
 
-  // 判断文件夹是否包含当前活跃文件（用于状态反馈高亮）
-  function isFolderActive(folderPath: string): boolean {
-    const activePath = nativePath || previewNativePath || '';
-    if (!activePath) return false;
-    if (activePath === folderPath) return false; // 文件高亮由 .active 处理
-    const sep = activePath.includes('\\') ? '\\' : '/';
-    return activePath.startsWith(folderPath + sep);
-  }
-
   // 在系统文件管理器中定位文件/文件夹
   async function revealPathInFolder(path: string) {
     try {
@@ -391,7 +382,6 @@
           tabindex="0"
           class="tree-folder-root-title"
           class:collapsed={!rootFolderExpanded}
-          class:active={isFolderActive(currentFolderPath)}
           title={currentFolderPath}
           on:click={toggleRootFolder}
           on:contextmenu|preventDefault={(event) => {
@@ -504,7 +494,6 @@
                       tabindex="0"
                       class="tree-folder nested-dir"
                       class:collapsed={!isExpanded}
-                      class:active={isFolderActive(node.path)}
                       class:empty={!hasChildren}
                       style="padding-left: {12 + row.depth * 12}px"
                       title={node.path}

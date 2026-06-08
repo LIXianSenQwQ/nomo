@@ -64,4 +64,5 @@ export interface FileTreeNode {
 export interface WorkspaceState {
   tabs: Tab[];
   activeTabId: string;
+  currentFolderPath?: string;
 }
