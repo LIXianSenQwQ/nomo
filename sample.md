@@ -207,7 +207,7 @@ console.log(element);
 ```
 
 ```powershell title="windows-first.ps1"
-$root = "D:\Demo\NewMd"
+$root = "D:\Demo\Nomo"
 Write-Output "Nomo works in $root"
 ```
 
