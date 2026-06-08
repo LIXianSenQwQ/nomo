@@ -12,8 +12,11 @@
   import LinkQuickEditor from './LinkQuickEditor.svelte';
   import StatusBar from './StatusBar.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
+  import { getPlatformCapabilities } from '../services/platform';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
+
+  const platformCapabilities = getPlatformCapabilities();
 
   export let focusMode: boolean;
   export let isResizing: boolean;
@@ -139,43 +142,45 @@
     on:change={openMarkdownFile}
   />
 
-  <AppTitleBar
-    {theme}
-    {desktopEnabled}
-    {activeMenu}
-    {recentFiles}
-    {missingRecentPaths}
-    {mode}
-    {focusMode}
-    {outlineVisible}
-    {getCompactPath}
-    {toggleMenu}
-    {closeMenu}
-    {toggleTheme}
-    {minimizeWindow}
-    {maximizeWindow}
-    {closeAppWindow}
-    {exitApp}
-    {createNewWindow}
-    {createNewFile}
-    {openFileDialog}
-    {openFolderDialog}
-    {openRecentEntry}
-    {saveMarkdownFile}
-    {clearRecentEntriesList}
-    {removeRecentEntry}
-    {closeCurrentFile}
-    {closeCurrentWindow}
-    {runCommand}
-    {openTablePicker}
-    {openLinkPicker}
-    {editFrontMatter}
-    {showUnavailableFeature}
-    {setMode}
-    {toggleOutlineVisible}
-    {toggleFocusMode}
-    {openSettings}
-  />
+  {#if !(desktopEnabled && platformCapabilities.isMac)}
+    <AppTitleBar
+      {theme}
+      {desktopEnabled}
+      {activeMenu}
+      {recentFiles}
+      {missingRecentPaths}
+      {mode}
+      {focusMode}
+      {outlineVisible}
+      {getCompactPath}
+      {toggleMenu}
+      {closeMenu}
+      {toggleTheme}
+      {minimizeWindow}
+      {maximizeWindow}
+      {closeAppWindow}
+      {exitApp}
+      {createNewWindow}
+      {createNewFile}
+      {openFileDialog}
+      {openFolderDialog}
+      {openRecentEntry}
+      {saveMarkdownFile}
+      {clearRecentEntriesList}
+      {removeRecentEntry}
+      {closeCurrentFile}
+      {closeCurrentWindow}
+      {runCommand}
+      {openTablePicker}
+      {openLinkPicker}
+      {editFrontMatter}
+      {showUnavailableFeature}
+      {setMode}
+      {toggleOutlineVisible}
+      {toggleFocusMode}
+      {openSettings}
+    />
+  {/if}
 
   <main
     class="workspace"

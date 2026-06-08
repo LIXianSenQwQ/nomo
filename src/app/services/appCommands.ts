@@ -12,15 +12,19 @@ export interface AppCommandHandlers {
   openFolderDialog: () => void;
   openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   saveMarkdownFile: (saveAs?: boolean) => void;
+  closeCurrentFile: () => void;
+  closeCurrentWindow: () => void;
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
   openLinkPicker: () => void;
+  openSettings: () => void;
   editFrontMatter: () => void;
   showUnavailableFeature: (featureName: string) => void;
   setMode: (mode: EditorMode) => void;
   getMode: () => EditorMode;
   toggleTheme: () => void;
   toggleFocusMode: () => void;
+  toggleOutlineVisible: () => void;
   switchToNextTab: () => void;
   switchToPrevTab: () => void;
   getDefaultCodeBlockLanguage: () => string;
@@ -34,9 +38,7 @@ type ShortcutParts = {
   key: string;
 };
 
-const shortcutCommandOrder = Object.keys(
-  DEFAULT_SHORTCUT_PREFERENCES,
-) as ShortcutCommandId[];
+const shortcutCommandOrder = Object.keys(DEFAULT_SHORTCUT_PREFERENCES) as ShortcutCommandId[];
 
 export function executeDesktopCommand(command: string, handlers: AppCommandHandlers) {
   if (command === 'new-file') {
@@ -61,12 +63,24 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.saveMarkdownFile();
   } else if (command === 'save-file-as') {
     handlers.saveMarkdownFile(true);
+  } else if (command === 'close-current-file') {
+    handlers.closeCurrentFile();
+  } else if (command === 'close-current-window') {
+    handlers.closeCurrentWindow();
   } else if (command === 'undo') {
     handlers.runCommand({ type: 'undo' });
   } else if (command === 'redo') {
     handlers.runCommand({ type: 'redo' });
   } else if (command === 'toggle-blockquote') {
     handlers.runCommand({ type: 'toggleBlockquote' });
+  } else if (command === 'insert-callout') {
+    handlers.runCommand({ type: 'insertCallout' });
+  } else if (command === 'toggle-ordered-list') {
+    handlers.runCommand({ type: 'toggleOrderedList' });
+  } else if (command === 'toggle-bullet-list') {
+    handlers.runCommand({ type: 'toggleBulletList' });
+  } else if (command === 'toggle-task-list') {
+    handlers.runCommand({ type: 'toggleTaskList' });
   } else if (command === 'insert-table') {
     handlers.openTablePicker();
   } else if (command === 'insert-math-block') {
@@ -151,10 +165,14 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.runCommand({ type: 'clearInlineStyles' });
   } else if (command === 'toggle-source') {
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');
+  } else if (command === 'toggle-outline') {
+    handlers.toggleOutlineVisible();
   } else if (command === 'toggle-theme') {
     handlers.toggleTheme();
   } else if (command === 'toggle-focus') {
     handlers.toggleFocusMode();
+  } else if (command === 'open-settings') {
+    handlers.openSettings();
   }
 }
 

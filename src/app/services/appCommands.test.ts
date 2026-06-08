@@ -16,17 +16,21 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     openFolderDialog: vi.fn(),
     openRecentEntry: vi.fn(),
     saveMarkdownFile: vi.fn(),
+    closeCurrentFile: vi.fn(),
+    closeCurrentWindow: vi.fn(),
     runCommand: vi.fn((command: EditorCommand) => {
       commands.push(command);
     }),
     openTablePicker: vi.fn(),
     openLinkPicker: vi.fn(),
+    openSettings: vi.fn(),
     editFrontMatter: vi.fn(),
     showUnavailableFeature: vi.fn(),
     setMode: vi.fn(),
     getMode: vi.fn((): EditorMode => 'semantic'),
     toggleTheme: vi.fn(),
     toggleFocusMode: vi.fn(),
+    toggleOutlineVisible: vi.fn(),
     switchToNextTab: vi.fn(),
     switchToPrevTab: vi.fn(),
     getDefaultCodeBlockLanguage: vi.fn(() => 'ts'),
@@ -74,6 +78,40 @@ describe('appCommands', () => {
 
     expect(handlers.commands).toEqual([{ type: 'clearInlineStyles' }]);
     expect(handlers.showUnavailableFeature).not.toHaveBeenCalled();
+  });
+
+  it('通过桌面菜单命令关闭当前文件和窗口', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('close-current-file', handlers);
+    executeDesktopCommand('close-current-window', handlers);
+
+    expect(handlers.closeCurrentFile).toHaveBeenCalledTimes(1);
+    expect(handlers.closeCurrentWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('通过桌面菜单命令打开偏好设置', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('open-settings', handlers);
+
+    expect(handlers.openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('通过桌面菜单命令触发段落列表和提示块', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('insert-callout', handlers);
+    executeDesktopCommand('toggle-ordered-list', handlers);
+    executeDesktopCommand('toggle-bullet-list', handlers);
+    executeDesktopCommand('toggle-task-list', handlers);
+
+    expect(handlers.commands).toEqual([
+      { type: 'insertCallout' },
+      { type: 'toggleOrderedList' },
+      { type: 'toggleBulletList' },
+      { type: 'toggleTaskList' },
+    ]);
   });
 
   it('通过桌面菜单命令触发高亮', () => {

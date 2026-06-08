@@ -20,6 +20,7 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/LinkQuickEditor.svelte'),
     'utf-8',
   );
+  const appShellSource = readFileSync(resolve(__dirname, 'components/AppShell.svelte'), 'utf-8');
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
   const documentTabsSource = readFileSync(
     resolve(__dirname, 'components/DocumentTabs.svelte'),
@@ -224,7 +225,8 @@ describe('App outline layout', () => {
     expect(titleBarSource).not.toContain("comingSoon('高亮'");
     expect(appCommandsSource).toContain("command === 'menu-highlight'");
     expect(appCommandsSource).toContain("handlers.runCommand({ type: 'toggleHighlight' });");
-    expect(tauriMenuSource).toContain('with_id("menu-highlight", "高亮")');
+    expect(tauriMenuSource).toContain('"menu-highlight"');
+    expect(tauriMenuSource).toContain('"高亮"');
   });
 
   it('wires link editing through toolbar, titlebar and shortcuts', () => {
@@ -240,7 +242,8 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command === 'menu-link'");
     expect(appCommandsSource).toContain('handlers.openLinkPicker();');
     expect(appCommandsSource).toContain("key === 'k' && !event.shiftKey");
-    expect(tauriMenuSource).toContain('with_id("menu-link", "超链接")');
+    expect(tauriMenuSource).toContain('"menu-link"');
+    expect(tauriMenuSource).toContain('"超链接"');
     expect(appSource).toContain('editor.getActiveLink()');
     expect(appSource).toContain("type: 'insertLink'");
     expect(appSource).toContain('text: linkText');
@@ -259,8 +262,10 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("type: 'insertCommentInline'");
     expect(appCommandsSource).toContain("command === 'menu-comment-block'");
     expect(appCommandsSource).toContain("type: 'insertCommentBlock'");
-    expect(tauriMenuSource).toContain('with_id("menu-comment", "注释")');
-    expect(tauriMenuSource).toContain('with_id("menu-comment-block", "注释块")');
+    expect(tauriMenuSource).toContain('"menu-comment"');
+    expect(tauriMenuSource).toContain('"注释"');
+    expect(tauriMenuSource).toContain('"menu-comment-block"');
+    expect(tauriMenuSource).toContain('"注释块"');
   });
 
   it('forwards native menu events to desktop command handlers', () => {
@@ -272,15 +277,44 @@ describe('App outline layout', () => {
 
     expect(tauriLibSource).toContain('install_window_menu(app.handle(), &window)');
     expect(tauriCommandsSource).toContain('install_window_menu(&app, &window)');
+    expect(tauriMenuSource).toContain('app.set_menu(menu)');
+    expect(tauriMenuSource).toContain('app.on_menu_event(|app, event|');
+    expect(tauriMenuSource).toContain('app.get_focused_window()');
+    expect(tauriMenuSource).toContain('focused_document_window(app)');
     expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
     expect(tauriMenuSource).toContain('window.emit("nomo://menu-command", command)');
     expect(tauriMenuSource).toContain('emit_exit_request(window.app_handle())');
+    expect(tauriMenuSource).toContain('emit_exit_request(app)');
     expect(tauriCommandsSource).toContain('app.emit("nomo://request-exit-app", ())');
     expect(appSource).toContain("listen('nomo://request-exit-app'");
     expect(appSource).toContain('requestExitApp()');
     expect(tauriMenuSource).toContain('format!("open-recent:{}:{}", entry.entry_type, entry.path)');
     expect(appCommandsSource).toContain("command === 'new-window'");
     expect(appCommandsSource).toContain("command.startsWith('open-recent:')");
+  });
+
+  it('mirrors the app chrome menu into the native macOS menubar', () => {
+    expect(appShellSource).toContain(
+      "import { getPlatformCapabilities } from '../services/platform'",
+    );
+    expect(appShellSource).toContain('{#if !(desktopEnabled && platformCapabilities.isMac)}');
+    expect(appShellSource).toContain('<AppTitleBar');
+    expect(tauriMenuSource).toContain('static APP_MENU_EVENT_INSTALLED');
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "段落")');
+    expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "设置")');
+    expect(tauriMenuSource).toContain('"set-heading-1"');
+    expect(tauriMenuSource).toContain('"set-heading-6"');
+    expect(tauriMenuSource).toContain('"insert-callout",');
+    expect(tauriMenuSource).toContain('"toggle-ordered-list",');
+    expect(tauriMenuSource).toContain('"toggle-bullet-list",');
+    expect(tauriMenuSource).toContain('"toggle-task-list",');
+    expect(tauriMenuSource).toContain('"open-settings", "偏好设置..."');
+    expect(tauriMenuSource).toContain('Some("CmdOrCtrl+N")');
+    expect(tauriMenuSource).toContain('"Cmd+Q"');
+    expect(tauriMenuSource).toContain('"Alt+F4"');
+    expect(appCommandsSource).toContain("command === 'close-current-file'");
+    expect(appCommandsSource).toContain("command === 'close-current-window'");
+    expect(appCommandsSource).toContain("command === 'open-settings'");
   });
 
   it('wires YAML Front Matter to the semantic metadata card flow', () => {
@@ -337,7 +371,8 @@ describe('App outline layout', () => {
     expect(toolbarSource).toContain('TableOfContents size={17}');
   });
 
-  it('keeps global explorer and window controls in the single titlebar chrome', () => {
+  it('keeps global explorer and window controls in the Windows custom titlebar chrome', () => {
+    expect(appShellSource).toContain('{#if !(desktopEnabled && platformCapabilities.isMac)}');
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
