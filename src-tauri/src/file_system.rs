@@ -15,7 +15,7 @@ use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 const FOLDER_INDEX_BATCH_EVENT: &str = "nomo://folder-index-batch";
 const FOLDER_INDEX_FINISHED_EVENT: &str = "nomo://folder-index-finished";
 const FOLDER_INDEX_BATCH_SIZE: usize = 64;
-const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/实例.md";
+const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/sample.md";
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {
@@ -584,7 +584,7 @@ mod tests {
             fs::read_to_string(&target_path).expect("read target"),
             sample_markdown
         );
-        assert_eq!(document.file_name, "实例.md");
+        assert_eq!(document.file_name, "sample.md");
         assert_eq!(document.markdown, sample_markdown);
         assert!(!document.readonly);
 

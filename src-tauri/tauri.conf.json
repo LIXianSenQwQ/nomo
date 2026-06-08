@@ -37,13 +37,13 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../实例.md": "samples/实例.md"
+      "../sample.md": "samples/sample.md"
     },
     "fileAssociations": [
       {
         "ext": ["md", "markdown"],
         "name": "Markdown Document",
-        "description": "Markdown 文档",
+        "description": "Markdown Document",
         "role": "Editor",
         "mimeType": "text/markdown"
       }

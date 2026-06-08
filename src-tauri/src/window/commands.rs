@@ -179,7 +179,7 @@ fn register_markdown_file_association_impl() -> Result<DesktopActionPayload, Str
         "HKCU\\Software\\Classes\\Nomo.Markdown",
         "/ve",
         "/d",
-        "Markdown 文档",
+        "Markdown Document",
         "/f",
     ])?;
     run_reg_add(&[

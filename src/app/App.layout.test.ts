@@ -616,7 +616,7 @@ describe('App outline layout', () => {
     const tauriConfig = JSON.parse(tauriConfigSource);
 
     expect(tauriConfig.bundle.resources).toEqual({
-      '../实例.md': 'samples/实例.md',
+      '../sample.md': 'samples/sample.md',
     });
     expect(tauriLibSource).toContain('crate::file_system::install_sample_document');
     expect(tauriStorageSource).toContain("invoke<NativeDocumentPayload>('install_sample_document')");
