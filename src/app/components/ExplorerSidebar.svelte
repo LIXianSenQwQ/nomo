@@ -14,6 +14,7 @@
   import { clickOutside } from '../actions/clickOutside';
   import { motionIn, pulseOnChange, transitionDuration } from '../actions/motion';
   import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';
+  import { canExpandFolderNode } from '../services/folderTree';
   import ContextMenu from './ContextMenu.svelte';
 
   export let currentFolderPath: string;
@@ -92,13 +93,7 @@
   }
 
   function folderCanExpand(node: FileTreeNode) {
-    return (
-      node.loading ||
-      node.children_loaded === false ||
-      node.has_children === true ||
-      (node.children && node.children.length > 0) ||
-      pendingCreatePaths.has(node.path)
-    );
+    return canExpandFolderNode(node, pendingCreatePaths.has(node.path));
   }
 
   function handleFileClick(path: string) {

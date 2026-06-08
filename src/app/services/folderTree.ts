@@ -54,6 +54,16 @@ export function normalizeFolderEntries(entries: FileTreeNode[]): FileTreeNode[] 
   }));
 }
 
+export function canExpandFolderNode(node: FileTreeNode, hasPendingCreate = false) {
+  return (
+    node.is_dir &&
+    (node.loading === true ||
+      node.has_children === true ||
+      (node.children?.length ?? 0) > 0 ||
+      hasPendingCreate)
+  );
+}
+
 export function findTreeNode(nodes: FileTreeNode[], path: string): FileTreeNode | null {
   for (const node of nodes) {
     if (node.path === path) {
