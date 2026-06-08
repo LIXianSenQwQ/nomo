@@ -1,4 +1,4 @@
-import type { OutlineItem } from '../outline/outlineService';
+import { normalizeHeadingTitle, type OutlineItem } from '../outline/outlineService';
 
 export const TOC_START_MARKER = '<!-- toc -->';
 export const TOC_END_MARKER = '<!-- /toc -->';
@@ -131,7 +131,8 @@ export function extractTocItems(markdown: string): OutlineItem[] {
       return;
     }
 
-    const title = match[2].trim();
+    const rawTitle = match[2].trim();
+    const title = normalizeHeadingTitle(rawTitle) || rawTitle;
     const baseId = slugifyHeading(title) || `heading-${index + 1}`;
     const seen = usedIds.get(baseId) ?? 0;
     usedIds.set(baseId, seen + 1);

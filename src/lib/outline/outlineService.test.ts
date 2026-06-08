@@ -10,6 +10,26 @@ describe('outlineService', () => {
     ]);
   });
 
+  it('normalizes inline Markdown syntax in heading titles', () => {
+    expect(
+      extractOutline(
+        [
+          '## **项目概述**',
+          '### __整体架构__',
+          '#### `代码模块` 详解',
+          '##### [总结](#summary)',
+          '###### foo_bar_baz',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      { id: '项目概述', level: 2, title: '项目概述', line: 1 },
+      { id: '整体架构', level: 3, title: '整体架构', line: 2 },
+      { id: '代码模块-详解', level: 4, title: '代码模块 详解', line: 3 },
+      { id: '总结', level: 5, title: '总结', line: 4 },
+      { id: 'foobarbaz', level: 6, title: 'foo_bar_baz', line: 5 },
+    ]);
+  });
+
   it('calculates basic writing stats', () => {
     const stats = calculateDocumentStats('# Title\n\nhello world\n\n```ts\nconst x = 1\n```');
 

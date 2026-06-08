@@ -24,7 +24,8 @@ export function extractOutline(markdown: string): OutlineItem[] {
         return null;
       }
 
-      const title = match[2].trim();
+      const rawTitle = match[2].trim();
+      const title = normalizeHeadingTitle(rawTitle) || rawTitle;
       const baseId = slugifyHeading(title) || `heading-${index + 1}`;
       const seen = usedIds.get(baseId) ?? 0;
       usedIds.set(baseId, seen + 1);
@@ -61,4 +62,31 @@ function slugifyHeading(title: string): string {
     .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
     .trim()
     .replace(/\s+/g, '-');
+}
+
+export function normalizeHeadingTitle(title: string): string {
+  let plain = title
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+
+  let previous = '';
+  while (plain !== previous) {
+    previous = plain;
+    plain = plain
+      .replace(
+        /(^|[^\p{Letter}\p{Number}])(\*\*|__)(\S(?:[\s\S]*?\S)?)\2(?=$|[^\p{Letter}\p{Number}])/gu,
+        '$1$3',
+      )
+      .replace(
+        /(^|[^\p{Letter}\p{Number}])(\*|_)(\S(?:[\s\S]*?\S)?)\2(?=$|[^\p{Letter}\p{Number}])/gu,
+        '$1$3',
+      )
+      .replace(
+        /(^|[^\p{Letter}\p{Number}])~~(\S(?:[\s\S]*?\S)?)~~(?=$|[^\p{Letter}\p{Number}])/gu,
+        '$1$2',
+      );
+  }
+
+  return plain.replace(/\\([\\`*_[\]{}()#+\-.!>])/g, '$1').trim();
 }

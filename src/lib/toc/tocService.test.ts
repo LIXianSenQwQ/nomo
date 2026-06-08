@@ -21,6 +21,12 @@ describe('tocService', () => {
     );
   });
 
+  it('uses plain text titles for headings with inline Markdown syntax', () => {
+    expect(createTocList('# **项目概述**\n\n## `代码模块` 详解')).toBe(
+      '- [项目概述](#项目概述)\n  - [代码模块 详解](#代码模块-详解)',
+    );
+  });
+
   it('skips headings inside fenced code blocks and existing toc blocks', () => {
     const markdown = [
       '<!-- toc -->',
