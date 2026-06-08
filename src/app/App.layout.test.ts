@@ -81,6 +81,27 @@ describe('App outline layout', () => {
   ]
     .map((path) => readFileSync(resolve(__dirname, path), 'utf-8'))
     .join('\n');
+  const responsiveStyles = readFileSync(resolve(__dirname, 'styles/app-responsive.css'), 'utf-8');
+
+  function extractCssBlock(source: string, selector: string, fromIndex = 0) {
+    const selectorIndex = source.indexOf(selector, fromIndex);
+    expect(selectorIndex).toBeGreaterThan(-1);
+    const blockStart = source.indexOf('{', selectorIndex);
+    expect(blockStart).toBeGreaterThan(-1);
+    let depth = 0;
+    for (let index = blockStart; index < source.length; index += 1) {
+      if (source[index] === '{') {
+        depth += 1;
+      } else if (source[index] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          return source.slice(blockStart + 1, index);
+        }
+      }
+    }
+    throw new Error(`CSS block not closed: ${selector}`);
+  }
+
 
   it('keeps the document outline out of the document layout flow', () => {
     const documentLayouts =
@@ -359,6 +380,26 @@ describe('App outline layout', () => {
     expect(styles).toMatch(/\.tab-add\s*\{[\s\S]*?flex-shrink:\s*0;/);
     expect(styles).toContain('.tab-overflow-dropdown');
     expect(styles).toContain('.tab-dropdown-menu');
+  });
+
+  it('keeps narrow desktop chrome single-row instead of stacking controls', () => {
+    const narrowDesktopStart = responsiveStyles.indexOf('@media (max-width: 920px)');
+    const narrowDesktopStyles = extractCssBlock(responsiveStyles, '@media (max-width: 920px)');
+    const railStyles = extractCssBlock(responsiveStyles, '.rail', narrowDesktopStart);
+    const topbarStyles = extractCssBlock(responsiveStyles, '.topbar', narrowDesktopStart);
+    const toolbarStyles = extractCssBlock(responsiveStyles, '.toolbar', narrowDesktopStart);
+
+    expect(styles).toMatch(/--md-editor-effective-sidebar-width:\s*min\(/);
+    expect(styles).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*var\(--md-editor-effective-sidebar-width\)\)\s*minmax\(0,\s*1fr\);/,
+    );
+    expect(narrowDesktopStyles).not.toContain('.workspace');
+    expect(railStyles).toMatch(/display:\s*flex;/);
+    expect(railStyles).not.toMatch(/display:\s*none;/);
+    expect(topbarStyles).toMatch(/flex-wrap:\s*nowrap;/);
+    expect(topbarStyles).toMatch(/height:\s*40px;/);
+    expect(toolbarStyles).toMatch(/flex-wrap:\s*nowrap;/);
+    expect(toolbarStyles).toMatch(/overflow-x:\s*auto;/);
   });
 
   it('opens preferences in a dedicated settings window', () => {

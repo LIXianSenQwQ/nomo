@@ -5,29 +5,29 @@
 }
 
 @media (max-width: 920px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-
   .rail {
-    display: none;
+    display: flex;
   }
 
   .topbar {
-    flex-wrap: wrap;
-    min-height: 76px;
+    flex-wrap: nowrap;
+    height: 40px;
+    min-height: 40px;
   }
 
   .toolbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-content: center;
-    min-height: auto;
+    min-height: 44px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-gutter: stable;
   }
 
   .toolbar-spacer {
-    flex-basis: 100%;
-    min-width: 0;
-    height: 0;
+    flex-basis: auto;
+    min-width: 16px;
+    height: auto;
   }
 
   .document-layout {
@@ -586,4 +586,3 @@
 .theme-toggle-btn:hover {
   background: rgba(128, 128, 128, 0.15);
 }
-
