@@ -517,7 +517,17 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('"打开 Nomo"');
     expect(tauriTraySource).toContain('nomo-tray-dark-active-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-dark-inactive-24-preview.png');
+    expect(tauriTraySource).toContain('nomo-tray-light-active-24-preview.png');
+    expect(tauriTraySource).toContain('nomo-tray-light-inactive-24-preview.png');
+    expect(tauriTraySource).toContain('nomo-app-light-256.png');
+    expect(tauriTraySource).toContain('nomo-app-dark-256.png');
     expect(tauriTraySource).toContain('set_tray_active');
+    expect(tauriTraySource).toContain('set_desktop_icon_theme');
+    expect(tauriTraySource).toContain('apply_window_icons');
+    expect(tauriTraySource).toContain('.set_icon(icon.clone())');
+    expect(tauriLibSource).toContain('crate::window::commands::set_desktop_icon_theme');
+    expect(desktopWindowSource).toContain("invoke('set_desktop_icon_theme'");
+    expect(appSource).toContain('syncDesktopIconTheme(theme)');
     expect(tauriTraySource).toContain('"退出"');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');

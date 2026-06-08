@@ -113,6 +113,19 @@ export async function openSettingsWindow(desktopEnabled: boolean) {
   }
 }
 
+export async function setDesktopIconTheme(desktopEnabled: boolean, theme: 'light' | 'dark') {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_desktop_icon_theme', { theme });
+  } catch (error) {
+    console.error('同步桌面图标主题失败:', error);
+  }
+}
+
 export async function updateAppWindowTitle(
   desktopEnabled: boolean,
   fileName: string,

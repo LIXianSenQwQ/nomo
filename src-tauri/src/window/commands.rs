@@ -36,6 +36,11 @@ pub(crate) fn refresh_window_menu(
 }
 
 #[tauri::command]
+pub(crate) fn set_desktop_icon_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    crate::window::tray::set_desktop_icon_theme(&app, &theme)
+}
+
+#[tauri::command]
 pub(crate) fn create_new_window(
     app: AppHandle,
     pending_folder: Option<String>,
