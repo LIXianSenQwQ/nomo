@@ -69,12 +69,9 @@ fn install_app_menu_event<R: Runtime>(app: &AppHandle<R>) {
 
 #[cfg(target_os = "macos")]
 fn focused_document_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
-    if let Some(focused) = app.get_focused_window() {
-        let label = focused.label().to_string();
-        if is_document_window_label(&label) {
-            if let Some(window) = app.get_webview_window(&label) {
-                return Some(window);
-            }
+    for (label, window) in app.webview_windows() {
+        if is_document_window_label(&label) && window.is_focused().unwrap_or(false) {
+            return Some(window);
         }
     }
 
