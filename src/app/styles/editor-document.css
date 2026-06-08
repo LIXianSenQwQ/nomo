@@ -983,16 +983,26 @@
 }
 
 .mermaid-block-rendered {
+  display: grid;
   min-width: 0;
-  padding: 10px 34px 4px;
+  min-height: 120px;
+  max-height: min(420px, 52vh);
+  place-items: center;
+  overflow: auto;
+  padding: 16px 48px;
 }
 
 .mermaid-block svg {
   display: block;
-  max-width: 100%;
   height: auto;
   margin: 0 auto;
   background: transparent;
+}
+
+.mermaid-block-rendered > svg {
+  width: auto;
+  max-width: 100%;
+  max-height: min(360px, calc(52vh - 32px));
 }
 
 .mermaid-block-fullscreen-button,
@@ -2244,6 +2254,7 @@
 
 .mermaid-block {
   position: relative;
+  overflow: visible;
   cursor: pointer;
   border: none;
 }
@@ -2260,6 +2271,7 @@
 
 .mermaid-block.is-editing {
   position: relative;
+  overflow: visible;
   cursor: default;
   background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
   outline: 2px solid var(--md-editor-accent, #5a8cdc) !important;
@@ -2268,6 +2280,10 @@
 
 .mermaid-block-edit-surface {
   position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(96px, auto);
+  gap: 14px;
+  min-width: 0;
   z-index: 1;
 }
 
@@ -2276,7 +2292,8 @@
   box-sizing: border-box;
   width: 100%;
   min-height: 96px;
-  margin: 0 0 12px;
+  max-height: min(260px, 34vh);
+  margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm, 3px);
@@ -2295,13 +2312,32 @@
 
 .mermaid-block-preview {
   position: relative;
-  min-height: 48px;
-  overflow-x: auto;
-  padding: 8px 0;
+  display: grid;
+  min-height: 120px;
+  max-height: min(360px, 42vh);
+  place-items: center;
+  overflow: auto;
+  padding: 12px;
+  border-radius: var(--md-editor-radius-sm, 3px);
 }
 
-.mermaid-block-preview-render {
+.mermaid-block-preview-render,
+.mermaid-block-preview-snapshot {
   position: relative;
+  display: grid;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  place-items: center;
+}
+
+.mermaid-block-preview svg,
+.mermaid-block-preview-snapshot svg,
+.mermaid-block-preview-render svg {
+  width: auto;
+  max-width: 100%;
+  max-height: min(320px, calc(42vh - 24px));
+  margin: 0 auto;
 }
 
 [data-theme='dark'] .mermaid-block.is-editing .mermaid-block-preview-snapshot,

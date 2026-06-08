@@ -108,6 +108,39 @@ describe('MermaidBlockNodeView', () => {
     target.remove();
   });
 
+  it('normalizes Mermaid SVG intrinsic size before inserting it into the editor', async () => {
+    setCodeBlockDiagramRenderer({
+      async renderMermaid() {
+        return {
+          svg: '<svg width="100%" style="max-width: 165px;" viewBox="0.5 0 165 470"><g data-diagram="flowchart"></g></svg>',
+        };
+      },
+    });
+
+    const node = schema.nodes.mermaid_block.create({ code: 'flowchart TD\n  A --> B' });
+    const doc = schema.nodes.doc.create(null, [node]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    await Promise.resolve();
+
+    const svg = target.querySelector<SVGElement>('.mermaid-block-rendered > svg');
+    expect(svg?.getAttribute('width')).toBe('165');
+    expect(svg?.getAttribute('height')).toBe('470');
+    expect(svg?.getAttribute('style')).toBeNull();
+
+    view.destroy();
+    target.remove();
+  });
+
   it('keeps a stale display render from overwriting edit mode', async () => {
     const pendingRenders: Array<(value: { svg: string }) => void> = [];
     setCodeBlockDiagramRenderer({

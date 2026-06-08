@@ -154,7 +154,7 @@ export class MermaidBlockNodeView {
       if (result.error) {
         this.renderError(result.error, code);
       } else {
-        this.renderDisplayDiagram(result.svg);
+        this.renderDisplayDiagram(this.normalizeMermaidSvgSize(result.svg));
       }
     } catch (error) {
       if (this.editing || id !== this.renderId) return;
@@ -359,7 +359,11 @@ export class MermaidBlockNodeView {
       if (result.error) {
         this.setPreviewContent(result.error, { error: true, renderId: id });
       } else {
-        this.setPreviewContent(result.svg, { error: false, html: true, renderId: id });
+        this.setPreviewContent(this.normalizeMermaidSvgSize(result.svg), {
+          error: false,
+          html: true,
+          renderId: id,
+        });
       }
     } catch (error) {
       if (!this.editing || !this.previewEl || id !== this.previewRenderId) return;
@@ -431,6 +435,44 @@ export class MermaidBlockNodeView {
     });
 
     this.dom.append(renderedEl, fullscreenButton);
+  }
+
+  private normalizeMermaidSvgSize(svg: string): string {
+    const template = document.createElement('template');
+    template.innerHTML = svg.trim();
+
+    const svgEl = template.content.querySelector('svg');
+    const viewBox = svgEl?.getAttribute('viewBox');
+    if (!svgEl || !viewBox) return svg;
+
+    const [, , width, height] = viewBox
+      .trim()
+      .split(/\s+/)
+      .map((value) => Number.parseFloat(value));
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return template.innerHTML;
+    }
+
+    // Mermaid 默认输出 width="100%"，会让编辑器卡片继承一整行画布。
+    // 用 viewBox 的真实尺寸作为 SVG 内在尺寸，再交给 CSS 做最大宽高约束。
+    svgEl.setAttribute('width', String(Math.ceil(width)));
+    svgEl.setAttribute('height', String(Math.ceil(height)));
+
+    const inlineStyle = svgEl.getAttribute('style');
+    if (inlineStyle) {
+      const nextStyle = inlineStyle
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part && !part.toLowerCase().startsWith('max-width'))
+        .join('; ');
+      if (nextStyle) {
+        svgEl.setAttribute('style', nextStyle);
+      } else {
+        svgEl.removeAttribute('style');
+      }
+    }
+
+    return template.innerHTML;
   }
 
   private openFullscreen(): void {
