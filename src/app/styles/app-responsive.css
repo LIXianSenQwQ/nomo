@@ -48,7 +48,6 @@
   flex-direction: column;
   height: 42px;
   background: var(--md-titlebar-bg);
-  border-bottom: 1px solid var(--md-titlebar-border);
   user-select: none;
   padding: 0;
   box-sizing: border-box;
@@ -68,7 +67,6 @@
   height: 41px;
   gap: 6px;
   padding: 0 4px 0 8px;
-  border-bottom: 0;
 }
 
 .titlebar.is-mac .titlebar-row.top-row {
@@ -76,7 +74,7 @@
 }
 
 .titlebar.is-mac:not(.is-fullscreen) .titlebar-row.top-row {
-  padding-left: 80px; /* 为 macOS 原生红绿灯留出空间，全屏时不需要 */
+  padding-left: 82px; /* 为 macOS 原生红绿灯留出空间，让侧边栏按钮出现在其右侧 */
 }
 
 .titlebar-row.bottom-row {

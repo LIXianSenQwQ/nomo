@@ -1,5 +1,23 @@
+import { LogicalPosition } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getPlatformCapabilities } from './platform';
+
+function getNewWindowChromeOptions() {
+  const platformCapabilities = getPlatformCapabilities();
+
+  if (platformCapabilities.isMac) {
+    return {
+      decorations: true,
+      titleBarStyle: 'overlay' as const,
+      trafficLightPosition: new LogicalPosition(16, 14),
+      hiddenTitle: true,
+    };
+  }
+
+  return {
+    decorations: platformCapabilities.windowDecorations,
+  };
+}
 
 export async function minimizeAppWindow(desktopEnabled: boolean) {
   if (!desktopEnabled) {
@@ -74,7 +92,7 @@ export async function createAppWindow(
       minHeight: 640,
       center: true,
       visible: true,
-      decorations: getPlatformCapabilities().windowDecorations,
+      ...getNewWindowChromeOptions(),
       resizable: true,
       maximizable: true,
       minimizable: true,

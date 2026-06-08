@@ -61,6 +61,10 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/src/window/commands.rs'),
     'utf-8',
   );
+  const tauriMacosSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/os/macos.rs'),
+    'utf-8',
+  );
   const tauriImageAssetsSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/file_system/image_assets.rs'),
     'utf-8',
@@ -293,8 +297,10 @@ describe('App outline layout', () => {
     expect(tauriCommandsSource).toContain('install_window_menu(&app, &window)');
     expect(tauriMenuSource).toContain('app.set_menu(menu)');
     expect(tauriMenuSource).toContain('app.on_menu_event(|app, event|');
-    expect(tauriMenuSource).toContain('app.get_focused_window()');
     expect(tauriMenuSource).toContain('focused_document_window(app)');
+    expect(tauriMenuSource).toContain('app.webview_windows()');
+    expect(tauriMenuSource).toContain('window.is_focused().unwrap_or(false)');
+    expect(tauriMenuSource).toContain('app.get_webview_window("main")');
     expect(tauriMenuSource).toContain('window.on_menu_event(|window, event|');
     expect(tauriMenuSource).toContain('window.emit("nomo://menu-command", command)');
     expect(tauriMenuSource).toContain('emit_exit_request(window.app_handle())');
@@ -332,9 +338,9 @@ describe('App outline layout', () => {
   });
 
   it('keeps the explicit explorer root across restored workspace tabs', () => {
-    expect(appSource).toContain(`tabs,
-        activeTabId,
-        currentFolderPath`);
+    expect(appSource).toMatch(
+      /updateAppSetting\(`workspaceTabs:\$\{windowLabel\}`,\s*\{\s*tabs,\s*activeTabId,\s*currentFolderPath,\s*\}\)/,
+    );
     expect(appSource).toContain("typeof state.currentFolderPath === 'string'");
     expect(appSource).toContain('currentFolderPath = state.currentFolderPath');
     expect(appSource).not.toContain(
@@ -350,10 +356,7 @@ describe('App outline layout', () => {
   });
 
   it('mirrors the app chrome menu into the native macOS menubar', () => {
-    expect(appShellSource).toContain(
-      "import { getPlatformCapabilities } from '../services/platform'",
-    );
-    expect(appShellSource).toContain('{#if !(desktopEnabled && platformCapabilities.isMac)}');
+    expect(appShellSource).toContain('{#if desktopEnabled}');
     expect(appShellSource).toContain('<AppTitleBar');
     expect(tauriMenuSource).toContain('static APP_MENU_EVENT_INSTALLED');
     expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "段落")');
@@ -427,8 +430,8 @@ describe('App outline layout', () => {
     expect(toolbarSource).toContain('TableOfContents size={17}');
   });
 
-  it('keeps global explorer and window controls in the Windows custom titlebar chrome', () => {
-    expect(appShellSource).toContain('{#if !(desktopEnabled && platformCapabilities.isMac)}');
+  it('keeps global explorer controls in the single titlebar chrome', () => {
+    expect(appShellSource).toContain('{#if desktopEnabled}');
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
@@ -445,7 +448,14 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('syncWindowState');
     expect(desktopWindowSource).toContain("title: 'Nomo'");
     expect(desktopWindowSource).toContain('} - Nomo');
+    expect(desktopWindowSource).toContain('getNewWindowChromeOptions');
+    expect(desktopWindowSource).toContain("titleBarStyle: 'overlay'");
+    expect(desktopWindowSource).toContain('hiddenTitle: true');
+    expect(tauriMacosSource).toContain('uses_overlay_titlebar(window.label())');
+    expect(tauriMacosSource).toContain('label != "window-settings"');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
+    expect(styles).not.toContain('border-bottom: 1px solid var(--md-titlebar-border);');
+    expect(styles).toContain('padding-left: 82px;');
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).not.toContain('.app-logo');
     expect(styles).toMatch(/\.app-name\s*\{[\s\S]*?font-size:\s*13px;/);

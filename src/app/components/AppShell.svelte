@@ -12,11 +12,8 @@
   import LinkQuickEditor from './LinkQuickEditor.svelte';
   import StatusBar from './StatusBar.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
-  import { getPlatformCapabilities } from '../services/platform';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
-
-  const platformCapabilities = getPlatformCapabilities();
 
   export let focusMode: boolean;
   export let isResizing: boolean;
@@ -144,7 +141,7 @@
     on:change={openMarkdownFile}
   />
 
-  {#if !(desktopEnabled && platformCapabilities.isMac)}
+  {#if desktopEnabled}
     <AppTitleBar
       {theme}
       {desktopEnabled}
