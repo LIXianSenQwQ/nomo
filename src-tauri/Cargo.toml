@@ -1,6 +1,6 @@
 [package]
 name = "nomo"
-version = "0.0.0"
+version = "0.1.0"
 description = "A lightweight Markdown-first editor"
 authors = ["清羽"]
 edition = "2021"

@@ -1,8 +1,7 @@
 use crate::models::{
-    DesktopActionPayload,
-    ImageAssetInput, ImageAssetPayload, ImageDeleteInput, ImageDeletePayload, ImageResolveInput,
-    ImageResolvePayload, ImageUploadPayload, PicgoConnectionTestInput, PicgoCoreUploadInput,
-    PicgoServerUploadInput,
+    DesktopActionPayload, ImageAssetInput, ImageAssetPayload, ImageDeleteInput, ImageDeletePayload,
+    ImageResolveInput, ImageResolvePayload, ImageUploadPayload, PicgoConnectionTestInput,
+    PicgoCoreUploadInput, PicgoServerUploadInput,
 };
 use serde_json::Value;
 use sha2::{Digest, Sha256};

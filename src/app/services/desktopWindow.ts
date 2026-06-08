@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getPlatformCapabilities } from './platform';
 
 export async function minimizeAppWindow(desktopEnabled: boolean) {
   if (!desktopEnabled) {
@@ -73,7 +74,7 @@ export async function createAppWindow(
       minHeight: 640,
       center: true,
       visible: true,
-      decorations: false,
+      decorations: getPlatformCapabilities().windowDecorations,
       resizable: true,
       maximizable: true,
       minimizable: true,

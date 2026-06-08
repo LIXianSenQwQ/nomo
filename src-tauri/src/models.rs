@@ -99,12 +99,29 @@ pub(crate) struct FolderFileInfo {
     pub(crate) path: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct FileTreeEntry {
     pub(crate) name: String,
     pub(crate) path: String,
     pub(crate) is_dir: bool,
+    pub(crate) has_children: bool,
+    pub(crate) children_loaded: bool,
     pub(crate) children: Vec<FileTreeEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct FolderIndexBatch {
+    pub(crate) root_path: String,
+    pub(crate) directories: Vec<FileTreeEntry>,
+    pub(crate) scanned_dirs: usize,
+    pub(crate) scanned_files: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct FolderIndexFinished {
+    pub(crate) root_path: String,
+    pub(crate) scanned_dirs: usize,
+    pub(crate) scanned_files: usize,
 }
 
 #[derive(Debug, Deserialize)]

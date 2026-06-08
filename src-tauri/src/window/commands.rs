@@ -1,5 +1,8 @@
 use crate::window::menu::install_window_menu;
-use crate::{database, models::{DesktopActionPayload, WindowStateInput}};
+use crate::{
+    database,
+    models::{DesktopActionPayload, WindowStateInput},
+};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
@@ -75,14 +78,18 @@ pub(crate) async fn open_settings_window(app: AppHandle) -> Result<(), String> {
     .inner_size(860.0, 620.0)
     .min_inner_size(760.0, 520.0)
     .center()
-    .decorations(false)
+    .decorations(crate::window::os::window_decorations())
     .resizable(true)
-    .visible(true)
+    .visible(false)
     .build()
     .map_err(|error| format!("创建偏好设置窗口失败：{error}"))?;
 
+    // 先在隐藏状态下完成系统窗口适配和历史位置恢复，避免用户看到居中位置再跳到保存位置。
     crate::window::os::setup_window(&window);
     crate::window::state::restore_window_state(&app, window.label());
+    window
+        .show()
+        .map_err(|error| format!("显示偏好设置窗口失败：{error}"))?;
     window
         .set_focus()
         .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
@@ -156,7 +163,13 @@ fn register_markdown_file_association_impl() -> Result<DesktopActionPayload, Str
     let exe = exe_path.to_string_lossy().to_string();
     let open_command = format!("\"{exe}\" \"%1\"");
 
-    run_reg_add(&["HKCU\\Software\\Classes\\.md", "/ve", "/d", "Nomo.Markdown", "/f"])?;
+    run_reg_add(&[
+        "HKCU\\Software\\Classes\\.md",
+        "/ve",
+        "/d",
+        "Nomo.Markdown",
+        "/f",
+    ])?;
     run_reg_add(&[
         "HKCU\\Software\\Classes\\Nomo.Markdown",
         "/ve",

@@ -9,7 +9,7 @@
     type EditorMode,
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
-  import nomoAppIcon from '../assets/nomo-app-icon.png';
+  import { getPlatformCapabilities } from '../services/platform';
 
   export let theme: 'light' | 'dark';
   export let desktopEnabled: boolean;
@@ -47,8 +47,7 @@
   export let toggleFocusMode: () => void;
   export let openSettings: () => void;
 
-  let isMac = false;
-  let isWin = false;
+  let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
   let isMaximized = false;
   let unlistenResized: (() => void) | null = null;
@@ -104,8 +103,7 @@
   $: void setupWindowStateListener();
 
   onMount(() => {
-    isMac = navigator.userAgent.includes('Mac');
-    isWin = navigator.userAgent.includes('Win');
+    platformCapabilities = getPlatformCapabilities();
     canSyncWindowState = true;
     void setupWindowStateListener();
 
@@ -179,8 +177,8 @@
 
 <header
   class="titlebar"
-  class:is-mac={isMac}
-  class:is-win={isWin}
+  class:is-mac={platformCapabilities.isMac}
+  class:is-win={platformCapabilities.isWindows}
   class:is-fullscreen={isFullscreen}
 >
   <div class="titlebar-row top-row" data-drag-region role="presentation" on:mousedown={handleDrag}>
@@ -199,7 +197,6 @@
     </button>
 
     <div class="titlebar-left" data-drag-region>
-      <img class="app-logo" src={nomoAppIcon} alt="" aria-hidden="true" draggable="false" />
       <span class="app-name" data-drag-region>Nomo</span>
     </div>
 
@@ -568,7 +565,7 @@
         {/if}
       </button>
 
-      {#if desktopEnabled && isWin}
+      {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
         <div class="window-controls">
           <button class="control-btn" title="最小化" aria-label="最小化" on:click={minimizeWindow}>
             <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true"

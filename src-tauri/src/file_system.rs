@@ -1,7 +1,20 @@
 pub(crate) mod image_assets;
 
-use crate::models::{DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo};
-use std::{fs, path::Path, time::UNIX_EPOCH};
+use crate::models::{
+    DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo, FolderIndexBatch,
+    FolderIndexFinished,
+};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    thread,
+    time::UNIX_EPOCH,
+};
+use tauri::{AppHandle, Emitter};
+
+const FOLDER_INDEX_BATCH_EVENT: &str = "nomo://folder-index-batch";
+const FOLDER_INDEX_FINISHED_EVENT: &str = "nomo://folder-index-finished";
+const FOLDER_INDEX_BATCH_SIZE: usize = 64;
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {
@@ -92,11 +105,40 @@ pub(crate) fn list_folder_markdown_files(path: String) -> Result<Vec<FolderFileI
 
 #[tauri::command]
 pub(crate) fn get_folder_tree(path: String) -> Result<Vec<FileTreeEntry>, String> {
+    list_folder_children(path.clone(), Some(path))
+}
+
+#[tauri::command]
+pub(crate) fn list_folder_children(
+    path: String,
+    root_path: Option<String>,
+) -> Result<Vec<FileTreeEntry>, String> {
     let dir = Path::new(&path);
     if !dir.is_dir() {
         return Err(format!("不是一个有效的目录：{path}"));
     }
-    read_dir_tree(dir)
+
+    let root = root_path
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(Path::new)
+        .unwrap_or(dir);
+    let ignore_rules = IgnoreRules::load(root, Some(dir));
+    read_dir_children(dir, root, &ignore_rules)
+}
+
+#[tauri::command]
+pub(crate) fn start_folder_indexing(app: AppHandle, path: String) -> Result<(), String> {
+    let root = PathBuf::from(&path);
+    if !root.is_dir() {
+        return Err(format!("不是一个有效的目录：{path}"));
+    }
+
+    thread::spawn(move || {
+        index_folder_in_background(app, root);
+    });
+
+    Ok(())
 }
 
 pub(crate) fn file_modified_at(path: &str) -> i64 {
@@ -167,7 +209,11 @@ fn file_readonly(path: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
+fn read_dir_children(
+    dir: &Path,
+    root: &Path,
+    ignore_rules: &IgnoreRules,
+) -> Result<Vec<FileTreeEntry>, String> {
     let mut entries = Vec::new();
     let read_dir = fs::read_dir(dir).map_err(|error| format!("读取目录失败：{error}"))?;
 
@@ -179,21 +225,21 @@ fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_string();
+        let is_dir = path_buf.is_dir();
 
-        // 过滤掉构建产物和依赖目录，但保留 . 开头的隐藏文件/文件夹
-        if name == "node_modules" || name == "target" || name == "dist" {
+        if ignore_rules.is_ignored(root, &path_buf, &name, is_dir) {
             continue;
         }
 
-        if path_buf.is_dir() {
-            if let Ok(sub_entries) = read_dir_tree(&path_buf) {
-                entries.push(FileTreeEntry {
-                    name,
-                    path: path_buf.to_string_lossy().to_string(),
-                    is_dir: true,
-                    children: sub_entries,
-                });
-            }
+        if is_dir {
+            entries.push(FileTreeEntry {
+                name,
+                path: path_buf.to_string_lossy().to_string(),
+                is_dir: true,
+                has_children: has_visible_children(&path_buf, root, ignore_rules),
+                children_loaded: false,
+                children: Vec::new(),
+            });
         } else if path_buf.is_file() {
             if let Some(extension) = path_buf.extension().and_then(|ext| ext.to_str()) {
                 let ext = extension.to_lowercase();
@@ -202,6 +248,8 @@ fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
                         name,
                         path: path_buf.to_string_lossy().to_string(),
                         is_dir: false,
+                        has_children: false,
+                        children_loaded: true,
                         children: Vec::new(),
                     });
                 }
@@ -218,4 +266,260 @@ fn read_dir_tree(dir: &Path) -> Result<Vec<FileTreeEntry>, String> {
     });
 
     Ok(entries)
+}
+
+fn index_folder_in_background(app: AppHandle, root: PathBuf) {
+    let root_path = root.to_string_lossy().to_string();
+    let ignore_rules = IgnoreRules::load(&root, None);
+    let mut stack = vec![root.clone()];
+    let mut batch = Vec::new();
+    let mut scanned_dirs = 0;
+    let mut scanned_files = 0;
+
+    while let Some(dir) = stack.pop() {
+        scanned_dirs += 1;
+        let Ok(read_dir) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in read_dir.flatten() {
+            let path_buf = entry.path();
+            let name = path_buf
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("")
+                .to_string();
+            let is_dir = path_buf.is_dir();
+
+            if ignore_rules.is_ignored(&root, &path_buf, &name, is_dir) {
+                continue;
+            }
+
+            if is_dir {
+                let has_children = has_visible_children(&path_buf, &root, &ignore_rules);
+                stack.push(path_buf.clone());
+                batch.push(FileTreeEntry {
+                    name,
+                    path: path_buf.to_string_lossy().to_string(),
+                    is_dir: true,
+                    has_children,
+                    children_loaded: false,
+                    children: Vec::new(),
+                });
+            } else if path_buf.is_file() && is_markdown_like_file(&path_buf) {
+                scanned_files += 1;
+            }
+
+            if batch.len() >= FOLDER_INDEX_BATCH_SIZE {
+                emit_folder_index_batch(&app, &root_path, &mut batch, scanned_dirs, scanned_files);
+            }
+        }
+    }
+
+    emit_folder_index_batch(&app, &root_path, &mut batch, scanned_dirs, scanned_files);
+    let _ = app.emit(
+        FOLDER_INDEX_FINISHED_EVENT,
+        FolderIndexFinished {
+            root_path,
+            scanned_dirs,
+            scanned_files,
+        },
+    );
+}
+
+fn emit_folder_index_batch(
+    app: &AppHandle,
+    root_path: &str,
+    batch: &mut Vec<FileTreeEntry>,
+    scanned_dirs: usize,
+    scanned_files: usize,
+) {
+    if batch.is_empty() {
+        return;
+    }
+
+    let directories = std::mem::take(batch);
+    let _ = app.emit(
+        FOLDER_INDEX_BATCH_EVENT,
+        FolderIndexBatch {
+            root_path: root_path.to_string(),
+            directories,
+            scanned_dirs,
+            scanned_files,
+        },
+    );
+}
+
+fn has_visible_children(dir: &Path, root: &Path, ignore_rules: &IgnoreRules) -> bool {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return false;
+    };
+
+    for entry in read_dir.flatten() {
+        let path_buf = entry.path();
+        let name = path_buf
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        let is_dir = path_buf.is_dir();
+        if ignore_rules.is_ignored(root, &path_buf, name, is_dir) {
+            continue;
+        }
+        if is_dir || (path_buf.is_file() && is_markdown_like_file(&path_buf)) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_markdown_like_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            let ext = ext.to_lowercase();
+            ext == "md" || ext == "markdown" || ext == "txt"
+        })
+        .unwrap_or(false)
+}
+
+#[derive(Debug, Clone)]
+struct IgnorePattern {
+    value: String,
+    negated: bool,
+    directory_only: bool,
+}
+
+#[derive(Debug, Clone)]
+struct IgnoreRules {
+    patterns: Vec<IgnorePattern>,
+}
+
+impl IgnoreRules {
+    fn load(root: &Path, extra_dir: Option<&Path>) -> Self {
+        let mut patterns = built_in_ignore_patterns();
+        append_gitignore_patterns(root, &mut patterns);
+        if let Some(dir) = extra_dir {
+            if dir != root {
+                append_gitignore_patterns(dir, &mut patterns);
+            }
+        }
+        Self { patterns }
+    }
+
+    fn is_ignored(&self, root: &Path, path: &Path, name: &str, is_dir: bool) -> bool {
+        let mut ignored = false;
+        for pattern in &self.patterns {
+            if pattern.directory_only && !is_dir {
+                continue;
+            }
+            if pattern_matches(root, path, name, pattern) {
+                ignored = !pattern.negated;
+            }
+        }
+        ignored
+    }
+}
+
+fn built_in_ignore_patterns() -> Vec<IgnorePattern> {
+    [
+        ".git/",
+        ".hg/",
+        ".svn/",
+        "node_modules/",
+        "target/",
+        "dist/",
+        "build/",
+        "out/",
+        "coverage/",
+        ".next/",
+        ".svelte-kit/",
+        ".turbo/",
+        ".cache/",
+    ]
+    .into_iter()
+    .filter_map(parse_ignore_pattern)
+    .collect()
+}
+
+fn append_gitignore_patterns(dir: &Path, patterns: &mut Vec<IgnorePattern>) {
+    let content = fs::read_to_string(dir.join(".gitignore")).unwrap_or_default();
+    patterns.extend(content.lines().filter_map(parse_ignore_pattern));
+}
+
+fn parse_ignore_pattern(line: &str) -> Option<IgnorePattern> {
+    let mut value = line.trim();
+    if value.is_empty() || value.starts_with('#') {
+        return None;
+    }
+
+    let negated = value.starts_with('!');
+    if negated {
+        value = value.trim_start_matches('!').trim();
+    }
+    if value.is_empty() {
+        return None;
+    }
+
+    let directory_only = value.ends_with('/');
+    let value = value
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .replace('\\', "/");
+    if value.is_empty() {
+        return None;
+    }
+
+    Some(IgnorePattern {
+        value,
+        negated,
+        directory_only,
+    })
+}
+
+fn pattern_matches(root: &Path, path: &Path, name: &str, pattern: &IgnorePattern) -> bool {
+    let relative = path
+        .strip_prefix(root)
+        .ok()
+        .map(|value| value.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| name.replace('\\', "/"));
+
+    if pattern.value.contains('/') {
+        wildcard_match(&pattern.value, &relative)
+            || relative.starts_with(&(pattern.value.clone() + "/"))
+    } else {
+        wildcard_match(&pattern.value, name)
+    }
+}
+
+fn wildcard_match(pattern: &str, text: &str) -> bool {
+    let pattern = pattern.as_bytes();
+    let text = text.as_bytes();
+    let mut p = 0;
+    let mut t = 0;
+    let mut star = None;
+    let mut match_after_star = 0;
+
+    while t < text.len() {
+        if p < pattern.len() && (pattern[p] == b'?' || pattern[p] == text[t]) {
+            p += 1;
+            t += 1;
+        } else if p < pattern.len() && pattern[p] == b'*' {
+            star = Some(p);
+            match_after_star = t;
+            p += 1;
+        } else if let Some(star_index) = star {
+            p = star_index + 1;
+            match_after_star += 1;
+            t = match_after_star;
+        } else {
+            return false;
+        }
+    }
+
+    while p < pattern.len() && pattern[p] == b'*' {
+        p += 1;
+    }
+
+    p == pattern.len()
 }

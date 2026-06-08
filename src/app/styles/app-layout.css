@@ -172,6 +172,22 @@
   margin-top: 0;
 }
 
+.virtual-tree-viewport {
+  position: relative;
+  display: block;
+  min-height: 0;
+  contain: layout paint;
+}
+
+.tree-virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 26px;
+  min-width: 0;
+  will-change: transform;
+}
+
 /* 文件夹展开子树的层级引导线 */
 .tree-folder-wrapper {
   position: relative;
@@ -207,6 +223,13 @@
   background: transparent;
   color: var(--md-editor-fg);
   text-align: left;
+}
+
+.tree-loading-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--md-editor-muted-fg);
+  animation: tree-loading-spin 900ms linear infinite;
 }
 
 .tree-folder {
@@ -336,7 +359,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 30px;
+  min-height: 26px;
   padding: 0 8px;
   border-radius: var(--md-editor-radius-sm);
   background: color-mix(in srgb, var(--md-editor-accent) 6%, transparent);
@@ -366,6 +389,12 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes tree-loading-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

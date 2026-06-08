@@ -40,6 +40,7 @@
     ImageInsertStrategy,
     ImageUploadProvider,
   } from '../../lib/services/render';
+  import { getPlatformCapabilities } from '../services/platform';
 
   type CategoryId =
     | 'general'
@@ -83,7 +84,7 @@
   let saveQueued = false;
   let activeSavePromise: Promise<void> | null = null;
   let desktopEnabled = false;
-  let isWin = false;
+  let platformCapabilities = getPlatformCapabilities();
   let picgoTesting = false;
   let bindingMdAssociation = false;
 
@@ -103,7 +104,7 @@
 
   onMount(() => {
     desktopEnabled = isTauriRuntime();
-    isWin = navigator.userAgent.includes('Win');
+    platformCapabilities = getPlatformCapabilities();
     void loadPreferences();
 
     return () => {
@@ -429,7 +430,7 @@
         <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
         <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
       </div>
-      {#if desktopEnabled && isWin}
+      {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
         <div class="settings-window-controls" aria-label="窗口控制">
           <button
             type="button"
@@ -439,14 +440,7 @@
             on:click={minimizeCurrentWindow}
           >
             <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
-              <line
-                x1="0"
-                y1="0.5"
-                x2="10"
-                y2="0.5"
-                stroke="currentColor"
-                stroke-width="1.5"
-              />
+              <line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" stroke-width="1.5" />
             </svg>
           </button>
           <button
@@ -459,13 +453,8 @@
             <X size={15} aria-hidden="true" />
           </button>
         </div>
-      {:else}
-        <button
-          type="button"
-          class="close-button"
-          aria-label="关闭偏好设置"
-          on:click={handleClose}
-        >
+      {:else if !desktopEnabled}
+        <button type="button" class="close-button" aria-label="关闭偏好设置" on:click={handleClose}>
           <X size={18} />
         </button>
       {/if}
@@ -848,7 +837,9 @@
               <button
                 type="button"
                 class="action-button"
-                disabled={!desktopEnabled || !isWin || bindingMdAssociation}
+                disabled={!desktopEnabled ||
+                  !platformCapabilities.isWindows ||
+                  bindingMdAssociation}
                 on:click={bindMarkdownAssociation}
               >
                 {bindingMdAssociation ? '绑定中...' : '绑定 .md'}
@@ -1118,8 +1109,7 @@
 
             <div class="setting-row">
               <div>
-                <label for="outlineDefaultExpandLevel" class="setting-label"
-                  >大纲默认展开层级</label
+                <label for="outlineDefaultExpandLevel" class="setting-label">大纲默认展开层级</label
                 >
                 <p>打开或切换文档时默认展示到指定标题层级。</p>
               </div>
@@ -1233,7 +1223,6 @@
         {/if}
       </div>
     {/if}
-
   </section>
 </div>
 

@@ -65,6 +65,8 @@
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
   import { createBlankTab, writeActiveTabState } from './services/tabs';
   import {
+    listenFolderIndexBatches,
+    listenFolderIndexFinished,
     readMarkdownFromPath,
     rememberNativeFolder,
     pickFolderPath,
@@ -309,6 +311,7 @@
     setRootFolderExpanded: (value) => {
       rootFolderExpanded = value;
     },
+    getCurrentFolderPath: () => currentFolderPath,
     setCurrentFolderPath: (value) => {
       currentFolderPath = value;
     },
@@ -1618,7 +1621,14 @@
     }
 
     const { listen } = await import('@tauri-apps/api/event');
-    const [menuUnlisten, dropUnlisten, settingsUnlisten, exitRequestUnlisten] = await Promise.all([
+    const [
+      menuUnlisten,
+      dropUnlisten,
+      settingsUnlisten,
+      exitRequestUnlisten,
+      folderIndexBatchUnlisten,
+      folderIndexFinishedUnlisten,
+    ] = await Promise.all([
       listenDesktopMenuCommands((command) => {
         executeDesktopCommand(command);
       }).catch(() => null),
@@ -1631,11 +1641,22 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
+      listenFolderIndexBatches((payload) => {
+        folderExplorer.applyIndexBatch(payload);
+      }).catch(() => null),
+      listenFolderIndexFinished((payload) => {
+        folderExplorer.finishIndexing(payload);
+      }).catch(() => null),
     ]);
 
-    desktopUnlisteners = [menuUnlisten, dropUnlisten, settingsUnlisten, exitRequestUnlisten].filter(
-      (value): value is () => void => Boolean(value),
-    );
+    desktopUnlisteners = [
+      menuUnlisten,
+      dropUnlisten,
+      settingsUnlisten,
+      exitRequestUnlisten,
+      folderIndexBatchUnlisten,
+      folderIndexFinishedUnlisten,
+    ].filter((value): value is () => void => Boolean(value));
   }
 
   function executeDesktopCommand(command: string) {

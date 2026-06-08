@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { FileText, FolderOpen, FolderPlus, FilePlus, RefreshCw, ChevronsUp } from '@lucide/svelte';
+  import {
+    FileText,
+    FolderOpen,
+    FolderPlus,
+    FilePlus,
+    RefreshCw,
+    ChevronsUp,
+  } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import type { FileTreeNode } from '../types';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
@@ -54,6 +61,82 @@
   // 文件树双击检测状态（单击预览 / 双击固定）
   let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingClickPath: string | null = null;
+
+  type TreeRowData =
+    | {
+        key: string;
+        type: 'folder' | 'file';
+        node: FileTreeNode;
+        depth: number;
+      }
+    | {
+        key: string;
+        type: 'creating';
+        depth: number;
+      };
+  type TreeRow = TreeRowData & { top: number };
+
+  const TREE_ROW_HEIGHT = 26;
+  const TREE_OVERSCAN = 8;
+  let fileTreeScrollTop = 0;
+  let fileTreeViewportHeight = 0;
+  let flattenedRows: TreeRow[] = [];
+  let virtualRows: TreeRow[] = [];
+  let virtualTreeHeight = 0;
+
+  $: flattenedRows = buildVisibleRows(folderTree);
+  $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT;
+  $: {
+    const start = Math.max(0, Math.floor(fileTreeScrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN);
+    const visibleCount =
+      Math.ceil(Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT) / TREE_ROW_HEIGHT) +
+      TREE_OVERSCAN * 2;
+    virtualRows = flattenedRows.slice(start, start + visibleCount);
+  }
+
+  function buildVisibleRows(nodes: FileTreeNode[]) {
+    const rows: TreeRowData[] = [];
+    appendVisibleRows(rows, nodes, 1);
+    return rows.map((row, index) => ({
+      ...row,
+      top: index * TREE_ROW_HEIGHT,
+    }));
+  }
+
+  function appendVisibleRows(rows: TreeRowData[], nodes: FileTreeNode[], depth: number) {
+    for (const node of nodes) {
+      rows.push({
+        key: node.path,
+        type: node.is_dir ? 'folder' : 'file',
+        node,
+        depth,
+      });
+      if (node.is_dir && creatingParentPath === node.path) {
+        rows.push({
+          key: `${node.path}:creating`,
+          type: 'creating',
+          depth,
+        });
+      }
+      if (node.is_dir && expandedFolders.has(node.path) && node.children?.length) {
+        appendVisibleRows(rows, node.children, depth + 1);
+      }
+    }
+  }
+
+  function handleFileTreeScroll(event: Event) {
+    fileTreeScrollTop = (event.currentTarget as HTMLElement).scrollTop;
+  }
+
+  function folderCanExpand(node: FileTreeNode) {
+    return (
+      node.loading ||
+      node.children_loaded === false ||
+      node.has_children === true ||
+      (node.children && node.children.length > 0) ||
+      pendingCreatePaths.has(node.path)
+    );
+  }
 
   function handleFileClick(path: string) {
     // 取消任何待处理的单击（跨文件单击直接替换）
@@ -308,121 +391,31 @@
   <header class="explorer-header">
     <span>资源管理器</span>
     <div class="header-actions">
-      <button type="button" class="action-btn" title="刷新" on:click={() => dispatch('refreshFolder')}>
+      <button
+        type="button"
+        class="action-btn"
+        title="刷新"
+        on:click={() => dispatch('refreshFolder')}
+      >
         <RefreshCw size={13} />
       </button>
-      <button type="button" class="action-btn" title="折叠全部" on:click={() => dispatch('collapseAll')}>
+      <button
+        type="button"
+        class="action-btn"
+        title="折叠全部"
+        on:click={() => dispatch('collapseAll')}
+      >
         <ChevronsUp size={13} />
       </button>
     </div>
   </header>
 
-  <section class="file-tree" aria-label="文件夹结构">
-    {#snippet renderTree(nodes: FileTreeNode[], depth: number)}
-      {#each nodes as node}
-        {#if node.is_dir}
-          {@const isExpanded = expandedFolders.has(node.path)}
-          {@const hasChildren = (node.children && node.children.length > 0) || pendingCreatePaths.has(node.path)}
-          <div class="tree-folder-wrapper" class:expanded={isExpanded && hasChildren} style="--tree-depth: {depth}">
-            <!-- svelte-ignore a11y-click-events-have-key-events -->
-            <div
-              role="button"
-              tabindex="0"
-              class="tree-folder nested-dir"
-              class:collapsed={!isExpanded}
-              class:active={isFolderActive(node.path)}
-              class:empty={!hasChildren}
-              style="padding-left: {12 + depth * 12}px"
-              title={node.path}
-              on:click={() => hasChildren && toggleFolderCollapse(node.path)}
-              on:dblclick={(e) => startRenaming(node.path, node.name, e)}
-              on:contextmenu|preventDefault={(event) => handleFolderContextMenu(node, event)}
-            >
-              {#if hasChildren}
-                <span class="chevron-icon">
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
-                    ><path
-                      d="M3 4.5l3 3 3-3"
-                      stroke-width="1.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    /></svg
-                  >
-                </span>
-              {:else}
-                <span class="chevron-placeholder"></span>
-              {/if}
-              <FolderOpen size={13} />
-              {#if renamingPath === node.path}
-                <input
-                  bind:this={renamingInputRef}
-                  bind:value={renamingValue}
-                  on:blur={commitRenaming}
-                  on:keydown={handleRenamingKeydown}
-                  class="rename-input"
-                  use:motionIn={{ kind: 'micro', y: -2 }}
-                  on:click|stopPropagation
-                />
-              {:else}
-                <span class="node-name">{node.name}</span>
-                <div class="folder-actions">
-                  <button type="button" class="action-btn" title="新建文件" on:click={(e) => startCreating(node.path, 'file', e)}>
-                    <FilePlus size={12} />
-                  </button>
-                  <button type="button" class="action-btn" title="新建文件夹" on:click={(e) => startCreating(node.path, 'folder', e)}>
-                    <FolderPlus size={12} />
-                  </button>
-                </div>
-              {/if}
-            </div>
-            {#if creatingParentPath === node.path}
-              <div
-                class="tree-creating"
-                style="padding-left: {34 + depth * 12}px"
-                use:motionIn={{ kind: 'row', y: -4 }}
-                transition:slide={{ duration: transitionDuration('row') }}
-              >
-                {#if creatingType === 'folder'}
-                  <FolderOpen size={13} />
-                {:else}
-                  <FileText size={13} />
-                {/if}
-                <input
-                  bind:this={creatingInputRef}
-                  bind:value={creatingValue}
-                  on:blur={commitCreating}
-                  on:keydown={handleCreatingKeydown}
-                  class="rename-input"
-                  placeholder={creatingType === 'folder' ? '新建文件夹' : '无标题.md'}
-                />
-              </div>
-            {/if}
-            {#if isExpanded && node.children && node.children.length > 0}
-              <div class="tree-children" transition:slide={{ duration: transitionDuration('row') }}>
-                {@render renderTree(node.children, depth + 1)}
-              </div>
-            {/if}
-          </div>
-        {:else}
-          <button
-            type="button"
-            class="tree-file"
-            class:active={nativePath === node.path}
-            class:preview={previewNativePath === node.path}
-            style="padding-left: {34 + depth * 12}px"
-            title={node.path}
-            use:pulseOnChange={nativePath === node.path || previewNativePath === node.path}
-            on:click={() => handleFileClick(node.path)}
-            on:dblclick={() => handleFileDblClick(node.path)}
-            on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
-          >
-            <FileText size={13} />
-            <span>{node.name}</span>
-          </button>
-        {/if}
-      {/each}
-    {/snippet}
-
+  <section
+    class="file-tree"
+    aria-label="文件夹结构"
+    bind:clientHeight={fileTreeViewportHeight}
+    on:scroll={handleFileTreeScroll}
+  >
     <div class="tree-root">
       {#if currentFolderPath}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -480,10 +473,20 @@
           <FolderOpen size={14} />
           <span class="node-name">{getFolderName(currentFolderPath)}</span>
           <div class="folder-actions">
-            <button type="button" class="action-btn" title="新建文件" on:click={(e) => startCreating(currentFolderPath, 'file', e)}>
+            <button
+              type="button"
+              class="action-btn"
+              title="新建文件"
+              on:click={(e) => startCreating(currentFolderPath, 'file', e)}
+            >
               <FilePlus size={12} />
             </button>
-            <button type="button" class="action-btn" title="新建文件夹" on:click={(e) => startCreating(currentFolderPath, 'folder', e)}>
+            <button
+              type="button"
+              class="action-btn"
+              title="新建文件夹"
+              on:click={(e) => startCreating(currentFolderPath, 'folder', e)}
+            >
               <FolderPlus size={12} />
             </button>
           </div>
@@ -514,10 +517,134 @@
 
         {#if rootFolderExpanded}
           <div
-            class="recent-tree recursive-tree-container"
-            transition:slide={{ duration: transitionDuration('panel') }}
+            class="recent-tree recursive-tree-container virtual-tree-viewport"
+            style="height: {virtualTreeHeight}px"
           >
-            {@render renderTree(folderTree, 1)}
+            {#each virtualRows as row (row.key)}
+              <div class="tree-virtual-row" style="transform: translateY({row.top}px)">
+                {#if row.type === 'folder'}
+                  {@const node = row.node}
+                  {@const isExpanded = expandedFolders.has(node.path)}
+                  {@const hasChildren = folderCanExpand(node)}
+                  <div
+                    class="tree-folder-wrapper"
+                    class:expanded={isExpanded && hasChildren}
+                    style="--tree-depth: {row.depth}"
+                  >
+                    <!-- svelte-ignore a11y-click-events-have-key-events -->
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class="tree-folder nested-dir"
+                      class:collapsed={!isExpanded}
+                      class:active={isFolderActive(node.path)}
+                      class:empty={!hasChildren}
+                      style="padding-left: {12 + row.depth * 12}px"
+                      title={node.path}
+                      on:click={() => hasChildren && toggleFolderCollapse(node.path)}
+                      on:dblclick={(e) => startRenaming(node.path, node.name, e)}
+                      on:contextmenu|preventDefault={(event) =>
+                        handleFolderContextMenu(node, event)}
+                    >
+                      {#if hasChildren}
+                        <span class="chevron-icon">
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            stroke="currentColor"
+                            ><path
+                              d="M3 4.5l3 3 3-3"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            /></svg
+                          >
+                        </span>
+                      {:else}
+                        <span class="chevron-placeholder"></span>
+                      {/if}
+                      {#if node.loading}
+                        <span class="tree-loading-icon" aria-hidden="true"
+                          ><RefreshCw size={13} /></span
+                        >
+                      {:else}
+                        <FolderOpen size={13} />
+                      {/if}
+                      {#if renamingPath === node.path}
+                        <input
+                          bind:this={renamingInputRef}
+                          bind:value={renamingValue}
+                          on:blur={commitRenaming}
+                          on:keydown={handleRenamingKeydown}
+                          class="rename-input"
+                          use:motionIn={{ kind: 'micro', y: -2 }}
+                          on:click|stopPropagation
+                        />
+                      {:else}
+                        <span class="node-name">{node.name}</span>
+                        <div class="folder-actions">
+                          <button
+                            type="button"
+                            class="action-btn"
+                            title="新建文件"
+                            on:click={(e) => startCreating(node.path, 'file', e)}
+                          >
+                            <FilePlus size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            class="action-btn"
+                            title="新建文件夹"
+                            on:click={(e) => startCreating(node.path, 'folder', e)}
+                          >
+                            <FolderPlus size={12} />
+                          </button>
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                {:else if row.type === 'creating'}
+                  <div
+                    class="tree-creating"
+                    style="padding-left: {34 + row.depth * 12}px"
+                    use:motionIn={{ kind: 'row', y: -4 }}
+                  >
+                    {#if creatingType === 'folder'}
+                      <FolderOpen size={13} />
+                    {:else}
+                      <FileText size={13} />
+                    {/if}
+                    <input
+                      bind:this={creatingInputRef}
+                      bind:value={creatingValue}
+                      on:blur={commitCreating}
+                      on:keydown={handleCreatingKeydown}
+                      class="rename-input"
+                      placeholder={creatingType === 'folder' ? '新建文件夹' : '无标题.md'}
+                    />
+                  </div>
+                {:else}
+                  {@const node = row.node}
+                  <button
+                    type="button"
+                    class="tree-file"
+                    class:active={nativePath === node.path}
+                    class:preview={previewNativePath === node.path}
+                    style="padding-left: {34 + row.depth * 12}px"
+                    title={node.path}
+                    use:pulseOnChange={nativePath === node.path || previewNativePath === node.path}
+                    on:click={() => handleFileClick(node.path)}
+                    on:dblclick={() => handleFileDblClick(node.path)}
+                    on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
+                  >
+                    <FileText size={13} />
+                    <span>{node.name}</span>
+                  </button>
+                {/if}
+              </div>
+            {/each}
           </div>
         {/if}
       {:else}
@@ -545,12 +672,7 @@
         </div>
 
         {#if rootFolderExpanded}
-          <button
-            type="button"
-            class="tree-file active"
-            title={filePath}
-            use:pulseOnChange={dirty}
-          >
+          <button type="button" class="tree-file active" title={filePath} use:pulseOnChange={dirty}>
             <FileText size={13} />
             <span>{fileName}</span>
           </button>

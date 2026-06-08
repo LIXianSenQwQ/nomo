@@ -87,26 +87,19 @@
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-shrink: 0;
   margin-right: 6px;
-  font-weight: 500;
-}
-
-.app-logo {
-  display: block;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
 }
 
 .app-name {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
   letter-spacing: 0.5px;
-  opacity: 0.85;
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .titlebar-menu {

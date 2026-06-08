@@ -38,6 +38,14 @@ pub fn run() {
             crate::window::tray::install_app_tray(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             crate::window::state::restore_window_state(app.handle(), "main");
+            if let Some(window) = app.get_webview_window("main") {
+                window
+                    .show()
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+                window
+                    .set_focus()
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -73,6 +81,8 @@ pub fn run() {
             crate::window::commands::exit_app,
             crate::window::commands::register_markdown_file_association,
             crate::file_system::get_folder_tree,
+            crate::file_system::list_folder_children,
+            crate::file_system::start_folder_indexing,
             crate::file_system::check_paths_exist,
             crate::external_link::open_external_link,
             crate::external_link::reveal_in_explorer

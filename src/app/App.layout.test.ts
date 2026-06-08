@@ -341,9 +341,9 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
-    expect(titleBarSource).toContain('nomoAppIcon');
-    expect(titleBarSource).toContain('class="app-logo"');
-    expect(titleBarSource).toContain('aria-hidden="true"');
+    expect(titleBarSource).not.toContain('nomoAppIcon');
+    expect(titleBarSource).not.toContain('class="app-logo"');
+    expect(titleBarSource).not.toContain('<img class="app-logo"');
     expect(titleBarSource).toContain('Nomo</span>');
     expect(titleBarSource).not.toContain('<span class="app-logo">M</span>');
     expect(titleBarSource).toContain('资源管理器侧边栏');
@@ -356,7 +356,8 @@ describe('App outline layout', () => {
     expect(desktopWindowSource).toContain('} - Nomo');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
-    expect(styles).toMatch(/\.app-logo\s*\{[\s\S]*?width:\s*20px;/);
+    expect(styles).not.toContain('.app-logo');
+    expect(styles).toMatch(/\.app-name\s*\{[\s\S]*?font-size:\s*13px;/);
   });
 
   it('keeps explorer rows constrained to the visible tree width', () => {

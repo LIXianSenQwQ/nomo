@@ -16,6 +16,9 @@ export interface FileTreeNode {
   name: string;
   path: string;
   is_dir: boolean;
+  has_children?: boolean;
+  children_loaded?: boolean;
+  loading?: boolean;
   children: FileTreeNode[];
 }
 
