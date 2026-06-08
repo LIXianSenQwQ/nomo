@@ -255,7 +255,7 @@ export const schema = new Schema({
       },
       mermaid_block: {
         atom: true,
-        selectable: true,
+        selectable: false,
         draggable: false,
         group: 'block',
         attrs: {

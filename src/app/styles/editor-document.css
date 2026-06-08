@@ -1171,12 +1171,12 @@
 .mermaid-fullscreen-zoom-surface,
 .image-fullscreen-zoom-surface {
   box-sizing: border-box;
-  width: 900px;
-  min-width: 280px;
+  display: grid;
+  width: max-content;
+  min-width: 0;
   max-width: none;
-  zoom: var(--mermaid-fullscreen-scale, 1.25);
+  place-items: center;
   transition: filter 120ms ease;
-  will-change: transform;
 }
 
 .image-fullscreen-zoom-surface {
@@ -1189,13 +1189,17 @@
 
 .mermaid-fullscreen-viewport .mermaid-block-rendered {
   box-sizing: border-box;
-  width: 100%;
+  width: max-content;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
   padding: 0;
 }
 
 .mermaid-fullscreen-viewport svg {
   display: block;
-  width: 100%;
+  width: auto;
   max-width: none;
   max-height: none;
   height: auto;
@@ -1303,10 +1307,6 @@
   .image-fullscreen-panel {
     width: calc(100vw - 16px);
     height: calc(100vh - 16px);
-  }
-
-  .mermaid-fullscreen-zoom-surface {
-    width: min(900px, calc(100vw - 64px));
   }
 
   .mermaid-fullscreen-viewport,
@@ -2264,10 +2264,8 @@
   background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
 }
 
-.prosemirror-host .ProseMirror .mermaid-block.ProseMirror-selectednode {
-  background-color: var(--md-editor-hover-bg, rgba(0, 0, 0, 0.03));
-  outline: 2px solid var(--md-editor-accent, #5a8cdc);
-  outline-offset: 2px;
+.mermaid-block-empty {
+  min-height: 96px;
 }
 
 .mermaid-block.is-editing {

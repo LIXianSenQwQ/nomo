@@ -114,6 +114,18 @@ describe('appCommands', () => {
     ]);
   });
 
+  it('通过桌面图表菜单插入空白图表，模板命令才插入示例图表', () => {
+    const handlers = createHandlers();
+
+    executeDesktopCommand('menu-chart', handlers);
+    executeDesktopCommand('menu-chart:flowchart', handlers);
+
+    expect(handlers.commands).toEqual([
+      { type: 'insertMermaidBlock' },
+      { type: 'insertDiagramBlock', diagramType: 'flowchart' },
+    ]);
+  });
+
   it('通过桌面菜单命令触发高亮', () => {
     const handlers = createHandlers();
 

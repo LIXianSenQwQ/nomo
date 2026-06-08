@@ -74,6 +74,11 @@
     diagramPickerOpen = false;
   }
 
+  function insertBlankDiagram() {
+    runCommand({ type: 'insertMermaidBlock' });
+    closeDiagramPicker();
+  }
+
   function insertDiagram(diagramType: DiagramType) {
     runCommand({ type: 'insertDiagramBlock', diagramType });
     closeDiagramPicker();
@@ -272,6 +277,11 @@
         on:keydown={handleDiagramPickerKeydown}
       >
         <div class="diagram-picker-header">图表</div>
+        <button type="button" role="menuitem" on:click={insertBlankDiagram}>
+          <span>空白图表</span>
+          <small>mermaid</small>
+        </button>
+        <div class="diagram-picker-header">模板</div>
         {#each DIAGRAM_TEMPLATES as template}
           <button type="button" role="menuitem" on:click={() => insertDiagram(template.type)}>
             <span>{template.label}</span>

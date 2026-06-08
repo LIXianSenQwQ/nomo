@@ -128,10 +128,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-insert-paragraph-after') {
     handlers.runCommand({ type: 'insertParagraphAfter' });
   } else if (command === 'menu-chart') {
-    const diagramType = handlers.getDefaultDiagramType();
-    if (isDiagramType(diagramType)) {
-      handlers.runCommand({ type: 'insertDiagramBlock', diagramType });
-    }
+    handlers.runCommand({ type: 'insertMermaidBlock' });
   } else if (command.startsWith('menu-chart:')) {
     const diagramType = command.slice('menu-chart:'.length);
     if (isDiagramType(diagramType)) {

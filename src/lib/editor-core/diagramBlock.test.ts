@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { createEditorCore, setCodeBlockDiagramRenderer } from './createEditorCore';
 import { DIAGRAM_TEMPLATES } from './diagramTemplates';
+import { executeEditorCommand } from './editorCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { schema } from './schema';
@@ -56,6 +57,64 @@ describe('diagram templates', () => {
     expect(editor.getMarkdown()).toContain('```mermaid\nflowchart TD\n  A --> B\n```');
 
     editor.destroy();
+    target.remove();
+  });
+
+  it('inserts blank Mermaid blocks without default chart content', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+
+    expect(editor.execute({ type: 'insertMermaidBlock' })).toBe(true);
+
+    expect(editor.getMarkdown()).toContain('```mermaid\n\n```');
+    expect(editor.getMarkdown()).not.toContain('flowchart TD');
+    expect(target.querySelector('.mermaid-block.ProseMirror-selectednode')).toBeNull();
+    expect(target.querySelector('.mermaid-block')).not.toBeNull();
+
+    if (!target.querySelector('.mermaid-block-textarea')) {
+      target.querySelector<HTMLElement>('.mermaid-block')?.click();
+    }
+    expect(target.querySelector('.mermaid-block-textarea')).not.toBeNull();
+
+    editor.destroy();
+    target.remove();
+  });
+
+  it('keeps inserted diagram blocks in display mode without selecting the chart node', () => {
+    setCodeBlockDiagramRenderer({
+      async renderMermaid() {
+        return { svg: '<svg viewBox="0 0 100 50"><g></g></svg>' };
+      },
+    });
+
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    expect(
+      executeEditorCommand(
+        { type: 'insertDiagramBlock', diagramType: 'flowchart' },
+        view,
+        '',
+        () => {},
+      ),
+    ).toBe(true);
+
+    expect(view.state.selection).toBeInstanceOf(TextSelection);
+    expect(view.state.selection.from).toBe(2);
+    expect(view.state.selection.to).toBe(2);
+    expect(target.querySelector('.mermaid-block-textarea')).toBeNull();
+    expect(target.querySelector('.mermaid-block.ProseMirror-selectednode')).toBeNull();
+
+    view.destroy();
     target.remove();
   });
 });
@@ -185,7 +244,9 @@ describe('MermaidBlockNodeView', () => {
   it('opens rendered Mermaid diagrams in a fullscreen preview', async () => {
     setCodeBlockDiagramRenderer({
       async renderMermaid() {
-        return { svg: '<svg data-fullscreen-source="diagram"></svg>' };
+        return {
+          svg: '<svg data-fullscreen-source="diagram" width="100%" viewBox="0 0 100 50"><g></g></svg>',
+        };
       },
     });
 
@@ -213,6 +274,16 @@ describe('MermaidBlockNodeView', () => {
     expect(overlay?.querySelector('[data-fullscreen-source="diagram"]')).not.toBeNull();
     expect(overlay?.querySelector('.mermaid-fullscreen-header')).toBeNull();
     expect(overlay?.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('125%');
+    expect(
+      overlay
+        ?.querySelector('.mermaid-fullscreen-viewport .mermaid-block-rendered > svg')
+        ?.getAttribute('width'),
+    ).toBe('125');
+    expect(
+      overlay
+        ?.querySelector('.mermaid-fullscreen-viewport .mermaid-block-rendered > svg')
+        ?.getAttribute('height'),
+    ).toBe('63');
     expect(overlay?.textContent).not.toContain('图表预览');
     expect(target.querySelector('.mermaid-block-textarea')).toBeNull();
 
@@ -225,6 +296,16 @@ describe('MermaidBlockNodeView', () => {
       }),
     );
     expect(overlay?.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('135%');
+    expect(
+      overlay
+        ?.querySelector('.mermaid-fullscreen-viewport .mermaid-block-rendered > svg')
+        ?.getAttribute('width'),
+    ).toBe('135');
+    expect(
+      overlay
+        ?.querySelector('.mermaid-fullscreen-viewport .mermaid-block-rendered > svg')
+        ?.getAttribute('height'),
+    ).toBe('68');
 
     overlay
       ?.querySelector('.mermaid-fullscreen-viewport')
@@ -239,9 +320,7 @@ describe('MermaidBlockNodeView', () => {
       'is-dragging',
     );
 
-    document.body
-      .querySelector<HTMLButtonElement>('.mermaid-fullscreen-close-button')
-      ?.click();
+    document.body.querySelector<HTMLButtonElement>('.mermaid-fullscreen-close-button')?.click();
     expect(document.body.querySelector('.mermaid-fullscreen-overlay')).toBeNull();
 
     view.destroy();

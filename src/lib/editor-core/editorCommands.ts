@@ -15,6 +15,7 @@ import { schema } from './schema';
 import { getDiagramTemplate } from './diagramTemplates';
 import { CommentBlockNodeView } from './nodeViews/CommentBlockNodeView';
 import { CommentInlineNodeView } from './nodeViews/CommentInlineNodeView';
+import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { createLinkAttrs } from './link';
 
@@ -827,11 +828,7 @@ export function executeEditorCommand(
       return true;
     }
     case 'insertMermaidBlock':
-      return insertMarkdownSnippet(
-        markdown,
-        setMarkdown,
-        `\`\`\`mermaid\n${command.code ?? 'flowchart TD\\n  A --> B'}\n\`\`\`\n`,
-      );
+      return insertMermaidBlock(view, command.code ?? '', { enterEdit: !command.code });
     case 'insertDiagramBlock':
       return insertMermaidBlock(view, getDiagramTemplate(command.diagramType).code);
     case 'insertToc':
@@ -1257,18 +1254,88 @@ function insertBlock(
   return true;
 }
 
-function insertMermaidBlock(view: EditorView, code: string): boolean {
-  return insertBlock(view, schema.nodes.mermaid_block, '', { code });
+function insertMermaidBlock(
+  view: EditorView,
+  code: string,
+  options: { enterEdit?: boolean } = {},
+): boolean {
+  const node = schema.nodes.mermaid_block.create({ code });
+  const { state } = view;
+  const { selection } = state;
+  const { $from, empty } = selection;
+
+  // 步骤0：当前选中的是一个块级节点时，把图表插到该块后方，避免误删公式块、表格等内容。
+  if (selection instanceof NodeSelection && selection.node.isBlock) {
+    const insertPos = selection.to;
+    const tr = state.tr.insert(insertPos, node);
+    setSelectionAfterMermaidBlock(tr, insertPos, node);
+    view.dispatch(tr.scrollIntoView());
+    enterMermaidEditWhenReady(view, insertPos, options);
+    return true;
+  }
+
+  // 步骤1：空段落里插入图表时，直接替换当前段落，并补一个后续输入段落。
+  // Mermaid 常态只负责渲染，不能停留在 NodeSelection 选中态。
+  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
+    const blockStart = $from.before(1);
+    const blockEnd = $from.after(1);
+    const tr = state.tr.replaceWith(blockStart, blockEnd, node);
+    setSelectionAfterMermaidBlock(tr, blockStart, node);
+    view.dispatch(tr.scrollIntoView());
+    enterMermaidEditWhenReady(view, blockStart, options);
+    return true;
+  }
+
+  // 步骤2：正文段落中插入图表时，保留原文，把图表放到当前块下方。
+  if (empty && $from.depth === 1 && $from.parent.isTextblock) {
+    const insertPos = $from.after(1);
+    const tr = state.tr.insert(insertPos, node);
+    setSelectionAfterMermaidBlock(tr, insertPos, node);
+    view.dispatch(tr.scrollIntoView());
+    enterMermaidEditWhenReady(view, insertPos, options);
+    return true;
+  }
+
+  // 步骤3：有选区时用图表替换选中内容，随后仍把光标放到图表后方。
+  const tr = state.tr.replaceSelectionWith(node);
+  const insertedPos = tr.mapping.map(state.selection.from, -1);
+  if (tr.doc.nodeAt(insertedPos)?.type === schema.nodes.mermaid_block) {
+    setSelectionAfterMermaidBlock(tr, insertedPos, node);
+  }
+  view.dispatch(tr.scrollIntoView());
+  enterMermaidEditWhenReady(view, insertedPos, options);
+  return true;
 }
 
-function insertMarkdownSnippet(
-  markdown: string,
-  setMarkdown: MarkdownSetter,
-  snippet: string,
-): boolean {
-  const separator = markdown.endsWith('\n') ? '\n' : '\n\n';
-  setMarkdown(`${markdown}${separator}${snippet}`, { reason: 'programmatic-update' });
-  return true;
+function enterMermaidEditWhenReady(
+  view: EditorView,
+  pos: number,
+  options: { enterEdit?: boolean },
+): void {
+  if (!options.enterEdit) return;
+  if (MermaidBlockNodeView.enterEditAt(view, pos, 'start')) return;
+  if (MermaidBlockNodeView.enterClosestEditAt(view, pos, 'start')) return;
+  requestAnimationFrame(() => {
+    if (MermaidBlockNodeView.enterEditAt(view, pos, 'start')) return;
+    MermaidBlockNodeView.enterClosestEditAt(view, pos, 'start');
+  });
+}
+
+function setSelectionAfterMermaidBlock(
+  tr: Transaction,
+  blockPos: number,
+  mermaidNode: PmNode,
+): void {
+  const afterPos = blockPos + mermaidNode.nodeSize;
+  const nextNode = tr.doc.nodeAt(afterPos);
+
+  if (nextNode?.type === schema.nodes.paragraph) {
+    tr.setSelection(TextSelection.create(tr.doc, afterPos + 1));
+    return;
+  }
+
+  tr.insert(afterPos, schema.nodes.paragraph.create());
+  tr.setSelection(TextSelection.create(tr.doc, afterPos + 1));
 }
 
 /**

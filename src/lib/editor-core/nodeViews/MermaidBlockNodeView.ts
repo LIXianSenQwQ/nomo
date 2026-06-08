@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { getDiagramRenderer } from '../renderers';
 
@@ -35,18 +35,16 @@ export class MermaidBlockNodeView {
   private fullscreenViewportEl: HTMLElement | null = null;
   private fullscreenZoomSurfaceEl: HTMLElement | null = null;
   private fullscreenZoomBadgeEl: HTMLElement | null = null;
+  private fullscreenSvgBaseSize: { width: number; height: number } | null = null;
   private fullscreenScale = MermaidBlockNodeView.FULLSCREEN_DEFAULT_SCALE;
   private fullscreenKeydown: ((event: KeyboardEvent) => void) | null = null;
-  private fullscreenDrag:
-    | {
-        pointerId: number;
-        startX: number;
-        startY: number;
-        scrollLeft: number;
-        scrollTop: number;
-      }
-    | null = null;
-  private suppressNextSelectAutoEdit = false;
+  private fullscreenDrag: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null = null;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
     this.node = node;
@@ -88,6 +86,28 @@ export class MermaidBlockNodeView {
     return false;
   }
 
+  static enterClosestEditAt(
+    view: EditorView,
+    pos: number,
+    caret: 'start' | 'end' = 'start',
+  ): boolean {
+    let closestInstance: MermaidBlockNodeView | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const instance of MermaidBlockNodeView.instances) {
+      if (instance.view !== view || instance.editing) continue;
+      const distance = Math.abs(instance.getPos() - pos);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestInstance = instance;
+      }
+    }
+
+    if (!closestInstance || closestDistance > 4) return false;
+    closestInstance.enterEdit(caret);
+    return true;
+  }
+
   update(node: ProseMirrorNode): boolean {
     if (node.type !== this.node.type) return false;
     this.node = node;
@@ -98,14 +118,7 @@ export class MermaidBlockNodeView {
   }
 
   selectNode(): void {
-    this.dom.classList.add('ProseMirror-selectednode');
-    if (this.editing) {
-      this.dom.classList.remove('ProseMirror-selectednode');
-      return;
-    }
-    if (this.suppressNextSelectAutoEdit) {
-      this.suppressNextSelectAutoEdit = false;
-    }
+    this.dom.classList.remove('ProseMirror-selectednode');
   }
 
   deselectNode(): void {
@@ -138,7 +151,7 @@ export class MermaidBlockNodeView {
     if (this.editing) return;
 
     if (!code.trim()) {
-      this.dom.textContent = '';
+      this.renderEmptyDiagram();
       return;
     }
 
@@ -208,10 +221,7 @@ export class MermaidBlockNodeView {
     });
   }
 
-  private exitEdit(
-    save: boolean,
-    selection: 'node' | 'before' | 'after' | 'preserve' = 'node',
-  ): void {
+  private exitEdit(save: boolean, selection: 'before' | 'after' | 'preserve' = 'preserve'): void {
     if (!this.editing) return;
 
     const newCode = save && this.textarea ? this.textarea.value : this.originalCode;
@@ -230,9 +240,6 @@ export class MermaidBlockNodeView {
     } else if (selection === 'after') {
       const nextPos = Math.min(pos + this.node.nodeSize, tr.doc.content.size);
       tr = tr.setSelection(TextSelection.near(tr.doc.resolve(nextPos), 1));
-    } else if (selection === 'node') {
-      this.suppressNextSelectAutoEdit = true;
-      tr = tr.setSelection(NodeSelection.create(tr.doc, pos));
     }
 
     if (tr.docChanged || selection !== 'preserve') {
@@ -272,7 +279,10 @@ export class MermaidBlockNodeView {
 
     while (this.dom.firstChild) {
       const child = this.dom.firstChild;
-      if (child instanceof HTMLElement && child.classList.contains('mermaid-block-fullscreen-button')) {
+      if (
+        child instanceof HTMLElement &&
+        child.classList.contains('mermaid-block-fullscreen-button')
+      ) {
         child.remove();
       } else {
         previewEl.appendChild(child);
@@ -413,6 +423,13 @@ export class MermaidBlockNodeView {
     sourceEl.className = 'mermaid-block-source';
     sourceEl.textContent = `\`\`\`mermaid\n${code}\n\`\`\``;
     this.dom.append(errorEl, sourceEl);
+  }
+
+  private renderEmptyDiagram(): void {
+    this.dom.textContent = '';
+    const emptyEl = document.createElement('div');
+    emptyEl.className = 'mermaid-block-empty';
+    this.dom.appendChild(emptyEl);
   }
 
   private renderDisplayDiagram(svg: string): void {
@@ -564,6 +581,7 @@ export class MermaidBlockNodeView {
     this.fullscreenViewportEl = null;
     this.fullscreenZoomSurfaceEl = null;
     this.fullscreenZoomBadgeEl = null;
+    this.fullscreenSvgBaseSize = null;
     this.fullscreenDrag = null;
     document.body.classList.remove('has-mermaid-fullscreen');
   }
@@ -646,10 +664,43 @@ export class MermaidBlockNodeView {
     this.fullscreenScale = this.clampFullscreenScale(scale);
 
     const roundedScale = Number(this.fullscreenScale.toFixed(2));
-    this.fullscreenZoomSurfaceEl?.style.setProperty('--mermaid-fullscreen-scale', `${roundedScale}`);
+    this.applyFullscreenSvgScale(roundedScale);
     if (this.fullscreenZoomBadgeEl) {
       this.fullscreenZoomBadgeEl.textContent = `${Math.round(roundedScale * 100)}%`;
     }
+  }
+
+  private applyFullscreenSvgScale(scale: number): void {
+    const svgEl = this.fullscreenZoomSurfaceEl?.querySelector<SVGElement>('svg');
+    if (!svgEl) return;
+
+    const baseSize = this.fullscreenSvgBaseSize ?? this.readSvgIntrinsicSize(svgEl);
+    if (!baseSize) return;
+
+    this.fullscreenSvgBaseSize = baseSize;
+    svgEl.setAttribute('width', String(Math.ceil(baseSize.width * scale)));
+    svgEl.setAttribute('height', String(Math.ceil(baseSize.height * scale)));
+  }
+
+  private readSvgIntrinsicSize(svgEl: SVGElement): { width: number; height: number } | null {
+    const viewBox = svgEl.getAttribute('viewBox');
+    if (viewBox) {
+      const [, , width, height] = viewBox
+        .trim()
+        .split(/\s+/)
+        .map((value) => Number.parseFloat(value));
+      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+        return { width, height };
+      }
+    }
+
+    const width = Number.parseFloat(svgEl.getAttribute('width') ?? '');
+    const height = Number.parseFloat(svgEl.getAttribute('height') ?? '');
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      return { width, height };
+    }
+
+    return null;
   }
 
   private createIconButton(

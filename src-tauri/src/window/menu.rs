@@ -442,6 +442,7 @@ fn build_settings_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Su
 
 fn build_diagram_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     SubmenuBuilder::new(app, "图表")
+        .item(&menu_item(app, "menu-chart", "空白图表", None)?)
         .item(&menu_item(app, "menu-chart:flowchart", "流程图", None)?)
         .item(&menu_item(
             app,

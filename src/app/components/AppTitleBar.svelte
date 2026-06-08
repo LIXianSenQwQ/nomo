@@ -164,6 +164,11 @@
     closeMenu(menu);
   }
 
+  function insertBlankDiagram(menu: string) {
+    runCommand({ type: 'insertMermaidBlock' });
+    closeMenu(menu);
+  }
+
   function insertDiagram(diagramType: DiagramType, menu: string) {
     runCommand({ type: 'insertDiagramBlock', diagramType });
     closeMenu(menu);
@@ -446,6 +451,10 @@
                 /></svg
               >
               <div class="dropdown-menu nested">
+                <button on:click={() => insertBlankDiagram('paragraph')}>
+                  空白图表 <span class="shortcut">mermaid</span>
+                </button>
+                <div class="divider"></div>
                 {#each DIAGRAM_TEMPLATES as template}
                   <button on:click={() => insertDiagram(template.type, 'paragraph')}>
                     {template.label} <span class="shortcut">{template.type}</span>

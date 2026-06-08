@@ -206,14 +206,20 @@ describe('App outline layout', () => {
 
   it('wires Mermaid diagram insertion through toolbar, titlebar and native menu', () => {
     expect(toolbarSource).toContain('DIAGRAM_TEMPLATES');
+    expect(toolbarSource).toContain("type: 'insertMermaidBlock'");
+    expect(toolbarSource).toContain('空白图表');
     expect(toolbarSource).toContain("type: 'insertDiagramBlock'");
     expect(toolbarSource).toContain('aria-label="插入图表"');
     expect(titleBarSource).toContain('DIAGRAM_TEMPLATES');
+    expect(titleBarSource).toContain('insertBlankDiagram');
     expect(titleBarSource).toContain('insertDiagram(template.type');
     expect(titleBarSource).not.toContain("comingSoon('图表'");
+    expect(appCommandsSource).toContain("command === 'menu-chart'");
+    expect(appCommandsSource).toContain("type: 'insertMermaidBlock'");
     expect(appCommandsSource).toContain("command.startsWith('menu-chart:')");
     expect(appCommandsSource).toContain("type: 'insertDiagramBlock'");
     expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, "图表")');
+    expect(tauriMenuSource).toContain('"menu-chart", "空白图表"');
     expect(tauriMenuSource).toContain('menu-chart:flowchart');
     expect(tauriMenuSource).toContain('menu-chart:erDiagram');
   });
