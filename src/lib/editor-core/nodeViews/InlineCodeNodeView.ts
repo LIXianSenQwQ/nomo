@@ -12,6 +12,8 @@ import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 export class InlineCodeNodeView {
   private static nextKeyboardCursorSide: 'start' | 'end' | null = null;
   private static instantEditMode = false;
+  private static renderingEnabled = true;
+  private static instances = new Set<InlineCodeNodeView>();
 
   dom: HTMLElement;
 
@@ -35,6 +37,7 @@ export class InlineCodeNodeView {
     this.dom.className = 'inline-code';
     this.dom.contentEditable = 'false';
     this.dom.setAttribute('data-code', node.attrs.code as string);
+    InlineCodeNodeView.instances.add(this);
 
     // 点击进入编辑态
     this.dom.addEventListener('mousedown', (event) => {
@@ -71,6 +74,19 @@ export class InlineCodeNodeView {
 
   static requestInstantEdit(): void {
     InlineCodeNodeView.instantEditMode = true;
+  }
+
+  static setRenderingEnabled(enabled: boolean): void {
+    if (InlineCodeNodeView.renderingEnabled === enabled) {
+      return;
+    }
+
+    InlineCodeNodeView.renderingEnabled = enabled;
+    for (const instance of InlineCodeNodeView.instances) {
+      if (!instance.editing) {
+        instance.renderDisplay();
+      }
+    }
   }
 
   update(node: ProseMirrorNode): boolean {
@@ -112,6 +128,7 @@ export class InlineCodeNodeView {
   }
 
   destroy(): void {
+    InlineCodeNodeView.instances.delete(this);
     this.cleanupEdit();
   }
 
@@ -120,6 +137,7 @@ export class InlineCodeNodeView {
   private renderDisplay(): void {
     const code = this.node.attrs.code as string;
     this.dom.setAttribute('data-code', code);
+    this.dom.classList.toggle('is-raw-markdown', !InlineCodeNodeView.renderingEnabled);
 
     if (!code) {
       this.dom.textContent = '';
@@ -128,6 +146,11 @@ export class InlineCodeNodeView {
     }
 
     this.dom.classList.remove('is-empty');
+
+    if (!InlineCodeNodeView.renderingEnabled) {
+      this.dom.textContent = formatInlineCodeMarkdownLiteral(code);
+      return;
+    }
 
     // 轻量语法提示：对通用 token 做视觉区分
     this.dom.innerHTML = '';
@@ -273,6 +296,10 @@ export class InlineCodeNodeView {
 }
 
 // ---- 轻量语法提示：token 分类器 ----
+
+function formatInlineCodeMarkdownLiteral(code: string): string {
+  return code.includes('`') ? `\`\` ${code} \`\`` : `\`${code}\``;
+}
 
 interface InlineCodeToken {
   type: 'keyword' | 'boolean' | 'number' | 'string' | 'operator' | 'plain';

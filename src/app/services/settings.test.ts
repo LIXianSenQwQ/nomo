@@ -82,6 +82,7 @@ describe('settings', () => {
       zoomPercent: 500,
       outlineDefaultExpandLevel: 0,
       codeBlockIndent: 'tab',
+      inlineCodeRenderingEnabled: false,
       shortcutPreferences: {
         'toggle-source': 'Ctrl+Alt+E',
       },
@@ -95,8 +96,18 @@ describe('settings', () => {
     expect(normalized.zoomPercent).toBe(160);
     expect(normalized.outlineDefaultExpandLevel).toBe(1);
     expect(normalized.codeBlockIndent).toBe('tab');
+    expect(DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled).toBe(true);
+    expect(normalized.inlineCodeRenderingEnabled).toBe(false);
     expect(normalized.shortcutPreferences['toggle-source']).toBe('Ctrl+Alt+E');
     expect(normalized.imageHandlingSettings.defaultImageWidth).toBe('100%');
     expect(normalized.imageHandlingSettings.defaultImageAlign).toBe('center');
+  });
+
+  it('falls back to enabled inline code rendering for invalid preference values', () => {
+    const normalized = normalizeAppPreferences({
+      inlineCodeRenderingEnabled: 'false' as never,
+    });
+
+    expect(normalized.inlineCodeRenderingEnabled).toBe(true);
   });
 });

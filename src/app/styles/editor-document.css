@@ -2117,6 +2117,17 @@
   background: color-mix(in srgb, var(--md-editor-code-bg) 8%, transparent);
 }
 
+.inline-code.is-raw-markdown {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+}
+
 .inline-code.ProseMirror-selectednode {
   outline: 2px solid var(--md-editor-accent, #5a8cdc);
   outline-offset: 2px;

@@ -175,6 +175,7 @@
   let outlineDefaultExpandLevel = DEFAULT_APP_PREFERENCES.outlineDefaultExpandLevel;
   let codeBlockLineNumbersVisible = DEFAULT_APP_PREFERENCES.codeBlockLineNumbersVisible;
   let codeBlockIndent: CodeBlockIndentPreference = DEFAULT_APP_PREFERENCES.codeBlockIndent;
+  let inlineCodeRenderingEnabled = DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled;
   let shortcutPreferences: ShortcutPreferences = { ...DEFAULT_APP_PREFERENCES.shortcutPreferences };
   let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
   let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
@@ -684,6 +685,7 @@
   const editor = createEditorCore({
     markdown,
     mode,
+    inlineCodeRenderingEnabled,
     theme: { name: theme },
     onChange: syncFromEditor,
     onLinkShortcut: () => openLinkPicker(),
@@ -1326,6 +1328,7 @@
     outlineDefaultExpandLevel = preferences.outlineDefaultExpandLevel;
     codeBlockLineNumbersVisible = preferences.codeBlockLineNumbersVisible;
     codeBlockIndent = preferences.codeBlockIndent;
+    inlineCodeRenderingEnabled = preferences.inlineCodeRenderingEnabled;
     shortcutPreferences = preferences.shortcutPreferences;
 
     if (!filePreviewEnabled) {
@@ -1343,6 +1346,7 @@
     applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible);
     document.documentElement.dataset.codeBlockIndent = codeBlockIndent;
     editor.updateTheme({ name: theme });
+    editor.updateOptions({ inlineCodeRenderingEnabled });
     applyOutlineDefaultExpansion();
 
     const shouldBeLargeDocument = markdown.length > largeDocumentLimit;

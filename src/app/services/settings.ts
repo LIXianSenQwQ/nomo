@@ -68,6 +68,7 @@ export interface AppPreferences {
   outlineDefaultExpandLevel: number;
   codeBlockLineNumbersVisible: boolean;
   codeBlockIndent: CodeBlockIndentPreference;
+  inlineCodeRenderingEnabled: boolean;
   shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
 }
@@ -112,6 +113,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   outlineDefaultExpandLevel: 6,
   codeBlockLineNumbersVisible: true,
   codeBlockIndent: 'spaces-2',
+  inlineCodeRenderingEnabled: true,
   shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
 };
@@ -225,6 +227,7 @@ export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPr
     outlineDefaultExpandLevel: parseSetting<unknown>(settings, 'outlineDefaultExpandLevel'),
     codeBlockLineNumbersVisible: parseSetting<unknown>(settings, 'codeBlockLineNumbersVisible'),
     codeBlockIndent: parseSetting<unknown>(settings, 'codeBlockIndent'),
+    inlineCodeRenderingEnabled: parseSetting<unknown>(settings, 'inlineCodeRenderingEnabled'),
     shortcutPreferences: parseSetting<unknown>(settings, 'shortcutPreferences'),
     imageHandlingSettings:
       parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
@@ -341,6 +344,10 @@ export function normalizeAppPreferences(
     codeBlockIndent: isCodeBlockIndentPreference(value.codeBlockIndent)
       ? value.codeBlockIndent
       : DEFAULT_APP_PREFERENCES.codeBlockIndent,
+    inlineCodeRenderingEnabled:
+      typeof value.inlineCodeRenderingEnabled === 'boolean'
+        ? value.inlineCodeRenderingEnabled
+        : DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled,
     shortcutPreferences: normalizeShortcutPreferences(value.shortcutPreferences),
     imageHandlingSettings: normalizeImageSettings(
       value.imageHandlingSettings as Partial<ImageHandlingSettings> | null | undefined,
@@ -438,6 +445,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     outlineDefaultExpandLevel: preferences.outlineDefaultExpandLevel,
     codeBlockLineNumbersVisible: preferences.codeBlockLineNumbersVisible,
     codeBlockIndent: preferences.codeBlockIndent,
+    inlineCodeRenderingEnabled: preferences.inlineCodeRenderingEnabled,
     shortcutPreferences: preferences.shortcutPreferences,
     imageHandlingSettings: preferences.imageHandlingSettings,
   };

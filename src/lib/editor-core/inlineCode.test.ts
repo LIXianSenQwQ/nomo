@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DOMOutputSpec, TagParseRule } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
+import { createEditorCore } from './createEditorCore';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { schema } from './schema';
@@ -359,5 +360,68 @@ describe('inline_code semantic input', () => {
     });
 
     expect(codeValues).toEqual(['string asd = true', 'string ab12 = false']);
+  });
+});
+
+describe('inline_code rendering preference', () => {
+  it('renders inline code as the styled semantic node by default', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '`const ok = true`', target });
+
+    const inlineCode = target.querySelector<HTMLElement>('.inline-code');
+    expect(inlineCode?.classList.contains('is-raw-markdown')).toBe(false);
+    expect(inlineCode?.textContent).toBe('const ok = true');
+
+    editor.destroy();
+  });
+
+  it('renders inline code as raw Markdown when rendering is disabled', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '`const ok = true`',
+      target,
+      inlineCodeRenderingEnabled: false,
+    });
+
+    const inlineCode = target.querySelector<HTMLElement>('.inline-code');
+    expect(inlineCode?.classList.contains('is-raw-markdown')).toBe(true);
+    expect(inlineCode?.textContent).toBe('`const ok = true`');
+    expect(serializeMarkdown(parseMarkdown('`const ok = true`')).trim()).toBe('`const ok = true`');
+
+    editor.destroy();
+  });
+
+  it('uses double backtick Markdown when raw inline code contains a backtick', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '`` code with ` backtick ``',
+      target,
+      inlineCodeRenderingEnabled: false,
+    });
+
+    const inlineCode = target.querySelector<HTMLElement>('.inline-code');
+    expect(inlineCode?.textContent).toBe('`` code with ` backtick ``');
+    expect(serializeMarkdown(parseMarkdown('`` code with ` backtick ``')).trim()).toBe(
+      '`` code with ` backtick ``',
+    );
+
+    editor.destroy();
+  });
+
+  it('updates existing inline code nodes when the rendering preference changes', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '`code`', target });
+    const inlineCode = target.querySelector<HTMLElement>('.inline-code');
+
+    expect(inlineCode?.textContent).toBe('code');
+    editor.updateOptions({ inlineCodeRenderingEnabled: false });
+    expect(inlineCode?.classList.contains('is-raw-markdown')).toBe(true);
+    expect(inlineCode?.textContent).toBe('`code`');
+
+    editor.updateOptions({ inlineCodeRenderingEnabled: true });
+    expect(inlineCode?.classList.contains('is-raw-markdown')).toBe(false);
+    expect(inlineCode?.textContent).toBe('code');
+
+    editor.destroy();
   });
 });

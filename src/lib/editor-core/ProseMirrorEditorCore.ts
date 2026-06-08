@@ -98,7 +98,9 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
+      inlineCodeRenderingEnabled: options.inlineCodeRenderingEnabled ?? true,
     };
+    InlineCodeNodeView.setRenderingEnabled(this.runtime.inlineCodeRenderingEnabled);
 
     if (this.target) {
       this.mount(this.target);
@@ -290,10 +292,13 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   updateOptions(options: Partial<EditorRuntimeOptions>): void {
     this.assertActive();
+    const nextInlineCodeRenderingEnabled =
+      options.inlineCodeRenderingEnabled ?? this.runtime.inlineCodeRenderingEnabled;
     this.runtime = {
       ...this.runtime,
       ...options,
     };
+    InlineCodeNodeView.setRenderingEnabled(nextInlineCodeRenderingEnabled);
     this.view?.setProps({
       editable: () => this.isEditable(),
     });

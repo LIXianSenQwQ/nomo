@@ -20,7 +20,7 @@ jobs:
           - name: Windows x64
             runner: windows-latest
             rust-target: ''
-            args: ''
+            args: '--bundles nsis'
           - name: macOS arm64
             runner: macos-latest
             rust-target: aarch64-apple-darwin
@@ -53,15 +53,63 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Clean stale Windows release outputs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @(
+            'src-tauri\target\release\bundle',
+            'src-tauri\target\release\nsis',
+            'src-tauri\target\release\wix'
+          ) | ForEach-Object {
+            Remove-Item -LiteralPath $_ -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Build and publish release assets
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: '-'
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Nomo ${{ github.ref_name }}
-          releaseBody: See the assets below to download this version.
+          releaseBody: |
+            Windows:
+            - x64-setup.exe: 安装版
+            - x64.zip: 免安装版
+
+            macOS:
+            - .dmg / .app.tar.gz: arm64
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
+
+      - name: Package Windows zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '${{ github.ref_name }}' -replace '^v', ''
+          $zipRoot = Join-Path $env:RUNNER_TEMP 'nomo-x64'
+          $appDir = Join-Path $zipRoot 'Nomo'
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "Nomo_${version}_x64.zip"
+
+          Remove-Item -LiteralPath $zipRoot -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $appDir | Out-Null
+
+          Copy-Item -LiteralPath 'src-tauri\target\release\nomo.exe' -Destination (Join-Path $appDir 'nomo.exe')
+          if (Test-Path -LiteralPath 'src-tauri\target\release\resources') {
+            Copy-Item -LiteralPath 'src-tauri\target\release\resources' -Destination (Join-Path $appDir 'resources') -Recurse
+          }
+
+          Compress-Archive -LiteralPath $appDir -DestinationPath $zipPath -Force
+          "NOMO_ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+
+      - name: Upload Windows zip release asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload '${{ github.ref_name }}' "$env:NOMO_ZIP_PATH" --clobber

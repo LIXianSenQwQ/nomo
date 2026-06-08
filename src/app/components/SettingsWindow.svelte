@@ -6,7 +6,6 @@
     FileImage,
     FolderOpen,
     Info,
-    MonitorCog,
     Palette,
     Settings2,
     SlidersHorizontal,
@@ -41,6 +40,8 @@
     ImageUploadProvider,
   } from '../../lib/services/render';
   import { getPlatformCapabilities } from '../services/platform';
+  import nomoLogoDark from '../../../src-tauri/icons/nomo/source/nomo-app-dark-128.png?url';
+  import nomoLogoLight from '../../../src-tauri/icons/nomo/source/nomo-app-light-128.png?url';
 
   type CategoryId =
     | 'general'
@@ -617,7 +618,10 @@
       role="presentation"
       on:mousedown={handleWindowDrag}
     >
-      <MonitorCog size={20} aria-hidden="true" />
+      <span class="settings-brand-logo" aria-hidden="true">
+        <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
+        <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
+      </span>
       <span>偏好设置</span>
     </div>
 
@@ -929,6 +933,22 @@
                 type="checkbox"
                 checked={draftSettings.codeBlockLineNumbersVisible}
                 on:change={(event) => toggleSetting('codeBlockLineNumbersVisible', event)}
+              />
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="toggle-row" for="inlineCodeRenderingEnabled">
+              <span>
+                <span class="toggle-title">渲染行内代码</span>
+                <span class="toggle-desc"
+                  >开启后显示行内代码样式；关闭后显示原始 Markdown 反引号文本。</span
+                >
+              </span>
+              <input
+                id="inlineCodeRenderingEnabled"
+                type="checkbox"
+                checked={draftSettings.inlineCodeRenderingEnabled}
+                on:change={(event) => toggleSetting('inlineCodeRenderingEnabled', event)}
               />
               <span class="toggle-switch" aria-hidden="true"></span>
             </label>
@@ -1447,7 +1467,10 @@
         {:else if activeCategory === 'about'}
           <div class="settings-group about-group">
             <h2>Nomo</h2>
-            <div class="about-mark">N</div>
+            <div class="about-mark" aria-label="Nomo">
+              <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
+              <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
+            </div>
             <dl>
               <div>
                 <dt>版本</dt>
@@ -1514,8 +1537,36 @@
     user-select: none;
   }
 
-  .settings-brand :global(svg) {
-    color: var(--md-editor-accent);
+  .settings-brand-logo {
+    width: 22px;
+    height: 22px;
+    position: relative;
+    flex: 0 0 22px;
+    display: inline-grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
+  .settings-brand-logo img,
+  .about-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .logo-dark {
+    display: none;
+  }
+
+  :global(:root[data-theme='dark']) .logo-light {
+    display: none;
+  }
+
+  :global(:root[data-theme='dark']) .logo-dark {
+    display: block;
   }
 
   .settings-nav nav {
@@ -1974,14 +2025,14 @@
   .about-mark {
     width: 54px;
     height: 54px;
-    display: grid;
+    position: relative;
+    display: inline-grid;
     place-items: center;
     margin: 2px 0 16px;
     border-radius: var(--md-editor-radius-md);
-    background: var(--md-editor-accent);
-    color: white;
-    font-size: 24px;
-    font-weight: 800;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--md-editor-surface) 88%, var(--md-editor-accent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-editor-border) 72%, transparent);
   }
 
   .about-group dl {

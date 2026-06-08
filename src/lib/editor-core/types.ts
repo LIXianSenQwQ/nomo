@@ -13,6 +13,7 @@ export interface EditorThemeOptions {
 export interface EditorRuntimeOptions {
   readonly: boolean;
   mode: EditorMode;
+  inlineCodeRenderingEnabled: boolean;
 }
 
 export interface SetMarkdownOptions {
@@ -141,6 +142,7 @@ export interface EditorCoreOptions {
   markdown: string;
   readonly?: boolean;
   mode?: EditorMode;
+  inlineCodeRenderingEnabled?: boolean;
   theme?: EditorThemeOptions;
   onChange?: (event: EditorChangeEvent) => void;
   onSelectionChange?: (event: EditorSelectionEvent) => void;

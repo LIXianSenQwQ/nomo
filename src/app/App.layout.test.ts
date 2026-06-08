@@ -49,6 +49,26 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/tauri.conf.json'),
     'utf-8',
   );
+  const tauriWindowsConfigSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/tauri.windows.conf.json'),
+    'utf-8',
+  );
+  const tauriMacosConfigSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/tauri.macos.conf.json'),
+    'utf-8',
+  );
+  const releaseWorkflowSource = readFileSync(
+    resolve(__dirname, '../../.github/workflows/release.yml'),
+    'utf-8',
+  );
+  const windowsOpenWithInstallerHookSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/installer/windows-open-with.nsh'),
+    'utf-8',
+  );
+  const simplifiedChineseInstallerLanguageSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/installer/SimpChinese.nsh'),
+    'utf-8',
+  );
   const tauriTraySource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/tray.rs'),
     'utf-8',
@@ -354,6 +374,60 @@ describe('App outline layout', () => {
     expect(tauriConfigSource).toContain('"role": "Editor"');
   });
 
+  it('ships Windows releases as NSIS plus zip without MSI', () => {
+    const tauriWindowsConfig = JSON.parse(tauriWindowsConfigSource);
+    const tauriMacosConfig = JSON.parse(tauriMacosConfigSource);
+
+    expect(tauriWindowsConfig.bundle.targets).toEqual(['nsis']);
+    expect(tauriWindowsConfig.bundle.windows.nsis.languages).toEqual(['SimpChinese', 'English']);
+    expect(tauriWindowsConfig.bundle.windows.nsis.displayLanguageSelector).toBe(true);
+    expect(tauriWindowsConfig.bundle.windows.nsis.startMenuFolder).toBe('Nomo');
+    expect(tauriWindowsConfig.bundle.windows.nsis.installerIcon).toBe('icons/icon.ico');
+    expect(tauriWindowsConfig.bundle.windows.nsis.uninstallerIcon).toBe('icons/icon.ico');
+    expect(tauriWindowsConfig.bundle.windows.nsis.customLanguageFiles.SimpChinese).toBe(
+      'installer/SimpChinese.nsh',
+    );
+    expect(tauriWindowsConfig.bundle.windows.nsis.installerHooks).toBe(
+      'installer/windows-open-with.nsh',
+    );
+    expect(tauriMacosConfig.bundle.targets).toEqual(['app', 'dmg']);
+
+    expect(releaseWorkflowSource).toContain("args: '--bundles nsis'");
+    expect(releaseWorkflowSource).toContain('tauri-apps/tauri-action@v1');
+    expect(releaseWorkflowSource).toContain('Nomo_${version}_x64.zip');
+    expect(releaseWorkflowSource).toContain('gh release upload');
+    expect(releaseWorkflowSource).toContain('x64.zip: 免安装版');
+    expect(releaseWorkflowSource).not.toContain('x64_en-US.msi');
+    expect(releaseWorkflowSource).not.toContain('portable');
+  });
+
+  it('registers Nomo as an optional Markdown open-with application', () => {
+    expect(windowsOpenWithInstallerHookSource).toContain('NSIS_HOOK_POSTINSTALL');
+    expect(windowsOpenWithInstallerHookSource).toContain(
+      'Software\\Classes\\Applications\\${MAINBINARYNAME}.exe',
+    );
+    expect(windowsOpenWithInstallerHookSource).toContain('SupportedTypes');
+    expect(windowsOpenWithInstallerHookSource).toContain('.md');
+    expect(windowsOpenWithInstallerHookSource).toContain('.markdown');
+    expect(windowsOpenWithInstallerHookSource).toContain('OpenWithList');
+    expect(windowsOpenWithInstallerHookSource).toContain('OpenWithProgids');
+    expect(windowsOpenWithInstallerHookSource).toContain('Nomo.Markdown');
+    expect(windowsOpenWithInstallerHookSource).not.toContain('Software\\Classes\\.md" ""');
+    expect(windowsOpenWithInstallerHookSource).toContain('NSIS_HOOK_POSTUNINSTALL');
+  });
+
+  it('localizes custom NSIS installer messages in Simplified Chinese', () => {
+    expect(simplifiedChineseInstallerLanguageSource).toContain(
+      'LangString createDesktop ${LANG_SIMPCHINESE} "创建桌面快捷方式"',
+    );
+    expect(simplifiedChineseInstallerLanguageSource).toContain(
+      'LangString installingWebview2 ${LANG_SIMPCHINESE} "正在安装 WebView2..."',
+    );
+    expect(simplifiedChineseInstallerLanguageSource).toContain(
+      'LangString deleteAppData ${LANG_SIMPCHINESE} "删除应用数据"',
+    );
+  });
+
   it('keeps the explicit explorer root across restored workspace tabs', () => {
     expect(appSource).toMatch(
       /updateAppSetting\(`workspaceTabs:\$\{windowLabel\}`,\s*\{\s*tabs,\s*activeTabId,\s*currentFolderPath,\s*\}\)/,
@@ -600,6 +674,8 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain('id="zoomPercent"');
     expect(settingsWindowSource).toContain('ctrlWheelZoomEnabled');
     expect(settingsWindowSource).toContain('codeBlockLineNumbersVisible');
+    expect(settingsWindowSource).toContain('inlineCodeRenderingEnabled');
+    expect(settingsWindowSource).toContain('渲染行内代码');
     expect(settingsWindowSource).toContain('setCodeBlockIndent');
     expect(settingsWindowSource).toContain('id="defaultImageWidth"');
     expect(settingsWindowSource).toContain('setImageDefaultAlign');
@@ -614,6 +690,7 @@ describe('App outline layout', () => {
     expect(appSource).toContain('handleGlobalWheel');
     expect(appSource).toContain('applyZoomSetting(zoomPercent)');
     expect(appSource).toContain('applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible)');
+    expect(appSource).toContain('editor.updateOptions({ inlineCodeRenderingEnabled })');
     expect(appSource).toContain(
       'document.documentElement.dataset.codeBlockIndent = codeBlockIndent',
     );
@@ -663,7 +740,9 @@ describe('App outline layout', () => {
       '../sample.md': 'samples/sample.md',
     });
     expect(tauriLibSource).toContain('crate::file_system::install_sample_document');
-    expect(tauriStorageSource).toContain("invoke<NativeDocumentPayload>('install_sample_document')");
+    expect(tauriStorageSource).toContain(
+      "invoke<NativeDocumentPayload>('install_sample_document')",
+    );
     expect(appSource).toContain('maybeOpenFirstRunSample');
     expect(appSource).toContain('documentActions.applyNativeDocument(document,');
     expect(appSource).toContain('FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY');

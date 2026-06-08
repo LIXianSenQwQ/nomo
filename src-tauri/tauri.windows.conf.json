@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "startMenuFolder": "Nomo",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "customLanguageFiles": {
+          "SimpChinese": "installer/SimpChinese.nsh"
+        },
+        "installerHooks": "installer/windows-open-with.nsh"
+      }
+    }
+  }
+}
