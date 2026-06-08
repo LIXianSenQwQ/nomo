@@ -10,11 +10,11 @@ use tauri::{Manager, WindowEvent};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            let paths = crate::window::external_open::collect_markdown_paths_from_args(
+            let targets = crate::window::external_open::collect_external_open_targets_from_args(
                 args,
                 Some(std::path::PathBuf::from(cwd)),
             );
-            let _ = crate::window::external_open::route_external_open(app, paths);
+            let _ = crate::window::external_open::route_external_open_targets(app, targets);
         }))
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
@@ -51,14 +51,22 @@ pub fn run() {
                     .set_focus()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
-            let startup_paths =
-                crate::window::external_open::collect_markdown_paths_from_startup_args();
+            let startup_targets =
+                crate::window::external_open::collect_external_open_targets_from_startup_args();
             crate::window::external_open::persist_pending_external_open(
                 app.handle(),
                 "main",
-                &startup_paths,
+                &startup_targets.markdown_paths,
             )
             .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            if let Some(folder_path) = startup_targets.folder_paths.first() {
+                crate::window::external_open::persist_pending_external_folder_open(
+                    app.handle(),
+                    "main",
+                    folder_path,
+                )
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -94,7 +102,10 @@ pub fn run() {
             crate::window::commands::hide_window_to_tray,
             crate::window::commands::request_exit_app,
             crate::window::commands::exit_app,
+            crate::window::commands::get_markdown_file_association_status,
             crate::window::commands::register_markdown_file_association,
+            crate::window::commands::get_windows_context_menu_status,
+            crate::window::commands::register_windows_context_menu,
             crate::file_system::get_folder_tree,
             crate::file_system::list_folder_children,
             crate::file_system::start_folder_indexing,

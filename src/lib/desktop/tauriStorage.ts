@@ -118,6 +118,10 @@ interface ExternalOpenPayload {
   paths?: unknown;
 }
 
+interface ExternalOpenFolderPayload {
+  folder_path?: unknown;
+}
+
 export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -380,6 +384,18 @@ export async function listenDesktopOpenDocuments(
       : [];
     if (paths.length > 0) {
       handler(paths);
+    }
+  });
+}
+
+export async function listenDesktopOpenFolder(
+  handler: (folderPath: string) => void,
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<ExternalOpenFolderPayload>('nomo://open-folder', (event) => {
+    const folderPath = event.payload?.folder_path;
+    if (typeof folderPath === 'string' && folderPath.length > 0) {
+      handler(folderPath);
     }
   });
 }

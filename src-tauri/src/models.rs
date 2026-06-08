@@ -201,3 +201,19 @@ pub(crate) struct DesktopActionPayload {
     pub(crate) ok: bool,
     pub(crate) message: String,
 }
+
+#[derive(Debug, Serialize)]
+pub(crate) struct MarkdownAssociationStatus {
+    pub(crate) supported: bool,
+    pub(crate) registered: bool,
+    pub(crate) is_default: bool,
+    pub(crate) default_prog_id: Option<String>,
+    pub(crate) message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct WindowsContextMenuStatus {
+    pub(crate) supported: bool,
+    pub(crate) registered: bool,
+    pub(crate) message: String,
+}

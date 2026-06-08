@@ -321,21 +321,32 @@ describe('App outline layout', () => {
 
   it('routes external document open requests into existing document windows', () => {
     expect(tauriLibSource).toContain('tauri_plugin_single_instance::init');
-    expect(tauriLibSource).toContain('collect_markdown_paths_from_args');
+    expect(tauriLibSource).toContain('collect_external_open_targets_from_args');
+    expect(tauriLibSource).toContain('route_external_open_targets');
     expect(tauriLibSource).toContain('tauri::RunEvent::Opened');
     expect(tauriLibSource).toContain('collect_markdown_paths_from_urls');
     expect(tauriLibSource).toContain('persist_pending_external_open');
+    expect(tauriLibSource).toContain('persist_pending_external_folder_open');
     expect(tauriExternalOpenSource).toContain(
       'const OPEN_DOCUMENT_EVENT: &str = "nomo://open-document"',
     );
+    expect(tauriExternalOpenSource).toContain(
+      'const OPEN_FOLDER_EVENT: &str = "nomo://open-folder"',
+    );
     expect(tauriExternalOpenSource).toContain('.emit(');
     expect(tauriExternalOpenSource).toContain('OPEN_DOCUMENT_EVENT');
+    expect(tauriExternalOpenSource).toContain('OPEN_FOLDER_EVENT');
     expect(tauriExternalOpenSource).toContain('is_document_window_label');
     expect(tauriStorageSource).toContain('listenDesktopOpenDocuments');
     expect(tauriStorageSource).toContain("listen<ExternalOpenPayload>('nomo://open-document'");
+    expect(tauriStorageSource).toContain('listenDesktopOpenFolder');
+    expect(tauriStorageSource).toContain("listen<ExternalOpenFolderPayload>('nomo://open-folder'");
     expect(appSource).toContain('listenDesktopOpenDocuments');
+    expect(appSource).toContain('listenDesktopOpenFolder');
     expect(appSource).toContain('pendingExternalOpen:${windowLabel}');
+    expect(appSource).toContain('pendingFolder:${windowLabel}');
     expect(appSource).toContain('openExternalMarkdownPaths(pendingExternalOpenPaths)');
+    expect(appSource).toContain('openFolderWithBehavior(folderPath)');
     expect(appSource).toContain("openRecentEntry(path, 'file')");
     expect(tauriConfigSource).toContain('"fileAssociations"');
     expect(tauriConfigSource).toContain('"md"');
@@ -478,9 +489,8 @@ describe('App outline layout', () => {
     expect(styles).toMatch(/\.tree-folder-wrapper\s*\{[\s\S]*?max-width:\s*100%;/);
     expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?max-width:\s*100%;/);
     expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?overflow:\s*hidden;/);
-    expect(styles).toMatch(
-      /\.file-tree button\.tree-file\s*\{[\s\S]*?max-width:\s*calc\(100% - 4px\);/,
-    );
+    expect(styles).toMatch(/\.file-tree button\.tree-file\s*\{[\s\S]*?max-width:\s*100%;/);
+    expect(styles).toMatch(/\.file-tree button\.tree-file\s*\{[\s\S]*?margin:\s*1px 0;/);
   });
 
   it('keeps folder chevron double-clicks from starting rename mode', () => {

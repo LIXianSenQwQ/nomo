@@ -52,6 +52,20 @@
     | 'advanced'
     | 'about';
 
+  type MarkdownAssociationStatus = {
+    supported: boolean;
+    registered: boolean;
+    is_default: boolean;
+    default_prog_id: string | null;
+    message: string;
+  };
+
+  type WindowsContextMenuStatus = {
+    supported: boolean;
+    registered: boolean;
+    message: string;
+  };
+
   const categories = [
     { id: 'general' as const, label: '通用', icon: Settings2 },
     { id: 'editor' as const, label: '编辑器', icon: BookOpenText },
@@ -87,6 +101,13 @@
   let platformCapabilities = getPlatformCapabilities();
   let picgoTesting = false;
   let bindingMdAssociation = false;
+  let checkingMdAssociation = false;
+  let mdAssociationStatus: MarkdownAssociationStatus | null = null;
+  let mdAssociationError = '';
+  let registeringContextMenu = false;
+  let checkingContextMenu = false;
+  let contextMenuStatus: WindowsContextMenuStatus | null = null;
+  let contextMenuError = '';
 
   const shortcutItems: Array<{ id: ShortcutCommandId; label: string }> = [
     { id: 'new-file', label: '新建 Markdown' },
@@ -106,6 +127,9 @@
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
     void loadPreferences();
+    void refreshMarkdownAssociationStatus();
+    void refreshWindowsContextMenuStatus();
+    window.addEventListener('focus', handleWindowFocus);
 
     return () => {
       if (statusTimer !== null) {
@@ -114,8 +138,16 @@
       if (autoSaveTimer !== null) {
         window.clearTimeout(autoSaveTimer);
       }
+      window.removeEventListener('focus', handleWindowFocus);
     };
   });
+
+  function handleWindowFocus() {
+    if (activeCategory === 'files') {
+      void refreshMarkdownAssociationStatus({ silent: true });
+      void refreshWindowsContextMenuStatus({ silent: true });
+    }
+  }
 
   async function loadPreferences() {
     draftSettings = await loadAppPreferences(desktopEnabled);
@@ -366,8 +398,195 @@
     }
   }
 
+  async function refreshMarkdownAssociationStatus(options: { silent?: boolean } = {}) {
+    if (!desktopEnabled || !platformCapabilities.isWindows || checkingMdAssociation) {
+      return;
+    }
+
+    checkingMdAssociation = true;
+    if (!options.silent) {
+      mdAssociationError = '';
+    }
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      mdAssociationStatus = await invoke<MarkdownAssociationStatus>(
+        'get_markdown_file_association_status',
+      );
+      mdAssociationError = '';
+    } catch (error) {
+      mdAssociationError = error instanceof Error ? error.message : String(error);
+    } finally {
+      checkingMdAssociation = false;
+    }
+  }
+
+  function getMarkdownAssociationLabel() {
+    if (!desktopEnabled || !platformCapabilities.isWindows) {
+      return '不支持';
+    }
+    if (checkingMdAssociation && !mdAssociationStatus) {
+      return '检测中';
+    }
+    if (mdAssociationError) {
+      return '检测失败';
+    }
+    if (mdAssociationStatus?.is_default) {
+      return '已绑定';
+    }
+    if (mdAssociationStatus?.registered) {
+      return '待选择';
+    }
+    return '未绑定';
+  }
+
+  function getMarkdownAssociationDescription() {
+    if (!desktopEnabled) {
+      return '仅 Windows 桌面版可绑定系统默认打开方式。';
+    }
+    if (!platformCapabilities.isWindows) {
+      return '当前默认打开方式绑定仅支持 Windows。';
+    }
+    if (mdAssociationError) {
+      return mdAssociationError;
+    }
+    if (checkingMdAssociation && !mdAssociationStatus) {
+      return '正在读取 Windows 当前 .md 默认打开方式。';
+    }
+    return (
+      mdAssociationStatus?.message ??
+      '将 Nomo 注册到 Windows 默认应用候选列表，并在系统设置中完成确认。'
+    );
+  }
+
+  function getMarkdownAssociationButtonLabel() {
+    if (bindingMdAssociation) {
+      return '打开中...';
+    }
+    if (mdAssociationStatus?.is_default) {
+      return '已绑定';
+    }
+    if (mdAssociationStatus?.registered) {
+      return '去选择 Nomo';
+    }
+    return '绑定 .md';
+  }
+
+  function getMarkdownAssociationPillClass() {
+    if (mdAssociationStatus?.is_default) {
+      return 'bound';
+    }
+    if (mdAssociationError) {
+      return 'error';
+    }
+    if (mdAssociationStatus?.registered) {
+      return 'pending';
+    }
+    return 'idle';
+  }
+
+  async function refreshWindowsContextMenuStatus(options: { silent?: boolean } = {}) {
+    if (!desktopEnabled || !platformCapabilities.isWindows || checkingContextMenu) {
+      return;
+    }
+
+    checkingContextMenu = true;
+    if (!options.silent) {
+      contextMenuError = '';
+    }
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      contextMenuStatus = await invoke<WindowsContextMenuStatus>('get_windows_context_menu_status');
+      contextMenuError = '';
+    } catch (error) {
+      contextMenuError = error instanceof Error ? error.message : String(error);
+    } finally {
+      checkingContextMenu = false;
+    }
+  }
+
+  function getContextMenuLabel() {
+    if (!desktopEnabled || !platformCapabilities.isWindows) {
+      return '不支持';
+    }
+    if (checkingContextMenu && !contextMenuStatus) {
+      return '检测中';
+    }
+    if (contextMenuError) {
+      return '检测失败';
+    }
+    return contextMenuStatus?.registered ? '已注册' : '未注册';
+  }
+
+  function getContextMenuDescription() {
+    if (!desktopEnabled) {
+      return '仅 Windows 桌面版可注册系统右键菜单。';
+    }
+    if (!platformCapabilities.isWindows) {
+      return '当前右键菜单注册仅支持 Windows。';
+    }
+    if (contextMenuError) {
+      return contextMenuError;
+    }
+    if (checkingContextMenu && !contextMenuStatus) {
+      return '正在读取 Windows 当前右键菜单注册状态。';
+    }
+    return (
+      contextMenuStatus?.message ?? '在 .md / .markdown 文件和文件夹右键菜单中加入 Nomo。'
+    );
+  }
+
+  function getContextMenuButtonLabel() {
+    if (registeringContextMenu) {
+      return '注册中...';
+    }
+    if (contextMenuStatus?.registered) {
+      return '已注册';
+    }
+    return '注册右键菜单';
+  }
+
+  function getContextMenuPillClass() {
+    if (contextMenuStatus?.registered) {
+      return 'bound';
+    }
+    if (contextMenuError) {
+      return 'error';
+    }
+    return 'idle';
+  }
+
+  async function registerWindowsContextMenu() {
+    if (
+      !desktopEnabled ||
+      !platformCapabilities.isWindows ||
+      registeringContextMenu ||
+      contextMenuStatus?.registered
+    ) {
+      return;
+    }
+
+    registeringContextMenu = true;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ ok: boolean; message: string }>('register_windows_context_menu');
+      showStatus(result.message);
+      await refreshWindowsContextMenuStatus({ silent: true });
+    } catch (error) {
+      showStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      registeringContextMenu = false;
+    }
+  }
+
   async function bindMarkdownAssociation() {
-    if (!desktopEnabled || bindingMdAssociation) {
+    if (
+      !desktopEnabled ||
+      !platformCapabilities.isWindows ||
+      bindingMdAssociation ||
+      mdAssociationStatus?.is_default
+    ) {
       return;
     }
     bindingMdAssociation = true;
@@ -377,6 +596,7 @@
         'register_markdown_file_association',
       );
       showStatus(result.message);
+      await refreshMarkdownAssociationStatus({ silent: true });
     } catch (error) {
       showStatus(error instanceof Error ? error.message : String(error));
     } finally {
@@ -832,18 +1052,49 @@
             <div class="setting-row">
               <div>
                 <span class="setting-label">绑定 .md 默认打开方式</span>
-                <p>将当前 Nomo 程序注册为 Windows Markdown 默认打开应用。</p>
+                <p>{getMarkdownAssociationDescription()}</p>
               </div>
-              <button
-                type="button"
-                class="action-button"
-                disabled={!desktopEnabled ||
-                  !platformCapabilities.isWindows ||
-                  bindingMdAssociation}
-                on:click={bindMarkdownAssociation}
-              >
-                {bindingMdAssociation ? '绑定中...' : '绑定 .md'}
-              </button>
+              <div class="association-action">
+                <span class={`association-pill ${getMarkdownAssociationPillClass()}`}>
+                  {getMarkdownAssociationLabel()}
+                </span>
+                <button
+                  type="button"
+                  class="action-button"
+                  disabled={!desktopEnabled ||
+                    !platformCapabilities.isWindows ||
+                    bindingMdAssociation ||
+                    checkingMdAssociation ||
+                    mdAssociationStatus?.is_default}
+                  on:click={bindMarkdownAssociation}
+                >
+                  {getMarkdownAssociationButtonLabel()}
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <span class="setting-label">注册 .md 与文件夹右键菜单</span>
+                <p>{getContextMenuDescription()}</p>
+              </div>
+              <div class="association-action">
+                <span class={`association-pill ${getContextMenuPillClass()}`}>
+                  {getContextMenuLabel()}
+                </span>
+                <button
+                  type="button"
+                  class="action-button"
+                  disabled={!desktopEnabled ||
+                    !platformCapabilities.isWindows ||
+                    registeringContextMenu ||
+                    checkingContextMenu ||
+                    contextMenuStatus?.registered}
+                  on:click={registerWindowsContextMenu}
+                >
+                  {getContextMenuButtonLabel()}
+                </button>
+              </div>
             </div>
           </div>
         {:else if activeCategory === 'images'}
@@ -1615,6 +1866,50 @@
     opacity: 0.55;
   }
 
+  .association-action {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .association-pill {
+    min-width: 62px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 9px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: 999px;
+    color: var(--md-editor-muted-fg);
+    background: color-mix(in srgb, var(--md-editor-surface) 78%, transparent);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .association-pill.bound {
+    border-color: color-mix(in srgb, #16a34a 58%, var(--md-editor-border));
+    color: #15803d;
+    background: color-mix(in srgb, #22c55e 12%, var(--md-editor-surface));
+  }
+
+  .association-pill.pending {
+    border-color: color-mix(in srgb, #d97706 58%, var(--md-editor-border));
+    color: #b45309;
+    background: color-mix(in srgb, #f59e0b 12%, var(--md-editor-surface));
+  }
+
+  .association-pill.error {
+    border-color: color-mix(in srgb, #dc2626 58%, var(--md-editor-border));
+    color: #b91c1c;
+    background: color-mix(in srgb, #ef4444 10%, var(--md-editor-surface));
+  }
+
   .toggle-row input {
     position: absolute;
     opacity: 0;
@@ -1746,6 +2041,11 @@
     .disabled-row {
       grid-template-columns: minmax(0, 1fr);
       gap: 10px;
+    }
+
+    .association-action {
+      justify-self: stretch;
+      justify-content: space-between;
     }
 
     .settings-content {

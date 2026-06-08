@@ -4,6 +4,7 @@
     listenDesktopFileDrops,
     listenDesktopMenuCommands,
     listenDesktopOpenDocuments,
+    listenDesktopOpenFolder,
     isTauriRuntime,
     listAppSettings,
     installSampleDocument,
@@ -1774,6 +1775,7 @@
       settingsUnlisten,
       exitRequestUnlisten,
       openDocumentUnlisten,
+      openFolderUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
     ] = await Promise.all([
@@ -1795,6 +1797,12 @@
         }
         openExternalMarkdownPaths(paths).catch(() => undefined);
       }).catch(() => null),
+      listenDesktopOpenFolder((folderPath) => {
+        if (windowLabel) {
+          updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
+        }
+        openFolderWithBehavior(folderPath).catch(() => undefined);
+      }).catch(() => null),
       listenFolderIndexBatches((payload) => {
         folderExplorer.applyIndexBatch(payload);
       }).catch(() => null),
@@ -1809,6 +1817,7 @@
       settingsUnlisten,
       exitRequestUnlisten,
       openDocumentUnlisten,
+      openFolderUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
     ].filter((value): value is () => void => Boolean(value));

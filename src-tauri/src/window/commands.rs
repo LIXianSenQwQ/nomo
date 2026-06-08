@@ -1,8 +1,5 @@
 use crate::window::menu::install_window_menu;
-use crate::{
-    database,
-    models::{DesktopActionPayload, WindowStateInput},
-};
+use crate::{database, models::WindowStateInput};
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
@@ -157,65 +154,25 @@ pub(crate) fn emit_exit_request<R: Runtime>(app: &AppHandle<R>) -> Result<(), St
 }
 
 #[tauri::command]
-pub(crate) fn register_markdown_file_association() -> Result<DesktopActionPayload, String> {
-    register_markdown_file_association_impl()
+pub(crate) fn get_markdown_file_association_status(
+) -> Result<crate::models::MarkdownAssociationStatus, String> {
+    crate::window::file_association::get_markdown_file_association_status()
 }
 
-#[cfg(target_os = "windows")]
-fn register_markdown_file_association_impl() -> Result<DesktopActionPayload, String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
-    let exe = exe_path.to_string_lossy().to_string();
-    let open_command = format!("\"{exe}\" \"%1\"");
-
-    run_reg_add(&[
-        "HKCU\\Software\\Classes\\.md",
-        "/ve",
-        "/d",
-        "Nomo.Markdown",
-        "/f",
-    ])?;
-    run_reg_add(&[
-        "HKCU\\Software\\Classes\\Nomo.Markdown",
-        "/ve",
-        "/d",
-        "Markdown Document",
-        "/f",
-    ])?;
-    run_reg_add(&[
-        "HKCU\\Software\\Classes\\Nomo.Markdown\\shell\\open\\command",
-        "/ve",
-        "/d",
-        &open_command,
-        "/f",
-    ])?;
-
-    Ok(DesktopActionPayload {
-        ok: true,
-        message: "已将 .md 文件关联到 Nomo。若资源管理器未立即刷新，请重新打开文件夹。".to_string(),
-    })
+#[tauri::command]
+pub(crate) fn register_markdown_file_association(
+) -> Result<crate::models::DesktopActionPayload, String> {
+    crate::window::file_association::register_markdown_file_association()
 }
 
-#[cfg(target_os = "windows")]
-fn run_reg_add(args: &[&str]) -> Result<(), String> {
-    let output = std::process::Command::new("reg")
-        .arg("add")
-        .args(args)
-        .output()
-        .map_err(|error| format!("调用 reg.exe 失败：{error}"))?;
-    if output.status.success() {
-        return Ok(());
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    Err(if stderr.is_empty() {
-        format!("写入 Windows 文件关联失败，退出码：{}", output.status)
-    } else {
-        format!("写入 Windows 文件关联失败：{stderr}")
-    })
+#[tauri::command]
+pub(crate) fn get_windows_context_menu_status(
+) -> Result<crate::models::WindowsContextMenuStatus, String> {
+    crate::window::file_association::get_windows_context_menu_status()
 }
 
-#[cfg(not(target_os = "windows"))]
-fn register_markdown_file_association_impl() -> Result<DesktopActionPayload, String> {
-    Err("当前默认打开方式绑定仅支持 Windows".to_string())
+#[tauri::command]
+pub(crate) fn register_windows_context_menu() -> Result<crate::models::DesktopActionPayload, String>
+{
+    crate::window::file_association::register_windows_context_menu()
 }

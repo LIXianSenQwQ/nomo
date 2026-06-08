@@ -10,26 +10,52 @@ use tauri::Url;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 const OPEN_DOCUMENT_EVENT: &str = "nomo://open-document";
+const OPEN_FOLDER_EVENT: &str = "nomo://open-folder";
 const PENDING_EXTERNAL_OPEN_PREFIX: &str = "pendingExternalOpen:";
+const PENDING_EXTERNAL_FOLDER_PREFIX: &str = "pendingFolder:";
 
 #[derive(Clone, Debug, Serialize)]
 struct ExternalOpenPayload {
     paths: Vec<String>,
 }
 
-pub(crate) fn collect_markdown_paths_from_startup_args() -> Vec<String> {
-    let args = env::args().collect::<Vec<_>>();
-    let cwd = env::current_dir().ok();
-    collect_markdown_paths_from_args(args, cwd)
+#[derive(Clone, Debug, Serialize)]
+struct ExternalFolderOpenPayload {
+    folder_path: String,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct ExternalOpenTargets {
+    pub(crate) markdown_paths: Vec<String>,
+    pub(crate) folder_paths: Vec<String>,
+}
+
+#[allow(dead_code)]
+pub(crate) fn collect_markdown_paths_from_startup_args() -> Vec<String> {
+    collect_external_open_targets_from_startup_args().markdown_paths
+}
+
+#[allow(dead_code)]
 pub(crate) fn collect_markdown_paths_from_args(
     args: Vec<String>,
     cwd: Option<PathBuf>,
 ) -> Vec<String> {
+    collect_external_open_targets_from_args(args, cwd).markdown_paths
+}
+
+pub(crate) fn collect_external_open_targets_from_startup_args() -> ExternalOpenTargets {
+    let args = env::args().collect::<Vec<_>>();
+    let cwd = env::current_dir().ok();
+    collect_external_open_targets_from_args(args, cwd)
+}
+
+pub(crate) fn collect_external_open_targets_from_args(
+    args: Vec<String>,
+    cwd: Option<PathBuf>,
+) -> ExternalOpenTargets {
     let exe_path = env::current_exe().ok();
     let mut seen = HashSet::new();
-    let mut paths = Vec::new();
+    let mut targets = ExternalOpenTargets::default();
 
     for arg in args {
         if arg.starts_with('-') {
@@ -48,12 +74,17 @@ pub(crate) fn collect_markdown_paths_from_args(
         if is_supported_external_file(&absolute, exe_path.as_deref()) {
             let normalized = normalize_path(&absolute);
             if seen.insert(normalized.clone()) {
-                paths.push(normalized);
+                targets.markdown_paths.push(normalized);
+            }
+        } else if is_supported_external_folder(&absolute, exe_path.as_deref()) {
+            let normalized = normalize_path(&absolute);
+            if seen.insert(normalized.clone()) {
+                targets.folder_paths.push(normalized);
             }
         }
     }
 
-    paths
+    targets
 }
 
 #[cfg(any(target_os = "macos", test))]
@@ -110,6 +141,50 @@ pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result
     Ok(())
 }
 
+pub(crate) fn route_external_open_targets(
+    app: &AppHandle,
+    targets: ExternalOpenTargets,
+) -> Result<(), String> {
+    route_external_open(app, targets.markdown_paths)?;
+    if let Some(folder_path) = targets.folder_paths.into_iter().next() {
+        route_external_folder_open(app, folder_path)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn route_external_folder_open(
+    app: &AppHandle,
+    folder_path: String,
+) -> Result<(), String> {
+    if folder_path.is_empty() {
+        return Ok(());
+    }
+
+    let Some(window) = target_document_window(app) else {
+        persist_pending_external_folder_open(app, "main", &folder_path)?;
+        return Ok(());
+    };
+
+    let label = window.label().to_string();
+    let _ = persist_pending_external_folder_open(app, &label, &folder_path);
+    window
+        .show()
+        .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;
+    window
+        .set_focus()
+        .map_err(|error| format!("聚焦外部打开目标窗口失败：{error}"))?;
+    window
+        .emit(
+            OPEN_FOLDER_EVENT,
+            ExternalFolderOpenPayload {
+                folder_path: folder_path.clone(),
+            },
+        )
+        .map_err(|error| format!("发送外部打开文件夹事件失败：{error}"))?;
+    crate::window::tray::set_tray_active(app, true);
+    Ok(())
+}
+
 pub(crate) fn persist_pending_external_open(
     app: &AppHandle,
     label: &str,
@@ -130,8 +205,32 @@ pub(crate) fn persist_pending_external_open(
     )
 }
 
+pub(crate) fn persist_pending_external_folder_open(
+    app: &AppHandle,
+    label: &str,
+    folder_path: &str,
+) -> Result<(), String> {
+    if folder_path.is_empty() {
+        return Ok(());
+    }
+
+    let key = pending_external_folder_key(label);
+    database::update_app_setting(
+        app.clone(),
+        SettingInput {
+            key,
+            value_json: serde_json::to_string(folder_path)
+                .map_err(|error| format!("序列化待外部打开文件夹失败：{error}"))?,
+        },
+    )
+}
+
 pub(crate) fn pending_external_open_key(label: &str) -> String {
     format!("{PENDING_EXTERNAL_OPEN_PREFIX}{label}")
+}
+
+pub(crate) fn pending_external_folder_key(label: &str) -> String {
+    format!("{PENDING_EXTERNAL_FOLDER_PREFIX}{label}")
 }
 
 pub(crate) fn is_document_window_label(label: &str) -> bool {
@@ -160,6 +259,16 @@ fn is_supported_external_file(path: &Path, exe_path: Option<&Path>) -> bool {
     }
 
     true
+}
+
+fn is_supported_external_folder(path: &Path, exe_path: Option<&Path>) -> bool {
+    if let Some(exe_path) = exe_path {
+        if same_path(path, exe_path) {
+            return false;
+        }
+    }
+
+    path.is_dir()
 }
 
 fn has_supported_extension(path: &Path) -> bool {
@@ -228,6 +337,27 @@ mod tests {
         );
 
         assert_eq!(paths, vec![normalize_path(&md)]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn collects_existing_folder_paths_from_args() {
+        let dir = env::temp_dir().join(format!("nomo-external-open-folder-{}", database::now_ts()));
+        fs::create_dir_all(&dir).unwrap();
+        let md = dir.join("demo.md");
+        fs::write(&md, "# ok").unwrap();
+
+        let targets = collect_external_open_targets_from_args(
+            vec![
+                "Nomo.exe".to_string(),
+                dir.to_string_lossy().to_string(),
+                md.to_string_lossy().to_string(),
+            ],
+            None,
+        );
+
+        assert_eq!(targets.folder_paths, vec![normalize_path(&dir)]);
+        assert_eq!(targets.markdown_paths, vec![normalize_path(&md)]);
         let _ = fs::remove_dir_all(dir);
     }
 
