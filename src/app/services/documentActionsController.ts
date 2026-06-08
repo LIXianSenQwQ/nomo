@@ -17,8 +17,10 @@ import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
 
 interface DocumentActionsOptions {
-  largeDocumentLimit: number;
   recoveryKey: string;
+  getLargeDocumentLimit(): number;
+  getAutoSaveDelayMs(): number;
+  getCreateSnapshotBeforeSave(): boolean;
   getDesktopEnabled(): boolean;
   getDirty(): boolean;
   getAutoSaveEnabled(): boolean;
@@ -114,7 +116,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.markdown = text;
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = 0;
-    targetTab.largeDocumentMode = text.length > options.largeDocumentLimit;
+    targetTab.largeDocumentMode = text.length > options.getLargeDocumentLimit();
     targetTab.readonlyDocumentMode = targetTab.largeDocumentMode;
     targetTab.externalFileWarning = '';
 
@@ -140,7 +142,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         path,
         markdownToSave,
         options.getFileName(),
-        options.getNativePath(),
+        options.getCreateSnapshotBeforeSave() ? options.getNativePath() : null,
       );
       if (error) {
         options.setStatusMessage(error);
@@ -176,8 +178,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
   async function applyNativeDocument(document: NativeDocument, message: string, saved = false) {
     const isLargeDocument =
-      document.markdown.length > options.largeDocumentLimit ||
-      document.sizeBytes > options.largeDocumentLimit;
+      document.markdown.length > options.getLargeDocumentLimit() ||
+      document.sizeBytes > options.getLargeDocumentLimit();
     const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
     if (existingTab && !saved) {
       options.switchTab(existingTab.id);
@@ -236,8 +238,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     message: string,
   ) {
     const isLargeDocument =
-      document.markdown.length > options.largeDocumentLimit ||
-      document.sizeBytes > options.largeDocumentLimit;
+      document.markdown.length > options.getLargeDocumentLimit() ||
+      document.sizeBytes > options.getLargeDocumentLimit();
     const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
 
     options.saveActiveTabState();
@@ -352,14 +354,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (saveTimers[tabId] !== undefined) {
       clearTimeout(saveTimers[tabId]);
     }
-    
+
     saveTimers[tabId] = setTimeout(async () => {
       delete saveTimers[tabId];
       if (!options.getAutoSaveEnabled()) return;
       if (!options.getDesktopEnabled()) return;
 
       const markdownToSave = normalizeMarkdownForSave(currentMarkdown);
-      
+
       const { document, error } = await saveNativeMarkdownFile(
         path,
         markdownToSave,
@@ -378,13 +380,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         if (options.getActiveTabId() === tabId) {
           options.setStatusMessage('已保存');
         }
-        
+
         const tabs = options.getTabs();
         const savedTab = tabs.find((tab) => tab.id === tabId);
         if (savedTab) {
           savedTab.dirty = false;
           savedTab.lastKnownModifiedAt = document.modifiedAt;
-          
+
           if (options.getActiveTabId() === tabId) {
             options.setDirty(false);
             options.setLastKnownModifiedAt(document.modifiedAt);
@@ -404,7 +406,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
             const { dirname, join } = await import('@tauri-apps/api/path');
             const parentDir = await dirname(path);
             let targetPath = await join(parentDir, finalName);
-            
+
             const { statMarkdownFile, renameFile } = await import('../../lib/desktop/tauriStorage');
             let suffix = 1;
             let currentName = finalName;
@@ -420,12 +422,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
             if (targetPath !== path) {
               await renameFile(path, targetPath).catch(() => null);
-              
+
               if (savedTab) {
                 savedTab.nativePath = targetPath;
                 savedTab.filePath = targetPath;
                 savedTab.fileName = currentName;
-                
+
                 const stat = await statMarkdownFile(targetPath).catch(() => null);
                 if (stat && stat.exists) {
                   savedTab.lastKnownModifiedAt = stat.modifiedAt;
@@ -439,7 +441,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
                   options.setFilePath(targetPath);
                   options.setNativePath(targetPath);
                 }
-                
+
                 options.setTabs([...options.getTabs()]);
               }
               if (options.getCurrentFolderPath()) {
@@ -449,7 +451,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
           }
         }
       }
-    }, 1000);
+    }, options.getAutoSaveDelayMs());
   }
 
   function cancelPendingAutoSaves() {

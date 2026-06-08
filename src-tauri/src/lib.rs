@@ -15,7 +15,12 @@ pub fn run() {
                 crate::window::state::persist_current_window_state(window);
             }
             WindowEvent::CloseRequested { api, .. } => {
-                if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
+                let label = window.label();
+                let is_document_window =
+                    label == "main" || (label.starts_with("window-") && label != "window-settings");
+                if is_document_window
+                    && crate::window::tray::close_to_tray_enabled(window.app_handle())
+                {
                     api.prevent_close();
                     let _ = window.hide();
                     crate::window::tray::set_tray_active(window.app_handle(), false);
@@ -58,6 +63,7 @@ pub fn run() {
             crate::file_system::image_assets::upload_image_via_picgo_core,
             crate::file_system::image_assets::upload_image_via_picgo_server,
             crate::window::commands::create_new_window,
+            crate::window::commands::open_settings_window,
             crate::window::commands::minimize_window,
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,

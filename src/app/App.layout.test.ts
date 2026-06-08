@@ -12,8 +12,8 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/EditorToolbar.svelte'),
     'utf-8',
   );
-  const settingsDrawerSource = readFileSync(
-    resolve(__dirname, 'components/SettingsDrawer.svelte'),
+  const settingsWindowSource = readFileSync(
+    resolve(__dirname, 'components/SettingsWindow.svelte'),
     'utf-8',
   );
   const linkQuickEditorSource = readFileSync(
@@ -99,7 +99,9 @@ describe('App outline layout', () => {
   });
 
   it('sizes the document content as a percentage of the editor shell', () => {
-    expect(appSource).toContain('contentWidthPercent = 68');
+    expect(appSource).toContain(
+      'contentWidthPercent = DEFAULT_APP_PREFERENCES.contentWidthPercent',
+    );
     expect(appSource).toContain('{contentWidthPercent}');
     expect(styles).toMatch(
       /grid-template-columns:\s*minmax\(0,\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\)\);/,
@@ -336,7 +338,9 @@ describe('App outline layout', () => {
     expect(styles).toMatch(/\.tree-folder-wrapper\s*\{[\s\S]*?max-width:\s*100%;/);
     expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?max-width:\s*100%;/);
     expect(styles).toMatch(/\.tree-folder\.nested-dir\s*\{[\s\S]*?overflow:\s*hidden;/);
-    expect(styles).toMatch(/\.file-tree button\.tree-file\s*\{[\s\S]*?max-width:\s*calc\(100% - 4px\);/);
+    expect(styles).toMatch(
+      /\.file-tree button\.tree-file\s*\{[\s\S]*?max-width:\s*calc\(100% - 4px\);/,
+    );
   });
 
   it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {
@@ -357,43 +361,30 @@ describe('App outline layout', () => {
     expect(styles).toContain('.tab-dropdown-menu');
   });
 
-  it('moves editor appearance controls into the settings drawer draft flow', () => {
-    expect(settingsDrawerSource).toContain('编辑器外观');
-    expect(settingsDrawerSource).toContain('export let fontSize');
-    expect(settingsDrawerSource).toContain('export let lineHeight');
-    expect(settingsDrawerSource).toContain("export let blockStyle: 'classic' | 'modern'");
-    expect(settingsDrawerSource).toContain('draftFontSize = fontSize');
-    expect(settingsDrawerSource).toContain('draftLineHeight = lineHeight');
-    expect(settingsDrawerSource).toContain('draftBlockStyle = blockStyle');
-    expect(settingsDrawerSource).toContain('aria-label="提示块样式"');
-    expect(settingsDrawerSource).toContain('draftFolderBehavior = folderOpenDefaultBehavior');
-    expect(settingsDrawerSource).toContain('打开文件夹默认行为');
-    expect(settingsDrawerSource).toContain('文件预览标签');
-    expect(settingsDrawerSource).toContain('toggleFilePreviewEnabled');
-    expect(settingsDrawerSource).toContain('显示文档统计');
-    expect(settingsDrawerSource).toContain('文档统计类型');
-    expect(settingsDrawerSource).toContain('setDraftWritingStatsMetric');
-    expect(settingsDrawerSource).toContain('自动保存');
-    expect(settingsDrawerSource).toContain('toggleAutoSaveEnabled');
-    expect(settingsDrawerSource).toContain('关闭到托盘');
-    expect(settingsDrawerSource).toContain('toggleCloseToTrayEnabled');
-    expect(settingsDrawerSource).toContain('draftFolderBehavior,');
-    expect(settingsDrawerSource).toContain('draftFilePreviewEnabled,');
-    expect(settingsDrawerSource).toContain('draftWritingStatsVisible,');
-    expect(settingsDrawerSource).toContain('draftWritingStatsMetric,');
-    expect(settingsDrawerSource).toContain('draftAutoSaveEnabled,');
-    expect(settingsDrawerSource).toContain('draftCloseToTrayEnabled,');
-    expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
-    expect(appSource).toContain('updateLineHeightValue(nextAppearanceSettings.lineHeight)');
-    expect(appSource).toContain('updateBlockStyle(nextAppearanceSettings.blockStyle)');
-    expect(appSource).toContain('filePreviewEnabled = true');
-    expect(appSource).toContain('autoSaveEnabled = false');
-    expect(appSource).toContain('closeToTrayEnabled = false');
-    expect(appSource).toContain("updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled)");
-    expect(appSource).toContain("updateAppSetting('writingStatsVisible'");
-    expect(appSource).toContain("updateAppSetting('writingStatsMetric'");
-    expect(appSource).toContain("updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled)");
-    expect(appSource).toContain("updateAppSetting('closeToTrayEnabled', nextCloseToTrayEnabled)");
+  it('opens preferences in a dedicated settings window', () => {
+    expect(appSource).not.toContain('SettingsDrawer');
+    expect(desktopWindowSource).toContain('openSettingsWindow');
+    expect(settingsWindowSource).toContain('偏好设置');
+    expect(settingsWindowSource).toContain('settings-nav');
+    expect(settingsWindowSource).toContain('保存前创建快照');
+    expect(settingsWindowSource).toContain('自动保存延迟');
+    expect(settingsWindowSource).toContain('大文件阈值');
+    expect(settingsWindowSource).toContain('打开文件夹默认行为');
+    expect(settingsWindowSource).toContain('文件预览标签');
+    expect(settingsWindowSource).toContain('显示文档统计');
+    expect(settingsWindowSource).toContain('默认统计类型');
+    expect(settingsWindowSource).toContain('阅读时间');
+    expect(settingsWindowSource).toContain('关闭到托盘');
+    expect(settingsWindowSource).toContain('图片默认宽度');
+    expect(settingsWindowSource).toContain('后续版本支持');
+    expect(settingsWindowSource).toContain('自动清理本地图片');
+    expect(settingsWindowSource).toContain('代码块默认语言');
+    expect(settingsWindowSource).toContain('Mermaid 默认图表类型');
+    expect(appSource).toContain('DEFAULT_APP_PREFERENCES.filePreviewEnabled');
+    expect(appSource).toContain('DEFAULT_APP_PREFERENCES.autoSaveEnabled');
+    expect(appSource).toContain('DEFAULT_APP_PREFERENCES.closeToTrayEnabled');
+    expect(appSource).toContain('SETTINGS_UPDATED_EVENT');
+    expect(appSource).toContain('applyAppPreferences');
     expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');
     expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
   });
@@ -414,10 +405,10 @@ describe('App outline layout', () => {
   });
 
   it('removes application-level workspace storage path configuration', () => {
-    expect(settingsDrawerSource).not.toContain('工作区存储路径');
-    expect(settingsDrawerSource).not.toContain('workspaceDir');
-    expect(settingsDrawerSource).not.toContain('browseFolder');
-    expect(settingsDrawerSource).not.toContain('selectedDir');
+    expect(settingsWindowSource).not.toContain('工作区存储路径');
+    expect(settingsWindowSource).not.toContain('workspaceDir');
+    expect(settingsWindowSource).not.toContain('browseFolder');
+    expect(settingsWindowSource).not.toContain('selectedDir');
 
     expect(appSource).not.toContain("updateAppSetting('workspaceDir'");
     expect(appSource).not.toContain("settings.find((s) => s.key === 'workspaceDir')");
@@ -439,8 +430,8 @@ describe('App outline layout', () => {
     expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: boolean');
     expect(imageSettingsSource).toContain('autoDeleteUnusedLocalImages: true');
     expect(appSettingsSource).toContain('autoDeleteUnusedLocalImages');
-    expect(settingsDrawerSource).toContain('自动清理本地图片');
-    expect(settingsDrawerSource).toContain('toggleAutoDeleteUnusedLocalImages');
+    expect(settingsWindowSource).toContain('自动清理本地图片');
+    expect(settingsWindowSource).toContain('autoDeleteUnusedLocalImages');
     expect(appSource).toContain('!imageSettings.autoDeleteUnusedLocalImages');
   });
 });

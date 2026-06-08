@@ -99,6 +99,19 @@ export async function createAppWindow(
   }
 }
 
+export async function openSettingsWindow(desktopEnabled: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_settings_window');
+  } catch (error) {
+    console.error('打开偏好设置窗口失败:', error);
+  }
+}
+
 export async function updateAppWindowTitle(
   desktopEnabled: boolean,
   fileName: string,

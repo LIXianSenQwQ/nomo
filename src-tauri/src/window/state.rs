@@ -6,6 +6,10 @@ const MIN_WINDOW_WIDTH: u32 = 920;
 const MIN_WINDOW_HEIGHT: u32 = 640;
 const DEFAULT_WINDOW_WIDTH: u32 = 1180;
 const DEFAULT_WINDOW_HEIGHT: u32 = 760;
+const SETTINGS_MIN_WINDOW_WIDTH: u32 = 760;
+const SETTINGS_MIN_WINDOW_HEIGHT: u32 = 520;
+const SETTINGS_DEFAULT_WINDOW_WIDTH: u32 = 860;
+const SETTINGS_DEFAULT_WINDOW_HEIGHT: u32 = 620;
 const MIN_VISIBLE_SIZE: i32 = 80;
 
 pub(crate) fn persist_current_window_state(window: &tauri::Window) {
@@ -39,14 +43,15 @@ pub(crate) fn restore_window_state(app: &AppHandle, label: &str) {
         return;
     };
 
+    let metrics = window_metrics(label);
     let width = state
         .width
-        .unwrap_or(DEFAULT_WINDOW_WIDTH)
-        .max(MIN_WINDOW_WIDTH);
+        .unwrap_or(metrics.default_width)
+        .max(metrics.min_width);
     let height = state
         .height
-        .unwrap_or(DEFAULT_WINDOW_HEIGHT)
-        .max(MIN_WINDOW_HEIGHT);
+        .unwrap_or(metrics.default_height)
+        .max(metrics.min_height);
     let monitors = window.available_monitors().unwrap_or_default();
 
     let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }));
@@ -62,6 +67,31 @@ pub(crate) fn restore_window_state(app: &AppHandle, label: &str) {
 
     if let Some(position) = centered_position_on_primary_monitor(&window, width, height) {
         let _ = window.set_position(tauri::Position::Physical(position));
+    }
+}
+
+struct WindowMetrics {
+    min_width: u32,
+    min_height: u32,
+    default_width: u32,
+    default_height: u32,
+}
+
+fn window_metrics(label: &str) -> WindowMetrics {
+    if label == "window-settings" {
+        return WindowMetrics {
+            min_width: SETTINGS_MIN_WINDOW_WIDTH,
+            min_height: SETTINGS_MIN_WINDOW_HEIGHT,
+            default_width: SETTINGS_DEFAULT_WINDOW_WIDTH,
+            default_height: SETTINGS_DEFAULT_WINDOW_HEIGHT,
+        };
+    }
+
+    WindowMetrics {
+        min_width: MIN_WINDOW_WIDTH,
+        min_height: MIN_WINDOW_HEIGHT,
+        default_width: DEFAULT_WINDOW_WIDTH,
+        default_height: DEFAULT_WINDOW_HEIGHT,
     }
 }
 

@@ -7,6 +7,7 @@
 
   export let stats: DocumentStats;
   export let activeMetric: StatsMetric = 'words';
+  export let readingTimeVisible = false;
   export let onMetricChange: (metric: StatsMetric) => void = () => undefined;
 
   let statsOpen = false;
@@ -53,7 +54,8 @@
       on:click={toggleStats}
       on:keydown={handleStatsKeydown}
     >
-      {activeStatsOption.value} {activeStatsOption.unit}
+      {activeStatsOption.value}
+      {activeStatsOption.unit}
     </button>
 
     {#if statsOpen}
@@ -64,6 +66,9 @@
         aria-labelledby="writing-stats-title"
       >
         <h2 id="writing-stats-title">文档统计</h2>
+        {#if readingTimeVisible}
+          <div class="reading-time">预计阅读 {stats.readingMinutes} 分钟</div>
+        {/if}
         <div class="writing-stats-options" role="group" aria-label="选择显示的统计类型">
           {#each statsOptions as option (option.key)}
             <button

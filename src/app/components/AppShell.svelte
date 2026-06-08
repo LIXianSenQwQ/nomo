@@ -55,6 +55,7 @@
   export let stats: DocumentStats;
   export let writingStatsVisible: boolean;
   export let writingStatsMetric: StatsMetric;
+  export let readingTimeVisible: boolean;
   export let tablePickerOpen: boolean;
   export let linkPickerOpen: boolean;
   export let linkText: string;
@@ -289,6 +290,7 @@
         <StatusBar
           {stats}
           activeMetric={writingStatsMetric}
+          {readingTimeVisible}
           onMetricChange={setWritingStatsMetric}
         />
       {/if}

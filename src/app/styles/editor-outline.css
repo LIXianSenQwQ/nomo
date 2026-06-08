@@ -207,6 +207,17 @@ textarea::selection {
   line-height: 1.4;
 }
 
+.reading-time {
+  margin: 6px 6px 0;
+  padding: 7px 8px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-accent) 7%, transparent);
+  color: var(--md-editor-muted-fg);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .writing-stats-options {
   display: grid;
   gap: 2px;

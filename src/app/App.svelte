@@ -42,7 +42,6 @@
     type FrontMatterBlock,
   } from '../lib/markdown/frontMatter';
   import AppShell from './components/AppShell.svelte';
-  import SettingsDrawer from './components/SettingsDrawer.svelte';
   import FolderOpenDialog from './components/FolderOpenDialog.svelte';
   import type { FileTreeNode, Tab, WorkspaceState } from './types';
   import { getCompactPath, getDirectoryLabel, getFolderName } from './utils/pathLabels';
@@ -57,6 +56,7 @@
     exitApp as exitDesktopApp,
     maximizeAppWindow,
     minimizeAppWindow,
+    openSettingsWindow,
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
@@ -82,9 +82,14 @@
     ContextMenuItem,
   } from '../lib/editor-core/plugins/contextMenu';
   import {
+    DEFAULT_APP_PREFERENCES,
+    SETTINGS_UPDATED_EVENT,
     applyBlockStyleSetting,
-    loadPersistedImageSettings,
-    persistImageSettings,
+    applyEditorLayoutSettings,
+    applyThemeSetting,
+    applyTypographySettings,
+    loadAppPreferences,
+    type AppPreferences,
   } from './services/settings';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
@@ -99,24 +104,7 @@
     type ImageHandlingSettings,
   } from '../lib/services/render';
 
-  const LARGE_DOCUMENT_LIMIT = 300_000;
   const RECOVERY_KEY = 'nomo-save-recovery';
-  type EditorAppearanceSettings = {
-    fontSize: number;
-    lineHeight: number;
-    blockStyle: 'classic' | 'modern';
-  };
-  type WorkspaceBehaviorSettings = {
-    folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
-    filePreviewEnabled: boolean;
-    autoSaveEnabled: boolean;
-    closeToTrayEnabled: boolean;
-    editorMode: EditorMode;
-    sidebarHidden: boolean;
-    outlineVisible: boolean;
-    writingStatsVisible: boolean;
-    writingStatsMetric: WritingStatsMetric;
-  };
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
@@ -127,8 +115,8 @@
   let markdown = '',
     dirty = false,
     version = 0;
-  let mode: EditorMode = 'semantic';
-  let theme: 'light' | 'dark' = 'light';
+  let mode: EditorMode = DEFAULT_APP_PREFERENCES.editorMode;
+  let theme: 'light' | 'dark' = DEFAULT_APP_PREFERENCES.theme;
   let fileName = '',
     filePath = '';
   let nativePath: string | null = null;
@@ -137,22 +125,28 @@
   let recentFiles: RecentEntry[] = [];
   let missingRecentPaths = new Set<string>();
   let outline: OutlineItem[] = [];
-  let outlineVisible = true,
+  let outlineVisible = DEFAULT_APP_PREFERENCES.outlineVisible,
     activeOutlineId = outline[0]?.id ?? '';
   let collapsedOutlineIds = new Set<string>();
   let visibleOutlineIds = new Set(outline.map((item) => item.id));
   let suppressOutlineScrollUntil = 0;
   let stats: DocumentStats = calculateDocumentStats('');
-  let writingStatsVisible = true;
-  let writingStatsMetric: WritingStatsMetric = 'words';
-  let fontSize = 16,
-    lineHeight = 1.75,
-    contentWidthPercent = 68,
-    focusMode = false,
-    blockStyle: 'classic' | 'modern' = 'modern';
+  let writingStatsVisible = DEFAULT_APP_PREFERENCES.writingStatsVisible;
+  let writingStatsMetric: WritingStatsMetric = DEFAULT_APP_PREFERENCES.writingStatsMetric;
+  let readingTimeVisible = DEFAULT_APP_PREFERENCES.readingTimeVisible;
+  let fontSize = DEFAULT_APP_PREFERENCES.fontSize,
+    lineHeight = DEFAULT_APP_PREFERENCES.lineHeight,
+    contentWidthPercent = DEFAULT_APP_PREFERENCES.contentWidthPercent,
+    focusMode = DEFAULT_APP_PREFERENCES.sidebarHidden,
+    blockStyle: 'classic' | 'modern' = DEFAULT_APP_PREFERENCES.blockStyle;
+  let largeDocumentLimit = DEFAULT_APP_PREFERENCES.largeDocumentLimit;
+  let autoSaveDelayMs = DEFAULT_APP_PREFERENCES.autoSaveDelayMs;
+  let createSnapshotBeforeSave = DEFAULT_APP_PREFERENCES.createSnapshotBeforeSave;
+  let defaultCodeBlockLanguage = DEFAULT_APP_PREFERENCES.defaultCodeBlockLanguage;
+  let defaultDiagramType = DEFAULT_APP_PREFERENCES.defaultDiagramType;
   let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
   let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
-    'ask-every-time';
+    DEFAULT_APP_PREFERENCES.folderOpenDefaultBehavior;
   let folderOpenDialogPath: string | null = null;
   let folderOpenDialogName = '';
   let editorHost: HTMLDivElement,
@@ -201,9 +195,9 @@
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
-  let filePreviewEnabled = true;
-  let autoSaveEnabled = false;
-  let closeToTrayEnabled = false;
+  let filePreviewEnabled = DEFAULT_APP_PREFERENCES.filePreviewEnabled;
+  let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
+  let closeToTrayEnabled = DEFAULT_APP_PREFERENCES.closeToTrayEnabled;
   let windowLabel = '';
 
   function persistWorkspaceState() {
@@ -517,6 +511,8 @@
     getMode: () => mode,
     toggleTheme: () => toggleTheme(),
     toggleFocusMode: () => toggleFocusMode(),
+    getDefaultCodeBlockLanguage: () => defaultCodeBlockLanguage,
+    getDefaultDiagramType: () => defaultDiagramType,
     switchToNextTab: () => {
       const idx = tabs.findIndex((t) => t.id === activeTabId);
       const nextIdx = idx >= 0 ? (idx + 1) % tabs.length : 0;
@@ -619,72 +615,8 @@
       blockStyle = value;
     },
   });
-  let isSettingsOpen = false;
-
   function openSettings() {
-    isSettingsOpen = true;
-  }
-
-  function closeSettings() {
-    isSettingsOpen = false;
-  }
-
-  async function handleSaveSettings(
-    nextImageSettings: ImageHandlingSettings,
-    nextAppearanceSettings: EditorAppearanceSettings,
-    nextWorkspaceBehaviorSettings: WorkspaceBehaviorSettings,
-  ) {
-    imageSettings = nextImageSettings;
-    persistImageSettings(desktopEnabled, imageSettings);
-    updateFontSizeValue(nextAppearanceSettings.fontSize);
-    updateLineHeightValue(nextAppearanceSettings.lineHeight);
-    updateBlockStyle(nextAppearanceSettings.blockStyle);
-    const nextFilePreviewEnabled = nextWorkspaceBehaviorSettings.filePreviewEnabled;
-    const nextAutoSaveEnabled = nextWorkspaceBehaviorSettings.autoSaveEnabled;
-    const nextCloseToTrayEnabled = nextWorkspaceBehaviorSettings.closeToTrayEnabled;
-    if (nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior !== folderOpenDefaultBehavior) {
-      folderOpenDefaultBehavior = nextWorkspaceBehaviorSettings.folderOpenDefaultBehavior;
-      await updateAppSetting('folderOpenDefaultBehavior', folderOpenDefaultBehavior).catch(
-        () => undefined,
-      );
-    }
-    if (nextFilePreviewEnabled !== filePreviewEnabled) {
-      filePreviewEnabled = nextFilePreviewEnabled;
-      if (!filePreviewEnabled) {
-        previewTabId = null;
-        persistWorkspaceState();
-      }
-      await updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled).catch(() => undefined);
-    }
-    if (nextAutoSaveEnabled !== autoSaveEnabled) {
-      autoSaveEnabled = nextAutoSaveEnabled;
-      if (!autoSaveEnabled) {
-        documentActions.cancelPendingAutoSaves();
-      }
-      await updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled).catch(() => undefined);
-    }
-    if (nextCloseToTrayEnabled !== closeToTrayEnabled) {
-      closeToTrayEnabled = nextCloseToTrayEnabled;
-      await updateAppSetting('closeToTrayEnabled', nextCloseToTrayEnabled).catch(() => undefined);
-    }
-    if (nextWorkspaceBehaviorSettings.sidebarHidden !== focusMode) {
-      setSidebarHidden(nextWorkspaceBehaviorSettings.sidebarHidden);
-    }
-    if (nextWorkspaceBehaviorSettings.outlineVisible !== outlineVisible) {
-      setOutlineVisiblePreference(nextWorkspaceBehaviorSettings.outlineVisible);
-    }
-    if (nextWorkspaceBehaviorSettings.writingStatsVisible !== writingStatsVisible) {
-      setWritingStatsVisiblePreference(nextWorkspaceBehaviorSettings.writingStatsVisible);
-    }
-    if (nextWorkspaceBehaviorSettings.writingStatsMetric !== writingStatsMetric) {
-      setWritingStatsMetric(nextWorkspaceBehaviorSettings.writingStatsMetric);
-    }
-    if (nextWorkspaceBehaviorSettings.editorMode !== mode) {
-      setMode(nextWorkspaceBehaviorSettings.editorMode);
-    } else {
-      persistEditorModePreference(nextWorkspaceBehaviorSettings.editorMode);
-    }
-    closeSettings();
+    openSettingsWindow(desktopEnabled);
   }
 
   // 打开预览标签页（文件树单击）
@@ -727,7 +659,7 @@
     }
 
     const isLargeDocument =
-      document.markdown.length > LARGE_DOCUMENT_LIMIT || document.sizeBytes > LARGE_DOCUMENT_LIMIT;
+      document.markdown.length > largeDocumentLimit || document.sizeBytes > largeDocumentLimit;
 
     targetTab.fileName = document.fileName;
     targetTab.filePath = document.path;
@@ -848,7 +780,9 @@
   }
 
   const documentActions = createDocumentActionsController({
-    largeDocumentLimit: LARGE_DOCUMENT_LIMIT,
+    getLargeDocumentLimit: () => largeDocumentLimit,
+    getAutoSaveDelayMs: () => autoSaveDelayMs,
+    getCreateSnapshotBeforeSave: () => createSnapshotBeforeSave,
     recoveryKey: RECOVERY_KEY,
     getDesktopEnabled: () => desktopEnabled,
     getDirty: () => dirty,
@@ -970,14 +904,10 @@
   });
   const handleEditorDrop = imageInsertion.handleEditorDrop;
   const handleEditorPaste = imageInsertion.handleEditorPaste;
-  const loadPersistedSettings = editorSettings.loadPersistedSettings;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
   const toggleTheme = editorSettings.toggleTheme;
-  const updateFontSizeValue = editorSettings.updateFontSizeValue;
-  const updateLineHeightValue = editorSettings.updateLineHeightValue;
   const updateContentWidth = editorSettings.updateContentWidth;
-  const updateBlockStyle = editorSettings.updateBlockStyle;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
   const pruneCollapsedOutlineIds = outlineInteraction.pruneCollapsedOutlineIds;
@@ -1238,6 +1168,57 @@
 
   const unsubscribe = editor.subscribe(syncFromEditor);
 
+  function applyAppPreferences(
+    preferences: AppPreferences,
+    options: { applyEditorMode?: boolean } = {},
+  ) {
+    theme = preferences.theme;
+    fontSize = preferences.fontSize;
+    lineHeight = preferences.lineHeight;
+    contentWidthPercent = preferences.contentWidthPercent;
+    blockStyle = preferences.blockStyle;
+    imageSettings = preferences.imageHandlingSettings;
+    folderOpenDefaultBehavior = preferences.folderOpenDefaultBehavior;
+    filePreviewEnabled = preferences.filePreviewEnabled;
+    closeToTrayEnabled = preferences.closeToTrayEnabled;
+    focusMode = preferences.sidebarHidden;
+    outlineVisible = preferences.outlineVisible;
+    writingStatsVisible = preferences.writingStatsVisible;
+    writingStatsMetric = preferences.writingStatsMetric;
+    readingTimeVisible = preferences.readingTimeVisible;
+    largeDocumentLimit = preferences.largeDocumentLimit;
+    autoSaveDelayMs = preferences.autoSaveDelayMs;
+    createSnapshotBeforeSave = preferences.createSnapshotBeforeSave;
+    defaultCodeBlockLanguage = preferences.defaultCodeBlockLanguage;
+    defaultDiagramType = preferences.defaultDiagramType;
+
+    if (!filePreviewEnabled) {
+      previewTabId = null;
+    }
+    if (autoSaveEnabled && !preferences.autoSaveEnabled) {
+      documentActions.cancelPendingAutoSaves();
+    }
+    autoSaveEnabled = preferences.autoSaveEnabled;
+
+    applyThemeSetting(theme, { transition: true });
+    applyTypographySettings(fontSize, lineHeight);
+    applyEditorLayoutSettings(contentWidthPercent);
+    applyBlockStyleSetting(blockStyle);
+    editor.updateTheme({ name: theme });
+
+    if (options.applyEditorMode && !largeDocumentMode) {
+      mode = preferences.editorMode;
+      editor.updateOptions({ mode: preferences.editorMode });
+    }
+
+    persistWorkspaceState();
+  }
+
+  async function reloadAppPreferencesFromSettingsWindow() {
+    const preferences = await loadAppPreferences(desktopEnabled);
+    applyAppPreferences(preferences, { applyEditorMode: true });
+  }
+
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
     let persistedEditorMode: EditorMode | null = null;
@@ -1269,119 +1250,9 @@
         }
       }
 
-      const folderBehaviorSetting = settings.find((s) => s.key === 'folderOpenDefaultBehavior');
-      if (folderBehaviorSetting) {
-        try {
-          const value = JSON.parse(folderBehaviorSetting.valueJson) as
-            | 'current-window'
-            | 'new-window'
-            | 'ask-every-time';
-          if (['current-window', 'new-window', 'ask-every-time'].includes(value)) {
-            folderOpenDefaultBehavior = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const filePreviewSetting = settings.find((s) => s.key === 'filePreviewEnabled');
-      if (filePreviewSetting) {
-        try {
-          const value = JSON.parse(filePreviewSetting.valueJson);
-          if (typeof value === 'boolean') {
-            filePreviewEnabled = value;
-            if (!filePreviewEnabled) {
-              previewTabId = null;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const autoSaveSetting = settings.find((s) => s.key === 'autoSaveEnabled');
-      if (autoSaveSetting) {
-        try {
-          const value = JSON.parse(autoSaveSetting.valueJson);
-          if (typeof value === 'boolean') {
-            autoSaveEnabled = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const closeToTraySetting = settings.find((s) => s.key === 'closeToTrayEnabled');
-      if (closeToTraySetting) {
-        try {
-          const value = JSON.parse(closeToTraySetting.valueJson);
-          if (typeof value === 'boolean') {
-            closeToTrayEnabled = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const editorModeSetting = settings.find((s) => s.key === 'editorMode');
-      if (editorModeSetting) {
-        try {
-          const value = JSON.parse(editorModeSetting.valueJson);
-          if (value === 'semantic' || value === 'source') {
-            persistedEditorMode = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const sidebarHiddenSetting = settings.find((s) => s.key === 'sidebarHidden');
-      if (sidebarHiddenSetting) {
-        try {
-          const value = JSON.parse(sidebarHiddenSetting.valueJson);
-          if (typeof value === 'boolean') {
-            focusMode = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const outlineVisibleSetting = settings.find((s) => s.key === 'outlineVisible');
-      if (outlineVisibleSetting) {
-        try {
-          const value = JSON.parse(outlineVisibleSetting.valueJson);
-          if (typeof value === 'boolean') {
-            outlineVisible = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const writingStatsVisibleSetting = settings.find((s) => s.key === 'writingStatsVisible');
-      if (writingStatsVisibleSetting) {
-        try {
-          const value = JSON.parse(writingStatsVisibleSetting.valueJson);
-          if (typeof value === 'boolean') {
-            writingStatsVisible = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      const writingStatsMetricSetting = settings.find((s) => s.key === 'writingStatsMetric');
-      if (writingStatsMetricSetting) {
-        try {
-          const value = JSON.parse(writingStatsMetricSetting.valueJson);
-          if (value === 'lines' || value === 'words' || value === 'chars') {
-            writingStatsMetric = value;
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const appPreferences = await loadAppPreferences(desktopEnabled);
+      applyAppPreferences(appPreferences, { applyEditorMode: false });
+      persistedEditorMode = appPreferences.editorMode;
 
       // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
       const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
@@ -1403,13 +1274,11 @@
     editor.mount(editorHost);
     // 监听图片右键菜单自定义事件（冒泡自 ImageNodeView）
     editorHost.addEventListener('image-context-menu', handleImageContextMenu);
-    await loadPersistedSettings();
     if (persistedEditorMode && !largeDocumentMode) {
       mode = persistedEditorMode;
       editor.updateOptions({ mode: persistedEditorMode });
     }
-    imageSettings = await loadPersistedImageSettings(desktopEnabled);
-    // 确保 blockStyle 默认值写入 DOM（loadPersistedSettings 可能跳过）
+    // 确保 blockStyle 默认值写入 DOM
     applyBlockStyleSetting(blockStyle);
     await refreshRecentFiles();
     await setupDesktopEvents();
@@ -1472,7 +1341,7 @@
       documentActions.debouncedAutoSave(event.markdown);
     }
 
-    if (event.markdown.length > LARGE_DOCUMENT_LIMIT) {
+    if (event.markdown.length > largeDocumentLimit) {
       syncSourceTextareaHeight();
       return;
     }
@@ -1670,17 +1539,21 @@
       return;
     }
 
-    const [menuUnlisten, dropUnlisten] = await Promise.all([
+    const { listen } = await import('@tauri-apps/api/event');
+    const [menuUnlisten, dropUnlisten, settingsUnlisten] = await Promise.all([
       listenDesktopMenuCommands((command) => {
         executeDesktopCommand(command);
       }).catch(() => null),
       listenDesktopFileDrops((paths) => {
         openDroppedMarkdown(paths);
       }).catch(() => null),
+      listen(SETTINGS_UPDATED_EVENT, () => {
+        reloadAppPreferencesFromSettingsWindow().catch(() => undefined);
+      }).catch(() => null),
     ]);
 
-    desktopUnlisteners = [menuUnlisten, dropUnlisten].filter((value): value is () => void =>
-      Boolean(value),
+    desktopUnlisteners = [menuUnlisten, dropUnlisten, settingsUnlisten].filter(
+      (value): value is () => void => Boolean(value),
     );
   }
 
@@ -1822,6 +1695,7 @@
   {stats}
   {writingStatsVisible}
   {writingStatsMetric}
+  {readingTimeVisible}
   {tablePickerOpen}
   {linkPickerOpen}
   {linkText}
@@ -1896,25 +1770,6 @@
   on:closeTabsToRight={handleCloseTabsToRight}
   on:closeAllTabs={handleCloseAllTabs}
   on:deleteNode={handleDeleteNode}
-/>
-
-<SettingsDrawer
-  isOpen={isSettingsOpen}
-  {imageSettings}
-  {fontSize}
-  {lineHeight}
-  {blockStyle}
-  {filePreviewEnabled}
-  {autoSaveEnabled}
-  {closeToTrayEnabled}
-  editorMode={mode}
-  sidebarHidden={focusMode}
-  {outlineVisible}
-  {writingStatsVisible}
-  {writingStatsMetric}
-  {folderOpenDefaultBehavior}
-  {closeSettings}
-  saveSettings={handleSaveSettings}
 />
 
 <div class="app-toast" class:visible={toastMessage} role="status">{toastMessage}</div>

@@ -18,6 +18,8 @@ export interface AppCommandHandlers {
   toggleFocusMode: () => void;
   switchToNextTab: () => void;
   switchToPrevTab: () => void;
+  getDefaultCodeBlockLanguage: () => string;
+  getDefaultDiagramType: () => Parameters<typeof isDiagramType>[0];
 }
 
 export function executeDesktopCommand(command: string, handlers: AppCommandHandlers) {
@@ -54,7 +56,10 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'insert-math-block') {
     handlers.runCommand({ type: 'insertMathBlock', tex: '' });
   } else if (command === 'insert-code-block') {
-    handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
+    handlers.runCommand({
+      type: 'insertCodeBlock',
+      language: handlers.getDefaultCodeBlockLanguage(),
+    });
   } else if (command.startsWith('insert-diagram:')) {
     const diagramType = command.slice('insert-diagram:'.length);
     if (isDiagramType(diagramType)) {
@@ -93,7 +98,10 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
   } else if (command === 'menu-insert-paragraph-after') {
     handlers.runCommand({ type: 'insertParagraphAfter' });
   } else if (command === 'menu-chart') {
-    handlers.runCommand({ type: 'insertDiagramBlock', diagramType: 'flowchart' });
+    const diagramType = handlers.getDefaultDiagramType();
+    if (isDiagramType(diagramType)) {
+      handlers.runCommand({ type: 'insertDiagramBlock', diagramType });
+    }
   } else if (command.startsWith('menu-chart:')) {
     const diagramType = command.slice('menu-chart:'.length);
     if (isDiagramType(diagramType)) {
@@ -225,7 +233,10 @@ export function handleGlobalShortcut(event: KeyboardEvent, handlers: AppCommandH
   } else if (key === 'k') {
     // Ctrl+Shift+K → 代码块
     event.preventDefault();
-    handlers.runCommand({ type: 'insertCodeBlock', language: 'ts' });
+    handlers.runCommand({
+      type: 'insertCodeBlock',
+      language: handlers.getDefaultCodeBlockLanguage(),
+    });
   } else if (code === 'KeyH') {
     // Ctrl+Shift+H → 水平分割线
     event.preventDefault();

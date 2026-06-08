@@ -29,6 +29,8 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     toggleFocusMode: vi.fn(),
     switchToNextTab: vi.fn(),
     switchToPrevTab: vi.fn(),
+    getDefaultCodeBlockLanguage: vi.fn(() => 'ts'),
+    getDefaultDiagramType: vi.fn(() => 'flowchart'),
   };
 }
 

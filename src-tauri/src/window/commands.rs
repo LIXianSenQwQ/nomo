@@ -1,6 +1,9 @@
 use crate::window::menu::install_window_menu;
 use crate::{database, models::WindowStateInput};
-use tauri::{AppHandle, Manager};
+use std::path::PathBuf;
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+
+const SETTINGS_WINDOW_LABEL: &str = "window-settings";
 
 #[tauri::command]
 pub(crate) fn update_window_state(
@@ -49,6 +52,41 @@ pub(crate) fn create_new_window(
     }
 
     Ok(id)
+}
+
+#[tauri::command]
+pub(crate) async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        window
+            .show()
+            .map_err(|error| format!("显示偏好设置窗口失败：{error}"))?;
+        window
+            .set_focus()
+            .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
+        return Ok(());
+    }
+
+    let window = WebviewWindowBuilder::new(
+        &app,
+        SETTINGS_WINDOW_LABEL,
+        WebviewUrl::App(PathBuf::from("index.html?view=settings")),
+    )
+    .title("偏好设置 - Nomo")
+    .inner_size(860.0, 620.0)
+    .min_inner_size(760.0, 520.0)
+    .center()
+    .decorations(true)
+    .resizable(true)
+    .visible(true)
+    .build()
+    .map_err(|error| format!("创建偏好设置窗口失败：{error}"))?;
+
+    crate::window::state::restore_window_state(&app, window.label());
+    window
+        .set_focus()
+        .map_err(|error| format!("聚焦偏好设置窗口失败：{error}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]
