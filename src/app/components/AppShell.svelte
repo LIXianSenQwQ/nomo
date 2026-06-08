@@ -13,6 +13,8 @@
   import StatusBar from './StatusBar.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
 
+  type StatsMetric = 'lines' | 'words' | 'chars';
+
   export let focusMode: boolean;
   export let isResizing: boolean;
   export let contentWidthPercent: number;
@@ -51,6 +53,8 @@
   export let collapsedOutlineIds: Set<string>;
   export let visibleOutlineIds: Set<string>;
   export let stats: DocumentStats;
+  export let writingStatsVisible: boolean;
+  export let writingStatsMetric: StatsMetric;
   export let tablePickerOpen: boolean;
   export let linkPickerOpen: boolean;
   export let linkText: string;
@@ -117,6 +121,7 @@
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let openMarkdownFile: (event: Event) => void;
+  export let setWritingStatsMetric: (metric: StatsMetric) => void;
 </script>
 
 <div
@@ -280,7 +285,13 @@
         {closeLinkPicker}
       />
 
-      <StatusBar {stats} />
+      {#if writingStatsVisible}
+        <StatusBar
+          {stats}
+          activeMetric={writingStatsMetric}
+          onMetricChange={setWritingStatsMetric}
+        />
+      {/if}
     </section>
   </main>
 </div>

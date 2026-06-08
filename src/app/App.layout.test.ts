@@ -102,6 +102,16 @@ describe('App outline layout', () => {
     );
   });
 
+  it('keeps document stats as a floating editor card', () => {
+    expect(styles).toMatch(
+      /\.editor-shell\s*\{[\s\S]*?grid-template-rows:\s*auto auto minmax\(0,\s*1fr\);/,
+    );
+    expect(styles).toMatch(/\.statusbar\s*\{[\s\S]*?position:\s*absolute;/);
+    expect(styles).toMatch(/\.statusbar\s*\{[\s\S]*?right:\s*16px;/);
+    expect(styles).toMatch(/\.statusbar-stats-trigger\s*\{[\s\S]*?border:\s*1px solid/);
+    expect(styles).not.toMatch(/\.statusbar\s*\{[\s\S]*?border-top:\s*1px solid/);
+  });
+
   it('keeps outline navigation in the current editor mode', () => {
     const jumpStart = outlineInteractionSource.indexOf('function jumpToOutlineItem');
     const jumpEnd = outlineInteractionSource.indexOf(
@@ -342,12 +352,17 @@ describe('App outline layout', () => {
     expect(settingsDrawerSource).toContain('打开文件夹默认行为');
     expect(settingsDrawerSource).toContain('文件预览标签');
     expect(settingsDrawerSource).toContain('toggleFilePreviewEnabled');
+    expect(settingsDrawerSource).toContain('显示文档统计');
+    expect(settingsDrawerSource).toContain('文档统计类型');
+    expect(settingsDrawerSource).toContain('setDraftWritingStatsMetric');
     expect(settingsDrawerSource).toContain('自动保存');
     expect(settingsDrawerSource).toContain('toggleAutoSaveEnabled');
     expect(settingsDrawerSource).toContain('关闭到托盘');
     expect(settingsDrawerSource).toContain('toggleCloseToTrayEnabled');
     expect(settingsDrawerSource).toContain('draftFolderBehavior,');
     expect(settingsDrawerSource).toContain('draftFilePreviewEnabled,');
+    expect(settingsDrawerSource).toContain('draftWritingStatsVisible,');
+    expect(settingsDrawerSource).toContain('draftWritingStatsMetric,');
     expect(settingsDrawerSource).toContain('draftAutoSaveEnabled,');
     expect(settingsDrawerSource).toContain('draftCloseToTrayEnabled,');
     expect(appSource).toContain('updateFontSizeValue(nextAppearanceSettings.fontSize)');
@@ -357,6 +372,8 @@ describe('App outline layout', () => {
     expect(appSource).toContain('autoSaveEnabled = false');
     expect(appSource).toContain('closeToTrayEnabled = false');
     expect(appSource).toContain("updateAppSetting('filePreviewEnabled', nextFilePreviewEnabled)");
+    expect(appSource).toContain("updateAppSetting('writingStatsVisible'");
+    expect(appSource).toContain("updateAppSetting('writingStatsMetric'");
     expect(appSource).toContain("updateAppSetting('autoSaveEnabled', nextAutoSaveEnabled)");
     expect(appSource).toContain("updateAppSetting('closeToTrayEnabled', nextCloseToTrayEnabled)");
     expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');

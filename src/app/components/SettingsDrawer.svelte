@@ -23,7 +23,11 @@
     editorMode: EditorMode;
     sidebarHidden: boolean;
     outlineVisible: boolean;
+    writingStatsVisible: boolean;
+    writingStatsMetric: WritingStatsMetric;
   }
+
+  type WritingStatsMetric = 'lines' | 'words' | 'chars';
 
   export let isOpen: boolean;
   export let imageSettings: ImageHandlingSettings;
@@ -36,6 +40,8 @@
   export let editorMode: EditorMode;
   export let sidebarHidden: boolean;
   export let outlineVisible: boolean;
+  export let writingStatsVisible: boolean;
+  export let writingStatsMetric: WritingStatsMetric;
   export let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time';
   export let closeSettings: () => void;
   export let saveSettings: (
@@ -54,6 +60,8 @@
   let draftEditorMode: EditorMode = editorMode;
   let draftSidebarHidden = sidebarHidden;
   let draftOutlineVisible = outlineVisible;
+  let draftWritingStatsVisible = writingStatsVisible;
+  let draftWritingStatsMetric: WritingStatsMetric = writingStatsMetric;
   let draftFolderBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
     folderOpenDefaultBehavior;
 
@@ -69,6 +77,8 @@
     draftEditorMode = editorMode;
     draftSidebarHidden = sidebarHidden;
     draftOutlineVisible = outlineVisible;
+    draftWritingStatsVisible = writingStatsVisible;
+    draftWritingStatsMetric = writingStatsMetric;
     draftFolderBehavior = folderOpenDefaultBehavior;
   }
 
@@ -88,6 +98,8 @@
         editorMode: draftEditorMode,
         sidebarHidden: draftSidebarHidden,
         outlineVisible: draftOutlineVisible,
+        writingStatsVisible: draftWritingStatsVisible,
+        writingStatsMetric: draftWritingStatsMetric,
       },
     );
   }
@@ -118,6 +130,14 @@
 
   function toggleOutlineVisible(event: Event) {
     draftOutlineVisible = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function toggleWritingStatsVisible(event: Event) {
+    draftWritingStatsVisible = (event.currentTarget as HTMLInputElement).checked;
+  }
+
+  function setDraftWritingStatsMetric(metric: WritingStatsMetric) {
+    draftWritingStatsMetric = metric;
   }
 
   function setImageStrategy(strategy: ImageInsertStrategy) {
@@ -291,6 +311,50 @@
             />
             <span class="toggle-switch" aria-hidden="true"></span>
           </label>
+
+          <label class="toggle-setting" for="writingStatsVisible">
+            <span>
+              <span class="toggle-title">显示文档统计</span>
+              <span class="toggle-desc">在正文右下角显示可切换的行数、词数或字符统计。</span>
+            </span>
+            <input
+              id="writingStatsVisible"
+              type="checkbox"
+              checked={draftWritingStatsVisible}
+              on:change={toggleWritingStatsVisible}
+            />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+
+          <div class="setting-field">
+            <span class="setting-label">文档统计类型</span>
+            <div class="stats-metric-options" role="group" aria-label="文档统计类型">
+              <button
+                type="button"
+                class:active={draftWritingStatsMetric === 'lines'}
+                aria-pressed={draftWritingStatsMetric === 'lines'}
+                on:click={() => setDraftWritingStatsMetric('lines')}
+              >
+                行数
+              </button>
+              <button
+                type="button"
+                class:active={draftWritingStatsMetric === 'words'}
+                aria-pressed={draftWritingStatsMetric === 'words'}
+                on:click={() => setDraftWritingStatsMetric('words')}
+              >
+                词数
+              </button>
+              <button
+                type="button"
+                class:active={draftWritingStatsMetric === 'chars'}
+                aria-pressed={draftWritingStatsMetric === 'chars'}
+                on:click={() => setDraftWritingStatsMetric('chars')}
+              >
+                字符
+              </button>
+            </div>
+          </div>
 
           <label class="toggle-setting" for="autoSaveEnabled">
             <span>
@@ -745,7 +809,18 @@
     background: color-mix(in srgb, var(--md-editor-surface) 82%, var(--md-editor-bg));
   }
 
-  .folder-behavior-options button {
+  .stats-metric-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-md);
+    background: color-mix(in srgb, var(--md-editor-surface) 82%, var(--md-editor-bg));
+  }
+
+  .folder-behavior-options button,
+  .stats-metric-options button {
     min-width: 0;
     min-height: 36px;
     padding: 0 8px;
@@ -762,18 +837,21 @@
       box-shadow 160ms ease;
   }
 
-  .folder-behavior-options button:hover {
+  .folder-behavior-options button:hover,
+  .stats-metric-options button:hover {
     background: color-mix(in srgb, var(--md-editor-accent) 8%, transparent);
     color: var(--md-editor-fg);
   }
 
-  .folder-behavior-options button.active {
+  .folder-behavior-options button.active,
+  .stats-metric-options button.active {
     background: var(--md-editor-bg);
     color: var(--md-editor-accent-strong);
     box-shadow: 0 1px 8px color-mix(in srgb, #020617 10%, transparent);
   }
 
   .folder-behavior-options button:focus-visible,
+  .stats-metric-options button:focus-visible,
   .segmented-control button:focus-visible,
   .provider-switch button:focus-visible,
   .save-btn:focus-visible,

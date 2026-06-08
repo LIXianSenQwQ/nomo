@@ -114,7 +114,10 @@
     editorMode: EditorMode;
     sidebarHidden: boolean;
     outlineVisible: boolean;
+    writingStatsVisible: boolean;
+    writingStatsMetric: WritingStatsMetric;
   };
+  type WritingStatsMetric = 'lines' | 'words' | 'chars';
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
@@ -140,6 +143,8 @@
   let visibleOutlineIds = new Set(outline.map((item) => item.id));
   let suppressOutlineScrollUntil = 0;
   let stats: DocumentStats = calculateDocumentStats('');
+  let writingStatsVisible = true;
+  let writingStatsMetric: WritingStatsMetric = 'words';
   let fontSize = 16,
     lineHeight = 1.75,
     contentWidthPercent = 68,
@@ -486,6 +491,16 @@
     setOutlineVisiblePreference(!outlineVisible);
   }
 
+  function setWritingStatsVisiblePreference(visible: boolean) {
+    writingStatsVisible = visible;
+    updateAppSetting('writingStatsVisible', visible).catch(() => undefined);
+  }
+
+  function setWritingStatsMetric(metric: WritingStatsMetric) {
+    writingStatsMetric = metric;
+    updateAppSetting('writingStatsMetric', metric).catch(() => undefined);
+  }
+
   const commandHandlers: AppCommandHandlers = {
     createNewFile: () => createNewFile(),
     createNewWindow,
@@ -657,6 +672,12 @@
     }
     if (nextWorkspaceBehaviorSettings.outlineVisible !== outlineVisible) {
       setOutlineVisiblePreference(nextWorkspaceBehaviorSettings.outlineVisible);
+    }
+    if (nextWorkspaceBehaviorSettings.writingStatsVisible !== writingStatsVisible) {
+      setWritingStatsVisiblePreference(nextWorkspaceBehaviorSettings.writingStatsVisible);
+    }
+    if (nextWorkspaceBehaviorSettings.writingStatsMetric !== writingStatsMetric) {
+      setWritingStatsMetric(nextWorkspaceBehaviorSettings.writingStatsMetric);
     }
     if (nextWorkspaceBehaviorSettings.editorMode !== mode) {
       setMode(nextWorkspaceBehaviorSettings.editorMode);
@@ -1338,6 +1359,30 @@
         }
       }
 
+      const writingStatsVisibleSetting = settings.find((s) => s.key === 'writingStatsVisible');
+      if (writingStatsVisibleSetting) {
+        try {
+          const value = JSON.parse(writingStatsVisibleSetting.valueJson);
+          if (typeof value === 'boolean') {
+            writingStatsVisible = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const writingStatsMetricSetting = settings.find((s) => s.key === 'writingStatsMetric');
+      if (writingStatsMetricSetting) {
+        try {
+          const value = JSON.parse(writingStatsMetricSetting.valueJson);
+          if (value === 'lines' || value === 'words' || value === 'chars') {
+            writingStatsMetric = value;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
       const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
       if (pendingFolderSetting) {
@@ -1775,6 +1820,8 @@
   {collapsedOutlineIds}
   {visibleOutlineIds}
   {stats}
+  {writingStatsVisible}
+  {writingStatsMetric}
   {tablePickerOpen}
   {linkPickerOpen}
   {linkText}
@@ -1840,6 +1887,7 @@
   {jumpToOutlineItem}
   {openMarkdownFile}
   {openSettings}
+  {setWritingStatsMetric}
   on:createNode={handleCreateNode}
   on:renameNode={handleRenameNode}
   on:refreshFolder={handleRefreshFolder}
@@ -1862,6 +1910,8 @@
   editorMode={mode}
   sidebarHidden={focusMode}
   {outlineVisible}
+  {writingStatsVisible}
+  {writingStatsMetric}
   {folderOpenDefaultBehavior}
   {closeSettings}
   saveSettings={handleSaveSettings}

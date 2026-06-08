@@ -1,7 +1,8 @@
 .editor-shell {
   container-type: inline-size;
+  position: relative;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   background: var(--md-editor-surface);
@@ -9,8 +10,7 @@
 
 .menu-bar,
 .topbar,
-.toolbar,
-.statusbar {
+.toolbar {
   display: flex;
   align-items: center;
   min-width: 0;
