@@ -11,7 +11,9 @@
   import type { FileTreeNode } from '../types';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import { createEventDispatcher } from 'svelte';
+  import { clickOutside } from '../actions/clickOutside';
   import { motionIn, pulseOnChange, transitionDuration } from '../actions/motion';
+  import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';
   import ContextMenu from './ContextMenu.svelte';
 
   export let currentFolderPath: string;
@@ -62,29 +64,20 @@
   let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingClickPath: string | null = null;
 
-  type TreeRowData =
-    | {
-        key: string;
-        type: 'folder' | 'file';
-        node: FileTreeNode;
-        depth: number;
-      }
-    | {
-        key: string;
-        type: 'creating';
-        depth: number;
-      };
-  type TreeRow = TreeRowData & { top: number };
-
   const TREE_ROW_HEIGHT = 26;
   const TREE_OVERSCAN = 8;
   let fileTreeScrollTop = 0;
   let fileTreeViewportHeight = 0;
-  let flattenedRows: TreeRow[] = [];
-  let virtualRows: TreeRow[] = [];
+  let flattenedRows: ExplorerTreeRow[] = [];
+  let virtualRows: ExplorerTreeRow[] = [];
   let virtualTreeHeight = 0;
 
-  $: flattenedRows = buildVisibleRows(folderTree);
+  $: flattenedRows = buildVisibleExplorerRows(
+    folderTree,
+    expandedFolders,
+    creatingParentPath,
+    TREE_ROW_HEIGHT,
+  );
   $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT;
   $: {
     const start = Math.max(0, Math.floor(fileTreeScrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN);
@@ -92,36 +85,6 @@
       Math.ceil(Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT) / TREE_ROW_HEIGHT) +
       TREE_OVERSCAN * 2;
     virtualRows = flattenedRows.slice(start, start + visibleCount);
-  }
-
-  function buildVisibleRows(nodes: FileTreeNode[]) {
-    const rows: TreeRowData[] = [];
-    appendVisibleRows(rows, nodes, 1);
-    return rows.map((row, index) => ({
-      ...row,
-      top: index * TREE_ROW_HEIGHT,
-    }));
-  }
-
-  function appendVisibleRows(rows: TreeRowData[], nodes: FileTreeNode[], depth: number) {
-    for (const node of nodes) {
-      rows.push({
-        key: node.path,
-        type: node.is_dir ? 'folder' : 'file',
-        node,
-        depth,
-      });
-      if (node.is_dir && creatingParentPath === node.path) {
-        rows.push({
-          key: `${node.path}:creating`,
-          type: 'creating',
-          depth,
-        });
-      }
-      if (node.is_dir && expandedFolders.has(node.path) && node.children?.length) {
-        appendVisibleRows(rows, node.children, depth + 1);
-      }
-    }
   }
 
   function handleFileTreeScroll(event: Event) {
@@ -230,6 +193,15 @@
         renamingInputRef.select();
       }
     }, 0);
+  }
+
+  function handleFolderDoubleClick(node: FileTreeNode, event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.chevron-icon')) {
+      event.stopPropagation();
+      return;
+    }
+    startRenaming(node.path, node.name, event);
   }
 
   function commitRenaming() {
@@ -542,7 +514,7 @@
                       style="padding-left: {12 + row.depth * 12}px"
                       title={node.path}
                       on:click={() => hasChildren && toggleFolderCollapse(node.path)}
-                      on:dblclick={(e) => startRenaming(node.path, node.name, e)}
+                      on:dblclick={(event) => handleFolderDoubleClick(node, event)}
                       on:contextmenu|preventDefault={(event) =>
                         handleFolderContextMenu(node, event)}
                     >
@@ -576,9 +548,10 @@
                         <input
                           bind:this={renamingInputRef}
                           bind:value={renamingValue}
-                          on:blur={commitRenaming}
+                          on:blur={cancelRenaming}
                           on:keydown={handleRenamingKeydown}
                           class="rename-input"
+                          use:clickOutside={cancelRenaming}
                           use:motionIn={{ kind: 'micro', y: -2 }}
                           on:click|stopPropagation
                         />

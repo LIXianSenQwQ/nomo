@@ -150,6 +150,7 @@
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding: 6px var(--explorer-scrollbar-safe-area) 10px 8px;
+  user-select: none;
 }
 
 .file-tree::-webkit-scrollbar {
@@ -350,6 +351,7 @@
   font-size: 13px;
   font-weight: normal;
   outline: none;
+  user-select: text;
   animation: edit-field-in 140ms ease-out;
 }
 

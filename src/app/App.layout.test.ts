@@ -376,6 +376,38 @@ describe('App outline layout', () => {
     );
   });
 
+  it('keeps folder chevron double-clicks from starting rename mode', () => {
+    expect(explorerSidebarSource).toContain('function handleFolderDoubleClick');
+    expect(explorerSidebarSource).toContain("target?.closest('.chevron-icon')");
+    expect(explorerSidebarSource).toContain(
+      'on:dblclick={(event) => handleFolderDoubleClick(node, event)}',
+    );
+  });
+
+  it('cancels explorer rename mode when focus leaves the rename input', () => {
+    expect(explorerSidebarSource).toContain("import { clickOutside } from '../actions/clickOutside';");
+    expect(explorerSidebarSource).toContain('on:blur={cancelRenaming}');
+    expect(explorerSidebarSource).toContain('use:clickOutside={cancelRenaming}');
+    expect(explorerSidebarSource).toContain("if (event.key === 'Enter')");
+    expect(explorerSidebarSource).toContain('commitRenaming();');
+  });
+
+  it('recomputes explorer virtual rows when folder expansion changes', () => {
+    expect(explorerSidebarSource).toContain(
+      "import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';",
+    );
+    expect(explorerSidebarSource).toContain(
+      '$: flattenedRows = buildVisibleExplorerRows(',
+    );
+    expect(explorerSidebarSource).toContain('expandedFolders,');
+    expect(explorerSidebarSource).toContain('creatingParentPath,');
+  });
+
+  it('prevents accidental text selection while clicking explorer icons', () => {
+    expect(styles).toMatch(/\.file-tree\s*\{[\s\S]*?user-select:\s*none;/);
+    expect(styles).toMatch(/\.rename-input\s*\{[\s\S]*?user-select:\s*text;/);
+  });
+
   it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {
     const containerStart = documentTabsSource.indexOf('<div class="tabs-container"');
     const addButtonIndex = documentTabsSource.indexOf('class="tab-add"');
