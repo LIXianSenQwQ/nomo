@@ -1068,7 +1068,13 @@ function extractAttr(rawTag: string, name: string): string | null {
 }
 
 function isMarkdownComment(content: string): boolean {
-  return COMMENT_RE.test(content.trim());
+  const match = COMMENT_RE.exec(content.trim());
+  if (!match) {
+    return false;
+  }
+
+  const commentContent = match[1];
+  return !commentContent.includes('<!--') && !commentContent.includes('-->');
 }
 
 function isReservedTocComment(content: string): boolean {

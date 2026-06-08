@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { EditorView } from 'prosemirror-view';
 import { createEditorCore } from './createEditorCore';
 
 describe('createEditorCore', () => {
@@ -161,6 +162,42 @@ describe('createEditorCore', () => {
 
     expect(editor.getMarkdown()).toContain('<!-- toc -->\n<!-- /toc -->');
     expect(target.querySelector('.toc-empty')?.textContent).toContain('当前文档还没有标题');
+  });
+
+  it('keeps toc marker examples in inline code as ordinary Markdown text', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const markdown = '正文 `<!-- toc --><!-- /toc -->` 后续';
+
+    editor.setMarkdown(markdown);
+
+    expect(editor.getMarkdown()).toBe(markdown);
+    expect(target.querySelector('.toc-block')).toBeNull();
+  });
+
+  it('does not rewrite adjacent toc marker text during semantic transactions', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    view.dispatch(view.state.tr.insertText('正文 '));
+    view.dispatch(view.state.tr.insertText('<!-- toc --><!-- /toc -->'));
+    view.dispatch(view.state.tr.insertText(' 后续'));
+
+    expect(editor.getMarkdown()).toBe('正文 <!-- toc --><!-- /toc --> 后续');
+    expect(editor.getMarkdown()).not.toContain('-- >');
+    expect(target.querySelector('.toc-block')).toBeNull();
+  });
+
+  it('keeps an existing toc block stable when typing above it in semantic mode', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '<!-- toc -->\n<!-- /toc -->', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    view.dispatch(view.state.tr.insertText('上方文字', 0));
+
+    expect(editor.getMarkdown()).toBe('上方文字\n\n<!-- toc -->\n<!-- /toc -->\n');
+    expect(target.querySelector('.toc-block')).not.toBeNull();
   });
 
   it('inserts default YAML front matter without duplicating existing metadata', () => {

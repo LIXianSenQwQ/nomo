@@ -3,6 +3,7 @@ import {
   createTocBlock,
   createTocList,
   extractTocItems,
+  hasTocBlock,
   removeTocBlocks,
   updateTocBlocks,
 } from './tocService';
@@ -47,6 +48,32 @@ describe('tocService', () => {
 
     expect(updateTocBlocks(markdown)).toContain('- [新标题](#新标题)');
     expect(updateTocBlocks(markdown)).not.toContain('旧标题');
+  });
+
+  it('only treats standalone marker lines outside fenced code as toc blocks', () => {
+    const inlineCode = '`<!-- toc --><!-- /toc -->`';
+    const inlineText = '正文 `<!-- toc --><!-- /toc -->` 后续';
+    const paragraphText = '正文 <!-- toc --><!-- /toc --> 后续';
+    const adjacentMarkers = '<!-- toc --><!-- /toc -->';
+    const fencedSplitMarkers = [
+      '```md',
+      '<!-- toc -->',
+      '<!-- /toc -->',
+      '```',
+      '',
+      '# 标题',
+    ].join('\n');
+    const fencedAdjacentMarkers = ['```', '<!-- toc --><!-- /toc -->', '```', '', '# 标题'].join(
+      '\n',
+    );
+
+    expect(hasTocBlock(inlineCode)).toBe(false);
+    expect(updateTocBlocks(inlineCode)).toBe(inlineCode);
+    expect(updateTocBlocks(inlineText)).toBe(inlineText);
+    expect(updateTocBlocks(paragraphText)).toBe(paragraphText);
+    expect(updateTocBlocks(adjacentMarkers)).toBe(adjacentMarkers);
+    expect(updateTocBlocks(fencedSplitMarkers)).toBe(fencedSplitMarkers);
+    expect(updateTocBlocks(fencedAdjacentMarkers)).toBe(fencedAdjacentMarkers);
   });
 
   it('removes toc blocks without touching body content', () => {

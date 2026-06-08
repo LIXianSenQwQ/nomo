@@ -223,6 +223,25 @@ describe('markdown serialization', () => {
     expect(doc.child(0).attrs.content).toBe('- [标题](#标题)');
   });
 
+  it('round trips toc marker examples as inline code instead of toc blocks', () => {
+    const input = '`<!-- toc --><!-- /toc -->`';
+    const doc = parseMarkdown(input);
+    const paragraph = doc.child(0);
+
+    expect(paragraph.type.name).toBe('paragraph');
+    expect(paragraph.child(0).type.name).toBe('inline_code');
+    expect(serializeMarkdown(doc).trim()).toBe(input);
+  });
+
+  it('keeps adjacent toc marker comments as ordinary text without corrupting comment endings', () => {
+    const input = '正文 <!-- toc --><!-- /toc --> 后续';
+
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(input);
+    expect(serializeMarkdown(parseMarkdown('<!-- toc --><!-- /toc -->')).trim()).toBe(
+      '<!-- toc --><!-- /toc -->',
+    );
+  });
+
   it('parses image with align and width attributes', () => {
     const input = '![demo](./assets/demo.png){align=center width=60%}';
     const doc = parseMarkdown(input);
