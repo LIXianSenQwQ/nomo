@@ -10,11 +10,12 @@ use std::{
     thread,
     time::UNIX_EPOCH,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 
 const FOLDER_INDEX_BATCH_EVENT: &str = "nomo://folder-index-batch";
 const FOLDER_INDEX_FINISHED_EVENT: &str = "nomo://folder-index-finished";
 const FOLDER_INDEX_BATCH_SIZE: usize = 64;
+const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/实例.md";
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {
@@ -68,6 +69,20 @@ pub(crate) fn write_markdown_file(
     fs::write(&path, markdown.as_bytes())
         .map_err(|error| format!("保存 Markdown 文件失败：{error}"))?;
     document_payload(path, markdown)
+}
+
+#[tauri::command]
+pub(crate) fn install_sample_document(app: AppHandle) -> Result<DocumentPayload, String> {
+    let resource_path = app
+        .path()
+        .resolve(SAMPLE_DOCUMENT_RESOURCE_PATH, BaseDirectory::Resource)
+        .map_err(|error| format!("定位实例文档资源失败：{error}"))?;
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("定位应用数据目录失败：{error}"))?;
+
+    install_sample_document_from_paths(&resource_path, &app_data_dir)
 }
 
 #[tauri::command]
@@ -165,6 +180,24 @@ fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, S
         file_name,
         markdown,
     })
+}
+
+fn install_sample_document_from_paths(
+    resource_path: &Path,
+    app_data_dir: &Path,
+) -> Result<DocumentPayload, String> {
+    let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+    if !target_path.exists() {
+        if let Some(parent) = target_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| format!("创建实例文档目录失败：{error}"))?;
+        }
+        fs::copy(resource_path, &target_path)
+            .map_err(|error| format!("复制实例文档失败：{error}"))?;
+    }
+
+    let markdown =
+        fs::read_to_string(&target_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
+    document_payload(target_path.to_string_lossy().to_string(), markdown)
 }
 
 #[tauri::command]
@@ -522,4 +555,76 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
     }
 
     p == pattern.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{install_sample_document_from_paths, SAMPLE_DOCUMENT_RESOURCE_PATH};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn installs_sample_document_into_samples_directory() {
+        let root = unique_test_dir("install-sample");
+        let resource_path = root.join("resource.md");
+        let app_data_dir = root.join("app-data");
+        let sample_markdown = "# Nomo Markdown 全元素实例\n\n示例内容";
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(&resource_path, sample_markdown).expect("write resource");
+
+        let document =
+            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
+        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+
+        assert!(target_path.exists());
+        assert_eq!(
+            fs::read_to_string(&target_path).expect("read target"),
+            sample_markdown
+        );
+        assert_eq!(document.file_name, "实例.md");
+        assert_eq!(document.markdown, sample_markdown);
+        assert!(!document.readonly);
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn keeps_existing_user_sample_document() {
+        let root = unique_test_dir("keep-existing-sample");
+        let resource_path = root.join("resource.md");
+        let app_data_dir = root.join("app-data");
+        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(&resource_path, "# 原始实例").expect("write resource");
+        fs::create_dir_all(target_path.parent().expect("target parent")).expect("create samples");
+        fs::write(&target_path, "# 用户已修改实例").expect("write target");
+
+        let document =
+            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
+
+        assert_eq!(
+            fs::read_to_string(&target_path).expect("read target"),
+            "# 用户已修改实例"
+        );
+        assert_eq!(document.markdown, "# 用户已修改实例");
+
+        cleanup(root);
+    }
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("nomo-file-system-{name}-{nonce}"));
+        let _ = fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn cleanup(path: PathBuf) {
+        let _ = fs::remove_dir_all(path);
+    }
 }

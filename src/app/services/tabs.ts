@@ -13,22 +13,6 @@ export interface ActiveTabState {
   version: number;
 }
 
-export function createDefaultTab(markdown: string): Tab {
-  return {
-    id: 'default',
-    fileName: '阶段3样例.md',
-    filePath: 'D:\\Demo\\Nomo\\阶段3样例.md',
-    nativePath: null,
-    markdown,
-    dirty: false,
-    lastKnownModifiedAt: 0,
-    largeDocumentMode: false,
-    readonlyDocumentMode: false,
-    externalFileChange: createEmptyExternalFileChange(),
-    version: 0,
-  };
-}
-
 export function createBlankTab(fileName = 'untitled.md', filePath = '无标题.md'): Tab {
   return {
     id: createTabId(),

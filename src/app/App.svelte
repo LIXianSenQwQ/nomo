@@ -3,8 +3,10 @@
   import {
     listenDesktopFileDrops,
     listenDesktopMenuCommands,
+    listenDesktopOpenDocuments,
     isTauriRuntime,
     listAppSettings,
+    installSampleDocument,
     openExternalLink,
     updateAppSetting,
     rememberRecentEntry,
@@ -64,6 +66,7 @@
     maximizeAppWindow,
     minimizeAppWindow,
     openSettingsWindow,
+    setDesktopIconTheme,
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
@@ -108,6 +111,12 @@
   } from './services/settings';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
+  import {
+    FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY,
+    shouldMarkFirstRunSampleHandled,
+    shouldOpenFirstRunSample,
+    type FirstRunSampleState,
+  } from './services/firstRunSample';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
@@ -182,6 +191,7 @@
     externalFileChange: ExternalFileChangeState = createEmptyExternalFileChange(),
     lastKnownModifiedAt = 0;
   let desktopUnlisteners: Array<() => void> = [];
+  let pendingExternalOpenPaths: string[] = [];
   let currentFolderPath = '',
     folderTree: FileTreeNode[] = [];
   let expandedFolders = new Set<string>();
@@ -330,6 +340,8 @@
   const expandAncestors = folderExplorer.expandAncestors;
   const toggleFolderCollapse = folderExplorer.toggleFolderCollapse;
   const toggleRootFolder = folderExplorer.toggleRootFolder;
+  const removeMissingExplorerPaths = folderExplorer.removeMissingPaths;
+  const syncLoadedExplorerFolders = folderExplorer.syncLoadedFolders;
 
   // 侧边栏宽度拉伸状态与函数
   let sidebarWidth = 250;
@@ -430,10 +442,16 @@
     if (!desktopEnabled) return;
 
     if (entryType === 'folder') {
+      if (!(await ensureExplorerPathExists(path, '文件夹不存在或已被移动'))) {
+        return;
+      }
       await openFolderWithBehavior(path);
       return;
     }
 
+    if (!(await ensureExplorerPathExists(path, '文件不存在或已被移动'))) {
+      return;
+    }
     await openRecentFile(path);
   }
 
@@ -590,8 +608,47 @@
     missingRecentPaths = new Set<string>();
   }
   let fileCheckTimer: number | null = null;
+  let explorerSyncInProgress = false;
   let systemThemeMediaQuery: MediaQueryList | null = null;
   let systemThemeChangeHandler: (() => void) | null = null;
+
+  async function ensureExplorerPathExists(path: string, missingMessage: string) {
+    if (!desktopEnabled) {
+      return true;
+    }
+
+    const [exists] = await checkPathsExist([path]).catch(() => [true]);
+    if (exists) {
+      return true;
+    }
+
+    removeMissingExplorerPaths([path], false);
+    statusMessage = `${missingMessage}：${path}`;
+    await refreshRecentFiles();
+    return false;
+  }
+
+  function isMissingPathError(error: string) {
+    const message = error.toLowerCase();
+    return (
+      message.includes('文件不存在') ||
+      message.includes('not found') ||
+      message.includes('os error 2')
+    );
+  }
+
+  async function syncExplorerWithFileSystem() {
+    if (explorerSyncInProgress) {
+      return;
+    }
+
+    explorerSyncInProgress = true;
+    try {
+      await syncLoadedExplorerFolders();
+    } finally {
+      explorerSyncInProgress = false;
+    }
+  }
 
   function handleContextMenuOpen(event: ContextMenuOpenEvent) {
     contextMenuX = event.x;
@@ -663,6 +720,9 @@
   // 打开预览标签页（文件树单击）
   async function openPreviewFile(path: string) {
     if (!desktopEnabled) return;
+    if (!(await ensureExplorerPathExists(path, '文件不存在或已被移动'))) {
+      return;
+    }
 
     // 已有固定标签页打开此文件 → 切换到它
     const existingFixedTab = tabs.find((t) => t.nativePath === path && t.id !== previewTabId);
@@ -677,6 +737,10 @@
     const { document, error } = await readMarkdownFromPath(path, '预览打开失败');
     if (error) {
       statusMessage = error;
+      if (isMissingPathError(error)) {
+        removeMissingExplorerPaths([path], false);
+        statusMessage = `${error}，已从资源管理器移除`;
+      }
       return;
     }
     if (!document) return;
@@ -952,12 +1016,17 @@
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
+  function syncDesktopIconTheme(nextTheme: 'light' | 'dark' = theme) {
+    setDesktopIconTheme(desktopEnabled, nextTheme).catch(() => undefined);
+  }
+
   function toggleTheme() {
     const nextTheme: ThemePreference = theme === 'light' ? 'dark' : 'light';
     themePreference = nextTheme;
     theme = applyThemeSetting(themePreference, { transition: true });
     localStorage.setItem('nomo-theme', themePreference);
     updateAppSetting('theme', themePreference).catch(() => undefined);
+    syncDesktopIconTheme(theme);
     editor.updateTheme({ name: theme });
   }
   const updateContentWidth = editorSettings.updateContentWidth;
@@ -1229,6 +1298,7 @@
   ) {
     themePreference = preferences.theme;
     theme = applyThemeSetting(themePreference, { transition: true });
+    syncDesktopIconTheme(theme);
     fontSize = preferences.fontSize;
     lineHeight = preferences.lineHeight;
     contentWidthPercent = preferences.contentWidthPercent;
@@ -1313,11 +1383,38 @@
     applyAppPreferences(preferences, { applyEditorMode: true });
   }
 
+  async function maybeOpenFirstRunSample(state: FirstRunSampleState) {
+    if (!desktopEnabled) {
+      return;
+    }
+
+    if (shouldOpenFirstRunSample(state)) {
+      const document = await installSampleDocument().catch((error) => {
+        statusMessage = error instanceof Error ? error.message : `打开实例文档失败：${error}`;
+        return null;
+      });
+      if (!document) {
+        return;
+      }
+
+      await documentActions.applyNativeDocument(document, '已打开实例文档');
+      await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
+      return;
+    }
+
+    if (shouldMarkFirstRunSampleHandled(state)) {
+      await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
+    }
+  }
+
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
     window.addEventListener('wheel', handleGlobalWheel, { passive: false });
     setupSystemThemeListener();
     let persistedEditorMode: EditorMode | null = null;
+    let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
+    let restoredWorkspaceTabs = false;
+    let hasPendingFolder = false;
 
     if (desktopEnabled) {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -1325,7 +1422,7 @@
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('refresh_window_menu').catch(() => undefined);
 
-      const settings = await listAppSettings().catch(() => []);
+      settings = await listAppSettings().catch(() => []);
       // 优先读取窗口独立的状态，兼容旧的全局 key
       const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
       const workspaceTabsSetting =
@@ -1340,6 +1437,7 @@
             const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
             activeTabId = activeTab.id;
             loadTabState(activeTab);
+            restoredWorkspaceTabs = true;
           }
         } catch {
           // ignore
@@ -1356,11 +1454,29 @@
         try {
           const folderPath = JSON.parse(pendingFolderSetting.valueJson);
           if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
+            hasPendingFolder = true;
             currentFolderPath = folderPath;
             await loadFolder(folderPath).catch(() => undefined);
             // 标记为已消费，避免刷新时重复处理
             await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
           }
+        } catch {
+          // ignore
+        }
+      }
+
+      const pendingExternalOpenSetting = settings.find(
+        (s) => s.key === `pendingExternalOpen:${windowLabel}`,
+      );
+      if (pendingExternalOpenSetting) {
+        try {
+          const paths = JSON.parse(pendingExternalOpenSetting.valueJson);
+          if (Array.isArray(paths)) {
+            pendingExternalOpenPaths = paths.filter(
+              (path): path is string => typeof path === 'string',
+            );
+          }
+          await updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
         } catch {
           // ignore
         }
@@ -1377,10 +1493,19 @@
     // 确保 blockStyle 默认值写入 DOM
     applyBlockStyleSetting(blockStyle);
     await refreshRecentFiles();
+    await maybeOpenFirstRunSample({
+      settings,
+      recentFilesCount: recentFiles.length,
+      restoredWorkspaceTabs,
+      hasPendingFolder,
+    });
     await setupDesktopEvents();
+    await openExternalMarkdownPaths(pendingExternalOpenPaths);
+    pendingExternalOpenPaths = [];
     window.addEventListener('keydown', handleGlobalShortcut);
     fileCheckTimer = window.setInterval(() => {
-      checkExternalFileChange();
+      void checkExternalFileChange();
+      void syncExplorerWithFileSystem();
     }, 5000);
     await tick();
     syncSourceTextareaHeight();
@@ -1645,6 +1770,7 @@
       dropUnlisten,
       settingsUnlisten,
       exitRequestUnlisten,
+      openDocumentUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
     ] = await Promise.all([
@@ -1660,6 +1786,12 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
+      listenDesktopOpenDocuments((paths) => {
+        if (windowLabel) {
+          updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
+        }
+        openExternalMarkdownPaths(paths).catch(() => undefined);
+      }).catch(() => null),
       listenFolderIndexBatches((payload) => {
         folderExplorer.applyIndexBatch(payload);
       }).catch(() => null),
@@ -1673,9 +1805,21 @@
       dropUnlisten,
       settingsUnlisten,
       exitRequestUnlisten,
+      openDocumentUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
     ].filter((value): value is () => void => Boolean(value));
+  }
+
+  async function openExternalMarkdownPaths(paths: string[]) {
+    if (!desktopEnabled || paths.length === 0) {
+      return;
+    }
+
+    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt)$/i.test(path));
+    for (const path of supportedPaths) {
+      await openRecentEntry(path, 'file');
+    }
   }
 
   function executeDesktopCommand(command: string) {
@@ -1718,6 +1862,7 @@
         return;
       }
       theme = applyThemeSetting(themePreference, { transition: true });
+      syncDesktopIconTheme(theme);
       editor.updateTheme({ name: theme });
     };
     systemThemeMediaQuery.addEventListener('change', systemThemeChangeHandler);

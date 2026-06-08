@@ -9,6 +9,13 @@ use tauri::{Manager, WindowEvent};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            let paths = crate::window::external_open::collect_markdown_paths_from_args(
+                args,
+                Some(std::path::PathBuf::from(cwd)),
+            );
+            let _ = crate::window::external_open::route_external_open(app, paths);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
@@ -16,9 +23,7 @@ pub fn run() {
             }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
-                let is_document_window =
-                    label == "main" || (label.starts_with("window-") && label != "window-settings");
-                if is_document_window
+                if crate::window::external_open::is_document_window_label(label)
                     && crate::window::tray::close_to_tray_enabled(window.app_handle())
                 {
                     api.prevent_close();
@@ -46,11 +51,20 @@ pub fn run() {
                     .set_focus()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
+            let startup_paths =
+                crate::window::external_open::collect_markdown_paths_from_startup_args();
+            crate::window::external_open::persist_pending_external_open(
+                app.handle(),
+                "main",
+                &startup_paths,
+            )
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             crate::file_system::read_markdown_file,
             crate::file_system::write_markdown_file,
+            crate::file_system::install_sample_document,
             crate::file_system::stat_markdown_file,
             crate::database::remember_recent_entry,
             crate::database::list_recent_entries,
@@ -88,6 +102,13 @@ pub fn run() {
             crate::external_link::open_external_link,
             crate::external_link::reveal_in_explorer
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Nomo");
+        .build(tauri::generate_context!())
+        .expect("error while building Nomo")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                let paths = crate::window::external_open::collect_markdown_paths_from_urls(urls);
+                let _ = crate::window::external_open::route_external_open(_app, paths);
+            }
+        });
 }

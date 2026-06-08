@@ -181,7 +181,9 @@
   border-radius: 50%;
   background-color: var(--md-editor-accent, #007acc);
   flex-shrink: 0;
-  transition: transform 140ms ease, opacity 140ms ease;
+  transition:
+    transform 140ms ease,
+    opacity 140ms ease;
 }
 
 .close-tab-btn {
@@ -245,7 +247,9 @@
   background: transparent;
   color: var(--md-editor-muted-fg);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .tab-dropdown-btn:hover {
@@ -290,7 +294,9 @@
   font-weight: 500;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
 }
 
 .tab-dropdown-item:hover {

@@ -165,7 +165,9 @@
   margin: 0;
   color: var(--md-editor-warning);
   font-size: 12px;
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .front-matter-edit-hint {

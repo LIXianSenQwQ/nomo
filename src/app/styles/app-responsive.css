@@ -19,9 +19,8 @@
     flex-wrap: nowrap;
     align-content: center;
     min-height: 44px;
-    overflow-x: auto;
+    overflow-x: clip;
     overflow-y: hidden;
-    scrollbar-gutter: stable;
   }
 
   .toolbar-spacer {

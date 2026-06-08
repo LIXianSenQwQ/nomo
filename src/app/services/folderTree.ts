@@ -77,6 +77,70 @@ export function findTreeNode(nodes: FileTreeNode[], path: string): FileTreeNode 
   return null;
 }
 
+export function collectTreePaths(nodes: FileTreeNode[]): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    paths.push(node.path);
+    if (node.children?.length) {
+      paths.push(...collectTreePaths(node.children));
+    }
+  }
+  return paths;
+}
+
+export function removeTreePaths(nodes: FileTreeNode[], removedPaths: string[]): FileTreeNode[] {
+  if (removedPaths.length === 0) {
+    return nodes;
+  }
+
+  let changed = false;
+  const nextNodes: FileTreeNode[] = [];
+
+  for (const node of nodes) {
+    if (removedPaths.some((removedPath) => pathMatchesOrDescendsFrom(node.path, removedPath))) {
+      changed = true;
+      continue;
+    }
+
+    const nextChildren = node.children?.length
+      ? removeTreePaths(node.children, removedPaths)
+      : (node.children ?? []);
+    const childrenChanged = nextChildren !== node.children;
+    changed = changed || childrenChanged;
+
+    if (childrenChanged) {
+      nextNodes.push({
+        ...node,
+        children: nextChildren,
+        has_children: node.is_dir
+          ? nextChildren.length > 0 || (node.children_loaded ? false : node.has_children)
+          : false,
+      });
+    } else {
+      nextNodes.push(node);
+    }
+  }
+
+  return changed ? nextNodes : nodes;
+}
+
+export function pruneExpandedFolders(
+  expandedFolders: Set<string>,
+  removedPaths: string[],
+): Set<string> {
+  if (removedPaths.length === 0) {
+    return expandedFolders;
+  }
+
+  const nextExpandedFolders = new Set<string>();
+  for (const folderPath of expandedFolders) {
+    if (!removedPaths.some((removedPath) => pathMatchesOrDescendsFrom(folderPath, removedPath))) {
+      nextExpandedFolders.add(folderPath);
+    }
+  }
+  return nextExpandedFolders.size === expandedFolders.size ? expandedFolders : nextExpandedFolders;
+}
+
 export function updateFolderChildren(
   nodes: FileTreeNode[],
   folderPath: string,
@@ -150,4 +214,16 @@ function updateTreeNodes(
   });
 
   return changed ? nextNodes : nodes;
+}
+
+function pathMatchesOrDescendsFrom(path: string, ancestorPath: string) {
+  const normalizedPath = normalizeComparablePath(path);
+  const normalizedAncestor = normalizeComparablePath(ancestorPath);
+  return (
+    normalizedPath === normalizedAncestor || normalizedPath.startsWith(`${normalizedAncestor}/`)
+  );
+}
+
+function normalizeComparablePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }

@@ -114,6 +114,10 @@ interface SnapshotRecordPayload {
   reason: string;
 }
 
+interface ExternalOpenPayload {
+  paths?: unknown;
+}
+
 export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -152,6 +156,11 @@ export async function readMarkdownFile(path: string): Promise<NativeDocument> {
   return normalizeDocumentPayload(
     await invoke<NativeDocumentPayload>('read_markdown_file', { path }),
   );
+}
+
+export async function installSampleDocument(): Promise<NativeDocument> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return normalizeDocumentPayload(await invoke<NativeDocumentPayload>('install_sample_document'));
 }
 
 export async function saveMarkdownNative(
@@ -359,6 +368,20 @@ export async function listenDesktopFileDrops(
 ): Promise<UnlistenFn> {
   const { listen, TauriEvent } = await import('@tauri-apps/api/event');
   return listen<{ paths: string[] }>(TauriEvent.DRAG_DROP, (event) => handler(event.payload.paths));
+}
+
+export async function listenDesktopOpenDocuments(
+  handler: (paths: string[]) => void,
+): Promise<UnlistenFn> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<ExternalOpenPayload>('nomo://open-document', (event) => {
+    const paths = Array.isArray(event.payload?.paths)
+      ? event.payload.paths.filter((path): path is string => typeof path === 'string')
+      : [];
+    if (paths.length > 0) {
+      handler(paths);
+    }
+  });
 }
 
 function normalizeDocumentPayload(payload: NativeDocumentPayload): NativeDocument {

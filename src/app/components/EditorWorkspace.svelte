@@ -133,10 +133,7 @@
   </section>
 
   {#if outlineVisible}
-    <aside class="content-outline"
-      aria-label="文档大纲"
-      transition:outlinePanelTransition
-    >
+    <aside class="content-outline" aria-label="文档大纲" transition:outlinePanelTransition>
       <strong>文档大纲</strong>
       {#if outline.length > 0}
         <div class="content-outline-list">
@@ -173,7 +170,8 @@
                 >
                   <span>
                     {#if splitTitleNumber(item.title)[0]}
-                      <span class="outline-num">{splitTitleNumber(item.title)[0]}</span>{splitTitleNumber(item.title)[1]}
+                      <span class="outline-num">{splitTitleNumber(item.title)[0]}</span
+                      >{splitTitleNumber(item.title)[1]}
                     {:else}
                       {item.title}
                     {/if}

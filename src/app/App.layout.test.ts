@@ -45,8 +45,16 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const tauriLibSource = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf-8');
+  const tauriConfigSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/tauri.conf.json'),
+    'utf-8',
+  );
   const tauriTraySource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/tray.rs'),
+    'utf-8',
+  );
+  const tauriExternalOpenSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/external_open.rs'),
     'utf-8',
   );
   const tauriWindowCommandsSource = readFileSync(
@@ -299,6 +307,30 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command.startsWith('open-recent:')");
   });
 
+  it('routes external document open requests into existing document windows', () => {
+    expect(tauriLibSource).toContain('tauri_plugin_single_instance::init');
+    expect(tauriLibSource).toContain('collect_markdown_paths_from_args');
+    expect(tauriLibSource).toContain('tauri::RunEvent::Opened');
+    expect(tauriLibSource).toContain('collect_markdown_paths_from_urls');
+    expect(tauriLibSource).toContain('persist_pending_external_open');
+    expect(tauriExternalOpenSource).toContain(
+      'const OPEN_DOCUMENT_EVENT: &str = "nomo://open-document"',
+    );
+    expect(tauriExternalOpenSource).toContain('.emit(');
+    expect(tauriExternalOpenSource).toContain('OPEN_DOCUMENT_EVENT');
+    expect(tauriExternalOpenSource).toContain('is_document_window_label');
+    expect(tauriStorageSource).toContain('listenDesktopOpenDocuments');
+    expect(tauriStorageSource).toContain("listen<ExternalOpenPayload>('nomo://open-document'");
+    expect(appSource).toContain('listenDesktopOpenDocuments');
+    expect(appSource).toContain('pendingExternalOpen:${windowLabel}');
+    expect(appSource).toContain('openExternalMarkdownPaths(pendingExternalOpenPaths)');
+    expect(appSource).toContain("openRecentEntry(path, 'file')");
+    expect(tauriConfigSource).toContain('"fileAssociations"');
+    expect(tauriConfigSource).toContain('"md"');
+    expect(tauriConfigSource).toContain('"markdown"');
+    expect(tauriConfigSource).toContain('"role": "Editor"');
+  });
+
   it('mirrors the app chrome menu into the native macOS menubar', () => {
     expect(appShellSource).toContain(
       "import { getPlatformCapabilities } from '../services/platform'",
@@ -426,7 +458,9 @@ describe('App outline layout', () => {
   });
 
   it('cancels explorer rename mode when focus leaves the rename input', () => {
-    expect(explorerSidebarSource).toContain("import { clickOutside } from '../actions/clickOutside';");
+    expect(explorerSidebarSource).toContain(
+      "import { clickOutside } from '../actions/clickOutside';",
+    );
     expect(explorerSidebarSource).toContain('on:blur={cancelRenaming}');
     expect(explorerSidebarSource).toContain('use:clickOutside={cancelRenaming}');
     expect(explorerSidebarSource).toContain("if (event.key === 'Enter')");
@@ -437,9 +471,7 @@ describe('App outline layout', () => {
     expect(explorerSidebarSource).toContain(
       "import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';",
     );
-    expect(explorerSidebarSource).toContain(
-      '$: flattenedRows = buildVisibleExplorerRows(',
-    );
+    expect(explorerSidebarSource).toContain('$: flattenedRows = buildVisibleExplorerRows(');
     expect(explorerSidebarSource).toContain('expandedFolders,');
     expect(explorerSidebarSource).toContain('creatingParentPath,');
   });
@@ -467,7 +499,7 @@ describe('App outline layout', () => {
     expect(styles).toContain('.tab-dropdown-menu');
   });
 
-  it('keeps narrow desktop chrome single-row instead of stacking controls', () => {
+  it('keeps narrow desktop chrome single-row and clips the editor toolbar without horizontal scroll', () => {
     const narrowDesktopStart = responsiveStyles.indexOf('@media (max-width: 920px)');
     const narrowDesktopStyles = extractCssBlock(responsiveStyles, '@media (max-width: 920px)');
     const railStyles = extractCssBlock(responsiveStyles, '.rail', narrowDesktopStart);
@@ -484,7 +516,9 @@ describe('App outline layout', () => {
     expect(topbarStyles).toMatch(/flex-wrap:\s*nowrap;/);
     expect(topbarStyles).toMatch(/height:\s*40px;/);
     expect(toolbarStyles).toMatch(/flex-wrap:\s*nowrap;/);
-    expect(toolbarStyles).toMatch(/overflow-x:\s*auto;/);
+    expect(toolbarStyles).toMatch(/overflow-x:\s*clip;/);
+    expect(toolbarStyles).toMatch(/overflow-y:\s*hidden;/);
+    expect(toolbarStyles).not.toMatch(/overflow-x:\s*auto;/);
   });
 
   it('opens preferences in a dedicated settings window', () => {
@@ -536,7 +570,9 @@ describe('App outline layout', () => {
     expect(appSource).toContain('handleGlobalWheel');
     expect(appSource).toContain('applyZoomSetting(zoomPercent)');
     expect(appSource).toContain('applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible)');
-    expect(appSource).toContain('document.documentElement.dataset.codeBlockIndent = codeBlockIndent');
+    expect(appSource).toContain(
+      'document.documentElement.dataset.codeBlockIndent = codeBlockIndent',
+    );
     expect(appSource).toContain('applyOutlineDefaultExpansion');
     expect(appSource).toContain('shortcutPreferences');
     expect(appSource).toContain('requestExitApp()');
@@ -547,6 +583,7 @@ describe('App outline layout', () => {
     expect(tauriWindowCommandsSource).toContain('pub(crate) fn request_exit_app');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriMenuSource).toContain('emit_exit_request(window.app_handle())');
+    expect(tauriMenuSource).toContain('emit_exit_request(app)');
   });
 
   it('supports closing windows to the system tray when enabled', () => {
@@ -573,6 +610,19 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
     expect(tauriTraySource).toContain('closeToTrayEnabled');
+  });
+
+  it('bundles and opens the first-run sample document through the normal document flow', () => {
+    const tauriConfig = JSON.parse(tauriConfigSource);
+
+    expect(tauriConfig.bundle.resources).toEqual({
+      '../实例.md': 'samples/实例.md',
+    });
+    expect(tauriLibSource).toContain('crate::file_system::install_sample_document');
+    expect(tauriStorageSource).toContain("invoke<NativeDocumentPayload>('install_sample_document')");
+    expect(appSource).toContain('maybeOpenFirstRunSample');
+    expect(appSource).toContain('documentActions.applyNativeDocument(document,');
+    expect(appSource).toContain('FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY');
   });
 
   it('removes application-level workspace storage path configuration', () => {

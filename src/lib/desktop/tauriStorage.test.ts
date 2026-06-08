@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { parseNativeError } from './tauriStorage';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { installSampleDocument, parseNativeError } from './tauriStorage';
+
+const invokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}));
+
+beforeEach(() => {
+  invokeMock.mockReset();
+});
 
 describe('parseNativeError', () => {
   it('解析 PERMISSION_DENIED 错误码', () => {
@@ -61,5 +71,28 @@ describe('桌面路径编码场景（Windows-first）', () => {
     const json = JSON.stringify({ path });
     const parsed = JSON.parse(json);
     expect(parsed.path).toBe(path);
+  });
+});
+
+describe('installSampleDocument', () => {
+  it('把后端实例文档 payload 规范化为 NativeDocument', async () => {
+    invokeMock.mockResolvedValue({
+      path: 'C:\\Users\\清羽\\AppData\\Roaming\\Nomo\\samples\\实例.md',
+      file_name: '实例.md',
+      markdown: '# 实例',
+      modified_at: 100,
+      size_bytes: 8,
+      readonly: false,
+    });
+
+    await expect(installSampleDocument()).resolves.toEqual({
+      path: 'C:\\Users\\清羽\\AppData\\Roaming\\Nomo\\samples\\实例.md',
+      fileName: '实例.md',
+      markdown: '# 实例',
+      modifiedAt: 100,
+      sizeBytes: 8,
+      readonly: false,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('install_sample_document');
   });
 });
