@@ -8,11 +8,16 @@ import {
   rememberRecentEntry,
   saveMarkdownNative,
   statMarkdownFile,
+  type FileStatus,
   type NativeDocument,
   type RecentEntry,
   type SnapshotRecord,
 } from '../../lib/desktop/tauriStorage';
-import type { FileTreeNode } from '../types';
+import {
+  createEmptyExternalFileChange,
+  type ExternalFileChangeState,
+  type FileTreeNode,
+} from '../types';
 
 export interface FolderIndexBatch {
   root_path: string;
@@ -107,14 +112,14 @@ export async function loadDocumentSnapshots(
   return listDocumentSnapshots(nativePath).catch(() => []);
 }
 
-export async function getExternalFileWarning(
+export async function getExternalFileChange(
   desktopEnabled: boolean,
   nativePath: string | null,
   lastKnownModifiedAt: number,
   dirty: boolean,
-) {
+): Promise<ExternalFileChangeState> {
   if (!desktopEnabled || !nativePath || lastKnownModifiedAt === 0) {
-    return '';
+    return createEmptyExternalFileChange();
   }
 
   const status = await statMarkdownFile(nativePath).catch((error) => ({
@@ -122,17 +127,59 @@ export async function getExternalFileWarning(
   }));
 
   if ('error' in status) {
-    return status.error;
+    return {
+      type: 'deleted',
+      path: nativePath,
+      modifiedAt: 0,
+      dirtyAtDetection: dirty,
+      message: status.error,
+    };
   }
+
+  return resolveExternalFileChange({
+    desktopEnabled,
+    nativePath,
+    lastKnownModifiedAt,
+    dirty,
+    status,
+  });
+}
+
+export function resolveExternalFileChange(input: {
+  desktopEnabled: boolean;
+  nativePath: string | null;
+  lastKnownModifiedAt: number;
+  dirty: boolean;
+  status: Pick<FileStatus, 'exists' | 'modifiedAt'> | null;
+}): ExternalFileChangeState {
+  const { desktopEnabled, nativePath, lastKnownModifiedAt, dirty, status } = input;
+  if (!desktopEnabled || !nativePath || lastKnownModifiedAt === 0 || !status) {
+    return createEmptyExternalFileChange();
+  }
+
   if (!status.exists) {
-    return '当前文件已被外部删除或移动，保存前请另存为新路径';
+    return {
+      type: 'deleted',
+      path: nativePath,
+      modifiedAt: 0,
+      dirtyAtDetection: dirty,
+      message: '当前文件已被外部删除或移动，请另存为当前内容',
+    };
   }
+
   if (status.modifiedAt > lastKnownModifiedAt) {
-    return dirty
-      ? '文件已被外部修改；保存会覆盖外部版本，已建议先另存为'
-      : '文件已被外部修改，请从最近文件重新打开以刷新内容';
+    return {
+      type: 'modified',
+      path: nativePath,
+      modifiedAt: status.modifiedAt,
+      dirtyAtDetection: dirty,
+      message: dirty
+        ? '文件已被外部修改，自动保存已暂停；请选择重新载入、另存为或覆盖外部版本'
+        : '文件已被外部修改，请选择重新载入外部版本或保留当前内容',
+    };
   }
-  return '';
+
+  return createEmptyExternalFileChange();
 }
 
 export async function pickFolderPath() {

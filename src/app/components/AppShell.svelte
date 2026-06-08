@@ -3,7 +3,7 @@
   import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
-  import type { FileTreeNode, Tab } from '../types';
+  import type { ExternalFileChangeState, FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
   import DocumentTabs from './DocumentTabs.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
@@ -50,7 +50,7 @@
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
-  export let externalFileWarning: string;
+  export let externalFileChange: ExternalFileChangeState;
   export let outline: OutlineItem[];
   export let activeOutlineId: string;
   export let collapsedOutlineIds: Set<string>;
@@ -88,6 +88,8 @@
   export let closeCurrentFile: () => void;
   export let closeCurrentWindow: () => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
+  export let reloadExternalFile: () => void;
+  export let overwriteExternalFile: () => void;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
@@ -256,13 +258,15 @@
         {frontMatter}
         {frontMatterEditing}
         {readonlyDocumentMode}
-        {externalFileWarning}
+        {externalFileChange}
         {outlineVisible}
         {outline}
         {activeOutlineId}
         {collapsedOutlineIds}
         {visibleOutlineIds}
         {saveMarkdownFile}
+        {reloadExternalFile}
+        {overwriteExternalFile}
         {updateMarkdown}
         {enterFrontMatterEdit}
         {leaveFrontMatterEdit}

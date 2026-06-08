@@ -43,7 +43,14 @@
   } from '../lib/markdown/frontMatter';
   import AppShell from './components/AppShell.svelte';
   import FolderOpenDialog from './components/FolderOpenDialog.svelte';
-  import type { FileTreeNode, Tab, WorkspaceState } from './types';
+  import {
+    createEmptyExternalFileChange,
+    normalizeExternalFileChange,
+    type ExternalFileChangeState,
+    type FileTreeNode,
+    type Tab,
+    type WorkspaceState,
+  } from './types';
   import { getCompactPath, getDirectoryLabel, getFolderName } from './utils/pathLabels';
   import {
     executeDesktopCommand as executeDesktopAppCommand,
@@ -172,7 +179,7 @@
   let pendingSourceScrollTop: number | null = null;
   let largeDocumentMode = false,
     readonlyDocumentMode = false,
-    externalFileWarning = '',
+    externalFileChange: ExternalFileChangeState = createEmptyExternalFileChange(),
     lastKnownModifiedAt = 0;
   let desktopUnlisteners: Array<() => void> = [];
   let currentFolderPath = '',
@@ -235,7 +242,7 @@
       nativePath,
       largeDocumentMode,
       readonlyDocumentMode,
-      externalFileWarning,
+      externalFileChange,
       lastKnownModifiedAt,
     });
     persistWorkspaceState();
@@ -255,7 +262,8 @@
       nativePath = tab.nativePath;
       largeDocumentMode = tab.largeDocumentMode;
       readonlyDocumentMode = tab.readonlyDocumentMode;
-      externalFileWarning = tab.externalFileWarning;
+      externalFileChange = normalizeExternalFileChange(tab.externalFileChange);
+      tab.externalFileChange = externalFileChange;
       lastKnownModifiedAt = tab.lastKnownModifiedAt;
 
       if (editor) {
@@ -702,9 +710,7 @@
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
     targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
-    targetTab.externalFileWarning = document.readonly
-      ? '当前文件是只读文件，建议使用另存为保存修改'
-      : '';
+    targetTab.externalFileChange = createEmptyExternalFileChange();
     targetTab.version = 0;
 
     tabs = [...tabs];
@@ -800,7 +806,7 @@
       lastKnownModifiedAt = 0;
       largeDocumentMode = false;
       readonlyDocumentMode = false;
-      externalFileWarning = '';
+      externalFileChange = createEmptyExternalFileChange();
       outline = [];
       if (editor) {
         editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
@@ -848,6 +854,16 @@
     setLastKnownModifiedAt: (value) => {
       lastKnownModifiedAt = value;
     },
+    getExternalFileChange: () => externalFileChange,
+    setExternalFileChange: (value) => {
+      externalFileChange = value;
+      const activeTab = tabs.find((tab) => tab.id === activeTabId);
+      if (activeTab) {
+        activeTab.externalFileChange = value;
+        tabs = [...tabs];
+        persistWorkspaceState();
+      }
+    },
     getCurrentFolderPath: () => currentFolderPath,
     getFileInput: () => fileInput,
     getEditor: () => editor,
@@ -866,9 +882,6 @@
     },
     setRecentFiles: (value) => {
       recentFiles = value;
-    },
-    setExternalFileWarning: (value) => {
-      externalFileWarning = value;
     },
     saveActiveTabState,
     loadTabState,
@@ -960,6 +973,8 @@
   const createNewFile = documentActions.createNewFile;
   const _documentCloseTab = documentActions.closeTab;
   const refreshRecentFiles = documentActions.refreshRecentFiles;
+  const reloadExternalFile = documentActions.reloadExternalFile;
+  const overwriteExternalFile = documentActions.overwriteExternalFile;
   const checkExternalFileChange = documentActions.checkExternalFileChange;
 
   // 包装 closeTab：预览标签页直接关闭无需确认
@@ -987,7 +1002,7 @@
           lastKnownModifiedAt = 0;
           largeDocumentMode = false;
           readonlyDocumentMode = false;
-          externalFileWarning = '';
+          externalFileChange = createEmptyExternalFileChange();
           outline = [];
           isSwitchingTab = true;
           try {
@@ -1016,7 +1031,7 @@
       lastKnownModifiedAt = 0;
       largeDocumentMode = false;
       readonlyDocumentMode = false;
-      externalFileWarning = '';
+      externalFileChange = createEmptyExternalFileChange();
       outline = [];
       isSwitchingTab = true;
       try {
@@ -1095,7 +1110,7 @@
         lastKnownModifiedAt = 0;
         largeDocumentMode = false;
         readonlyDocumentMode = false;
-        externalFileWarning = '';
+        externalFileChange = createEmptyExternalFileChange();
         outline = [];
         isSwitchingTab = true;
         try {
@@ -1830,7 +1845,7 @@
   {frontMatter}
   {frontMatterEditing}
   {readonlyDocumentMode}
-  {externalFileWarning}
+  {externalFileChange}
   {outline}
   {activeOutlineId}
   {collapsedOutlineIds}
@@ -1867,6 +1882,8 @@
   {closeCurrentFile}
   {closeCurrentWindow}
   {saveMarkdownFile}
+  {reloadExternalFile}
+  {overwriteExternalFile}
   {runCommand}
   {pendingInlineMarks}
   {openTablePicker}

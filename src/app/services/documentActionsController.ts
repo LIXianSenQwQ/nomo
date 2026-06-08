@@ -1,12 +1,12 @@
 import type { NativeDocument, RecentEntry } from '../../lib/desktop/tauriStorage';
 import type { EditorCore } from '../../lib/editor-core';
 import { calculateDocumentStats } from '../../lib/outline/outlineService';
-import type { Tab } from '../types';
+import { createEmptyExternalFileChange, type ExternalFileChangeState, type Tab } from '../types';
 import { getDirectoryLabel } from '../utils/pathLabels';
 import {
   exportMarkdownInBrowser,
   findDroppedMarkdownPath,
-  getExternalFileWarning,
+  getExternalFileChange,
   loadRecentEntries,
   openMarkdownFromDialog,
   readMarkdownFromPath,
@@ -33,6 +33,8 @@ interface DocumentActionsOptions {
   setFilePath(value: string): void;
   getLastKnownModifiedAt(): number;
   setLastKnownModifiedAt(value: number): void;
+  getExternalFileChange(): ExternalFileChangeState;
+  setExternalFileChange(value: ExternalFileChangeState): void;
   setDirty(value: boolean): void;
   setLargeDocumentMode(value: boolean): void;
   setReadonlyDocumentMode(value: boolean): void;
@@ -45,7 +47,6 @@ interface DocumentActionsOptions {
   setActiveTabId(value: string): void;
   setStatusMessage(value: string): void;
   setRecentFiles(value: Awaited<ReturnType<typeof loadRecentEntries>>): void;
-  setExternalFileWarning(value: string): void;
   saveActiveTabState(): void;
   loadTabState(tab: Tab): void;
   switchTab(tabId: string): void;
@@ -118,7 +119,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.lastKnownModifiedAt = 0;
     targetTab.largeDocumentMode = text.length > options.getLargeDocumentLimit();
     targetTab.readonlyDocumentMode = targetTab.largeDocumentMode;
-    targetTab.externalFileWarning = '';
+    targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setTabs([...options.getTabs()]);
     options.loadTabState(targetTab);
@@ -135,6 +136,11 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     }
 
     if (options.getDesktopEnabled()) {
+      if (!saveAs && hasExternalFileChange()) {
+        options.setStatusMessage('检测到外部文件变更，请先选择重新载入、另存为或覆盖外部版本');
+        return;
+      }
+
       const path = saveAs ? null : options.getNativePath();
       const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
       options.writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
@@ -207,9 +213,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
     targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
-    targetTab.externalFileWarning = document.readonly
-      ? '当前文件是只读文件，建议使用另存为保存修改'
-      : '';
+    targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setActiveTabId(targetTab.id);
     options.setTabs([...options.getTabs()]);
@@ -262,9 +266,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
     targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
-    targetTab.externalFileWarning = document.readonly
-      ? '当前文件是只读文件，建议使用另存为保存修改'
-      : '';
+    targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setFileName(targetTab.fileName);
     options.setFilePath(targetTab.filePath);
@@ -274,7 +276,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setLastKnownModifiedAt(targetTab.lastKnownModifiedAt);
     options.setLargeDocumentMode(targetTab.largeDocumentMode);
     options.setReadonlyDocumentMode(targetTab.readonlyDocumentMode);
-    options.setExternalFileWarning(targetTab.externalFileWarning);
+    options.setExternalFileChange(targetTab.externalFileChange);
     options.setTabs([...options.getTabs()]);
 
     options.setStatusMessage(message);
@@ -340,6 +342,49 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setRecentFiles(await loadRecentEntries(options.getDesktopEnabled()));
   }
 
+  async function reloadExternalFile() {
+    const path = options.getNativePath();
+    if (!options.getDesktopEnabled() || !path || !hasExternalFileChange()) {
+      return;
+    }
+
+    const { document, error } = await readMarkdownFromPath(path, '重新载入外部版本失败');
+    if (error) {
+      options.setStatusMessage(error);
+      return;
+    }
+    if (document) {
+      await applyNativeDocument(document, '已重新载入外部版本', true);
+    }
+  }
+
+  async function overwriteExternalFile() {
+    const path = options.getNativePath();
+    if (!options.getDesktopEnabled() || !path) {
+      return;
+    }
+    if (options.getExternalFileChange().type !== 'modified') {
+      options.setStatusMessage('当前没有可覆盖的外部修改');
+      return;
+    }
+
+    const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
+    options.writeRecoveryDraft('before-overwrite-external');
+    const { document, error } = await saveNativeMarkdownFile(
+      path,
+      markdownToSave,
+      options.getFileName(),
+      options.getCreateSnapshotBeforeSave() ? path : null,
+    );
+    if (error) {
+      options.setStatusMessage(error);
+    }
+    if (document) {
+      localStorage.removeItem(options.recoveryKey);
+      await applySavedNativeDocument(document, markdownToSave, '已覆盖外部版本');
+    }
+  }
+
   let saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   function debouncedAutoSave(currentMarkdown: string) {
@@ -350,6 +395,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const fileName = options.getFileName();
 
     if (!tabId || !path) return;
+    if (hasExternalFileChange()) {
+      options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+      return;
+    }
 
     if (saveTimers[tabId] !== undefined) {
       clearTimeout(saveTimers[tabId]);
@@ -359,6 +408,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       delete saveTimers[tabId];
       if (!options.getAutoSaveEnabled()) return;
       if (!options.getDesktopEnabled()) return;
+      if (hasExternalFileChange()) {
+        options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+        return;
+      }
 
       const markdownToSave = normalizeMarkdownForSave(currentMarkdown);
 
@@ -462,15 +515,23 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   }
 
   async function checkExternalFileChange() {
-    const warning = await getExternalFileWarning(
+    const nextChange = await getExternalFileChange(
       options.getDesktopEnabled(),
       options.getNativePath(),
       options.getLastKnownModifiedAt(),
       options.getDirty(),
     );
-    if (warning) {
-      options.setExternalFileWarning(warning);
+    options.setExternalFileChange(nextChange);
+    if (nextChange.type !== 'none') {
+      cancelPendingAutoSaves();
+      if (options.getDirty()) {
+        options.setStatusMessage('检测到外部文件变更，已暂停自动保存');
+      }
     }
+  }
+
+  function hasExternalFileChange() {
+    return options.getExternalFileChange().type !== 'none';
   }
 
   return {
@@ -483,6 +544,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     createNewFile,
     closeTab,
     refreshRecentFiles,
+    reloadExternalFile,
+    overwriteExternalFile,
     checkExternalFileChange,
     debouncedAutoSave,
     cancelPendingAutoSaves,

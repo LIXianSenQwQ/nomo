@@ -1,4 +1,4 @@
-import type { Tab } from '../types';
+import { createEmptyExternalFileChange, type ExternalFileChangeState, type Tab } from '../types';
 
 export interface ActiveTabState {
   fileName: string;
@@ -9,7 +9,7 @@ export interface ActiveTabState {
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
-  externalFileWarning: string;
+  externalFileChange: ExternalFileChangeState;
   version: number;
 }
 
@@ -24,7 +24,7 @@ export function createDefaultTab(markdown: string): Tab {
     lastKnownModifiedAt: 0,
     largeDocumentMode: false,
     readonlyDocumentMode: false,
-    externalFileWarning: '',
+    externalFileChange: createEmptyExternalFileChange(),
     version: 0,
   };
 }
@@ -40,7 +40,7 @@ export function createBlankTab(fileName = 'untitled.md', filePath = '无标题.m
     lastKnownModifiedAt: 0,
     largeDocumentMode: false,
     readonlyDocumentMode: false,
-    externalFileWarning: '',
+    externalFileChange: createEmptyExternalFileChange(),
     version: 0,
   };
 }

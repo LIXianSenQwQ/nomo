@@ -695,6 +695,19 @@
   cursor: pointer;
 }
 
+.desktop-alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.desktop-alert button.danger {
+  border-color: var(--md-editor-danger);
+  background: var(--md-editor-danger);
+  color: white;
+}
+
 .app-toast {
   position: fixed;
   bottom: 44px;

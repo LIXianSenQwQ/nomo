@@ -8,8 +8,47 @@ export interface Tab {
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
-  externalFileWarning: string;
+  externalFileChange: ExternalFileChangeState;
   version: number;
+}
+
+export type ExternalFileChangeType = 'none' | 'modified' | 'deleted';
+
+export interface ExternalFileChangeState {
+  type: ExternalFileChangeType;
+  path: string | null;
+  modifiedAt: number;
+  dirtyAtDetection: boolean;
+  message: string;
+}
+
+export function createEmptyExternalFileChange(): ExternalFileChangeState {
+  return {
+    type: 'none',
+    path: null,
+    modifiedAt: 0,
+    dirtyAtDetection: false,
+    message: '',
+  };
+}
+
+export function normalizeExternalFileChange(value: unknown): ExternalFileChangeState {
+  if (!value || typeof value !== 'object') {
+    return createEmptyExternalFileChange();
+  }
+
+  const state = value as Partial<ExternalFileChangeState>;
+  if (state.type !== 'modified' && state.type !== 'deleted') {
+    return createEmptyExternalFileChange();
+  }
+
+  return {
+    type: state.type,
+    path: typeof state.path === 'string' ? state.path : null,
+    modifiedAt: typeof state.modifiedAt === 'number' ? state.modifiedAt : 0,
+    dirtyAtDetection: Boolean(state.dirtyAtDetection),
+    message: typeof state.message === 'string' ? state.message : '',
+  };
 }
 
 export interface FileTreeNode {

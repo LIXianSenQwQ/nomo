@@ -4,6 +4,7 @@
   import type { EditorMode } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
+  import type { ExternalFileChangeState } from '../types';
   import {
     modePaneMotion,
     motionIn,
@@ -19,7 +20,7 @@
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
   export let readonlyDocumentMode: boolean;
-  export let externalFileWarning: string;
+  export let externalFileChange: ExternalFileChangeState;
   export let outlineVisible: boolean;
   export let outline: OutlineItem[];
   export let activeOutlineId: string;
@@ -30,6 +31,8 @@
   export let semanticPane: HTMLElement;
   export let editorHost: HTMLDivElement;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
+  export let reloadExternalFile: () => void;
+  export let overwriteExternalFile: () => void;
   export let updateMarkdown: (event: Event) => void;
   export let enterFrontMatterEdit: () => void;
   export let leaveFrontMatterEdit: () => void;
@@ -56,16 +59,26 @@
   }
 </script>
 
-{#if externalFileWarning}
+{#if externalFileChange.type !== 'none'}
   <div
     class="desktop-alert"
     role="status"
     use:motionIn={{ kind: 'panel', y: -8 }}
     transition:slide={{ duration: transitionDuration('panel') }}
   >
-    <strong>文件状态</strong>
-    <span>{externalFileWarning}</span>
-    <button on:click={() => saveMarkdownFile(true)}>另存为</button>
+    <strong>外部文件变更</strong>
+    <span>{externalFileChange.message}</span>
+    <div class="desktop-alert-actions">
+      {#if externalFileChange.type === 'modified'}
+        <button type="button" on:click={reloadExternalFile}>重新载入外部版本</button>
+      {/if}
+      <button type="button" on:click={() => saveMarkdownFile(true)}>另存为当前内容</button>
+      {#if externalFileChange.type === 'modified'}
+        <button type="button" class="danger" on:click={overwriteExternalFile}>
+          覆盖外部版本
+        </button>
+      {/if}
+    </div>
   </div>
 {/if}
 
