@@ -396,9 +396,17 @@ describe('App outline layout', () => {
     expect(releaseWorkflowSource).toContain('tauri-apps/tauri-action@v1');
     expect(releaseWorkflowSource).toContain('Nomo_${version}_x64.zip');
     expect(releaseWorkflowSource).toContain('gh release upload');
+    expect(releaseWorkflowSource).toContain('checksums.md5: MD5 校验清单');
+    expect(releaseWorkflowSource).toContain('name: Publish MD5 checksums');
+    expect(releaseWorkflowSource).toContain("gh release upload '${{ github.ref_name }}' checksums.md5 --clobber");
     expect(releaseWorkflowSource).toContain('x64.zip: 免安装版');
+    expect(releaseWorkflowSource).not.toContain('TAURI_SIGNING_PRIVATE_KEY');
+    expect(releaseWorkflowSource).not.toContain('includeUpdaterJson');
     expect(releaseWorkflowSource).not.toContain('x64_en-US.msi');
     expect(releaseWorkflowSource).not.toContain('portable');
+    expect(tauriConfigSource).not.toContain('createUpdaterArtifacts');
+    expect(tauriConfigSource).not.toContain('"pubkey"');
+    expect(tauriLibSource).not.toContain('tauri_plugin_updater');
   });
 
   it('registers Nomo as an optional Markdown open-with application', () => {

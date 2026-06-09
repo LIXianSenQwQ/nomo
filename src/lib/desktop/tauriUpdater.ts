@@ -11,6 +11,24 @@ export type SoftwareUpdateStatus =
   | 'unsupported'
   | 'error';
 
+export interface SoftwareUpdateCandidate {
+  version: string;
+  date?: string;
+  body?: string;
+  assetName: string;
+  assetSize?: number;
+  downloadUrl: string;
+  md5: string;
+}
+
+export interface DownloadedSoftwareUpdate {
+  version: string;
+  assetName: string;
+  filePath: string;
+  md5: string;
+  downloadedBytes: number;
+}
+
 export interface SoftwareUpdateCheckResult {
   supported: boolean;
   available: boolean;
@@ -18,7 +36,7 @@ export interface SoftwareUpdateCheckResult {
   version?: string;
   date?: string;
   body?: string;
-  update?: SoftwareUpdateHandle;
+  candidate?: SoftwareUpdateCandidate;
 }
 
 export interface SoftwareUpdateProgress {
@@ -35,19 +53,8 @@ export interface SoftwareUpdateUiState {
   error?: string;
 }
 
-export type SoftwareUpdateDownloadEvent =
-  | { event: 'Started'; data: { contentLength?: number } }
-  | { event: 'Progress'; data: { chunkLength: number } }
-  | { event: 'Finished' };
-
-export interface SoftwareUpdateHandle {
-  currentVersion: string;
-  version: string;
-  date?: string;
-  body?: string;
-  download(onEvent?: (event: SoftwareUpdateDownloadEvent) => void): Promise<void>;
-  install(): Promise<void>;
-  close?(): Promise<void>;
+export interface SoftwareUpdateProgressEvent extends SoftwareUpdateProgress {
+  requestId: string;
 }
 
 interface SoftwareUpdateRuntime {
@@ -55,8 +62,13 @@ interface SoftwareUpdateRuntime {
   isWindowsRuntime: () => boolean;
   isInstallerRuntime: () => Promise<boolean>;
   getCurrentVersion: () => Promise<string>;
-  check: () => Promise<SoftwareUpdateHandle | null>;
-  relaunch: () => Promise<void>;
+  check: () => Promise<SoftwareUpdateCheckResult>;
+  download: (
+    candidate: SoftwareUpdateCandidate,
+    requestId: string,
+  ) => Promise<DownloadedSoftwareUpdate>;
+  install: (downloadedUpdate: DownloadedSoftwareUpdate) => Promise<void>;
+  listenProgress: (handler: (event: SoftwareUpdateProgressEvent) => void) => Promise<() => void>;
 }
 
 export function isSoftwareUpdateSupported(runtime: Partial<SoftwareUpdateRuntime> = {}): boolean {
@@ -86,54 +98,42 @@ export async function checkSoftwareUpdate(
     };
   }
 
-  const update = await fullRuntime.check();
-  if (!update) {
-    return {
-      supported: true,
-      available: false,
-      currentVersion,
-    };
-  }
-
+  const result = await fullRuntime.check();
   return {
-    supported: true,
-    available: true,
-    currentVersion: update.currentVersion || currentVersion,
-    version: update.version,
-    date: update.date,
-    body: update.body,
-    update,
+    ...result,
+    currentVersion: result.currentVersion || currentVersion,
   };
 }
 
 export async function downloadSoftwareUpdate(
-  update: SoftwareUpdateHandle,
+  candidate: SoftwareUpdateCandidate,
   onProgress?: (progress: SoftwareUpdateProgress) => void,
-): Promise<void> {
-  let downloadedBytes = 0;
-  let totalBytes: number | undefined;
+  runtime: Partial<SoftwareUpdateRuntime> = {},
+): Promise<DownloadedSoftwareUpdate> {
+  const fullRuntime = await resolveRuntime(runtime);
+  const requestId = createSoftwareUpdateRequestId();
+  const unlisten = onProgress
+    ? await fullRuntime.listenProgress((event) => {
+        if (event.requestId !== requestId) {
+          return;
+        }
+        onProgress(createSoftwareUpdateProgress(event.downloadedBytes, event.totalBytes));
+      })
+    : null;
 
-  await update.download((event) => {
-    if (event.event === 'Started') {
-      downloadedBytes = 0;
-      totalBytes = event.data.contentLength;
-    } else if (event.event === 'Progress') {
-      downloadedBytes += event.data.chunkLength;
-    } else if (event.event === 'Finished' && typeof totalBytes === 'number') {
-      downloadedBytes = totalBytes;
-    }
-
-    onProgress?.(createSoftwareUpdateProgress(downloadedBytes, totalBytes));
-  });
+  try {
+    return await fullRuntime.download(candidate, requestId);
+  } finally {
+    unlisten?.();
+  }
 }
 
 export async function installSoftwareUpdate(
-  update: SoftwareUpdateHandle,
+  downloadedUpdate: DownloadedSoftwareUpdate,
   runtime: Partial<SoftwareUpdateRuntime> = {},
 ): Promise<void> {
   const fullRuntime = await resolveRuntime(runtime);
-  await update.install();
-  await fullRuntime.relaunch();
+  await fullRuntime.install(downloadedUpdate);
 }
 
 export function createSoftwareUpdateProgress(
@@ -150,6 +150,11 @@ export function createSoftwareUpdateProgress(
   };
 }
 
+export function isSoftwareUpdateIntegrityFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /MD5|校验失败|integrity|checksum/i.test(message);
+}
+
 async function resolveRuntime(
   runtime: Partial<SoftwareUpdateRuntime>,
 ): Promise<SoftwareUpdateRuntime> {
@@ -159,7 +164,9 @@ async function resolveRuntime(
     isInstallerRuntime: runtime.isInstallerRuntime ?? defaultIsInstallerRuntime,
     getCurrentVersion: runtime.getCurrentVersion ?? defaultGetCurrentVersion,
     check: runtime.check ?? defaultCheck,
-    relaunch: runtime.relaunch ?? defaultRelaunch,
+    download: runtime.download ?? defaultDownload,
+    install: runtime.install ?? defaultInstall,
+    listenProgress: runtime.listenProgress ?? defaultListenProgress,
   };
 }
 
@@ -168,9 +175,34 @@ async function defaultGetCurrentVersion(): Promise<string> {
   return getVersion();
 }
 
-async function defaultCheck(): Promise<SoftwareUpdateHandle | null> {
-  const { check } = await import('@tauri-apps/plugin-updater');
-  return check() as Promise<SoftwareUpdateHandle | null>;
+async function defaultCheck(): Promise<SoftwareUpdateCheckResult> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<SoftwareUpdateCheckResult>('check_software_update');
+}
+
+async function defaultDownload(
+  candidate: SoftwareUpdateCandidate,
+  requestId: string,
+): Promise<DownloadedSoftwareUpdate> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DownloadedSoftwareUpdate>('download_software_update', {
+    candidate,
+    requestId,
+  });
+}
+
+async function defaultInstall(downloadedUpdate: DownloadedSoftwareUpdate): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('install_software_update', { downloadedUpdate });
+}
+
+async function defaultListenProgress(
+  handler: (event: SoftwareUpdateProgressEvent) => void,
+): Promise<() => void> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<SoftwareUpdateProgressEvent>('nomo://software-update-download-progress', (event) =>
+    handler(event.payload),
+  );
 }
 
 async function defaultIsInstallerRuntime(): Promise<boolean> {
@@ -182,9 +214,8 @@ async function defaultIsInstallerRuntime(): Promise<boolean> {
   return invoke<boolean>('is_windows_installer_installation').catch(() => false);
 }
 
-async function defaultRelaunch(): Promise<void> {
-  const { relaunch } = await import('@tauri-apps/plugin-process');
-  await relaunch();
+function createSoftwareUpdateRequestId(): string {
+  return `update-download-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function isWindows(): boolean {

@@ -5,24 +5,35 @@ import {
   downloadSoftwareUpdate,
   installSoftwareUpdate,
   isSoftwareUpdateInstallerSupported,
+  isSoftwareUpdateIntegrityFailure,
   isSoftwareUpdateSupported,
-  type SoftwareUpdateDownloadEvent,
-  type SoftwareUpdateHandle,
+  type DownloadedSoftwareUpdate,
+  type SoftwareUpdateCandidate,
+  type SoftwareUpdateProgressEvent,
 } from './tauriUpdater';
 
-function createMockUpdate(options: Partial<SoftwareUpdateHandle> = {}): SoftwareUpdateHandle {
+function createMockCandidate(options: Partial<SoftwareUpdateCandidate> = {}): SoftwareUpdateCandidate {
   return {
-    currentVersion: '0.1.3',
     version: '0.1.4',
     date: '2026-06-09T00:00:00Z',
     body: 'Bug fixes',
-    download: vi.fn(async (onEvent?: (event: SoftwareUpdateDownloadEvent) => void) => {
-      onEvent?.({ event: 'Started', data: { contentLength: 100 } });
-      onEvent?.({ event: 'Progress', data: { chunkLength: 25 } });
-      onEvent?.({ event: 'Progress', data: { chunkLength: 75 } });
-      onEvent?.({ event: 'Finished' });
-    }),
-    install: vi.fn(async () => undefined),
+    assetName: 'Nomo_0.1.4_x64-setup.exe',
+    assetSize: 100,
+    downloadUrl: 'https://example.test/Nomo_0.1.4_x64-setup.exe',
+    md5: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    ...options,
+  };
+}
+
+function createDownloadedUpdate(
+  options: Partial<DownloadedSoftwareUpdate> = {},
+): DownloadedSoftwareUpdate {
+  return {
+    version: '0.1.4',
+    assetName: 'Nomo_0.1.4_x64-setup.exe',
+    filePath: 'C:\\Users\\Qing Yu\\AppData\\Local\\Nomo\\updates\\Nomo_0.1.4_x64-setup.exe',
+    md5: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    downloadedBytes: 100,
     ...options,
   };
 }
@@ -48,7 +59,12 @@ describe('tauriUpdater', () => {
       isDesktopRuntime: () => false,
       isWindowsRuntime: () => true,
       getCurrentVersion: async () => '0.1.3',
-      check: async () => createMockUpdate(),
+      check: async () => ({
+        supported: true,
+        available: true,
+        currentVersion: '0.1.3',
+        candidate: createMockCandidate(),
+      }),
     });
 
     expect(result).toEqual({
@@ -59,7 +75,12 @@ describe('tauriUpdater', () => {
   });
 
   it('returns unsupported check results outside a Windows installer installation', async () => {
-    const check = vi.fn(async () => createMockUpdate());
+    const check = vi.fn(async () => ({
+      supported: true,
+      available: true,
+      currentVersion: '0.1.3',
+      candidate: createMockCandidate(),
+    }));
     const result = await checkSoftwareUpdate({
       isDesktopRuntime: () => true,
       isWindowsRuntime: () => true,
@@ -92,7 +113,11 @@ describe('tauriUpdater', () => {
       isWindowsRuntime: () => true,
       isInstallerRuntime: async () => true,
       getCurrentVersion: async () => '0.1.3',
-      check: async () => null,
+      check: async () => ({
+        supported: true,
+        available: false,
+        currentVersion: '0.1.3',
+      }),
     });
 
     expect(result.supported).toBe(true);
@@ -101,71 +126,100 @@ describe('tauriUpdater', () => {
   });
 
   it('returns available update metadata when a new version exists', async () => {
-    const update = createMockUpdate();
+    const candidate = createMockCandidate();
     const result = await checkSoftwareUpdate({
       isDesktopRuntime: () => true,
       isWindowsRuntime: () => true,
       isInstallerRuntime: async () => true,
       getCurrentVersion: async () => '0.1.3',
-      check: async () => update,
+      check: async () => ({
+        supported: true,
+        available: true,
+        currentVersion: '0.1.3',
+        version: candidate.version,
+        date: candidate.date,
+        body: candidate.body,
+        candidate,
+      }),
     });
 
     expect(result.supported).toBe(true);
     expect(result.available).toBe(true);
     expect(result.version).toBe('0.1.4');
-    expect(result.update).toBe(update);
+    expect(result.candidate).toBe(candidate);
   });
 
-  it('converts download events into percent progress', async () => {
+  it('converts download progress events into percent progress', async () => {
     const progresses: number[] = [];
+    const candidate = createMockCandidate();
+    const downloadedUpdate = createDownloadedUpdate();
+    let progressHandler: ((event: SoftwareUpdateProgressEvent) => void) | null = null;
+    const unlisten = vi.fn();
 
-    await downloadSoftwareUpdate(createMockUpdate(), (progress) => {
-      if (typeof progress.percent === 'number') {
-        progresses.push(progress.percent);
-      }
-    });
+    const result = await downloadSoftwareUpdate(
+      candidate,
+      (progress) => {
+        if (typeof progress.percent === 'number') {
+          progresses.push(progress.percent);
+        }
+      },
+      {
+        download: vi.fn(async (_candidate, requestId) => {
+          progressHandler?.({ requestId, downloadedBytes: 0, totalBytes: 100, percent: 0 });
+          progressHandler?.({ requestId, downloadedBytes: 25, totalBytes: 100, percent: 25 });
+          progressHandler?.({ requestId: 'other', downloadedBytes: 50, totalBytes: 100, percent: 50 });
+          progressHandler?.({ requestId, downloadedBytes: 100, totalBytes: 100, percent: 100 });
+          return downloadedUpdate;
+        }),
+        listenProgress: async (handler) => {
+          progressHandler = handler;
+          return unlisten;
+        },
+      },
+    );
 
-    expect(progresses).toEqual([0, 25, 100, 100]);
+    expect(result).toBe(downloadedUpdate);
+    expect(progresses).toEqual([0, 25, 100]);
+    expect(unlisten).toHaveBeenCalledOnce();
   });
 
-  it('rejects when download fails', async () => {
-    const update = createMockUpdate({
-      download: vi.fn(async () => {
-        throw new Error('network failed');
+  it('rejects when download fails and cleans up listener', async () => {
+    const unlisten = vi.fn();
+
+    await expect(
+      downloadSoftwareUpdate(createMockCandidate(), undefined, {
+        download: vi.fn(async () => {
+          throw new Error('network failed');
+        }),
+        listenProgress: async () => unlisten,
       }),
-    });
-
-    await expect(downloadSoftwareUpdate(update)).rejects.toThrow('network failed');
+    ).rejects.toThrow('network failed');
+    expect(unlisten).not.toHaveBeenCalled();
   });
 
-  it('installs and relaunches after install succeeds', async () => {
-    const update = createMockUpdate();
-    const relaunch = vi.fn(async () => undefined);
+  it('installs a verified downloaded update', async () => {
+    const downloadedUpdate = createDownloadedUpdate();
+    const install = vi.fn(async () => undefined);
 
-    await installSoftwareUpdate(update, {
-      isDesktopRuntime: () => true,
-      isWindowsRuntime: () => true,
-      relaunch,
-    });
+    await installSoftwareUpdate(downloadedUpdate, { install });
 
-    expect(update.install).toHaveBeenCalledOnce();
-    expect(relaunch).toHaveBeenCalledOnce();
+    expect(install).toHaveBeenCalledWith(downloadedUpdate);
   });
 
   it('rejects when install fails', async () => {
-    const update = createMockUpdate({
-      install: vi.fn(async () => {
-        throw new Error('install failed');
-      }),
-    });
-
     await expect(
-      installSoftwareUpdate(update, {
-        isDesktopRuntime: () => true,
-        isWindowsRuntime: () => true,
-        relaunch: vi.fn(async () => undefined),
+      installSoftwareUpdate(createDownloadedUpdate(), {
+        install: vi.fn(async () => {
+          throw new Error('install failed');
+        }),
       }),
     ).rejects.toThrow('install failed');
+  });
+
+  it('detects integrity failures from backend errors', () => {
+    expect(isSoftwareUpdateIntegrityFailure(new Error('更新包校验失败'))).toBe(true);
+    expect(isSoftwareUpdateIntegrityFailure('MD5 mismatch')).toBe(true);
+    expect(isSoftwareUpdateIntegrityFailure(new Error('network failed'))).toBe(false);
   });
 
   it('normalizes progress without a total size', () => {

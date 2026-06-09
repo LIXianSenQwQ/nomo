@@ -38,13 +38,16 @@ describe('interface language i18n', () => {
   it('provides software update messages for supported interface languages', () => {
     applyInterfaceLanguagePreference('zh-CN');
     expect(t.softwareUpdateRestartAndInstall()).toBe('重启并安装');
+    expect(t.softwareUpdateIntegrityFailed()).toContain('校验失败');
     expect(t.unsavedChangesBeforeUpdate({ names: 'a.md' })).toContain('a.md');
 
     applyInterfaceLanguagePreference('zh-TW');
     expect(t.softwareUpdateRestartAndInstall()).toBe('重啟並安裝');
+    expect(t.softwareUpdateIntegrityFailed()).toContain('校驗失敗');
 
     applyInterfaceLanguagePreference('en-US');
     expect(t.softwareUpdateRestartAndInstall()).toBe('Restart and install');
+    expect(t.softwareUpdateIntegrityFailed()).toContain('verification failed');
   });
 
   it('keeps generated message access safe through the translation proxy', () => {

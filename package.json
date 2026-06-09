@@ -12,7 +12,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "tauri": "tauri",
-    "tauri:build:windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-tauri-windows.ps1",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -20,8 +19,6 @@
     "@lucide/svelte": "^1.0.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
     "gsap": "^3.15.0",
     "katex": "^0.17.0",
     "markdown-it": "^14.2.0",

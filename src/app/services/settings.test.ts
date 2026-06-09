@@ -70,6 +70,8 @@ describe('settings', () => {
     expect(settingsWindowSource).toContain('checkForSoftwareUpdate');
     expect(settingsWindowSource).toContain('installDownloadedSoftwareUpdate');
     expect(settingsWindowSource).toContain('getSoftwareUpdateButtonLabel');
+    expect(settingsWindowSource).toContain('isSoftwareUpdateIntegrityFailure');
+    expect(settingsWindowSource).toContain('softwareUpdateIntegrityFailed');
     expect(settingsWindowSource).toContain('nomo://request-update-install');
     expect(settingsWindowSource).not.toContain(
       '<span class="disabled-pill">{t.futureVersionSupport()}</span>\n            </div>\n          </div>\n        {/if}',

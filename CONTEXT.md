@@ -157,7 +157,7 @@ _Avoid_: 分析报表、用户行为统计
 _Avoid_: 导入文档、创建空白新窗口、应用级默认存储根目录
 
 **软件更新**:
-通过签名安装包把 Nomo 应用本体升级到新版本的桌面能力；第一版面向 Windows 安装版。
+通过 GitHub Release 发布的 Windows NSIS 安装包升级 Nomo 应用本体，并在安装前校验 Release MD5 清单的桌面能力。
 _Avoid_: 文档同步、资源目录迁移、数据库主内容更新、免安装 zip 自替换
 
 **Windows-first**:

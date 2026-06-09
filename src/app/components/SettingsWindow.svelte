@@ -18,9 +18,10 @@
     checkSoftwareUpdate,
     downloadSoftwareUpdate,
     installSoftwareUpdate,
+    isSoftwareUpdateIntegrityFailure,
     isSoftwareUpdateInstallerSupported,
     isSoftwareUpdateSupported,
-    type SoftwareUpdateHandle,
+    type DownloadedSoftwareUpdate,
     type SoftwareUpdateProgress,
     type SoftwareUpdateUiState,
   } from '../../lib/desktop/tauriUpdater';
@@ -121,7 +122,7 @@
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
   let filesIntegrationStatusRequested = false;
-  let pendingSoftwareUpdate: SoftwareUpdateHandle | null = null;
+  let downloadedSoftwareUpdate: DownloadedSoftwareUpdate | null = null;
   let updateState: SoftwareUpdateUiState = {
     status: 'idle',
     message: '',
@@ -321,7 +322,7 @@
       return;
     }
 
-    pendingSoftwareUpdate = null;
+    downloadedSoftwareUpdate = null;
     if (!isSoftwareUpdateSupported()) {
       updateState = {
         status: 'unsupported',
@@ -345,7 +346,7 @@
         return;
       }
 
-      if (!result.available || !result.update) {
+      if (!result.available || !result.candidate) {
         updateState = {
           status: 'upToDate',
           message: t.softwareUpdateUpToDate(),
@@ -353,14 +354,13 @@
         return;
       }
 
-      pendingSoftwareUpdate = result.update;
       updateState = {
         status: 'available',
         message: t.softwareUpdateAvailable({ version: result.version ?? '' }),
         version: result.version,
       };
 
-      await downloadSoftwareUpdate(result.update, (progress) => {
+      downloadedSoftwareUpdate = await downloadSoftwareUpdate(result.candidate, (progress) => {
         updateState = {
           status: 'downloading',
           message: getSoftwareUpdateDownloadMessage(progress),
@@ -376,10 +376,12 @@
         progress: updateState.progress,
       };
     } catch (error) {
-      pendingSoftwareUpdate = null;
+      downloadedSoftwareUpdate = null;
       updateState = {
         status: 'error',
-        message: t.softwareUpdateFailed(),
+        message: isSoftwareUpdateIntegrityFailure(error)
+          ? t.softwareUpdateIntegrityFailed()
+          : t.softwareUpdateFailed(),
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -402,7 +404,7 @@
   }
 
   async function installDownloadedSoftwareUpdate() {
-    if (!pendingSoftwareUpdate || updateState.status !== 'downloaded') {
+    if (!downloadedSoftwareUpdate || updateState.status !== 'downloaded') {
       return;
     }
 
@@ -422,7 +424,7 @@
         status: 'installing',
         message: t.softwareUpdateInstalling(),
       };
-      await installSoftwareUpdate(pendingSoftwareUpdate);
+      await installSoftwareUpdate(downloadedSoftwareUpdate);
     } catch (error) {
       updateState = {
         ...updateState,

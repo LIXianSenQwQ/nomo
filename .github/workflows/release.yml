@@ -71,8 +71,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: '-'
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Nomo ${{ github.ref_name }}
@@ -80,12 +78,12 @@ jobs:
             Windows:
             - x64-setup.exe: 安装版
             - x64.zip: 免安装版
+            - checksums.md5: MD5 校验清单
 
             macOS:
             - .dmg / .app.tar.gz: arm64
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
-          includeUpdaterJson: ${{ runner.os == 'Windows' && !contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
 
       - name: Package Windows zip
@@ -116,3 +114,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload '${{ github.ref_name }}' "$env:NOMO_ZIP_PATH" --clobber
+
+  checksums:
+    name: Publish MD5 checksums
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ !contains(github.ref_name, '-') }}
+
+    steps:
+      - name: Generate and upload checksums.md5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh release download '${{ github.ref_name }}' --dir release-assets --clobber
+          rm -f release-assets/checksums.md5 checksums.md5
+
+          mapfile -d '' files < <(find release-assets -maxdepth 1 -type f ! -name 'checksums.md5' -print0 | sort -z)
+          : > checksums.md5
+          for file in "${files[@]}"; do
+            md5="$(md5sum "$file" | awk '{print $1}')"
+            name="$(basename "$file")"
+            printf '%s  %s\n' "$md5" "$name" >> checksums.md5
+          done
+
+          gh release upload '${{ github.ref_name }}' checksums.md5 --clobber
