@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "tauri": "tauri",
+    "tauri:build:windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/build-tauri-windows.ps1",
     "test": "vitest run",
     "test:watch": "vitest"
   },

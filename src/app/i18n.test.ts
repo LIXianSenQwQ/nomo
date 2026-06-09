@@ -46,4 +46,11 @@ describe('interface language i18n', () => {
     applyInterfaceLanguagePreference('en-US');
     expect(t.softwareUpdateRestartAndInstall()).toBe('Restart and install');
   });
+
+  it('keeps generated message access safe through the translation proxy', () => {
+    applyInterfaceLanguagePreference('zh-CN');
+    const currentFolder = t.currentFolder;
+
+    expect(currentFolder()).toBe('当前文件夹');
+  });
 });

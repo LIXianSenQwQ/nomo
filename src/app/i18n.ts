@@ -30,7 +30,7 @@ let currentInterfaceLocale: EffectiveInterfaceLocale = DEFAULT_EFFECTIVE_INTERFA
 
 overwriteGetLocale(() => currentInterfaceLocale as Locale);
 
-const generatedMessages = messages.m as unknown as MessageBag;
+const generatedMessages = { ...messages.m } as unknown as MessageBag;
 
 const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTable>> = {
   'zh-CN': {
