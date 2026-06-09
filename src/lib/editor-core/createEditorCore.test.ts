@@ -33,6 +33,21 @@ describe('createEditorCore', () => {
     ]);
   });
 
+  it('defers ProseMirror state rebuild for source input until semantic mode resumes', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# Old', mode: 'source', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    editor.setMarkdown('# New', { sourceInput: true });
+
+    expect(editor.getMarkdown()).toBe('# New');
+    expect(view.state.doc.textContent).toBe('Old');
+
+    editor.updateOptions({ mode: 'semantic' });
+
+    expect(view.state.doc.textContent).toBe('New');
+  });
+
   it('emits pending inline mark snapshots for toolbar state', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '', target });

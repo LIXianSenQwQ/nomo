@@ -7,6 +7,19 @@ export interface OutlineScrollAnchor {
   sectionProgress: number;
 }
 
+interface SemanticHeadingAnchor {
+  id: string;
+  element: HTMLElement;
+}
+
+interface SemanticHeadingCache {
+  editor: Element | null;
+  signature: string;
+  anchors: SemanticHeadingAnchor[];
+}
+
+const semanticHeadingCache = new WeakMap<HTMLElement, SemanticHeadingCache>();
+
 export function getSourceLineHeight(sourceTextarea: HTMLTextAreaElement | undefined) {
   if (!sourceTextarea) {
     return 24;
@@ -91,7 +104,7 @@ export function getActiveOutlineIdFromSemantic(
     return '';
   }
 
-  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (headingAnchors.length === 0) {
     return outline[0]?.id ?? '';
   }
@@ -111,7 +124,7 @@ export function getSemanticScrollAnchor(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
 ): OutlineScrollAnchor | null {
-  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (!outline.length || !semanticPane || headingAnchors.length === 0) {
     return null;
   }
@@ -124,7 +137,10 @@ export function getSemanticScrollAnchor(
     }
   });
 
-  const currentTop = getElementTopInScrollContainer(headingAnchors[activeIndex].element, semanticPane);
+  const currentTop = getElementTopInScrollContainer(
+    headingAnchors[activeIndex].element,
+    semanticPane,
+  );
   const nextTop = headingAnchors[activeIndex + 1]
     ? getElementTopInScrollContainer(headingAnchors[activeIndex + 1].element, semanticPane)
     : semanticPane.scrollHeight;
@@ -132,7 +148,8 @@ export function getSemanticScrollAnchor(
   const sectionProgress = clamp((visibleTop - currentTop) / sectionHeight, 0, 1);
 
   return {
-    outlineId: headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? outline[0].id,
+    outlineId:
+      headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? outline[0].id,
     sectionProgress,
   };
 }
@@ -142,7 +159,7 @@ export function scrollSemanticToAnchor(
   semanticPane: HTMLElement | undefined,
   anchor: OutlineScrollAnchor | null,
 ) {
-  const headingAnchors = getSemanticHeadingAnchors(semanticPane);
+  const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (!semanticPane || !anchor || headingAnchors.length === 0) {
     return;
   }
@@ -152,7 +169,10 @@ export function scrollSemanticToAnchor(
     return;
   }
 
-  const currentTop = getElementTopInScrollContainer(headingAnchors[currentIndex].element, semanticPane);
+  const currentTop = getElementTopInScrollContainer(
+    headingAnchors[currentIndex].element,
+    semanticPane,
+  );
   const nextTop = headingAnchors[currentIndex + 1]
     ? getElementTopInScrollContainer(headingAnchors[currentIndex + 1].element, semanticPane)
     : semanticPane.scrollHeight;
@@ -176,10 +196,24 @@ function getSemanticHeadings(semanticPane: HTMLElement | undefined) {
   );
 }
 
-function getSemanticHeadingAnchors(semanticPane: HTMLElement | undefined) {
+function getSemanticHeadingAnchors(
+  semanticPane: HTMLElement | undefined,
+  outline: OutlineItem[],
+): SemanticHeadingAnchor[] {
+  if (!semanticPane) {
+    return [];
+  }
+
+  const editor = semanticPane.querySelector('.ProseMirror');
+  const signature = outline.map((item) => item.id).join('\u001f');
+  const cached = semanticHeadingCache.get(semanticPane);
+  if (cached && cached.editor === editor && cached.signature === signature) {
+    return cached.anchors;
+  }
+
   const headings = getSemanticHeadings(semanticPane);
   const usedIds = new Map<string, number>();
-  return headings.map((element, index) => {
+  const anchors = headings.map((element, index) => {
     const title = element.textContent?.trim() ?? '';
     const baseId = slugifyHeading(title) || `heading-${index + 1}`;
     const seen = usedIds.get(baseId) ?? 0;
@@ -189,6 +223,8 @@ function getSemanticHeadingAnchors(semanticPane: HTMLElement | undefined) {
       element,
     };
   });
+  semanticHeadingCache.set(semanticPane, { editor, signature, anchors });
+  return anchors;
 }
 
 function getElementTopInScrollContainer(element: HTMLElement, scrollContainer: HTMLElement) {

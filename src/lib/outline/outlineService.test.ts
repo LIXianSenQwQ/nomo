@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateDocumentStats, extractOutline } from './outlineService';
+import { analyzeMarkdown, calculateDocumentStats, extractOutline } from './outlineService';
 
 describe('outlineService', () => {
   it('extracts heading outline with stable ids and line numbers', () => {
@@ -39,6 +39,18 @@ describe('outlineService', () => {
       lines: 7,
       headings: 1,
       readingMinutes: 1,
+    });
+  });
+
+  it('analyzes outline and stats in one pass without changing results', () => {
+    const markdown = '# Title\r\n\r\nhello world\r\n\r\n```ts\r\nconst x = 1\r\n```';
+    const analysis = analyzeMarkdown(markdown);
+
+    expect(analysis.outline).toEqual(extractOutline(markdown));
+    expect(analysis.stats).toEqual(calculateDocumentStats(markdown));
+    expect(analysis.stats).toMatchObject({
+      lines: 7,
+      headings: 1,
     });
   });
 });

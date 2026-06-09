@@ -67,7 +67,9 @@ export function createEditorInteractionController(options: EditorInteractionOpti
 
   function updateMarkdown(event: Event) {
     options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);
-    options.getEditor().setMarkdown((event.currentTarget as HTMLTextAreaElement).value);
+    options
+      .getEditor()
+      .setMarkdown((event.currentTarget as HTMLTextAreaElement).value, { sourceInput: true });
     syncSourceTextareaHeight(options.getPendingSourceScrollTop());
   }
 

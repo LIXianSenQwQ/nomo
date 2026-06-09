@@ -22,6 +22,10 @@ export function createTocBlock(markdown: string): string {
 }
 
 export function updateTocBlocks(markdown: string): string {
+  if (!markdown.includes(TOC_START_MARKER) || !markdown.includes(TOC_END_MARKER)) {
+    return markdown;
+  }
+
   const ranges = extractTocRanges(markdown);
   if (ranges.length === 0) {
     return markdown;
@@ -177,9 +181,7 @@ function readMarkdownLines(markdown: string): MarkdownLine[] {
     }
 
     const contentEnd =
-      newlineIndex > start && markdown[newlineIndex - 1] === '\r'
-        ? newlineIndex - 1
-        : newlineIndex;
+      newlineIndex > start && markdown[newlineIndex - 1] === '\r' ? newlineIndex - 1 : newlineIndex;
     lines.push({
       text: markdown.slice(start, contentEnd),
       start,

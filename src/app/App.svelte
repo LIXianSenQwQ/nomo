@@ -33,8 +33,7 @@
     type EditorMode,
   } from '../lib/editor-core';
   import {
-    calculateDocumentStats,
-    extractOutline,
+    analyzeMarkdown,
     type DocumentStats,
     type OutlineItem,
   } from '../lib/outline/outlineService';
@@ -164,7 +163,7 @@
   let collapsedOutlineIds = new Set<string>();
   let visibleOutlineIds = new Set(outline.map((item) => item.id));
   let suppressOutlineScrollUntil = 0;
-  let stats: DocumentStats = calculateDocumentStats('');
+  let stats: DocumentStats = analyzeMarkdown('').stats;
   let writingStatsVisible = DEFAULT_APP_PREFERENCES.writingStatsVisible;
   let writingStatsMetric: WritingStatsMetric = DEFAULT_APP_PREFERENCES.writingStatsMetric;
   let readingTimeVisible = DEFAULT_APP_PREFERENCES.readingTimeVisible;
@@ -299,10 +298,11 @@
         editor.setMarkdown(markdown, { reason: 'switch-tab', dirty: tab.dirty });
       }
 
-      outline = extractOutline(markdown);
+      const analysis = analyzeMarkdown(markdown);
+      outline = analysis.outline;
       activeOutlineId = outline[0]?.id ?? '';
       applyOutlineDefaultExpansion();
-      stats = calculateDocumentStats(markdown);
+      stats = analysis.stats;
       syncSourceTextareaHeight();
     } finally {
       isSwitchingTab = false;
@@ -1641,21 +1641,29 @@
   function syncFromEditor(event: EditorChangeEvent) {
     if (isSwitchingTab) return;
 
+    const markdownChanged = event.markdown !== markdown;
+
     // 预览标签页开始编辑 → 自动固定
-    if (previewTabId && previewTabId === activeTabId && event.dirty) {
+    if (markdownChanged && previewTabId && previewTabId === activeTabId && event.dirty) {
       previewTabId = null;
     }
 
-    markdown = event.markdown;
     dirty = event.dirty;
     version = event.version;
     mode = event.mode;
     pendingInlineMarks = event.pendingInlineMarks;
-    outline = extractOutline(event.markdown);
+
+    if (!markdownChanged) {
+      return;
+    }
+
+    markdown = event.markdown;
+    const analysis = analyzeMarkdown(event.markdown);
+    outline = analysis.outline;
     if (!outline.some((item) => item.id === activeOutlineId))
       activeOutlineId = outline[0]?.id ?? '';
     pruneCollapsedOutlineIds();
-    stats = calculateDocumentStats(event.markdown);
+    stats = analysis.stats;
 
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (activeTab) {

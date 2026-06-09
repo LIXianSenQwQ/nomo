@@ -14,33 +14,52 @@ export interface DocumentStats {
 }
 
 export function extractOutline(markdown: string): OutlineItem[] {
+  return analyzeMarkdown(markdown).outline;
+}
+
+export function calculateDocumentStats(markdown: string): DocumentStats {
+  return analyzeMarkdown(markdown).stats;
+}
+
+export function analyzeMarkdown(markdown: string): {
+  outline: OutlineItem[];
+  stats: DocumentStats;
+} {
+  if (markdown.length === 0) {
+    return {
+      outline: [],
+      stats: {
+        chars: 0,
+        words: 0,
+        lines: 1,
+        headings: 0,
+        readingMinutes: 1,
+      },
+    };
+  }
+
+  const outline: OutlineItem[] = [];
   const usedIds = new Map<string, number>();
+  const lines = markdown.split(/\r\n|\r|\n/);
 
-  return markdown
-    .split(/\r?\n/)
-    .map((line, index) => {
-      const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
-      if (!match) {
-        return null;
-      }
-
+  lines.forEach((line, index) => {
+    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (match) {
       const rawTitle = match[2].trim();
       const title = normalizeHeadingTitle(rawTitle) || rawTitle;
       const baseId = slugifyHeading(title) || `heading-${index + 1}`;
       const seen = usedIds.get(baseId) ?? 0;
       usedIds.set(baseId, seen + 1);
 
-      return {
+      outline.push({
         id: seen === 0 ? baseId : `${baseId}-${seen + 1}`,
         level: match[1].length as OutlineItem['level'],
         title,
         line: index + 1,
-      };
-    })
-    .filter((item): item is OutlineItem => item !== null);
-}
+      });
+    }
+  });
 
-export function calculateDocumentStats(markdown: string): DocumentStats {
   const withoutCode = markdown.replace(/```[\s\S]*?```/g, ' ');
   const words = withoutCode
     .replace(/[#>*_`[\]()!-]/g, ' ')
@@ -48,11 +67,14 @@ export function calculateDocumentStats(markdown: string): DocumentStats {
     .filter(Boolean).length;
 
   return {
-    chars: markdown.length,
-    words,
-    lines: markdown.length === 0 ? 1 : markdown.split(/\r\n|\r|\n/).length,
-    headings: extractOutline(markdown).length,
-    readingMinutes: Math.max(1, Math.ceil(words / 280)),
+    outline,
+    stats: {
+      chars: markdown.length,
+      words,
+      lines: lines.length,
+      headings: outline.length,
+      readingMinutes: Math.max(1, Math.ceil(words / 280)),
+    },
   };
 }
 

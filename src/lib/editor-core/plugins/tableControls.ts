@@ -77,11 +77,14 @@ class TableControlsView {
     const colCount = rows[0]?.cells.length ?? 0;
     if (rowCount === 0 || colCount === 0) return;
 
+    const rowRects = Array.from(rows, (row) => row.getBoundingClientRect());
+    const firstRowCellRects = Array.from(rows[0].cells, (cell) => cell.getBoundingClientRect());
+
     this.dom.replaceChildren();
 
     // 步骤1：渲染行/列插入按钮（跳过外边缘，由边框按钮处理）
-    this.renderRowInsertButtons(table, rowCount);
-    this.renderColInsertButtons(table, colCount);
+    this.renderRowInsertButtons(rowCount, tableRect, rowRects);
+    this.renderColInsertButtons(colCount, tableRect, firstRowCellRects);
 
     // 步骤2：可选渲染表格外边框上的线性插入按钮；当前设计暂时隐藏，保留入口便于后续迭代。
     if (this.options.showOuterBorderInsertButtons) {
@@ -89,8 +92,8 @@ class TableControlsView {
     }
 
     // 步骤3：渲染删除按钮（所有行的左侧 + 所有列的下方）
-    this.renderRowDeleteButtons(table, rowCount);
-    this.renderColDeleteButtons(table, rowCount, colCount);
+    this.renderRowDeleteButtons(rowCount, tableRect, rowRects);
+    this.renderColDeleteButtons(colCount, tableRect, firstRowCellRects);
 
     // 步骤4：渲染表格工具条（边界新增、对齐、表头、删除表格）
     this.renderUtilityBar(rowCount, colCount);
@@ -108,13 +111,10 @@ class TableControlsView {
 
   // ===== 渲染：行插入按钮 =====
 
-  private renderRowInsertButtons(table: HTMLTableElement, rowCount: number): void {
-    const tableRows = table.rows;
-    const tableRect = table.getBoundingClientRect();
-
+  private renderRowInsertButtons(rowCount: number, tableRect: DOMRect, rowRects: DOMRect[]): void {
     // 仅处理行间隙（1..rowCount-1），四角边缘由边框按钮处理
     for (let i = 1; i < rowCount; i++) {
-      const y = this.rowGapY(tableRows, i, tableRect);
+      const y = this.rowGapY(rowRects, i, tableRect);
       const title = t.insertRowBetween({ from: i, to: i + 1 });
 
       const leftBtn = this.createButton(title, '+', 'row-insert-left', () => this.insertRowAt(i));
@@ -128,38 +128,33 @@ class TableControlsView {
   }
 
   /** 计算第 pos 个行间隙的垂直中心（相对于表格 overlay） */
-  private rowGapY(
-    rows: HTMLCollectionOf<HTMLTableRowElement>,
-    pos: number,
-    tableRect: DOMRect,
-  ): number {
+  private rowGapY(rows: DOMRect[], pos: number, tableRect: DOMRect): number {
     if (pos === 0) {
       // 第一行上方
-      const rowTop = rows[0].getBoundingClientRect().top - tableRect.top;
+      const rowTop = rows[0].top - tableRect.top;
       return rowTop;
     }
     if (pos === rows.length) {
       // 最后一行下方
-      const rowBottom = rows[rows.length - 1].getBoundingClientRect().bottom - tableRect.top;
+      const rowBottom = rows[rows.length - 1].bottom - tableRect.top;
       return rowBottom;
     }
     // 第 pos-1 行和第 pos 行之间的间隙
-    const prevBottom = rows[pos - 1].getBoundingClientRect().bottom - tableRect.top;
-    const currTop = rows[pos].getBoundingClientRect().top - tableRect.top;
+    const prevBottom = rows[pos - 1].bottom - tableRect.top;
+    const currTop = rows[pos].top - tableRect.top;
     return Math.round((prevBottom + currTop) / 2);
   }
 
   // ===== 渲染：列插入按钮 =====
 
-  private renderColInsertButtons(table: HTMLTableElement, colCount: number): void {
-    const firstRowCells = table.rows[0]?.cells;
-    if (!firstRowCells) return;
-
-    const tableRect = table.getBoundingClientRect();
-
+  private renderColInsertButtons(
+    colCount: number,
+    tableRect: DOMRect,
+    firstRowCellRects: DOMRect[],
+  ): void {
     // 仅处理列间隙（1..colCount-1），四角边缘由边框按钮处理
     for (let j = 1; j < colCount; j++) {
-      const x = this.colGapX(firstRowCells, j, tableRect);
+      const x = this.colGapX(firstRowCellRects, j, tableRect);
       const title = t.insertColumnBetween({ from: j, to: j + 1 });
 
       const topBtn = this.createButton(title, '+', 'col-insert-top', () => this.insertColumnAt(j));
@@ -175,22 +170,18 @@ class TableControlsView {
   }
 
   /** 计算第 pos 个列间隙的水平中心（相对于表格 overlay） */
-  private colGapX(
-    cells: HTMLCollectionOf<HTMLTableCellElement>,
-    pos: number,
-    tableRect: DOMRect,
-  ): number {
+  private colGapX(cells: DOMRect[], pos: number, tableRect: DOMRect): number {
     if (pos === 0) {
       // 第一列左侧
-      return cells[0].getBoundingClientRect().left - tableRect.left;
+      return cells[0].left - tableRect.left;
     }
     if (pos === cells.length) {
       // 最后一列右侧
-      return cells[cells.length - 1].getBoundingClientRect().right - tableRect.left;
+      return cells[cells.length - 1].right - tableRect.left;
     }
     // 第 pos-1 列和第 pos 列之间的间隙
-    const prevRight = cells[pos - 1].getBoundingClientRect().right - tableRect.left;
-    const currLeft = cells[pos].getBoundingClientRect().left - tableRect.left;
+    const prevRight = cells[pos - 1].right - tableRect.left;
+    const currLeft = cells[pos].left - tableRect.left;
     return Math.round((prevRight + currLeft) / 2);
   }
 
@@ -309,12 +300,9 @@ class TableControlsView {
 
   // ===== 渲染：删除行按钮（每行左侧） =====
 
-  private renderRowDeleteButtons(table: HTMLTableElement, rowCount: number): void {
-    const tableRows = table.rows;
-    const tableRect = table.getBoundingClientRect();
-
+  private renderRowDeleteButtons(rowCount: number, tableRect: DOMRect, rowRects: DOMRect[]): void {
     for (let r = 0; r < rowCount; r++) {
-      const rowRect = tableRows[r].getBoundingClientRect();
+      const rowRect = rowRects[r];
       const centerY = rowRect.top - tableRect.top + rowRect.height / 2;
 
       const btn = this.createButton(t.deleteTableRow({ index: r + 1 }), '−', 'delete-row-btn', () =>
@@ -328,17 +316,12 @@ class TableControlsView {
   // ===== 渲染：删除列按钮（每列下方） =====
 
   private renderColDeleteButtons(
-    table: HTMLTableElement,
-    _rowCount: number,
     colCount: number,
+    tableRect: DOMRect,
+    firstRowCellRects: DOMRect[],
   ): void {
-    const firstRowCells = table.rows[0]?.cells;
-    if (!firstRowCells) return;
-
-    const tableRect = table.getBoundingClientRect();
-
     for (let c = 0; c < colCount; c++) {
-      const cellRect = firstRowCells[c].getBoundingClientRect();
+      const cellRect = firstRowCellRects[c];
       const centerX = cellRect.left - tableRect.left + cellRect.width / 2;
 
       const btn = this.createButton(

@@ -210,7 +210,7 @@ describe('App outline layout', () => {
       'options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);',
     );
     expect(updateSource).toContain(
-      'options.getEditor().setMarkdown((event.currentTarget as HTMLTextAreaElement).value);',
+      '.setMarkdown((event.currentTarget as HTMLTextAreaElement).value, { sourceInput: true });',
     );
     expect(editorInteractionSource).toContain(
       'options.getSourcePane().scrollTop = restoreScrollTop;',
@@ -398,7 +398,9 @@ describe('App outline layout', () => {
     expect(releaseWorkflowSource).toContain('gh release upload');
     expect(releaseWorkflowSource).toContain('checksums.md5: MD5 校验清单');
     expect(releaseWorkflowSource).toContain('name: Publish MD5 checksums');
-    expect(releaseWorkflowSource).toContain("gh release upload '${{ github.ref_name }}' checksums.md5 --clobber");
+    expect(releaseWorkflowSource).toContain(
+      "gh release upload '${{ github.ref_name }}' checksums.md5 --clobber",
+    );
     expect(releaseWorkflowSource).toContain('x64.zip: 免安装版');
     expect(releaseWorkflowSource).not.toContain('TAURI_SIGNING_PRIVATE_KEY');
     expect(releaseWorkflowSource).not.toContain('includeUpdaterJson');

@@ -84,6 +84,7 @@ export class ProseMirrorEditorCore implements EditorCore {
   private target: HTMLElement | null;
   private view: EditorView | null = null;
   private markdown: string;
+  private semanticViewDirty = false;
   private frontMatter = '';
   private version = 0;
   private dirty = false;
@@ -160,7 +161,11 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
     this.assertActive();
-    const previousDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
+    const previousMarkdown = this.markdown;
+    const delaySemanticSync = options?.sourceInput === true && this.runtime.mode === 'source';
+    const previousDoc = delaySemanticSync
+      ? null
+      : (this.view?.state.doc ?? parseMarkdown(this.markdown));
     this.markdown = updateTocBlocks(markdown);
     this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.version += 1;
@@ -169,8 +174,19 @@ export class ProseMirrorEditorCore implements EditorCore {
       (options?.reason !== 'open-file' &&
         options?.reason !== 'save-file' &&
         options?.reason !== 'switch-tab');
+    if (delaySemanticSync) {
+      this.semanticViewDirty = true;
+      if (shouldReportImageDeletion(options)) {
+        this.notifyDeletedImageSrcs(
+          findFullyRemovedMarkdownImageSrcs(previousMarkdown, this.markdown),
+        );
+      }
+      this.emit(options?.reason ?? 'programmatic-update');
+      return;
+    }
+
     this.replaceViewState(this.markdown);
-    if (shouldReportImageDeletion(options)) {
+    if (previousDoc && shouldReportImageDeletion(options)) {
       const nextDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
       this.notifyDeletedImages(previousDoc, nextDoc);
     }
@@ -301,6 +317,9 @@ export class ProseMirrorEditorCore implements EditorCore {
       ...options,
     };
     InlineCodeNodeView.setRenderingEnabled(nextInlineCodeRenderingEnabled);
+    if (this.semanticViewDirty && this.runtime.mode === 'semantic' && options.mode === 'semantic') {
+      this.replaceViewState(this.markdown);
+    }
     this.view?.setProps({
       editable: () => this.isEditable(),
     });
@@ -578,6 +597,8 @@ export class ProseMirrorEditorCore implements EditorCore {
           anchor: nextState.selection.anchor,
           head: nextState.selection.head,
         });
+      } else {
+        this.semanticViewDirty = false;
       }
       this.notifyDeletedImages(previousDoc, nextState.doc);
     }
@@ -597,6 +618,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
     const nextState = this.createState(markdown);
     this.view.updateState(selection ? this.restoreSelection(nextState, selection) : nextState);
+    this.semanticViewDirty = false;
   }
 
   private restoreSelection(
@@ -654,6 +676,14 @@ export class ProseMirrorEditorCore implements EditorCore {
     }
 
     const deletedSrcs = findFullyRemovedImageSrcs(previousDoc, nextDoc);
+    this.notifyDeletedImageSrcs(deletedSrcs);
+  }
+
+  private notifyDeletedImageSrcs(deletedSrcs: string[]): void {
+    if (!this.options.onImagesDeleted) {
+      return;
+    }
+
     if (deletedSrcs.length === 0) {
       return;
     }
@@ -703,6 +733,23 @@ function findFullyRemovedImageSrcs(
   return deleted;
 }
 
+function findFullyRemovedMarkdownImageSrcs(
+  previousMarkdown: string,
+  nextMarkdown: string,
+): string[] {
+  const previous = countMarkdownImageSrcs(previousMarkdown);
+  const next = countMarkdownImageSrcs(nextMarkdown);
+  const deleted: string[] = [];
+
+  for (const [src, previousCount] of previous) {
+    if (previousCount > 0 && !next.has(src)) {
+      deleted.push(src);
+    }
+  }
+
+  return deleted;
+}
+
 function countImageSrcs(doc: ProseMirrorNode): Map<string, number> {
   const counts = new Map<string, number>();
   doc.descendants((node) => {
@@ -716,5 +763,20 @@ function countImageSrcs(doc: ProseMirrorNode): Map<string, number> {
     }
     return false;
   });
+  return counts;
+}
+
+function countMarkdownImageSrcs(markdown: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  const imagePattern = /!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = imagePattern.exec(markdown)) !== null) {
+    const src = match[1].trim();
+    if (src) {
+      counts.set(src, (counts.get(src) ?? 0) + 1);
+    }
+  }
+
   return counts;
 }

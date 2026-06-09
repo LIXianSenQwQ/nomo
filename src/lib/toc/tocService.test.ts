@@ -16,9 +16,7 @@ describe('tocService', () => {
   });
 
   it('uses stable ids for duplicate headings', () => {
-    expect(createTocList('# Intro\n\n## Intro')).toBe(
-      '- [Intro](#intro)\n  - [Intro](#intro-2)',
-    );
+    expect(createTocList('# Intro\n\n## Intro')).toBe('- [Intro](#intro)\n  - [Intro](#intro-2)');
   });
 
   it('uses plain text titles for headings with inline Markdown syntax', () => {
@@ -44,16 +42,18 @@ describe('tocService', () => {
   });
 
   it('updates existing toc block content', () => {
-    const markdown = [
-      '<!-- toc -->',
-      '- [旧标题](#旧标题)',
-      '<!-- /toc -->',
-      '',
-      '# 新标题',
-    ].join('\n');
+    const markdown = ['<!-- toc -->', '- [旧标题](#旧标题)', '<!-- /toc -->', '', '# 新标题'].join(
+      '\n',
+    );
 
     expect(updateTocBlocks(markdown)).toContain('- [新标题](#新标题)');
     expect(updateTocBlocks(markdown)).not.toContain('旧标题');
+  });
+
+  it('returns Markdown without toc markers unchanged', () => {
+    const markdown = '# 标题\n\n正文\n\n```md\n# 代码标题\n```';
+
+    expect(updateTocBlocks(markdown)).toBe(markdown);
   });
 
   it('only treats standalone marker lines outside fenced code as toc blocks', () => {
@@ -61,14 +61,9 @@ describe('tocService', () => {
     const inlineText = '正文 `<!-- toc --><!-- /toc -->` 后续';
     const paragraphText = '正文 <!-- toc --><!-- /toc --> 后续';
     const adjacentMarkers = '<!-- toc --><!-- /toc -->';
-    const fencedSplitMarkers = [
-      '```md',
-      '<!-- toc -->',
-      '<!-- /toc -->',
-      '```',
-      '',
-      '# 标题',
-    ].join('\n');
+    const fencedSplitMarkers = ['```md', '<!-- toc -->', '<!-- /toc -->', '```', '', '# 标题'].join(
+      '\n',
+    );
     const fencedAdjacentMarkers = ['```', '<!-- toc --><!-- /toc -->', '```', '', '# 标题'].join(
       '\n',
     );

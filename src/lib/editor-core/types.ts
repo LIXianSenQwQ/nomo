@@ -20,6 +20,7 @@ export interface SetMarkdownOptions {
   preserveHistory?: boolean;
   reason?: 'open-file' | 'save-file' | 'switch-tab' | 'restore-snapshot' | 'programmatic-update';
   dirty?: boolean;
+  sourceInput?: boolean;
 }
 
 export interface EditorSelectionSnapshot {
