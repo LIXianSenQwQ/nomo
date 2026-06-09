@@ -440,6 +440,14 @@ describe('App outline layout', () => {
     );
   });
 
+  it('clears old tabs before opening a different folder in the current window', () => {
+    expect(appSource).toContain('function closeAllTabsWithConfirmation()');
+    expect(appSource).toContain('function clearAllTabsWithoutCreatingBlank()');
+    expect(appSource).toMatch(
+      /async function openFolderInCurrentWindow\(folderPath: string\) \{\s*if \(!currentFolderPath \|\| !sameFileSystemPath\(currentFolderPath, folderPath\)\) \{\s*if \(!closeAllTabsWithConfirmation\(\)\) \{\s*return;\s*\}\s*\}\s*currentFolderPath = folderPath;\s*await loadFolder\(folderPath\);/,
+    );
+  });
+
   it('does not mark ancestor folders as selected when a file is active', () => {
     expect(explorerSidebarSource).not.toContain('function isFolderActive');
     expect(explorerSidebarSource).not.toContain('class:active={isFolderActive(');

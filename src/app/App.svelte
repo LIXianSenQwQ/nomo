@@ -390,7 +390,59 @@
     return idx >= 0 ? normalized.slice(idx + 1) || path : path;
   }
 
+  function sameFileSystemPath(left: string, right: string) {
+    return (
+      left.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() ===
+      right.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
+    );
+  }
+
+  // 步骤：关闭全部标签页前统一确认未保存内容，确认后不自动创建空白标签。
+  function closeAllTabsWithConfirmation() {
+    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((t) => t.fileName).join('、');
+      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
+      if (!ok) return false;
+    }
+
+    clearAllTabsWithoutCreatingBlank();
+    return true;
+  }
+
+  function clearAllTabsWithoutCreatingBlank() {
+    isSwitchingTab = true;
+    try {
+      tabs = [];
+      activeTabId = '';
+      previewTabId = null;
+      markdown = '';
+      fileName = '';
+      filePath = '';
+      nativePath = null;
+      dirty = false;
+      version = 0;
+      lastKnownModifiedAt = 0;
+      largeDocumentMode = false;
+      readonlyDocumentMode = false;
+      externalFileChange = createEmptyExternalFileChange();
+      outline = [];
+      if (editor) {
+        editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+      }
+    } finally {
+      isSwitchingTab = false;
+    }
+    updateWindowTitle();
+    persistWorkspaceState();
+  }
+
   async function openFolderInCurrentWindow(folderPath: string) {
+    if (!currentFolderPath || !sameFileSystemPath(currentFolderPath, folderPath)) {
+      if (!closeAllTabsWithConfirmation()) {
+        return;
+      }
+    }
     currentFolderPath = folderPath;
     await loadFolder(folderPath);
     await rememberNativeFolder(folderPath);
@@ -533,6 +585,18 @@
       if (!ok) return;
     }
     await exitDesktopApp(desktopEnabled);
+  }
+
+  async function approveSoftwareUpdateInstall(requestId: string) {
+    const dirtyTabs = tabs.filter((tab) => tab.dirty && tab.id !== previewTabId);
+    let approved = true;
+    if (dirtyTabs.length > 0) {
+      const names = dirtyTabs.map((tab) => tab.fileName).join('、');
+      approved = confirm(t.unsavedChangesBeforeUpdate({ names }));
+    }
+
+    const { emit } = await import('@tauri-apps/api/event');
+    await emit('nomo://update-install-decision', { requestId, approved });
   }
 
   function persistEditorModePreference(nextMode: EditorMode) {
@@ -882,36 +946,7 @@
 
   // 步骤：关闭全部标签页，清空状态不保留空白标签
   function handleCloseAllTabs() {
-    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
-    if (dirtyTabs.length > 0) {
-      const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
-      if (!ok) return;
-    }
-
-    isSwitchingTab = true;
-    try {
-      tabs = [];
-      activeTabId = '';
-      previewTabId = null;
-      markdown = '';
-      fileName = '';
-      filePath = '';
-      nativePath = null;
-      dirty = false;
-      lastKnownModifiedAt = 0;
-      largeDocumentMode = false;
-      readonlyDocumentMode = false;
-      externalFileChange = createEmptyExternalFileChange();
-      outline = [];
-      if (editor) {
-        editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
-      }
-    } finally {
-      isSwitchingTab = false;
-    }
-    updateWindowTitle();
-    persistWorkspaceState();
+    closeAllTabsWithConfirmation();
   }
 
   const documentActions = createDocumentActionsController({
@@ -1813,6 +1848,7 @@
       settingsUnlisten,
       exitRequestUnlisten,
       closeRequestUnlisten,
+      updateInstallRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,
@@ -1832,6 +1868,12 @@
       }).catch(() => null),
       listen('nomo://request-close-window', () => {
         closeCurrentWindow().catch(() => undefined);
+      }).catch(() => null),
+      listen<{ requestId?: string }>('nomo://request-update-install', (event) => {
+        const requestId = event.payload?.requestId;
+        if (typeof requestId === 'string' && requestId.length > 0) {
+          approveSoftwareUpdateInstall(requestId).catch(() => undefined);
+        }
       }).catch(() => null),
       listenDesktopOpenDocuments((paths) => {
         if (windowLabel) {
@@ -1859,6 +1901,7 @@
       settingsUnlisten,
       exitRequestUnlisten,
       closeRequestUnlisten,
+      updateInstallRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,
