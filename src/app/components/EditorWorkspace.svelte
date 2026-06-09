@@ -21,6 +21,8 @@
   export let largeDocumentMode: boolean;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
+  export let frontMatterFocusRequest: number;
+  export let frontMatterFocusTarget: 'default' | 'title-value';
   export let readonlyDocumentMode: boolean;
   export let externalFileChange: ExternalFileChangeState;
   export let outlineVisible: boolean;
@@ -125,6 +127,8 @@
           {frontMatter}
           {interfaceLocale}
           editing={frontMatterEditing}
+          focusRequest={frontMatterFocusRequest}
+          focusTarget={frontMatterFocusTarget}
           readonly={readonlyDocumentMode}
           enterEdit={enterFrontMatterEdit}
           leaveEdit={leaveFrontMatterEdit}

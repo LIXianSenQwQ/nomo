@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "tauri": "tauri",
+    "build:win64:nsis": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
     "test": "vitest run",
     "test:watch": "vitest"
   },

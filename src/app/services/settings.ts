@@ -1,4 +1,9 @@
-import { listAppSettings, updateAppSetting } from '../../lib/desktop/tauriStorage';
+import {
+  listAppSettings,
+  updateAppSetting,
+  updateAppSettings,
+  type SettingRecord,
+} from '../../lib/desktop/tauriStorage';
 import type { DiagramType } from '../../lib/editor-core/diagramTemplates';
 import {
   DEFAULT_IMAGE_HANDLING_SETTINGS,
@@ -78,6 +83,14 @@ export interface AppPreferences {
   imageHandlingSettings: ImageHandlingSettings;
 }
 
+export type AppPreferenceKey = keyof AppPreferences;
+export type AppPreferencesPatch = Partial<AppPreferences>;
+
+export interface SettingsUpdatedPayload {
+  source: 'settings-window';
+  patch?: AppPreferencesPatch;
+}
+
 export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
   'new-file': 'Ctrl+N',
   'open-file': 'Ctrl+O',
@@ -134,12 +147,13 @@ const ZOOM_TRANSITION_MS = 150;
 const ZOOM_REDUCED_TRANSITION_MS = 90;
 let themeTransitionTimer: number | null = null;
 let zoomAnimationFrame: number | null = null;
+let themeSystemMigrationPersistedInSession = false;
 
 export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
+  nativeSettings?: SettingRecord[],
 ): Promise<PersistedEditorSettings> {
-  const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
-  const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
+  const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
   const savedTheme = parseSetting<string>(settings, 'theme') ?? localStorage.getItem('nomo-theme');
   const savedFontSize = Number(
     parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('nomo-font-size'),
@@ -184,9 +198,9 @@ export function persistEditorSetting(desktopEnabled: boolean, key: string, value
 
 export async function loadPersistedImageSettings(
   desktopEnabled: boolean,
+  nativeSettings?: SettingRecord[],
 ): Promise<ImageHandlingSettings> {
-  const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
-  const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
+  const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
   const saved =
     parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
     parseLocalImageSettings();
@@ -205,9 +219,11 @@ export function persistImageSettings(desktopEnabled: boolean, settings: ImageHan
   updateAppSetting('imageHandlingSettings', normalized).catch(() => undefined);
 }
 
-export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPreferences> {
-  const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
-  const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
+export async function loadAppPreferences(
+  desktopEnabled: boolean,
+  nativeSettings?: SettingRecord[],
+): Promise<AppPreferences> {
+  const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
   const local = readLocalPreferenceFallbacks();
   const storedTheme = parseSetting<unknown>(settings, 'theme') ?? local.theme;
   const theme = await migrateThemePreferenceToSystem(desktopEnabled, settings, storedTheme);
@@ -249,22 +265,32 @@ export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPr
   });
 }
 
-export async function saveAppPreferences(desktopEnabled: boolean, preferences: AppPreferences) {
+async function readNativeSettingsMap(
+  desktopEnabled: boolean,
+  nativeSettings?: SettingRecord[],
+): Promise<Map<string, string>> {
+  const settingsRows =
+    nativeSettings ?? (desktopEnabled ? await listAppSettings().catch(() => []) : []);
+  return new Map(settingsRows.map((setting) => [setting.key, setting.valueJson]));
+}
+
+export async function saveAppPreferences(
+  desktopEnabled: boolean,
+  preferences: AppPreferences,
+  keys?: AppPreferenceKey[],
+) {
   const normalized = normalizeAppPreferences(preferences);
 
   writeLocalPreferenceFallbacks(normalized);
+  writeLocalImageSettings(normalized.imageHandlingSettings);
   markThemeSystemMigrationDone(desktopEnabled);
-  persistImageSettings(desktopEnabled, normalized.imageHandlingSettings);
 
   if (!desktopEnabled) {
     return normalized;
   }
 
-  await Promise.all(
-    Object.entries(toPersistedPreferenceEntries(normalized)).map(([key, value]) =>
-      updateAppSetting(key, value),
-    ),
-  );
+  const persistedEntries = pickPersistedPreferenceEntries(normalized, keys);
+  await updateAppSettings(persistedEntries);
 
   return normalized;
 }
@@ -424,11 +450,15 @@ export function applyEditorLayoutSettings(contentWidthPercent: number) {
   );
 }
 
-export function applyZoomSetting(zoomPercent: number, options?: { transition?: boolean }) {
+export function applyZoomSetting(
+  zoomPercent: number,
+  options?: { transition?: boolean; onFrame?: () => void },
+) {
   const targetZoom = zoomPercent / 100;
   if (!options?.transition || typeof window === 'undefined') {
     cancelZoomAnimation();
     setZoomValue(targetZoom);
+    options?.onFrame?.();
     return;
   }
 
@@ -436,6 +466,7 @@ export function applyZoomSetting(zoomPercent: number, options?: { transition?: b
   if (!raf) {
     cancelZoomAnimation();
     setZoomValue(targetZoom);
+    options.onFrame?.();
     return;
   }
 
@@ -445,6 +476,7 @@ export function applyZoomSetting(zoomPercent: number, options?: { transition?: b
   const delta = targetZoom - startZoom;
   if (Math.abs(delta) < 0.001) {
     setZoomValue(targetZoom);
+    options.onFrame?.();
     return;
   }
 
@@ -454,11 +486,13 @@ export function applyZoomSetting(zoomPercent: number, options?: { transition?: b
     const elapsed = Date.now() - startedAt;
     const progress = Math.min(1, Math.max(0, elapsed / duration));
     setZoomValue(startZoom + delta * easeOutCubic(progress));
+    options.onFrame?.();
 
     if (progress < 1) {
       zoomAnimationFrame = raf(tick);
     } else {
       setZoomValue(targetZoom);
+      options.onFrame?.();
       zoomAnimationFrame = null;
     }
   };
@@ -508,6 +542,18 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
   };
 }
 
+function pickPersistedPreferenceEntries(preferences: AppPreferences, keys?: AppPreferenceKey[]) {
+  const entries = toPersistedPreferenceEntries(preferences);
+  if (!keys) {
+    return entries;
+  }
+
+  const uniqueKeys = new Set(keys);
+  return Object.fromEntries(
+    Object.entries(entries).filter(([key]) => uniqueKeys.has(key as AppPreferenceKey)),
+  );
+}
+
 function readLocalPreferenceFallbacks(): Partial<AppPreferences> {
   if (typeof localStorage === 'undefined') {
     return {};
@@ -534,6 +580,16 @@ function writeLocalPreferenceFallbacks(preferences: AppPreferences) {
   localStorage.setItem('nomo-line-height', String(preferences.lineHeight));
   localStorage.setItem('nomo-content-width-percent', String(preferences.contentWidthPercent));
   localStorage.setItem('nomo-block-style', preferences.blockStyle);
+}
+
+function writeLocalImageSettings(settings: ImageHandlingSettings) {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+  localStorage.setItem(
+    IMAGE_SETTINGS_STORAGE_KEY,
+    JSON.stringify(normalizeImageSettings(settings)),
+  );
 }
 
 async function migrateThemePreferenceToSystem(
@@ -571,12 +627,17 @@ function isThemeSystemMigrationDone(settings: Map<string, string>) {
 }
 
 function markThemeSystemMigrationDone(desktopEnabled: boolean) {
+  const localAlreadyDone =
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem(THEME_SYSTEM_MIGRATION_KEY) === 'true';
+
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(THEME_SYSTEM_MIGRATION_KEY, 'true');
   }
-  if (!desktopEnabled) {
+  if (!desktopEnabled || localAlreadyDone || themeSystemMigrationPersistedInSession) {
     return;
   }
+  themeSystemMigrationPersistedInSession = true;
   updateAppSetting(THEME_SYSTEM_MIGRATION_KEY, true).catch(() => undefined);
 }
 

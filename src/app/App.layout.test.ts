@@ -21,6 +21,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const appShellSource = readFileSync(resolve(__dirname, 'components/AppShell.svelte'), 'utf-8');
+  const emptyWorkspaceSource = readFileSync(
+    resolve(__dirname, 'components/EmptyWorkspace.svelte'),
+    'utf-8',
+  );
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
   const documentTabsSource = readFileSync(
     resolve(__dirname, 'components/DocumentTabs.svelte'),
@@ -36,6 +40,10 @@ describe('App outline layout', () => {
   );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
   const settingsServiceSource = readFileSync(resolve(__dirname, 'services/settings.ts'), 'utf-8');
+  const editorSettingsControllerSource = readFileSync(
+    resolve(__dirname, 'services/editorSettingsController.ts'),
+    'utf-8',
+  );
   const desktopWindowSource = readFileSync(
     resolve(__dirname, 'services/desktopWindow.ts'),
     'utf-8',
@@ -170,6 +178,43 @@ describe('App outline layout', () => {
     );
   });
 
+  it('refreshes editor viewport layout after content width and zoom changes', () => {
+    const contentWidthStart = editorSettingsControllerSource.indexOf(
+      'function updateContentWidth',
+    );
+    const contentWidthEnd = editorSettingsControllerSource.indexOf(
+      'function updateBlockStyle',
+      contentWidthStart,
+    );
+    const contentWidthSource = editorSettingsControllerSource.slice(
+      contentWidthStart,
+      contentWidthEnd,
+    );
+    const preferencesStart = appSource.indexOf('async function applyAppPreferences');
+    const preferencesEnd = appSource.indexOf('function getCurrentAppPreferences', preferencesStart);
+    const preferencesSource = appSource.slice(preferencesStart, preferencesEnd);
+    const wheelStart = appSource.indexOf('function handleGlobalWheel');
+    const wheelEnd = appSource.indexOf('function setupSystemThemeListener', wheelStart);
+    const wheelSource = appSource.slice(wheelStart, wheelEnd);
+
+    expect(editorSettingsControllerSource).toContain(
+      'refreshEditorViewportLayout(): void;',
+    );
+    expect(contentWidthSource).toContain('applyEditorLayoutSettings(options.getContentWidthPercent())');
+    expect(contentWidthSource).toContain('options.refreshEditorViewportLayout();');
+    expect(appSource).toContain(
+      'refreshEditorViewportLayout = editorInteraction.refreshEditorViewportLayout;',
+    );
+    expect(preferencesSource).toContain('applyTypographySettings(fontSize, lineHeight);');
+    expect(preferencesSource).toContain('applyEditorLayoutSettings(contentWidthPercent);');
+    expect(preferencesSource).toContain(
+      'applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout });',
+    );
+    expect(wheelSource).toContain(
+      'applyZoomSetting(zoomPercent, { transition: true, onFrame: refreshEditorViewportLayout });',
+    );
+  });
+
   it('keeps front matter aligned with the zoomed document body', () => {
     expect(styles).toMatch(
       /\.front-matter-card\s*\{[\s\S]*?max-width:\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\);[\s\S]*?margin:\s*0 auto 22px;[\s\S]*?zoom:\s*var\(--md-editor-zoom\);/,
@@ -184,6 +229,54 @@ describe('App outline layout', () => {
     expect(styles).toMatch(/\.statusbar\s*\{[\s\S]*?right:\s*16px;/);
     expect(styles).toMatch(/\.statusbar-stats-trigger\s*\{[\s\S]*?border:\s*1px solid/);
     expect(styles).not.toMatch(/\.statusbar\s*\{[\s\S]*?border-top:\s*1px solid/);
+  });
+
+  it('shows a real no-document workspace instead of an empty editor surface', () => {
+    expect(appShellSource).toContain(
+      '$: hasOpenDocument = tabs.length > 0 && Boolean(activeTabId);',
+    );
+    expect(appShellSource).toContain("import EmptyWorkspace from './EmptyWorkspace.svelte';");
+    expect(appShellSource).toContain('class:no-open-document={!hasOpenDocument}');
+
+    const tabsIndex = appShellSource.indexOf('<DocumentTabs');
+    const documentBranchIndex = appShellSource.indexOf('{#if hasOpenDocument}');
+    const emptyBranchIndex = appShellSource.indexOf('{:else}', documentBranchIndex);
+    const branchEndIndex = appShellSource.indexOf('      {/if}', emptyBranchIndex);
+    const documentBranch = appShellSource.slice(documentBranchIndex, emptyBranchIndex);
+    const emptyBranch = appShellSource.slice(emptyBranchIndex, branchEndIndex);
+
+    expect(tabsIndex).toBeGreaterThan(-1);
+    expect(documentBranchIndex).toBeGreaterThan(tabsIndex);
+    expect(documentBranch).toContain('<EditorToolbar');
+    expect(documentBranch).toContain('<EditorWorkspace');
+    expect(documentBranch).toContain('<LinkQuickEditor');
+    expect(documentBranch).toContain('<StatusBar');
+    expect(emptyBranch).toContain('<EmptyWorkspace');
+    expect(emptyBranch).toContain('{createNewFile}');
+    expect(emptyBranch).toContain('{openFileDialog}');
+    expect(emptyBranch).toContain('{openFolderDialog}');
+    expect(styles).toMatch(
+      /\.editor-shell\.no-open-document\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\);/,
+    );
+    expect(styles).toContain('.empty-workspace');
+    expect(styles).toContain('grid-row: 2;');
+    expect(styles).toContain('align-self: stretch;');
+    expect(styles).toContain('justify-self: stretch;');
+  });
+
+  it('wires the no-document workspace to existing document actions', () => {
+    expect(emptyWorkspaceSource).toContain('export let interfaceLocale: string;');
+    expect(emptyWorkspaceSource).toContain('export let createNewFile: () => void;');
+    expect(emptyWorkspaceSource).toContain('export let openFileDialog: () => void;');
+    expect(emptyWorkspaceSource).toContain('export let openFolderDialog: () => void;');
+    expect(emptyWorkspaceSource).toContain('on:click={createNewFile}');
+    expect(emptyWorkspaceSource).toContain('on:click={openFileDialog}');
+    expect(emptyWorkspaceSource).toContain('on:click={openFolderDialog}');
+    expect(emptyWorkspaceSource).toContain('t.noOpenDocument()');
+    expect(emptyWorkspaceSource).toContain('t.noOpenDocumentDescription()');
+    expect(emptyWorkspaceSource).toContain('FilePlus2');
+    expect(emptyWorkspaceSource).toContain('FileText');
+    expect(emptyWorkspaceSource).toContain('FolderOpen');
   });
 
   it('keeps outline navigation in the current editor mode', () => {
@@ -212,9 +305,8 @@ describe('App outline layout', () => {
     expect(updateSource).toContain(
       '.setMarkdown((event.currentTarget as HTMLTextAreaElement).value, { sourceInput: true });',
     );
-    expect(editorInteractionSource).toContain(
-      'options.getSourcePane().scrollTop = restoreScrollTop;',
-    );
+    expect(editorInteractionSource).toContain('clampPaneScrollTop(sourcePane, restoreScrollTop);');
+    expect(editorInteractionSource).toContain('options.setPendingSourceScrollTop(null);');
   });
 
   it('renders one shared outline panel with expandable items', () => {
@@ -393,7 +485,7 @@ describe('App outline layout', () => {
     expect(tauriMacosConfig.bundle.targets).toEqual(['app', 'dmg']);
 
     expect(releaseWorkflowSource).toContain("args: '--bundles nsis'");
-    expect(releaseWorkflowSource).toContain('tauri-apps/tauri-action@v1');
+    expect(releaseWorkflowSource).toContain('tauri-apps/tauri-action@v0.6.2');
     expect(releaseWorkflowSource).toContain('Nomo_${version}_x64.zip');
     expect(releaseWorkflowSource).toContain('gh release upload');
     expect(releaseWorkflowSource).toContain('checksums.md5: MD5 校验清单');
@@ -444,10 +536,25 @@ describe('App outline layout', () => {
     );
     expect(appSource).toContain("typeof state.currentFolderPath === 'string'");
     expect(appSource).toContain('currentFolderPath = state.currentFolderPath');
+    expect(appSource).toContain('startupFolderPath = state.currentFolderPath');
     expect(appSource).not.toContain(
       `const parentDir = getDirectoryLabel(filePath);
       if (parentDir && parentDir !== '当前文件夹') loadFolder(parentDir).catch(() => undefined);`,
     );
+  });
+
+  it('loads the restored explorer root in the background after desktop events are ready', () => {
+    expect(appSource).toContain("let startupFolderPath = ''");
+    expect(appSource).toContain('function scheduleStartupFolderLoad()');
+    expect(appSource).toContain('startupFolderPath = folderPath');
+    expect(appSource).toMatch(/await setupDesktopEvents\(\);\s*scheduleStartupFolderLoad\(\);/);
+    expect(appSource).toContain('queueMicrotask(runStartupFolderLoad)');
+    expect(appSource).toContain('window.setTimeout(runStartupFolderLoad, 0)');
+    expect(appSource).toContain('await loadFolder(folderPath);');
+    expect(appSource).toContain('await expandAncestors(nativePath, currentFolderPath);');
+    expect(appSource).toContain('t.loadFolderTreeFailed()');
+    expect(appSource).not.toContain('await loadFolder(folderPath).catch(() => undefined);');
+    expect(appSource).not.toContain('loadFolder(currentFolderPath).catch(() => undefined)');
   });
 
   it('clears old tabs before opening a different folder in the current window', () => {
@@ -455,6 +562,12 @@ describe('App outline layout', () => {
     expect(appSource).toContain('function clearAllTabsWithoutCreatingBlank()');
     expect(appSource).toMatch(
       /async function openFolderInCurrentWindow\(folderPath: string\) \{\s*if \(!currentFolderPath \|\| !sameFileSystemPath\(currentFolderPath, folderPath\)\) \{\s*if \(!closeAllTabsWithConfirmation\(\)\) \{\s*return;\s*\}\s*\}\s*currentFolderPath = folderPath;\s*await loadFolder\(folderPath\);/,
+    );
+  });
+
+  it('keeps the manual explorer refresh on the existing folder loading path', () => {
+    expect(appSource).toMatch(
+      /async function handleRefreshFolder\(\) \{\s*if \(currentFolderPath\) \{\s*await loadFolder\(currentFolderPath\);\s*\}\s*\}/,
     );
   });
 
@@ -488,8 +601,14 @@ describe('App outline layout', () => {
   it('wires YAML Front Matter to the semantic metadata card flow', () => {
     expect(editorSource).toContain('FrontMatterCard');
     expect(editorSource).toContain('frontMatterEditing');
+    expect(editorSource).toContain('focusRequest={frontMatterFocusRequest}');
+    expect(editorSource).toContain('focusTarget={frontMatterFocusTarget}');
+    expect(appShellSource).toContain('{frontMatterFocusRequest}');
+    expect(appShellSource).toContain('{frontMatterFocusTarget}');
     expect(appSource).toContain('replaceFrontMatterContent');
     expect(appSource).toContain("editor.execute({ type: 'insertFrontMatter' })");
+    expect(appSource).toContain('frontMatterFocusRequest');
+    expect(appSource).toContain("frontMatterFocusTarget = 'title-value'");
     expect(titleBarSource).toContain('finish(editFrontMatter,');
     expect(titleBarSource).not.toContain("comingSoon('YAML Front Matter'");
     expect(titleBarSource).toContain('t.frontMatter()');
@@ -499,7 +618,9 @@ describe('App outline layout', () => {
     expect(frontMatterCardSource).toContain('t.editDocumentMetadata()');
     expect(frontMatterCardSource).toContain('t.viewDocumentMetadata()');
     expect(frontMatterCardSource).not.toContain('YAML Front Matter');
+    expect(frontMatterCardSource).toContain("import { clickOutside } from '../actions/clickOutside';");
     expect(frontMatterCardSource).toContain('readonly={readonly}');
+    expect(frontMatterCardSource).toContain('use:clickOutside={leaveEdit}');
     expect(frontMatterCardSource).toContain('on:focus={enterEdit}');
     expect(frontMatterCardSource).toContain('on:focusout={handleFocusOut}');
     expect(frontMatterCardSource).toContain('on:input={handleInput}');
@@ -725,7 +846,9 @@ describe('App outline layout', () => {
     expect(settingsServiceSource).toContain("type ThemePreference = 'light' | 'dark' | 'system'");
     expect(appSource).toContain('setupSystemThemeListener');
     expect(appSource).toContain('handleGlobalWheel');
-    expect(appSource).toContain('applyZoomSetting(zoomPercent)');
+    expect(appSource).toContain(
+      'applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout })',
+    );
     expect(appSource).toContain('applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible)');
     expect(appSource).toContain('editor.updateOptions({ inlineCodeRenderingEnabled })');
     expect(appSource).toContain(

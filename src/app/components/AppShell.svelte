@@ -6,6 +6,7 @@
   import type { ExternalFileChangeState, FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
   import DocumentTabs from './DocumentTabs.svelte';
+  import EmptyWorkspace from './EmptyWorkspace.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
   import EditorWorkspace from './EditorWorkspace.svelte';
   import ExplorerSidebar from './ExplorerSidebar.svelte';
@@ -48,6 +49,8 @@
   export let largeDocumentMode: boolean;
   export let frontMatter: FrontMatterBlock | null;
   export let frontMatterEditing: boolean;
+  export let frontMatterFocusRequest: number;
+  export let frontMatterFocusTarget: 'default' | 'title-value';
   export let readonlyDocumentMode: boolean;
   export let externalFileChange: ExternalFileChangeState;
   export let outline: OutlineItem[];
@@ -127,6 +130,8 @@
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
+
+  $: hasOpenDocument = tabs.length > 0 && Boolean(activeTabId);
 </script>
 
 <div
@@ -217,7 +222,11 @@
       on:deleteNode
     />
 
-    <section class="editor-shell" aria-label={t.semanticEditorArea()}>
+    <section
+      class="editor-shell"
+      class:no-open-document={!hasOpenDocument}
+      aria-label={t.semanticEditorArea()}
+    >
       <DocumentTabs
         {interfaceLocale}
         {tabs}
@@ -233,80 +242,91 @@
         on:closeAllTabs
       />
 
-      <EditorToolbar
-        {interfaceLocale}
-        {mode}
-        {contentWidthPercent}
-        {outlineVisible}
-        {runCommand}
-        {pendingInlineMarks}
-        {tablePickerOpen}
-        {openTablePicker}
-        {closeTablePicker}
-        {openLinkPicker}
-        {insertTableWithSize}
-        {updateContentWidth}
-        {setMode}
-        {toggleOutlineVisible}
-      />
-
-      <EditorWorkspace
-        {interfaceLocale}
-        bind:sourcePane
-        bind:semanticPane
-        bind:sourceTextarea
-        bind:editorHost
-        {mode}
-        {markdown}
-        {largeDocumentMode}
-        {frontMatter}
-        {frontMatterEditing}
-        {readonlyDocumentMode}
-        {externalFileChange}
-        {outlineVisible}
-        {outline}
-        {activeOutlineId}
-        {collapsedOutlineIds}
-        {visibleOutlineIds}
-        {saveMarkdownFile}
-        {reloadExternalFile}
-        {overwriteExternalFile}
-        {updateMarkdown}
-        {enterFrontMatterEdit}
-        {leaveFrontMatterEdit}
-        {updateFrontMatterContent}
-        {deleteFrontMatter}
-        {updateActiveOutlineFromSourceScroll}
-        {updateActiveOutlineFromSemanticScroll}
-        {handleEditorPaste}
-        {handleEditorDrop}
-        {isOutlineItemExpandable}
-        {toggleOutlineItemExpanded}
-        {jumpToOutlineItem}
-      />
-
-      <LinkQuickEditor
-        {interfaceLocale}
-        open={linkPickerOpen}
-        text={linkText}
-        href={linkHref}
-        error={linkError}
-        canRemove={linkCanRemove}
-        positionStyle={linkPickerPositionStyle}
-        updateText={updateLinkText}
-        updateHref={updateLinkHref}
-        {applyLink}
-        {removeLink}
-        {closeLinkPicker}
-      />
-
-      {#if writingStatsVisible}
-        <StatusBar
+      {#if hasOpenDocument}
+        <EditorToolbar
           {interfaceLocale}
-          {stats}
-          activeMetric={writingStatsMetric}
-          {readingTimeVisible}
-          onMetricChange={setWritingStatsMetric}
+          {mode}
+          {contentWidthPercent}
+          {outlineVisible}
+          {runCommand}
+          {pendingInlineMarks}
+          {tablePickerOpen}
+          {openTablePicker}
+          {closeTablePicker}
+          {openLinkPicker}
+          {insertTableWithSize}
+          {updateContentWidth}
+          {setMode}
+          {toggleOutlineVisible}
+        />
+
+        <EditorWorkspace
+          {interfaceLocale}
+          bind:sourcePane
+          bind:semanticPane
+          bind:sourceTextarea
+          bind:editorHost
+          {mode}
+          {markdown}
+          {largeDocumentMode}
+          {frontMatter}
+          {frontMatterEditing}
+          {frontMatterFocusRequest}
+          {frontMatterFocusTarget}
+          {readonlyDocumentMode}
+          {externalFileChange}
+          {outlineVisible}
+          {outline}
+          {activeOutlineId}
+          {collapsedOutlineIds}
+          {visibleOutlineIds}
+          {saveMarkdownFile}
+          {reloadExternalFile}
+          {overwriteExternalFile}
+          {updateMarkdown}
+          {enterFrontMatterEdit}
+          {leaveFrontMatterEdit}
+          {updateFrontMatterContent}
+          {deleteFrontMatter}
+          {updateActiveOutlineFromSourceScroll}
+          {updateActiveOutlineFromSemanticScroll}
+          {handleEditorPaste}
+          {handleEditorDrop}
+          {isOutlineItemExpandable}
+          {toggleOutlineItemExpanded}
+          {jumpToOutlineItem}
+        />
+
+        <LinkQuickEditor
+          {interfaceLocale}
+          open={linkPickerOpen}
+          text={linkText}
+          href={linkHref}
+          error={linkError}
+          canRemove={linkCanRemove}
+          positionStyle={linkPickerPositionStyle}
+          updateText={updateLinkText}
+          updateHref={updateLinkHref}
+          {applyLink}
+          {removeLink}
+          {closeLinkPicker}
+        />
+
+        {#if writingStatsVisible}
+          <StatusBar
+            {interfaceLocale}
+            {stats}
+            activeMetric={writingStatsMetric}
+            {readingTimeVisible}
+            onMetricChange={setWritingStatsMetric}
+          />
+        {/if}
+      {:else}
+        <EmptyWorkspace
+          {interfaceLocale}
+          {createNewFile}
+          {openFileDialog}
+          {openFolderDialog}
         />
       {/if}
     </section>

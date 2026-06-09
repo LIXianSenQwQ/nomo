@@ -1,8 +1,5 @@
-import 'katex/dist/katex.min.css';
-import 'prosemirror-view/style/prosemirror.css';
 import './app/styles/theme.css';
 import './app/styles/global.css';
-import './app/styles/app.css';
 import { mount } from 'svelte';
 
 const target = document.getElementById('app');
@@ -12,10 +9,14 @@ if (!target) {
 }
 
 const searchParams = new URLSearchParams(window.location.search);
-const rootComponentPromise =
-  searchParams.get('view') === 'settings'
-    ? import('./app/components/SettingsWindow.svelte')
-    : import('./app/App.svelte');
+const isSettingsView = searchParams.get('view') === 'settings';
+const rootComponentPromise = isSettingsView
+  ? import('./app/components/SettingsWindow.svelte')
+  : Promise.all([
+      import('katex/dist/katex.min.css'),
+      import('prosemirror-view/style/prosemirror.css'),
+      import('./app/styles/app.css'),
+    ]).then(() => import('./app/App.svelte'));
 
 const app = rootComponentPromise
   .then(({ default: RootComponent }) =>

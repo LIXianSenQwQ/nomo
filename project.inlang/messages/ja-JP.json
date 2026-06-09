@@ -44,6 +44,8 @@
   "fileMissing": "ファイルが存在しないか移動されました",
   "previewOpenFailed": "プレビューを開けませんでした",
   "removedFromExplorer": "{message}; エクスプローラーから削除しました",
+  "file": "ファイル",
+  "folder": "フォルダー",
   "currentFolder": "現在のフォルダー",
   "newFolder": "新規フォルダー",
   "untitledMarkdown": "無題.md",

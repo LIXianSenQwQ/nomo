@@ -24,6 +24,7 @@ interface EditorSettingsControllerOptions {
   setContentWidthPercent(value: number): void;
   getBlockStyle(): 'classic' | 'modern';
   setBlockStyle(value: 'classic' | 'modern'): void;
+  refreshEditorViewportLayout(): void;
 }
 
 export function createEditorSettingsController(options: EditorSettingsControllerOptions) {
@@ -38,14 +39,17 @@ export function createEditorSettingsController(options: EditorSettingsController
     if (settings.fontSize) {
       options.setFontSize(settings.fontSize);
       applyTypographySettings(options.getFontSize(), options.getLineHeight());
+      options.refreshEditorViewportLayout();
     }
     if (settings.lineHeight) {
       options.setLineHeight(settings.lineHeight);
       applyTypographySettings(options.getFontSize(), options.getLineHeight());
+      options.refreshEditorViewportLayout();
     }
     if (settings.contentWidthPercent) {
       options.setContentWidthPercent(settings.contentWidthPercent);
       applyEditorLayoutSettings(options.getContentWidthPercent());
+      options.refreshEditorViewportLayout();
     }
     if (settings.blockStyle) {
       options.setBlockStyle(settings.blockStyle);
@@ -67,6 +71,7 @@ export function createEditorSettingsController(options: EditorSettingsController
     localStorage.setItem('nomo-font-size', String(value));
     persistSetting('fontSize', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
+    options.refreshEditorViewportLayout();
   }
 
   function updateFontSize(event: Event) {
@@ -78,6 +83,7 @@ export function createEditorSettingsController(options: EditorSettingsController
     localStorage.setItem('nomo-line-height', String(value));
     persistSetting('lineHeight', value);
     applyTypographySettings(options.getFontSize(), options.getLineHeight());
+    options.refreshEditorViewportLayout();
   }
 
   function updateLineHeight(event: Event) {
@@ -90,6 +96,7 @@ export function createEditorSettingsController(options: EditorSettingsController
     localStorage.setItem('nomo-content-width-percent', String(value));
     persistSetting('contentWidthPercent', value);
     applyEditorLayoutSettings(options.getContentWidthPercent());
+    options.refreshEditorViewportLayout();
   }
 
   function updateBlockStyle(blockStyle: 'classic' | 'modern') {

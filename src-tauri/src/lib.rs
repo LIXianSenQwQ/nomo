@@ -98,6 +98,7 @@ pub fn run() {
             crate::database::create_document_snapshot,
             crate::database::list_document_snapshots,
             crate::database::update_app_setting,
+            crate::database::update_app_settings,
             crate::database::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,

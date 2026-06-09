@@ -10,7 +10,7 @@ Nomo 正式应用图标已改用 `source/nomo-app-light-256.png` 作为源图，
 
 ## 目录说明
 
-- `source/`: 应用 logo 源图，保留 light/dark 与 128/256 两组 PNG；当前正式 bundle 图标生成源为 `source/nomo-app-light-256.png`。
+- `source/`: 应用 logo 源图，保留 light/dark 与 128/256 两组 PNG；当前正式 bundle 图标生成源为 `source/nomo-app-light-256.png`。应用图标源图必须保留透明安全边距，当前 256px 源图内容区为 224px，128px 源图内容区为 112px，避免 macOS Dock 视觉尺寸偏大。
 - `tray/`: 托盘/系统栏图标，保留 dark/light 与 active/inactive 四个 24px 状态图标。
 
 ## 命名规则

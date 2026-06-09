@@ -45,6 +45,8 @@ import { getLocale, experimentalStaticLocale } from "../runtime.js"
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
 /** @typedef {{ message: NonNullable<unknown> }} Removedfromexplorer2Inputs */
+/** @typedef {{}} FileInputs */
+/** @typedef {{}} FolderInputs */
 /** @typedef {{}} Currentfolder1Inputs */
 /** @typedef {{}} Newfolder1Inputs */
 /** @typedef {{}} Untitledmarkdown1Inputs */
@@ -845,6 +847,38 @@ const removedfromexplorer2 = /** @type {((inputs: Removedfromexplorer2Inputs, op
 	return __ja_jp2.removedfromexplorer2(inputs)
 });
 export { removedfromexplorer2 as "removedFromExplorer" }
+/**
+* | output |
+* | --- |
+* | "file" |
+*
+* @param {FileInputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+export const file = /** @type {((inputs?: FileInputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<FileInputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.file(inputs)
+	if (locale === "zh-TW") return __zh_tw2.file(inputs)
+	if (locale === "en-US") return __en_us2.file(inputs)
+	return __ja_jp2.file(inputs)
+});
+/**
+* | output |
+* | --- |
+* | "folder" |
+*
+* @param {FolderInputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+export const folder = /** @type {((inputs?: FolderInputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<FolderInputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.folder(inputs)
+	if (locale === "zh-TW") return __zh_tw2.folder(inputs)
+	if (locale === "en-US") return __en_us2.folder(inputs)
+	return __ja_jp2.folder(inputs)
+});
 /**
 * | output |
 * | --- |

@@ -4,15 +4,17 @@ use crate::models::{
 };
 use rusqlite::{params, Connection};
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, HashSet},
     fs,
     hash::{Hash, Hasher},
     path::PathBuf,
+    sync::{Mutex, OnceLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager, Runtime};
 
 const CURRENT_DATABASE_FILE: &str = "nomo.sqlite";
+static INITIALIZED_DATABASE_PATHS: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 
 #[tauri::command]
 pub(crate) fn remember_recent_entry(app: AppHandle, input: RecentEntryInput) -> Result<(), String> {
@@ -134,6 +136,45 @@ pub(crate) fn update_app_setting(app: AppHandle, input: SettingInput) -> Result<
 }
 
 #[tauri::command]
+pub(crate) fn update_app_settings(app: AppHandle, inputs: Vec<SettingInput>) -> Result<(), String> {
+    if inputs.is_empty() {
+        return Ok(());
+    }
+
+    let mut connection = open_database(&app)?;
+    update_app_settings_in_connection(&mut connection, inputs)
+}
+
+fn update_app_settings_in_connection(
+    connection: &mut Connection,
+    inputs: Vec<SettingInput>,
+) -> Result<(), String> {
+    let now = now_ts();
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("开始批量保存设置失败：{error}"))?;
+
+    for input in inputs {
+        transaction
+            .execute(
+                "INSERT INTO app_settings(key, value_json, updated_at)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(key) DO UPDATE SET
+                   value_json = excluded.value_json,
+                   updated_at = excluded.updated_at",
+                params![input.key, input.value_json, now],
+            )
+            .map_err(|error| format!("批量保存设置失败：{error}"))?;
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("提交批量保存设置失败：{error}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) fn list_app_settings(app: AppHandle) -> Result<Vec<SettingRecord>, String> {
     let connection = open_database(&app)?;
     let mut statement = connection
@@ -157,8 +198,8 @@ pub(crate) fn list_app_settings(app: AppHandle) -> Result<Vec<SettingRecord>, St
 pub(crate) fn open_database<R: Runtime>(app: &AppHandle<R>) -> Result<Connection, String> {
     let db_path = database_path(app)?;
     let connection =
-        Connection::open(db_path).map_err(|error| format!("打开 SQLite 失败：{error}"))?;
-    init_database(&connection)?;
+        Connection::open(&db_path).map_err(|error| format!("打开 SQLite 失败：{error}"))?;
+    init_database_once(&db_path, &connection)?;
     Ok(connection)
 }
 
@@ -207,6 +248,23 @@ fn database_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
         .map_err(|error| format!("定位应用数据目录失败：{error}"))?;
     fs::create_dir_all(&app_dir).map_err(|error| format!("创建应用数据目录失败：{error}"))?;
     Ok(app_dir.join(CURRENT_DATABASE_FILE))
+}
+
+fn init_database_once(db_path: &PathBuf, connection: &Connection) -> Result<(), String> {
+    let mut initialized_paths = initialized_database_paths()
+        .lock()
+        .map_err(|error| format!("检查 SQLite 初始化状态失败：{error}"))?;
+    if initialized_paths.contains(db_path) {
+        return Ok(());
+    }
+
+    init_database(connection)?;
+    initialized_paths.insert(db_path.clone());
+    Ok(())
+}
+
+fn initialized_database_paths() -> &'static Mutex<HashSet<PathBuf>> {
+    INITIALIZED_DATABASE_PATHS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 fn init_database(connection: &Connection) -> Result<(), String> {
@@ -322,7 +380,8 @@ fn hash_text(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::init_database;
+    use super::{init_database, init_database_once, update_app_settings_in_connection};
+    use crate::models::SettingInput;
     use rusqlite::Connection;
     use std::{fs, path::PathBuf};
 
@@ -344,6 +403,106 @@ mod tests {
             .expect("table count");
 
         assert_eq!(table_count, 3);
+        cleanup(root);
+    }
+
+    #[test]
+    fn initializes_each_database_path_once_per_process() {
+        let root = unique_test_dir("init-once");
+        fs::create_dir_all(&root).expect("test dir");
+        let db_path = root.join("nomo.sqlite");
+        let connection = Connection::open(&db_path).expect("current sqlite");
+
+        init_database_once(&db_path, &connection).expect("first init database");
+        connection
+            .execute(
+                "INSERT INTO app_settings(key, value_json, updated_at)
+                 VALUES ('workspaceDir', '\"deprecated\"', 1)",
+                [],
+            )
+            .expect("insert deprecated setting after init");
+
+        init_database_once(&db_path, &connection).expect("second init database");
+        let deprecated_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM app_settings WHERE key = 'workspaceDir'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("deprecated setting count");
+
+        assert_eq!(deprecated_count, 1);
+        cleanup(root);
+    }
+
+    #[test]
+    fn failed_database_initialization_can_be_retried() {
+        let root = unique_test_dir("init-retry");
+        fs::create_dir_all(&root).expect("test dir");
+        let db_path = root.join("nomo.sqlite");
+        let connection = Connection::open(&db_path).expect("current sqlite");
+
+        connection
+            .execute("CREATE TABLE app_settings (bad_schema TEXT)", [])
+            .expect("bad app settings schema");
+        assert!(init_database_once(&db_path, &connection).is_err());
+
+        connection
+            .execute("DROP TABLE app_settings", [])
+            .expect("drop bad app settings schema");
+        init_database_once(&db_path, &connection).expect("retry init database");
+
+        let key_column_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('app_settings') WHERE name = 'key'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("app_settings key column count");
+        assert_eq!(key_column_count, 1);
+        cleanup(root);
+    }
+
+    #[test]
+    fn batch_updates_settings_in_one_transaction() {
+        let root = unique_test_dir("settings-batch");
+        fs::create_dir_all(&root).expect("test dir");
+        let db_path = root.join("nomo.sqlite");
+        let mut connection = Connection::open(&db_path).expect("current sqlite");
+        init_database(&connection).expect("init database");
+
+        update_app_settings_in_connection(
+            &mut connection,
+            vec![
+                SettingInput {
+                    key: "theme".to_string(),
+                    value_json: "\"dark\"".to_string(),
+                },
+                SettingInput {
+                    key: "fontSize".to_string(),
+                    value_json: "18".to_string(),
+                },
+            ],
+        )
+        .expect("batch settings");
+
+        let theme: String = connection
+            .query_row(
+                "SELECT value_json FROM app_settings WHERE key = 'theme'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("theme setting");
+        let font_size: String = connection
+            .query_row(
+                "SELECT value_json FROM app_settings WHERE key = 'fontSize'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("font size setting");
+
+        assert_eq!(theme, "\"dark\"");
+        assert_eq!(font_size, "18");
         cleanup(root);
     }
 

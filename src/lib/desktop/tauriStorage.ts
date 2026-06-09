@@ -292,6 +292,20 @@ export async function updateAppSetting(key: string, value: unknown): Promise<voi
   });
 }
 
+export async function updateAppSettings(entries: Record<string, unknown>): Promise<void> {
+  const inputs = Object.entries(entries).map(([key, value]) => ({
+    key,
+    value_json: JSON.stringify(value),
+  }));
+
+  if (inputs.length === 0) {
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('update_app_settings', { inputs });
+}
+
 export async function listAppSettings(): Promise<SettingRecord[]> {
   const { invoke } = await import('@tauri-apps/api/core');
   const rows = await invoke<SettingRecordPayload[]>('list_app_settings');

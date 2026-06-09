@@ -105,10 +105,13 @@
     applyTypographySettings,
     applyZoomSetting,
     loadAppPreferences,
+    normalizeAppPreferences,
     resolveThemePreference,
     type AppPreferences,
+    type AppPreferencesPatch,
     type CodeBlockIndentPreference,
     type InterfaceLanguagePreference,
+    type SettingsUpdatedPayload,
     type ShortcutPreferences,
     type ThemePreference,
   } from './services/settings';
@@ -195,6 +198,7 @@
     semanticPane: HTMLElement,
     sourcePane: HTMLElement;
   let pendingSourceScrollTop: number | null = null;
+  let refreshEditorViewportLayout: () => void = () => undefined;
   let largeDocumentMode = false,
     readonlyDocumentMode = false,
     externalFileChange: ExternalFileChangeState = createEmptyExternalFileChange(),
@@ -203,6 +207,9 @@
   let pendingExternalOpenPaths: string[] = [];
   let currentFolderPath = '',
     folderTree: FileTreeNode[] = [];
+  let startupFolderPath = '';
+  let startupFolderLoadScheduled = false;
+  let startupFolderLoadInProgress = false;
   let expandedFolders = new Set<string>();
   let tablePickerOpen = false;
   let linkPickerOpen = false;
@@ -219,6 +226,8 @@
   let toastTimer: number | null = null;
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
   let frontMatterEditing = false;
+  let frontMatterFocusRequest = 0;
+  let frontMatterFocusTarget: 'default' | 'title-value' = 'default';
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
 
   // 上下文菜单状态
@@ -808,6 +817,7 @@
     setBlockStyle: (value) => {
       blockStyle = value;
     },
+    refreshEditorViewportLayout: () => refreshEditorViewportLayout(),
   });
   function openSettings() {
     openSettingsWindow(desktopEnabled);
@@ -1083,6 +1093,7 @@
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
+  refreshEditorViewportLayout = editorInteraction.refreshEditorViewportLayout;
   async function getDesktopEffectiveSystemTheme() {
     return (await getDesktopSystemTheme(desktopEnabled)) ?? resolveThemePreference('system');
   }
@@ -1384,7 +1395,7 @@
 
   async function applyAppPreferences(
     preferences: AppPreferences,
-    options: { applyEditorMode?: boolean } = {},
+    options: { applyEditorMode?: boolean; refreshInterfaceChrome?: boolean } = {},
   ) {
     themePreference = preferences.theme;
     if (themePreference === 'system') {
@@ -1395,7 +1406,9 @@
     }
     interfaceLanguage = preferences.interfaceLanguage;
     interfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
-    void refreshInterfaceLanguageChrome(desktopEnabled);
+    if (options.refreshInterfaceChrome) {
+      void refreshInterfaceLanguageChrome(desktopEnabled);
+    }
     fontSize = preferences.fontSize;
     lineHeight = preferences.lineHeight;
     contentWidthPercent = preferences.contentWidthPercent;
@@ -1433,7 +1446,7 @@
     applyTypographySettings(fontSize, lineHeight);
     applyEditorLayoutSettings(contentWidthPercent);
     applyBlockStyleSetting(blockStyle);
-    applyZoomSetting(zoomPercent);
+    applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout });
     applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible);
     document.documentElement.dataset.codeBlockIndent = codeBlockIndent;
     editor.updateTheme({ name: theme });
@@ -1461,6 +1474,61 @@
     persistWorkspaceState();
   }
 
+  function getCurrentAppPreferences(): AppPreferences {
+    return normalizeAppPreferences({
+      theme: themePreference,
+      interfaceLanguage,
+      editorMode: mode,
+      autoSaveEnabled,
+      autoSaveDelayMs,
+      createSnapshotBeforeSave,
+      fontSize,
+      lineHeight,
+      contentWidthPercent,
+      blockStyle,
+      largeDocumentLimit,
+      folderOpenDefaultBehavior,
+      filePreviewEnabled,
+      closeToTrayEnabled,
+      sidebarHidden: focusMode,
+      outlineVisible,
+      writingStatsVisible,
+      writingStatsMetric,
+      readingTimeVisible,
+      defaultCodeBlockLanguage,
+      defaultDiagramType,
+      zoomPercent,
+      ctrlWheelZoomEnabled,
+      outlineDefaultExpandLevel,
+      codeBlockLineNumbersVisible,
+      codeBlockIndent,
+      inlineCodeRenderingEnabled,
+      shortcutPreferences,
+      imageHandlingSettings: imageSettings,
+    });
+  }
+
+  async function applyAppPreferencesPatch(patch: AppPreferencesPatch) {
+    const preferences = normalizeAppPreferences({
+      ...getCurrentAppPreferences(),
+      ...patch,
+      imageHandlingSettings: patch.imageHandlingSettings ?? imageSettings,
+      shortcutPreferences: patch.shortcutPreferences ?? shortcutPreferences,
+    });
+    await applyAppPreferences(preferences, {
+      applyEditorMode: 'editorMode' in patch,
+      refreshInterfaceChrome: false,
+    });
+  }
+
+  function isSettingsUpdatedPayload(payload: unknown): payload is SettingsUpdatedPayload {
+    return Boolean(
+      payload &&
+      typeof payload === 'object' &&
+      (payload as SettingsUpdatedPayload).source === 'settings-window',
+    );
+  }
+
   function applyOutlineDefaultExpansion() {
     if (outlineDefaultExpandLevel >= 6) {
       collapsedOutlineIds = new Set();
@@ -1479,9 +1547,22 @@
 
   async function reloadAppPreferencesFromSettingsWindow() {
     const preferences = await loadAppPreferences(desktopEnabled);
-    await applyAppPreferences(preferences, { applyEditorMode: true });
+    await applyAppPreferences(preferences, { applyEditorMode: true, refreshInterfaceChrome: true });
     closeToTrayPromptAnswered = true;
     await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
+  }
+
+  async function handleSettingsUpdated(payload: unknown) {
+    if (!isSettingsUpdatedPayload(payload) || !payload.patch || typeof payload.patch !== 'object') {
+      await reloadAppPreferencesFromSettingsWindow();
+      return;
+    }
+
+    await applyAppPreferencesPatch(payload.patch);
+    if ('closeToTrayEnabled' in payload.patch) {
+      closeToTrayPromptAnswered = true;
+      await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
+    }
   }
 
   async function maybeOpenFirstRunSample(state: FirstRunSampleState) {
@@ -1506,6 +1587,50 @@
     if (shouldMarkFirstRunSampleHandled(state)) {
       await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
     }
+  }
+
+  function scheduleStartupFolderLoad() {
+    if (
+      !desktopEnabled ||
+      !startupFolderPath ||
+      startupFolderLoadScheduled ||
+      startupFolderLoadInProgress
+    ) {
+      return;
+    }
+
+    const folderPath = startupFolderPath;
+    startupFolderPath = '';
+    startupFolderLoadScheduled = true;
+
+    const runStartupFolderLoad = () => {
+      void (async () => {
+        startupFolderLoadScheduled = false;
+        startupFolderLoadInProgress = true;
+        try {
+          await loadFolder(folderPath);
+          if (
+            nativePath &&
+            currentFolderPath &&
+            sameFileSystemPath(currentFolderPath, folderPath)
+          ) {
+            await expandAncestors(nativePath, currentFolderPath);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          statusMessage = `${t.loadFolderTreeFailed()}：${message}`;
+        } finally {
+          startupFolderLoadInProgress = false;
+        }
+      })();
+    };
+
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(runStartupFolderLoad);
+      return;
+    }
+
+    window.setTimeout(runStartupFolderLoad, 0);
   }
 
   onMount(async () => {
@@ -1537,6 +1662,7 @@
           const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
           if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
             currentFolderPath = state.currentFolderPath;
+            startupFolderPath = state.currentFolderPath;
           }
           if (state.tabs && state.tabs.length > 0) {
             tabs = state.tabs;
@@ -1551,7 +1677,7 @@
         }
       }
 
-      const appPreferences = await loadAppPreferences(desktopEnabled);
+      const appPreferences = await loadAppPreferences(desktopEnabled, settings);
       await applyAppPreferences(appPreferences, { applyEditorMode: false });
       persistedEditorMode = appPreferences.editorMode;
 
@@ -1563,7 +1689,7 @@
           if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
             hasPendingFolder = true;
             currentFolderPath = folderPath;
-            await loadFolder(folderPath).catch(() => undefined);
+            startupFolderPath = folderPath;
             // 标记为已消费，避免刷新时重复处理
             await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
           }
@@ -1607,6 +1733,7 @@
       hasPendingFolder,
     });
     await setupDesktopEvents();
+    scheduleStartupFolderLoad();
     await openExternalMarkdownPaths(pendingExternalOpenPaths);
     pendingExternalOpenPaths = [];
     window.addEventListener('keydown', handleGlobalShortcut);
@@ -1617,10 +1744,6 @@
     await tick();
     syncSourceTextareaHeight();
     await updateWindowTitle().catch(() => undefined);
-
-    if (currentFolderPath) {
-      loadFolder(currentFolderPath).catch(() => undefined);
-    }
   });
 
   onDestroy(() => {
@@ -1815,8 +1938,13 @@
       statusMessage = t.readonlyCannotEditMetadata();
       return;
     }
-    if (!extractFrontMatterBlock(editor.getMarkdown())) {
+    const hasFrontMatter = Boolean(extractFrontMatterBlock(editor.getMarkdown()));
+    if (!hasFrontMatter) {
       editor.execute({ type: 'insertFrontMatter' });
+      frontMatterFocusTarget = 'title-value';
+      frontMatterFocusRequest += 1;
+    } else {
+      frontMatterFocusTarget = 'default';
     }
     frontMatterEditing = true;
   }
@@ -1826,6 +1954,7 @@
       statusMessage = t.readonlyCannotEditMetadata();
       return;
     }
+    frontMatterFocusTarget = 'default';
     frontMatterEditing = true;
   }
 
@@ -1869,6 +1998,7 @@
   $: frontMatter = extractFrontMatterBlock(markdown);
   $: if (!frontMatter) {
     frontMatterEditing = false;
+    frontMatterFocusTarget = 'default';
   }
 
   async function setupDesktopEvents() {
@@ -1895,8 +2025,8 @@
       listenDesktopFileDrops((paths) => {
         openDroppedMarkdown(paths);
       }).catch(() => null),
-      listen(SETTINGS_UPDATED_EVENT, () => {
-        reloadAppPreferencesFromSettingsWindow().catch(() => undefined);
+      listen<SettingsUpdatedPayload>(SETTINGS_UPDATED_EVENT, (event) => {
+        handleSettingsUpdated(event.payload).catch(() => undefined);
       }).catch(() => null),
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
@@ -1980,7 +2110,7 @@
       return;
     }
     zoomPercent = nextZoom;
-    applyZoomSetting(zoomPercent, { transition: true });
+    applyZoomSetting(zoomPercent, { transition: true, onFrame: refreshEditorViewportLayout });
     updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
     statusMessage = t.zoomStatus({ percent: zoomPercent });
   }
@@ -2121,6 +2251,8 @@
   {largeDocumentMode}
   {frontMatter}
   {frontMatterEditing}
+  {frontMatterFocusRequest}
+  {frontMatterFocusTarget}
   {readonlyDocumentMode}
   {externalFileChange}
   {outline}

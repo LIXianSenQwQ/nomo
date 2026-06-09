@@ -43,6 +43,8 @@
   "fileMissing": "The file does not exist or has been moved",
   "previewOpenFailed": "Failed to open preview",
   "removedFromExplorer": "{message}; removed from Explorer",
+  "file": "file",
+  "folder": "folder",
   "currentFolder": "Current folder",
   "newFolder": "New folder",
   "untitledMarkdown": "Untitled.md",

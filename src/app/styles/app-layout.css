@@ -136,6 +136,7 @@
 .mode-switch button:focus-visible,
 .icon-button:focus-visible,
 .tab-add:focus-visible,
+.empty-workspace-actions button:focus-visible,
 .toolbar button:focus-visible,
 .tree-file:focus-visible,
 .content-outline button:focus-visible {

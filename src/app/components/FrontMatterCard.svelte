@@ -3,12 +3,17 @@
   import { FileText, PencilLine, Trash2 } from '@lucide/svelte';
   import { fade } from 'svelte/transition';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
+  import { clickOutside } from '../actions/clickOutside';
   import { motionIn, transitionDuration } from '../actions/motion';
   import { t } from '../i18n';
+
+  type FrontMatterFocusTarget = 'default' | 'title-value';
 
   export let interfaceLocale: string;
   export let frontMatter: FrontMatterBlock;
   export let editing: boolean;
+  export let focusRequest = 0;
+  export let focusTarget: FrontMatterFocusTarget = 'default';
   export let readonly = false;
   export let enterEdit: () => void;
   export let leaveEdit: () => void;
@@ -17,11 +22,58 @@
 
   let textarea: HTMLTextAreaElement;
   let confirmingDelete = false;
+  let wasEditing = false;
+  let lastHandledFocusRequest = -1;
 
-  $: if (editing && textarea) {
-    tick().then(() => {
-      textarea?.focus();
+  $: {
+    const enteredEditing = editing && !wasEditing;
+    const receivedFocusRequest = editing && focusRequest !== lastHandledFocusRequest;
+
+    if (editing && textarea && !readonly && (enteredEditing || receivedFocusRequest)) {
+      lastHandledFocusRequest = focusRequest;
+      focusTextarea(focusTarget);
+    }
+
+    wasEditing = editing;
+  }
+
+  async function focusTextarea(target: FrontMatterFocusTarget) {
+    await tick();
+    await waitForNextFrame();
+    if (!editing || readonly || !textarea) {
+      return;
+    }
+
+    textarea.focus({ preventScroll: true });
+    if (target === 'title-value') {
+      selectTitleValue(textarea);
+      return;
+    }
+
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }
+
+  function waitForNextFrame() {
+    return new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => resolve());
+        return;
+      }
+      window.setTimeout(resolve, 0);
     });
+  }
+
+  function selectTitleValue(targetTextarea: HTMLTextAreaElement) {
+    const match = /(^|\n)([ \t]*title:[ \t]*)([^\n\r]*)/.exec(targetTextarea.value);
+    if (!match || match.index === undefined) {
+      targetTextarea.setSelectionRange(targetTextarea.value.length, targetTextarea.value.length);
+      return;
+    }
+
+    const lineStartOffset = match[1].length;
+    const valueStart = match.index + lineStartOffset + match[2].length;
+    const valueEnd = valueStart + match[3].length;
+    targetTextarea.setSelectionRange(valueStart, valueEnd);
   }
 
   function handleInput(event: Event) {
@@ -73,6 +125,7 @@
     data-interface-locale={interfaceLocale}
     aria-label={t.documentMetadataEditing()}
     use:motionIn={{ kind: 'panel', y: 8 }}
+    use:clickOutside={leaveEdit}
     transition:fade={{ duration: transitionDuration('mode') }}
     on:focusout={handleFocusOut}
   >

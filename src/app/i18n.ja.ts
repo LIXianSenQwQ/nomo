@@ -260,8 +260,12 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   newFile: '新しいファイル',
   newMarkdown: '新しいマークダウン',
   openFile: 'ファイルを開く',
+  openFolder: 'フォルダーを開く',
   openFileEllipsis: 'ファイルを開く...',
   openFolderEllipsis: 'フォルダーを開く...',
+  noOpenDocument: '開いている文書はありません',
+  noOpenDocumentDescription:
+    '左側から Markdown ファイルを選択するか、新しい文書を作成して編集を開始します。',
   openRecent: '最近開いたもの',
   pathInvalidRemove: 'パスが利用できません。クリックして削除します',
   noRecentFiles: '最近の記録はありません',

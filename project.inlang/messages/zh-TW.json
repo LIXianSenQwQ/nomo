@@ -43,6 +43,8 @@
   "fileMissing": "檔案不存在或已被移動",
   "previewOpenFailed": "預覽開啟失敗",
   "removedFromExplorer": "{message}，已從資源管理器移除",
+  "file": "檔案",
+  "folder": "資料夾",
   "currentFolder": "目前資料夾",
   "newFolder": "新增資料夾",
   "untitledMarkdown": "未命名.md",

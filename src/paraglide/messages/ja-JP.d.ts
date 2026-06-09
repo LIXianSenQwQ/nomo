@@ -42,6 +42,8 @@
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
 /** @typedef {{ message: NonNullable<unknown> }} Removedfromexplorer2Inputs */
+/** @typedef {{}} FileInputs */
+/** @typedef {{}} FolderInputs */
 /** @typedef {{}} Currentfolder1Inputs */
 /** @typedef {{}} Newfolder1Inputs */
 /** @typedef {{}} Untitledmarkdown1Inputs */
@@ -150,6 +152,8 @@ export const foldermissing1: (inputs: Foldermissing1Inputs) => LocalizedString;
 export const filemissing1: (inputs: Filemissing1Inputs) => LocalizedString;
 export const previewopenfailed2: (inputs: Previewopenfailed2Inputs) => LocalizedString;
 export const removedfromexplorer2: (inputs: Removedfromexplorer2Inputs) => LocalizedString;
+export const file: (inputs: FileInputs) => LocalizedString;
+export const folder: (inputs: FolderInputs) => LocalizedString;
 export const currentfolder1: (inputs: Currentfolder1Inputs) => LocalizedString;
 export const newfolder1: (inputs: Newfolder1Inputs) => LocalizedString;
 export const untitledmarkdown1: (inputs: Untitledmarkdown1Inputs) => LocalizedString;
@@ -267,6 +271,8 @@ export type Previewopenfailed2Inputs = {};
 export type Removedfromexplorer2Inputs = {
     message: NonNullable<unknown>;
 };
+export type FileInputs = {};
+export type FolderInputs = {};
 export type Currentfolder1Inputs = {};
 export type Newfolder1Inputs = {};
 export type Untitledmarkdown1Inputs = {};

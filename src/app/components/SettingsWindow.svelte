@@ -37,6 +37,8 @@
     normalizeAppPreferences,
     saveAppPreferences,
     type AppPreferences,
+    type AppPreferenceKey,
+    type AppPreferencesPatch,
     type BlockStylePreference,
     type CodeBlockIndentPreference,
     type EditorModePreference,
@@ -110,6 +112,7 @@
   let saveInFlight = false;
   let saveQueued = false;
   let activeSavePromise: Promise<void> | null = null;
+  let dirtyPreferenceKeys = new Set<AppPreferenceKey>();
   let desktopEnabled = false;
   let platformCapabilities = getPlatformCapabilities();
   let picgoTesting = false;
@@ -229,15 +232,21 @@
         do {
           saveQueued = false;
           const settingsToSave = draftSettings;
+          const keysToSave = Array.from(dirtyPreferenceKeys);
+          dirtyPreferenceKeys = new Set();
+          if (keysToSave.length === 0) {
+            showStatus(t.settingsSaved());
+            continue;
+          }
           try {
-            const saved = await saveAppPreferences(desktopEnabled, settingsToSave);
+            const saved = await saveAppPreferences(desktopEnabled, settingsToSave, keysToSave);
             if (draftSettings === settingsToSave) {
               draftSettings = saved;
               applySettingsToThisWindow(saved);
             }
-            await emitSettingsUpdated();
             showStatus(t.settingsSaved());
           } catch (error) {
+            keysToSave.forEach((key) => dirtyPreferenceKeys.add(key));
             showStatus(error instanceof Error ? error.message : t.settingsSaveFailed());
           }
         } while (saveQueued);
@@ -279,14 +288,16 @@
     await closeCurrentWindow();
   }
 
-  async function emitSettingsUpdated() {
+  async function emitSettingsUpdated(patch: AppPreferencesPatch) {
     if (!desktopEnabled) {
       return;
     }
     const { emit } = await import('@tauri-apps/api/event');
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('refresh_interface_language_chrome').catch(() => undefined);
-    await emit(SETTINGS_UPDATED_EVENT, { source: 'settings-window' }).catch(() => undefined);
+    if ('interfaceLanguage' in patch) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('refresh_interface_language_chrome').catch(() => undefined);
+    }
+    await emit(SETTINGS_UPDATED_EVENT, { source: 'settings-window', patch }).catch(() => undefined);
   }
 
   async function closeCurrentWindow() {
@@ -566,10 +577,30 @@
       ...patch,
       imageHandlingSettings: patch.imageHandlingSettings ?? draftSettings.imageHandlingSettings,
     });
+    const normalizedPatch = createNormalizedPatch(patch, nextSettings);
 
     draftSettings = nextSettings;
     applySettingsToThisWindow(nextSettings);
+    markDirtyPreferences(normalizedPatch);
+    void emitSettingsUpdated(normalizedPatch);
     scheduleAutoSave();
+  }
+
+  function createNormalizedPatch(
+    patch: Partial<AppPreferences>,
+    nextSettings: AppPreferences,
+  ): AppPreferencesPatch {
+    const normalizedPatch: AppPreferencesPatch = {};
+    for (const key of Object.keys(patch) as AppPreferenceKey[]) {
+      normalizedPatch[key] = nextSettings[key] as never;
+    }
+    return normalizedPatch;
+  }
+
+  function markDirtyPreferences(patch: AppPreferencesPatch) {
+    for (const key of Object.keys(patch) as AppPreferenceKey[]) {
+      dirtyPreferenceKeys.add(key);
+    }
   }
 
   function updateImageSettings(patch: Partial<AppPreferences['imageHandlingSettings']>) {

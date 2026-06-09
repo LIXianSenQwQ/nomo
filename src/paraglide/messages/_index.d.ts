@@ -1,3 +1,31 @@
+/**
+* | output |
+* | --- |
+* | "file" |
+*
+* @param {FileInputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+export const file: ((inputs?: FileInputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<FileInputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "folder" |
+*
+* @param {FolderInputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+export const folder: ((inputs?: FolderInputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<FolderInputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Appname1Inputs = {};
 export type Settingstitle1Inputs = {};
@@ -50,6 +78,8 @@ export type Previewopenfailed2Inputs = {};
 export type Removedfromexplorer2Inputs = {
     message: NonNullable<unknown>;
 };
+export type FileInputs = {};
+export type FolderInputs = {};
 export type Currentfolder1Inputs = {};
 export type Newfolder1Inputs = {};
 export type Untitledmarkdown1Inputs = {};

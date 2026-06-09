@@ -81,4 +81,22 @@ describe('interface language i18n', () => {
 
     expect(currentFolder()).toBe('当前文件夹');
   });
+
+  it('localizes file type labels used by explorer actions', () => {
+    applyInterfaceLanguagePreference('zh-CN');
+    expect(t.file()).toBe('文件');
+    expect(t.folder()).toBe('文件夹');
+
+    applyInterfaceLanguagePreference('zh-TW');
+    expect(t.file()).toBe('檔案');
+    expect(t.folder()).toBe('資料夾');
+
+    applyInterfaceLanguagePreference('en-US');
+    expect(t.file()).toBe('file');
+    expect(t.folder()).toBe('folder');
+
+    applyInterfaceLanguagePreference('ja-JP');
+    expect(t.file()).toBe('ファイル');
+    expect(t.folder()).toBe('フォルダー');
+  });
 });

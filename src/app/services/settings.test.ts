@@ -1,11 +1,29 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const storageMock = vi.hoisted(() => ({
+  listAppSettings: vi.fn(),
+  updateAppSetting: vi.fn(),
+  updateAppSettings: vi.fn(),
+}));
+
+vi.mock('../../lib/desktop/tauriStorage', () => storageMock);
+
 import {
   DEFAULT_APP_PREFERENCES,
+  applyZoomSetting,
+  loadAppPreferences,
   normalizeAppPreferences,
   normalizeImageSettings,
 } from './settings';
+
+beforeEach(() => {
+  storageMock.listAppSettings.mockReset();
+  storageMock.updateAppSetting.mockReset();
+  storageMock.updateAppSettings.mockReset();
+  localStorage.clear();
+});
 
 describe('settings', () => {
   it('keeps automatic local image cleanup enabled for existing image settings', () => {
@@ -57,7 +75,56 @@ describe('settings', () => {
     expect(appSource).toContain("updateAppSetting('sidebarHidden', hidden)");
     expect(appSource).toContain("updateAppSetting('outlineVisible', visible)");
     expect(appSource).toContain('loadAppPreferences(desktopEnabled)');
+    expect(appSource).toContain('loadAppPreferences(desktopEnabled, settings)');
     expect(appSource).toContain('applyAppPreferences');
+  });
+
+  it('reuses provided native settings rows without another desktop read', async () => {
+    const preferences = await loadAppPreferences(true, [
+      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('fontSize', 18),
+      createSetting('interfaceLanguage', 'ja-JP'),
+    ]);
+
+    expect(preferences.fontSize).toBe(18);
+    expect(preferences.interfaceLanguage).toBe('ja-JP');
+    expect(storageMock.listAppSettings).not.toHaveBeenCalled();
+  });
+
+  it('reads native settings when no reusable rows are provided', async () => {
+    storageMock.listAppSettings.mockResolvedValue([
+      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('fontSize', 19),
+    ]);
+
+    const preferences = await loadAppPreferences(true);
+
+    expect(preferences.fontSize).toBe(19);
+    expect(storageMock.listAppSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves settings window changes as dirty preference patches', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.svelte'), 'utf-8');
+    const settingsWindowSource = readFileSync(
+      resolve(__dirname, '../components/SettingsWindow.svelte'),
+      'utf-8',
+    );
+    const settingsServiceSource = readFileSync(resolve(__dirname, 'settings.ts'), 'utf-8');
+    const tauriStorageSource = readFileSync(
+      resolve(__dirname, '../../lib/desktop/tauriStorage.ts'),
+      'utf-8',
+    );
+
+    expect(settingsWindowSource).toContain('dirtyPreferenceKeys');
+    expect(settingsWindowSource).toContain(
+      'saveAppPreferences(desktopEnabled, settingsToSave, keysToSave)',
+    );
+    expect(settingsWindowSource).toContain("{ source: 'settings-window', patch }");
+    expect(settingsWindowSource).toContain("'interfaceLanguage' in patch");
+    expect(settingsServiceSource).toContain('updateAppSettings(persistedEntries)');
+    expect(tauriStorageSource).toContain("invoke('update_app_settings'");
+    expect(appSource).toContain('applyAppPreferencesPatch');
+    expect(appSource).toContain('handleSettingsUpdated(event.payload)');
   });
 
   it('uses a real updater entry in the settings about page', () => {
@@ -149,4 +216,55 @@ describe('settings', () => {
 
     expect(normalized.inlineCodeRenderingEnabled).toBe(true);
   });
+
+  it('calls the zoom frame callback after applying an immediate zoom value', () => {
+    const onFrame = vi.fn();
+
+    applyZoomSetting(120, { onFrame });
+
+    expect(document.documentElement.style.getPropertyValue('--md-editor-zoom')).toBe('1.2');
+    expect(onFrame).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls the zoom frame callback while animated zoom is progressing', () => {
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    const originalCancelAnimationFrame = window.cancelAnimationFrame;
+    const frames: FrameRequestCallback[] = [];
+    let now = 0;
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const onFrame = vi.fn();
+
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = vi.fn() as typeof window.cancelAnimationFrame;
+
+    try {
+      applyZoomSetting(130, { transition: true, onFrame });
+      expect(onFrame).not.toHaveBeenCalled();
+
+      now = 75;
+      frames.shift()?.(75);
+      expect(onFrame).toHaveBeenCalledTimes(1);
+
+      now = 200;
+      frames.shift()?.(200);
+      expect(document.documentElement.style.getPropertyValue('--md-editor-zoom')).toBe('1.3');
+      expect(onFrame).toHaveBeenCalledTimes(3);
+    } finally {
+      dateNow.mockRestore();
+      window.requestAnimationFrame = originalRequestAnimationFrame;
+      window.cancelAnimationFrame = originalCancelAnimationFrame;
+      applyZoomSetting(100);
+    }
+  });
 });
+
+function createSetting(key: string, value: unknown) {
+  return {
+    key,
+    valueJson: JSON.stringify(value),
+    updatedAt: 1,
+  };
+}

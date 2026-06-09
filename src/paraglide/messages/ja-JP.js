@@ -43,6 +43,8 @@
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
 /** @typedef {{ message: NonNullable<unknown> }} Removedfromexplorer2Inputs */
+/** @typedef {{}} FileInputs */
+/** @typedef {{}} FolderInputs */
 /** @typedef {{}} Currentfolder1Inputs */
 /** @typedef {{}} Newfolder1Inputs */
 /** @typedef {{}} Untitledmarkdown1Inputs */
@@ -283,6 +285,14 @@ export const previewopenfailed2 = /** @type {(inputs: Previewopenfailed2Inputs) 
 
 export const removedfromexplorer2 = /** @type {(inputs: Removedfromexplorer2Inputs) => LocalizedString} */ (i) => {
 	return /** @type {LocalizedString} */ (`${i?.message}; エクスプローラーから削除しました`)
+};
+
+export const file = /** @type {(inputs: FileInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`ファイル`)
+};
+
+export const folder = /** @type {(inputs: FolderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`フォルダー`)
 };
 
 export const currentfolder1 = /** @type {(inputs: Currentfolder1Inputs) => LocalizedString} */ () => {
