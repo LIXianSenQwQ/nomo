@@ -5,19 +5,7 @@ import { getLocale, overwriteGetLocale, type Locale } from '../paraglide/runtime
 export type EffectiveInterfaceLocale =
   | 'zh-CN'
   | 'zh-TW'
-  | 'en-US'
-  | 'ja-JP'
-  | 'ko-KR'
-  | 'fr-FR'
-  | 'de-DE'
-  | 'es-ES'
-  | 'pt-BR'
-  | 'ru-RU'
-  | 'it-IT'
-  | 'tr-TR'
-  | 'vi-VN'
-  | 'th-TH'
-  | 'id-ID';
+  | 'en-US';
 export type InterfaceLanguagePreference = 'system' | EffectiveInterfaceLocale;
 
 export interface InterfaceLanguageOption {
@@ -29,36 +17,12 @@ export const SUPPORTED_INTERFACE_LOCALES: EffectiveInterfaceLocale[] = [
   'zh-CN',
   'zh-TW',
   'en-US',
-  'ja-JP',
-  'ko-KR',
-  'fr-FR',
-  'de-DE',
-  'es-ES',
-  'pt-BR',
-  'ru-RU',
-  'it-IT',
-  'tr-TR',
-  'vi-VN',
-  'th-TH',
-  'id-ID',
 ];
 export const INTERFACE_LANGUAGE_OPTIONS: InterfaceLanguageOption[] = [
   { value: 'system', labelKey: 'interfaceLanguageSystem' },
   { value: 'zh-CN', labelKey: 'interfaceLanguageZhCn' },
   { value: 'zh-TW', labelKey: 'interfaceLanguageZhTw' },
   { value: 'en-US', labelKey: 'interfaceLanguageEnUs' },
-  { value: 'ja-JP', labelKey: 'interfaceLanguageJaJp' },
-  { value: 'ko-KR', labelKey: 'interfaceLanguageKoKr' },
-  { value: 'fr-FR', labelKey: 'interfaceLanguageFrFr' },
-  { value: 'de-DE', labelKey: 'interfaceLanguageDeDe' },
-  { value: 'es-ES', labelKey: 'interfaceLanguageEsEs' },
-  { value: 'pt-BR', labelKey: 'interfaceLanguagePtBr' },
-  { value: 'ru-RU', labelKey: 'interfaceLanguageRuRu' },
-  { value: 'it-IT', labelKey: 'interfaceLanguageItIt' },
-  { value: 'tr-TR', labelKey: 'interfaceLanguageTrTr' },
-  { value: 'vi-VN', labelKey: 'interfaceLanguageViVn' },
-  { value: 'th-TH', labelKey: 'interfaceLanguageThTh' },
-  { value: 'id-ID', labelKey: 'interfaceLanguageIdId' },
 ];
 export const INTERFACE_LOCALE_CHANGED_EVENT = 'nomo://interface-locale-changed';
 
@@ -1221,21 +1185,6 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
   },
 };
 
-const ENGLISH_FALLBACK_LOCALES = new Set<EffectiveInterfaceLocale>([
-  'ja-JP',
-  'ko-KR',
-  'fr-FR',
-  'de-DE',
-  'es-ES',
-  'pt-BR',
-  'ru-RU',
-  'it-IT',
-  'tr-TR',
-  'vi-VN',
-  'th-TH',
-  'id-ID',
-]);
-
 export const t = new Proxy(generatedMessages, {
   get(target, prop, receiver) {
     if (typeof prop !== 'string') {
@@ -1389,9 +1338,8 @@ function getExtraTranslation(
   locale: EffectiveInterfaceLocale,
   inputs?: Record<string, unknown>,
 ): string | null {
-  const tableLocale = ENGLISH_FALLBACK_LOCALES.has(locale) ? 'en-US' : locale;
   const value =
-    EXTRA_TRANSLATIONS[tableLocale]?.[key] ??
+    EXTRA_TRANSLATIONS[locale]?.[key] ??
     EXTRA_TRANSLATIONS['en-US']?.[key] ??
     EXTRA_TRANSLATIONS['zh-CN']?.[key];
   if (typeof value !== 'string') {

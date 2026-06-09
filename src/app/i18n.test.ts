@@ -21,8 +21,8 @@ describe('interface language i18n', () => {
     expect(resolveInterfaceLocale('system', ['zh-Hant-TW'])).toBe('zh-TW');
     expect(resolveInterfaceLocale('system', ['zh-HK'])).toBe('zh-TW');
     expect(resolveInterfaceLocale('system', ['en-US'])).toBe('en-US');
-    expect(resolveInterfaceLocale('system', ['fr-FR'])).toBe('fr-FR');
-    expect(resolveInterfaceLocale('system', ['ja'])).toBe('ja-JP');
+    expect(resolveInterfaceLocale('system', ['fr-FR'])).toBe('en-US');
+    expect(resolveInterfaceLocale('system', ['ja'])).toBe('en-US');
     expect(resolveInterfaceLocale('system', [])).toBe(DEFAULT_EFFECTIVE_INTERFACE_LOCALE);
   });
 

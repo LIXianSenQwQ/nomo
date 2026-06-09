@@ -1,5 +1,3 @@
-import App from './app/App.svelte';
-import SettingsWindow from './app/components/SettingsWindow.svelte';
 import 'katex/dist/katex.min.css';
 import 'prosemirror-view/style/prosemirror.css';
 import './app/styles/theme.css';
@@ -14,10 +12,20 @@ if (!target) {
 }
 
 const searchParams = new URLSearchParams(window.location.search);
-const RootComponent = searchParams.get('view') === 'settings' ? SettingsWindow : App;
+const rootComponentPromise =
+  searchParams.get('view') === 'settings'
+    ? import('./app/components/SettingsWindow.svelte')
+    : import('./app/App.svelte');
 
-const app = mount(RootComponent, {
-  target,
-});
+const app = rootComponentPromise
+  .then(({ default: RootComponent }) =>
+    mount(RootComponent, {
+      target,
+    }),
+  )
+  .catch((error) => {
+    console.error('Failed to mount Nomo app root.', error);
+    throw error;
+  });
 
 export default app;

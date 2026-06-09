@@ -110,6 +110,7 @@
   let checkingContextMenu = false;
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
+  let filesIntegrationStatusRequested = false;
 
   function createCategoryTitles(_locale: EffectiveInterfaceLocale): Record<CategoryId, string> {
     return {
@@ -142,8 +143,6 @@
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
     void loadPreferences();
-    void refreshMarkdownAssociationStatus();
-    void refreshWindowsContextMenuStatus();
     window.addEventListener('focus', handleWindowFocus);
 
     return () => {
@@ -162,6 +161,25 @@
       void refreshMarkdownAssociationStatus({ silent: true });
       void refreshWindowsContextMenuStatus({ silent: true });
     }
+  }
+
+  function selectCategory(categoryId: CategoryId) {
+    activeCategory = categoryId;
+    if (categoryId === 'files') {
+      void ensureFilesIntegrationStatus();
+    }
+  }
+
+  async function ensureFilesIntegrationStatus() {
+    if (filesIntegrationStatusRequested) {
+      return;
+    }
+
+    filesIntegrationStatusRequested = true;
+    await Promise.all([
+      refreshMarkdownAssociationStatus(),
+      refreshWindowsContextMenuStatus(),
+    ]);
   }
 
   async function loadPreferences() {
@@ -664,7 +682,7 @@
           aria-label={t[category.labelKey]()}
           aria-current={activeCategory === category.id ? 'page' : undefined}
           on:click={() => {
-            activeCategory = category.id;
+            selectCategory(category.id);
           }}
         >
           <svelte:component this={category.icon} size={16} aria-hidden="true" />

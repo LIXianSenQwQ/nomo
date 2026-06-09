@@ -287,6 +287,8 @@ export class ProseMirrorEditorCore implements EditorCore {
   updateTheme(theme: EditorThemeOptions): void {
     this.assertActive();
     this.options.theme = theme;
+    CodeBlockNodeView.updateTheme();
+    MermaidBlockNodeView.updateTheme();
     this.emit(`theme:${theme.name}`);
   }
 

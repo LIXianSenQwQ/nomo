@@ -1,6 +1,4 @@
 import { listAppSettings, updateAppSetting } from '../../lib/desktop/tauriStorage';
-import { CodeBlockNodeView } from '../../lib/editor-core/nodeViews/CodeBlockNodeView';
-import { MermaidBlockNodeView } from '../../lib/editor-core/nodeViews/MermaidBlockNodeView';
 import type { DiagramType } from '../../lib/editor-core/diagramTemplates';
 import {
   DEFAULT_IMAGE_HANDLING_SETTINGS,
@@ -392,9 +390,6 @@ export function applyThemeSetting(theme: ThemePreference, options?: { transition
   const effectiveTheme = resolveThemePreference(theme);
   document.documentElement.dataset.theme = effectiveTheme === 'dark' ? 'dark' : '';
   document.documentElement.dataset.themePreference = theme;
-  // 通知代码块更新语法高亮主题
-  CodeBlockNodeView.updateTheme();
-  MermaidBlockNodeView.updateTheme();
   return effectiveTheme;
 }
 
