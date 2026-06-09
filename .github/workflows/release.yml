@@ -18,7 +18,7 @@ jobs:
       matrix:
         include:
           - name: Windows x64
-            runner: windows-latest
+            runner: windows-2022
             rust-target: ''
             args: '--bundles nsis'
           - name: macOS arm64
@@ -67,7 +67,7 @@ jobs:
           }
 
       - name: Build and publish release assets
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: '-'
