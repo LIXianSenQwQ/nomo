@@ -60,6 +60,25 @@ describe('settings', () => {
     expect(appSource).toContain('applyAppPreferences');
   });
 
+  it('uses a real updater entry in the settings about page', () => {
+    const appSource = readFileSync(resolve(__dirname, '../App.svelte'), 'utf-8');
+    const settingsWindowSource = readFileSync(
+      resolve(__dirname, '../components/SettingsWindow.svelte'),
+      'utf-8',
+    );
+
+    expect(settingsWindowSource).toContain('checkForSoftwareUpdate');
+    expect(settingsWindowSource).toContain('installDownloadedSoftwareUpdate');
+    expect(settingsWindowSource).toContain('getSoftwareUpdateButtonLabel');
+    expect(settingsWindowSource).toContain('nomo://request-update-install');
+    expect(settingsWindowSource).not.toContain(
+      '<span class="disabled-pill">{t.futureVersionSupport()}</span>\n            </div>\n          </div>\n        {/if}',
+    );
+    expect(appSource).toContain('nomo://request-update-install');
+    expect(appSource).toContain('nomo://update-install-decision');
+    expect(appSource).toContain('unsavedChangesBeforeUpdate');
+  });
+
   it('normalizes new preference boundaries and invalid enum values', () => {
     const normalized = normalizeAppPreferences({
       interfaceLanguage: 'zh-TW',

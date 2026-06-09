@@ -71,6 +71,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: '-'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Nomo ${{ github.ref_name }}
@@ -83,6 +85,7 @@ jobs:
             - .dmg / .app.tar.gz: arm64
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: ${{ runner.os == 'Windows' && !contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
 
       - name: Package Windows zip

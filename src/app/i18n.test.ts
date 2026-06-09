@@ -4,6 +4,7 @@ import {
   applyInterfaceLanguagePreference,
   getInterfaceLocale,
   resolveInterfaceLocale,
+  t,
 } from './i18n';
 
 describe('interface language i18n', () => {
@@ -32,5 +33,17 @@ describe('interface language i18n', () => {
     expect(locale).toBe('zh-TW');
     expect(getInterfaceLocale()).toBe('zh-TW');
     expect(document.documentElement.lang).toBe('zh-TW');
+  });
+
+  it('provides software update messages for supported interface languages', () => {
+    applyInterfaceLanguagePreference('zh-CN');
+    expect(t.softwareUpdateRestartAndInstall()).toBe('重启并安装');
+    expect(t.unsavedChangesBeforeUpdate({ names: 'a.md' })).toContain('a.md');
+
+    applyInterfaceLanguagePreference('zh-TW');
+    expect(t.softwareUpdateRestartAndInstall()).toBe('重啟並安裝');
+
+    applyInterfaceLanguagePreference('en-US');
+    expect(t.softwareUpdateRestartAndInstall()).toBe('Restart and install');
   });
 });

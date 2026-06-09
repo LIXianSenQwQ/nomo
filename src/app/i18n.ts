@@ -2,10 +2,7 @@ import * as messages from '../paraglide/messages';
 import { writable } from 'svelte/store';
 import { getLocale, overwriteGetLocale, type Locale } from '../paraglide/runtime';
 
-export type EffectiveInterfaceLocale =
-  | 'zh-CN'
-  | 'zh-TW'
-  | 'en-US';
+export type EffectiveInterfaceLocale = 'zh-CN' | 'zh-TW' | 'en-US';
 export type InterfaceLanguagePreference = 'system' | EffectiveInterfaceLocale;
 
 export interface InterfaceLanguageOption {
@@ -13,11 +10,7 @@ export interface InterfaceLanguageOption {
   labelKey: string;
 }
 
-export const SUPPORTED_INTERFACE_LOCALES: EffectiveInterfaceLocale[] = [
-  'zh-CN',
-  'zh-TW',
-  'en-US',
-];
+export const SUPPORTED_INTERFACE_LOCALES: EffectiveInterfaceLocale[] = ['zh-CN', 'zh-TW', 'en-US'];
 export const INTERFACE_LANGUAGE_OPTIONS: InterfaceLanguageOption[] = [
   { value: 'system', labelKey: 'interfaceLanguageSystem' },
   { value: 'zh-CN', labelKey: 'interfaceLanguageZhCn' },
@@ -119,7 +112,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     mdAssociationDesktopOnly: '仅 Windows 桌面版可绑定系统默认打开方式。',
     mdAssociationWindowsOnly: '当前默认打开方式绑定仅支持 Windows。',
     mdAssociationCheckingDescription: '正在读取 Windows 当前 .md 默认打开方式。',
-    mdAssociationDefaultDescription: '将 Nomo 注册到 Windows 默认应用候选列表，并在系统设置中完成确认。',
+    mdAssociationDefaultDescription:
+      '将 Nomo 注册到 Windows 默认应用候选列表，并在系统设置中完成确认。',
     contextMenuDesktopOnly: '仅 Windows 桌面版可注册系统右键菜单。',
     contextMenuWindowsOnly: '当前右键菜单注册仅支持 Windows。',
     contextMenuCheckingDescription: '正在读取 Windows 当前右键菜单注册状态。',
@@ -186,7 +180,29 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     platformStrategy: '平台策略',
     platformStrategyDescription: '当前版本优先保证 Windows 的文件、窗口和快捷键体验。',
     updateCheck: '更新检查',
-    updateCheckDescription: '后续支持检查 Nomo 新版本并提示更新。',
+    updateCheckDescription: '检查 GitHub Release 中的 Nomo 稳定版更新。',
+    softwareUpdateCheckNow: '检查更新',
+    softwareUpdateChecking: '正在检查 Nomo 新版本。',
+    softwareUpdateCheckingShort: '检查中...',
+    softwareUpdateUpToDate: '当前已是最新版本。',
+    softwareUpdateAvailable: '发现新版本 {version}，正在准备下载。',
+    softwareUpdateDownloading: '正在下载更新包...',
+    softwareUpdateDownloadingPercent: '正在下载更新包：{percent}%。',
+    softwareUpdateDownloadingShort: '下载中...',
+    softwareUpdateDownloaded: '更新已下载，重启后完成安装。',
+    softwareUpdateWaitingInstall: '更新已下载，等待你确认重启并安装。',
+    softwareUpdateRestartAndInstall: '重启并安装',
+    softwareUpdateInstalling: '正在启动安装流程，Nomo 将会重启。',
+    softwareUpdateInstallingShort: '安装中...',
+    softwareUpdateFailed: '更新检查或下载失败。',
+    softwareUpdateInstallFailed: '更新安装失败。',
+    softwareUpdateUnsupported:
+      '当前环境不支持自动更新；如使用免安装 zip 版，请手动下载新版。',
+    softwareUpdateLatest: '已是最新',
+    softwareUpdateReady: '可安装',
+    softwareUpdateManual: '手动检查',
+    unsavedChangesBeforeUpdate:
+      '以下文档有未保存修改：{names}。重启并安装更新可能会丢失未保存内容，是否继续？',
     windowControls: '窗口控制',
     formatToolbar: '格式工具',
     setHeadingOne: '设置为一级标题',
@@ -400,7 +416,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     saveFileFailed: '保存文件失败',
     fileStatusCheckFailed: '文件状态检查失败',
     externalFileDeleted: '当前文件已被外部删除或移动，请另存为当前内容',
-    externalFileModifiedDirty: '文件已被外部修改，自动保存已暂停；请选择重新载入、另存为或覆盖外部版本',
+    externalFileModifiedDirty:
+      '文件已被外部修改，自动保存已暂停；请选择重新载入、另存为或覆盖外部版本',
     externalFileModifiedClean: '文件已被外部修改，请选择重新载入外部版本或保留当前内容',
     openFolderFailed: '打开文件夹失败',
     loadFolderTreeFailed: '载入文件夹文件树失败',
@@ -461,7 +478,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     codeBlockLineNumbers: '程式碼區塊行號',
     codeBlockLineNumbersDescription: '控制語義編輯區程式碼區塊是否顯示行號。',
     inlineCodeRendering: '渲染行內程式碼',
-    inlineCodeRenderingDescription: '開啟後顯示行內程式碼樣式；關閉後顯示原始 Markdown 反引號文字。',
+    inlineCodeRenderingDescription:
+      '開啟後顯示行內程式碼樣式；關閉後顯示原始 Markdown 反引號文字。',
     visualZoom: '視覺縮放',
     zoomLevel: '縮放級別',
     zoomLevelDescription: '調整正文編輯區和原始碼模式的整體顯示比例。',
@@ -500,7 +518,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     mdAssociationDesktopOnly: '僅 Windows 桌面版可綁定系統預設開啟方式。',
     mdAssociationWindowsOnly: '目前預設開啟方式綁定僅支援 Windows。',
     mdAssociationCheckingDescription: '正在讀取 Windows 目前 .md 預設開啟方式。',
-    mdAssociationDefaultDescription: '將 Nomo 註冊到 Windows 預設應用候選列表，並在系統設定中完成確認。',
+    mdAssociationDefaultDescription:
+      '將 Nomo 註冊到 Windows 預設應用候選列表，並在系統設定中完成確認。',
     contextMenuDesktopOnly: '僅 Windows 桌面版可註冊系統右鍵選單。',
     contextMenuWindowsOnly: '目前右鍵選單註冊僅支援 Windows。',
     contextMenuCheckingDescription: '正在讀取 Windows 目前右鍵選單註冊狀態。',
@@ -567,7 +586,29 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     platformStrategy: '平台策略',
     platformStrategyDescription: '目前版本優先保證 Windows 的檔案、視窗和快捷鍵體驗。',
     updateCheck: '更新檢查',
-    updateCheckDescription: '後續支援檢查 Nomo 新版本並提示更新。',
+    updateCheckDescription: '檢查 GitHub Release 中的 Nomo 穩定版更新。',
+    softwareUpdateCheckNow: '檢查更新',
+    softwareUpdateChecking: '正在檢查 Nomo 新版本。',
+    softwareUpdateCheckingShort: '檢查中...',
+    softwareUpdateUpToDate: '目前已是最新版本。',
+    softwareUpdateAvailable: '發現新版本 {version}，正在準備下載。',
+    softwareUpdateDownloading: '正在下載更新包...',
+    softwareUpdateDownloadingPercent: '正在下載更新包：{percent}%。',
+    softwareUpdateDownloadingShort: '下載中...',
+    softwareUpdateDownloaded: '更新已下載，重啟後完成安裝。',
+    softwareUpdateWaitingInstall: '更新已下載，等待你確認重啟並安裝。',
+    softwareUpdateRestartAndInstall: '重啟並安裝',
+    softwareUpdateInstalling: '正在啟動安裝流程，Nomo 將會重啟。',
+    softwareUpdateInstallingShort: '安裝中...',
+    softwareUpdateFailed: '更新檢查或下載失敗。',
+    softwareUpdateInstallFailed: '更新安裝失敗。',
+    softwareUpdateUnsupported:
+      '目前環境不支援自動更新；如使用免安裝 zip 版，請手動下載新版。',
+    softwareUpdateLatest: '已是最新',
+    softwareUpdateReady: '可安裝',
+    softwareUpdateManual: '手動檢查',
+    unsavedChangesBeforeUpdate:
+      '以下文件有未儲存修改：{names}。重啟並安裝更新可能會遺失未儲存內容，是否繼續？',
     windowControls: '視窗控制',
     formatToolbar: '格式工具',
     setHeadingOne: '設定為一級標題',
@@ -781,7 +822,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     saveFileFailed: '儲存檔案失敗',
     fileStatusCheckFailed: '檔案狀態檢查失敗',
     externalFileDeleted: '目前檔案已被外部刪除或移動，請另存目前內容',
-    externalFileModifiedDirty: '檔案已被外部修改，自動儲存已暫停；請選擇重新載入、另存新檔或覆蓋外部版本',
+    externalFileModifiedDirty:
+      '檔案已被外部修改，自動儲存已暫停；請選擇重新載入、另存新檔或覆蓋外部版本',
     externalFileModifiedClean: '檔案已被外部修改，請選擇重新載入外部版本或保留目前內容',
     openFolderFailed: '開啟資料夾失敗',
     loadFolderTreeFailed: '載入資料夾檔案樹失敗',
@@ -819,7 +861,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     autoSaveDelay: 'Autosave delay',
     autoSaveDelayDescription: 'How long to wait after input stops before saving.',
     createSnapshotBeforeSave: 'Create snapshot before saving',
-    createSnapshotBeforeSaveDescription: 'Record a Markdown snapshot before saving a local file so accidental overwrites can be recovered.',
+    createSnapshotBeforeSaveDescription:
+      'Record a Markdown snapshot before saving a local file so accidental overwrites can be recovered.',
     editorScale: 'Editor scale',
     fontSize: 'Font size',
     fontSizeDescription: 'Affects body text in semantic editing and source mode.',
@@ -832,7 +875,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     classic: 'Classic',
     modern: 'Modern',
     largeDocumentLimit: 'Large document threshold',
-    largeDocumentLimitDescription: 'Use read-only source mode after the threshold to avoid blocking the window with semantic parsing.',
+    largeDocumentLimitDescription:
+      'Use read-only source mode after the threshold to avoid blocking the window with semantic parsing.',
     charByte: 'characters / bytes',
     defaultIndent: 'Default indent',
     defaultIndentDescription: 'Used when pressing Tab inside a code block editor.',
@@ -842,27 +886,32 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     codeBlockLineNumbers: 'Code block line numbers',
     codeBlockLineNumbersDescription: 'Controls whether semantic code blocks show line numbers.',
     inlineCodeRendering: 'Render inline code',
-    inlineCodeRenderingDescription: 'When enabled, inline code is styled; when disabled, raw Markdown backticks remain visible.',
+    inlineCodeRenderingDescription:
+      'When enabled, inline code is styled; when disabled, raw Markdown backticks remain visible.',
     visualZoom: 'Visual zoom',
     zoomLevel: 'Zoom level',
     zoomLevelDescription: 'Adjusts the overall scale of the document editor and source mode.',
     ctrlWheelZoom: 'Ctrl wheel zoom',
     ctrlWheelZoomDescription: 'Hold Ctrl and scroll the mouse wheel to adjust zoom.',
     customCssTheme: 'Custom CSS theme',
-    customCssThemeDescription: 'Will be available after theme files are connected; current CSS variables are unaffected.',
+    customCssThemeDescription:
+      'Will be available after theme files are connected; current CSS variables are unaffected.',
     futureVersionSupport: 'Coming later',
     filesAndWindows: 'Files and windows',
     folderOpenDefaultBehavior: 'Default folder opening behavior',
-    folderOpenDefaultBehaviorDescription: 'Choose whether to reuse the current window or always open a new one.',
+    folderOpenDefaultBehaviorDescription:
+      'Choose whether to reuse the current window or always open a new one.',
     askEveryTime: 'Ask every time',
     currentWindow: 'Current window',
     newWindow: 'New window',
     filePreviewTab: 'File preview tab',
-    filePreviewTabDescription: 'Single-click files reuse a preview tab; editing or double-clicking pins it.',
+    filePreviewTabDescription:
+      'Single-click files reuse a preview tab; editing or double-clicking pins it.',
     hideExplorerOnLaunch: 'Hide explorer sidebar on launch',
     hideExplorerOnLaunchDescription: 'Keep the sidebar collapsed the next time Nomo opens.',
     closeToTray: 'Close to tray',
-    closeToTrayDescription: 'Hide the main editor window to the system tray when closing; quitting the app is unaffected.',
+    closeToTrayDescription:
+      'Hide the main editor window to the system tray when closing; quitting the app is unaffected.',
     bindMdDefaultApp: 'Bind .md default app',
     registerMdContextMenu: 'Register .md and folder context menu',
     unsupported: 'Unsupported',
@@ -878,10 +927,12 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     bindMd: 'Bind .md',
     registering: 'Registering...',
     registerContextMenu: 'Register context menu',
-    mdAssociationDesktopOnly: 'Only the Windows desktop app can bind the system default open-with app.',
+    mdAssociationDesktopOnly:
+      'Only the Windows desktop app can bind the system default open-with app.',
     mdAssociationWindowsOnly: 'Default app binding is currently supported only on Windows.',
     mdAssociationCheckingDescription: 'Reading the current Windows .md default app.',
-    mdAssociationDefaultDescription: 'Register Nomo as a Windows default-app candidate, then confirm it in system settings.',
+    mdAssociationDefaultDescription:
+      'Register Nomo as a Windows default-app candidate, then confirm it in system settings.',
     contextMenuDesktopOnly: 'Only the Windows desktop app can register system context menus.',
     contextMenuWindowsOnly: 'Context menu registration is currently supported only on Windows.',
     contextMenuCheckingDescription: 'Reading the current Windows context menu registration state.',
@@ -894,9 +945,11 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     documentAssetsFolder: 'Document .assets',
     upload: 'Upload',
     autoCleanLocalImages: 'Clean local images automatically',
-    autoCleanLocalImagesDescription: 'Delete matching local files after all image references are removed.',
+    autoCleanLocalImagesDescription:
+      'Delete matching local files after all image references are removed.',
     uploadProvider: 'Upload provider',
-    uploadProviderDescription: 'PicGo fits a resident service; PicGo-Core fits command-line workflows.',
+    uploadProviderDescription:
+      'PicGo fits a resident service; PicGo-Core fits command-line workflows.',
     picgoServerUrl: 'PicGo Server URL',
     picgoServerUrlDescription: 'Used to call the local PicGo service for image upload.',
     picgoCoreCommand: 'PicGo-Core command',
@@ -908,7 +961,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     testing: 'Testing...',
     testConnection: 'Test connection',
     imageDefaultWidth: 'Default image width',
-    imageDefaultWidthDescription: 'Writes a width attribute on inserted images. Use 640px, 80%, or leave empty.',
+    imageDefaultWidthDescription:
+      'Writes a width attribute on inserted images. Use 640px, 80%, or leave empty.',
     emptyPlaceholder: 'Empty',
     imageDefaultAlign: 'Default image alignment',
     imageDefaultAlignDescription: 'Writes an alignment attribute on inserted images.',
@@ -918,11 +972,13 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     alignRight: 'Right',
     statsAndNavigation: 'Stats and navigation',
     showDocumentOutline: 'Show document outline',
-    showDocumentOutlineDescription: 'Show current document heading navigation on the right side of the editor.',
+    showDocumentOutlineDescription:
+      'Show current document heading navigation on the right side of the editor.',
     showDocumentStats: 'Show document stats',
     showDocumentStatsDescription: 'Show lightweight stats in the lower-right of the document body.',
     defaultStatsMetric: 'Default stat metric',
-    defaultStatsMetricDescription: 'Decides whether the status bar shows lines, words, or characters by default.',
+    defaultStatsMetricDescription:
+      'Decides whether the status bar shows lines, words, or characters by default.',
     lines: 'Lines',
     words: 'Words',
     chars: 'Characters',
@@ -930,9 +986,11 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     wordUnit: ' words',
     charUnit: ' chars',
     readingTime: 'Reading time',
-    readingTimeDescription: 'Show estimated reading time derived from the current Markdown in the stats popover.',
+    readingTimeDescription:
+      'Show estimated reading time derived from the current Markdown in the stats popover.',
     outlineDefaultExpandLevel: 'Default outline expansion level',
-    outlineDefaultExpandLevelDescription: 'Default heading level shown when opening or switching documents.',
+    outlineDefaultExpandLevelDescription:
+      'Default heading level shown when opening or switching documents.',
     defaultInsertBehavior: 'Default insertion behavior',
     defaultCodeBlockLanguage: 'Default code block language',
     defaultCodeBlockLanguageDescription: 'Used when inserting code blocks from menus or shortcuts.',
@@ -946,9 +1004,33 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     positioning: 'Positioning',
     positioningDescription: 'A local-first, Markdown-first lightweight desktop Markdown editor.',
     platformStrategy: 'Platform strategy',
-    platformStrategyDescription: 'This version prioritizes the Windows file, window, and shortcut experience.',
+    platformStrategyDescription:
+      'This version prioritizes the Windows file, window, and shortcut experience.',
     updateCheck: 'Update check',
-    updateCheckDescription: 'Later versions will check for new Nomo releases and prompt updates.',
+    updateCheckDescription: 'Check stable Nomo updates from GitHub Releases.',
+    softwareUpdateCheckNow: 'Check for updates',
+    softwareUpdateChecking: 'Checking for a new Nomo version.',
+    softwareUpdateCheckingShort: 'Checking...',
+    softwareUpdateUpToDate: 'You are on the latest version.',
+    softwareUpdateAvailable: 'Version {version} is available. Preparing the download.',
+    softwareUpdateDownloading: 'Downloading update package...',
+    softwareUpdateDownloadingPercent: 'Downloading update package: {percent}%.',
+    softwareUpdateDownloadingShort: 'Downloading...',
+    softwareUpdateDownloaded: 'Update downloaded. Restart to finish installing.',
+    softwareUpdateWaitingInstall:
+      'Update downloaded. Waiting for restart and install confirmation.',
+    softwareUpdateRestartAndInstall: 'Restart and install',
+    softwareUpdateInstalling: 'Starting the installer. Nomo will restart.',
+    softwareUpdateInstallingShort: 'Installing...',
+    softwareUpdateFailed: 'Update check or download failed.',
+    softwareUpdateInstallFailed: 'Update install failed.',
+    softwareUpdateUnsupported:
+      'Automatic updates are unavailable here. If you are using the portable zip build, download the new version manually.',
+    softwareUpdateLatest: 'Latest',
+    softwareUpdateReady: 'Ready',
+    softwareUpdateManual: 'Manual check',
+    unsavedChangesBeforeUpdate:
+      'These documents have unsaved changes: {names}. Restarting to install may lose unsaved content. Continue?',
     windowControls: 'Window controls',
     formatToolbar: 'Format toolbar',
     setHeadingOne: 'Set heading 1',
@@ -1135,22 +1217,28 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     footnoteContentPlaceholder: 'Enter footnote content',
     unavailableSuffix: '(unavailable)',
     dragDropNoMarkdown: 'Dropped files do not include a Markdown or text file',
-    dragOpenBlockedUnsaved: 'The current document has unsaved changes. A recovery copy was kept; save before opening a dropped file.',
+    dragOpenBlockedUnsaved:
+      'The current document has unsaved changes. A recovery copy was kept; save before opening a dropped file.',
     dragOpenFailed: 'Failed to open dropped file',
     openedByDragDrop: 'Opened Markdown file from drag and drop',
     openedByTauri: 'Opened Markdown file with Tauri',
     localBrowserFile: 'Local browser file: {name}',
     markdownFileOpened: 'Opened Markdown file',
-    largeDocumentReadonlySaveBlocked: 'This large document is in read-only source mode. Use Save as or reduce the file before editing.',
-    externalChangeChooseAction: 'External file changes detected. Reload, Save as, or overwrite the external version first.',
+    largeDocumentReadonlySaveBlocked:
+      'This large document is in read-only source mode. Use Save as or reduce the file before editing.',
+    externalChangeChooseAction:
+      'External file changes detected. Reload, Save as, or overwrite the external version first.',
     savedByTauri: 'Saved Markdown file with Tauri',
     markdownExported: 'Exported Markdown file',
     openRecentFailed: 'Failed to open recent file',
     recentFileOpened: 'Opened recent file',
     switchedToOpenedTab: 'Switched to the already-open tab',
-    largeDocumentReadonlyOpened: 'Large document opened in read-only source mode to avoid blocking the UI',
-    newFileWithRecovery: 'The current document has unsaved changes. A recovery copy was kept and a new document was created.',
-    confirmCloseModifiedFile: 'File "{fileName}" has been modified. Close it? Your changes may be lost.',
+    largeDocumentReadonlyOpened:
+      'Large document opened in read-only source mode to avoid blocking the UI',
+    newFileWithRecovery:
+      'The current document has unsaved changes. A recovery copy was kept and a new document was created.',
+    confirmCloseModifiedFile:
+      'File "{fileName}" has been modified. Close it? Your changes may be lost.',
     reloadExternalFailed: 'Failed to reload external version',
     reloadedExternalVersion: 'Reloaded external version',
     noExternalChangeToOverwrite: 'There are no external changes to overwrite',
@@ -1161,9 +1249,12 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     openFileFailed: 'Failed to open file',
     saveFileFailed: 'Failed to save file',
     fileStatusCheckFailed: 'Failed to check file status',
-    externalFileDeleted: 'The current file was deleted or moved externally. Save the current content as a new file.',
-    externalFileModifiedDirty: 'The file was modified externally and autosave is paused. Reload, Save as, or overwrite the external version.',
-    externalFileModifiedClean: 'The file was modified externally. Reload the external version or keep the current content.',
+    externalFileDeleted:
+      'The current file was deleted or moved externally. Save the current content as a new file.',
+    externalFileModifiedDirty:
+      'The file was modified externally and autosave is paused. Reload, Save as, or overwrite the external version.',
+    externalFileModifiedClean:
+      'The file was modified externally. Reload the external version or keep the current content.',
     openFolderFailed: 'Failed to open folder',
     loadFolderTreeFailed: 'Failed to load folder file tree',
     loadSubfolderFailed: 'Failed to load subfolder: {error}',
@@ -1181,7 +1272,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     desktopImageInsertRequiresSavedFile: 'Save the Markdown file before inserting local images',
     imageUploadRequiresDesktop: 'Image upload requires PicGo or PicGo-Core in the desktop app',
     imageContentEmpty: 'Image content is empty and cannot be imported',
-    largeDocumentStayReadonlySource: 'Large document is in read-only source mode; staying there to avoid UI jank',
+    largeDocumentStayReadonlySource:
+      'Large document is in read-only source mode; staying there to avoid UI jank',
   },
 };
 
@@ -1301,9 +1393,7 @@ export function applyInterfaceLanguagePreference(
 
   if (typeof document !== 'undefined') {
     document.documentElement.lang = locale;
-    window.dispatchEvent(
-      new CustomEvent(INTERFACE_LOCALE_CHANGED_EVENT, { detail: { locale } }),
-    );
+    window.dispatchEvent(new CustomEvent(INTERFACE_LOCALE_CHANGED_EVENT, { detail: { locale } }));
   }
 
   return locale;

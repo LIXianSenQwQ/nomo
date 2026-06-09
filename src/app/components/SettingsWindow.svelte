@@ -14,6 +14,16 @@
   import { onMount } from 'svelte';
   import { DIAGRAM_TEMPLATES } from '../../lib/editor-core/diagramTemplates';
   import { isTauriRuntime } from '../../lib/desktop/tauriStorage';
+  import {
+    checkSoftwareUpdate,
+    downloadSoftwareUpdate,
+    installSoftwareUpdate,
+    isSoftwareUpdateInstallerSupported,
+    isSoftwareUpdateSupported,
+    type SoftwareUpdateHandle,
+    type SoftwareUpdateProgress,
+    type SoftwareUpdateUiState,
+  } from '../../lib/desktop/tauriUpdater';
   import packageInfo from '../../../package.json';
   import {
     DEFAULT_APP_PREFERENCES,
@@ -111,6 +121,12 @@
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
   let filesIntegrationStatusRequested = false;
+  let pendingSoftwareUpdate: SoftwareUpdateHandle | null = null;
+  let updateState: SoftwareUpdateUiState = {
+    status: 'idle',
+    message: '',
+  };
+  let updateDecisionUnlisten: (() => void) | null = null;
 
   function createCategoryTitles(_locale: EffectiveInterfaceLocale): Record<CategoryId, string> {
     return {
@@ -142,6 +158,14 @@
   onMount(() => {
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
+    if (!isSoftwareUpdateSupported()) {
+      updateState = {
+        status: 'unsupported',
+        message: t.softwareUpdateUnsupported(),
+      };
+    } else {
+      void refreshSoftwareUpdateSupport();
+    }
     void loadPreferences();
     window.addEventListener('focus', handleWindowFocus);
 
@@ -151,6 +175,9 @@
       }
       if (autoSaveTimer !== null) {
         window.clearTimeout(autoSaveTimer);
+      }
+      if (updateDecisionUnlisten) {
+        updateDecisionUnlisten();
       }
       window.removeEventListener('focus', handleWindowFocus);
     };
@@ -176,10 +203,7 @@
     }
 
     filesIntegrationStatusRequested = true;
-    await Promise.all([
-      refreshMarkdownAssociationStatus(),
-      refreshWindowsContextMenuStatus(),
-    ]);
+    await Promise.all([refreshMarkdownAssociationStatus(), refreshWindowsContextMenuStatus()]);
   }
 
   async function loadPreferences() {
@@ -292,6 +316,248 @@
     }, 1800);
   }
 
+  async function checkForSoftwareUpdate() {
+    if (['checking', 'downloading', 'installing'].includes(updateState.status)) {
+      return;
+    }
+
+    pendingSoftwareUpdate = null;
+    if (!isSoftwareUpdateSupported()) {
+      updateState = {
+        status: 'unsupported',
+        message: t.softwareUpdateUnsupported(),
+      };
+      return;
+    }
+
+    updateState = {
+      status: 'checking',
+      message: t.softwareUpdateChecking(),
+    };
+
+    try {
+      const result = await checkSoftwareUpdate();
+      if (!result.supported) {
+        updateState = {
+          status: 'unsupported',
+          message: t.softwareUpdateUnsupported(),
+        };
+        return;
+      }
+
+      if (!result.available || !result.update) {
+        updateState = {
+          status: 'upToDate',
+          message: t.softwareUpdateUpToDate(),
+        };
+        return;
+      }
+
+      pendingSoftwareUpdate = result.update;
+      updateState = {
+        status: 'available',
+        message: t.softwareUpdateAvailable({ version: result.version ?? '' }),
+        version: result.version,
+      };
+
+      await downloadSoftwareUpdate(result.update, (progress) => {
+        updateState = {
+          status: 'downloading',
+          message: getSoftwareUpdateDownloadMessage(progress),
+          version: result.version,
+          progress,
+        };
+      });
+
+      updateState = {
+        status: 'downloaded',
+        message: t.softwareUpdateDownloaded(),
+        version: result.version,
+        progress: updateState.progress,
+      };
+    } catch (error) {
+      pendingSoftwareUpdate = null;
+      updateState = {
+        status: 'error',
+        message: t.softwareUpdateFailed(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async function refreshSoftwareUpdateSupport() {
+    try {
+      if (!(await isSoftwareUpdateInstallerSupported())) {
+        updateState = {
+          status: 'unsupported',
+          message: t.softwareUpdateUnsupported(),
+        };
+      }
+    } catch {
+      updateState = {
+        status: 'unsupported',
+        message: t.softwareUpdateUnsupported(),
+      };
+    }
+  }
+
+  async function installDownloadedSoftwareUpdate() {
+    if (!pendingSoftwareUpdate || updateState.status !== 'downloaded') {
+      return;
+    }
+
+    try {
+      const approved = await requestUpdateInstallApproval();
+      if (!approved) {
+        updateState = {
+          ...updateState,
+          status: 'downloaded',
+          message: t.softwareUpdateWaitingInstall(),
+        };
+        return;
+      }
+
+      updateState = {
+        ...updateState,
+        status: 'installing',
+        message: t.softwareUpdateInstalling(),
+      };
+      await installSoftwareUpdate(pendingSoftwareUpdate);
+    } catch (error) {
+      updateState = {
+        ...updateState,
+        status: 'error',
+        message: t.softwareUpdateInstallFailed(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async function requestUpdateInstallApproval(): Promise<boolean> {
+    if (!desktopEnabled) {
+      return false;
+    }
+
+    const requestId = `update-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { emit, listen } = await import('@tauri-apps/api/event');
+
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      let timeoutId: number | null = null;
+
+      const settle = (approved: boolean) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        if (updateDecisionUnlisten) {
+          updateDecisionUnlisten();
+          updateDecisionUnlisten = null;
+        }
+        resolve(approved);
+      };
+
+      listen<{ requestId?: string; approved?: boolean }>(
+        'nomo://update-install-decision',
+        (event) => {
+          if (event.payload?.requestId !== requestId) {
+            return;
+          }
+          settle(Boolean(event.payload.approved));
+        },
+      )
+        .then((unlisten) => {
+          updateDecisionUnlisten = unlisten;
+          return emit('nomo://request-update-install', { requestId });
+        })
+        .catch(() => settle(false));
+
+      timeoutId = window.setTimeout(() => settle(false), 30_000);
+    });
+  }
+
+  function getSoftwareUpdateDownloadMessage(progress: SoftwareUpdateProgress) {
+    if (typeof progress.percent === 'number') {
+      return t.softwareUpdateDownloadingPercent({ percent: progress.percent });
+    }
+    return t.softwareUpdateDownloading();
+  }
+
+  function getSoftwareUpdateButtonLabel() {
+    if (updateState.status === 'checking') {
+      return t.softwareUpdateCheckingShort();
+    }
+    if (updateState.status === 'downloading') {
+      return t.softwareUpdateDownloadingShort();
+    }
+    if (updateState.status === 'downloaded') {
+      return t.softwareUpdateRestartAndInstall();
+    }
+    if (updateState.status === 'installing') {
+      return t.softwareUpdateInstallingShort();
+    }
+    return t.softwareUpdateCheckNow();
+  }
+
+  function getSoftwareUpdateDescription() {
+    if (updateState.error) {
+      return updateState.error;
+    }
+    return updateState.message || t.updateCheckDescription();
+  }
+
+  function getSoftwareUpdatePillLabel() {
+    if (updateState.status === 'upToDate') {
+      return t.softwareUpdateLatest();
+    }
+    if (updateState.status === 'downloaded') {
+      return t.softwareUpdateReady();
+    }
+    if (updateState.status === 'error') {
+      return t.checkFailed();
+    }
+    if (updateState.status === 'unsupported') {
+      return t.unsupported();
+    }
+    if (updateState.version) {
+      return `v${updateState.version}`;
+    }
+    return t.softwareUpdateManual();
+  }
+
+  function getSoftwareUpdatePillClass() {
+    if (updateState.status === 'upToDate' || updateState.status === 'downloaded') {
+      return 'bound';
+    }
+    if (updateState.status === 'error') {
+      return 'error';
+    }
+    if (updateState.status === 'available' || updateState.status === 'downloading') {
+      return 'pending';
+    }
+    return 'idle';
+  }
+
+  function isSoftwareUpdateButtonDisabled() {
+    return (
+      updateState.status === 'checking' ||
+      updateState.status === 'downloading' ||
+      updateState.status === 'installing' ||
+      updateState.status === 'unsupported'
+    );
+  }
+
+  function handleSoftwareUpdateButton() {
+    if (updateState.status === 'downloaded') {
+      void installDownloadedSoftwareUpdate();
+      return;
+    }
+    void checkForSoftwareUpdate();
+  }
+
   function updateDraft(patch: Partial<AppPreferences>) {
     const nextSettings = normalizeAppPreferences({
       ...draftSettings,
@@ -354,7 +620,10 @@
 
   function handleInterfaceLanguageChange(event: Event) {
     const nextLanguage = (event.currentTarget as HTMLSelectElement).value;
-    if (nextLanguage === 'system' || INTERFACE_LANGUAGE_OPTIONS.some((item) => item.value === nextLanguage)) {
+    if (
+      nextLanguage === 'system' ||
+      INTERFACE_LANGUAGE_OPTIONS.some((item) => item.value === nextLanguage)
+    ) {
       setInterfaceLanguage(nextLanguage as InterfaceLanguagePreference);
     }
   }
@@ -500,10 +769,7 @@
     if (checkingMdAssociation && !mdAssociationStatus) {
       return t.mdAssociationCheckingDescription();
     }
-    return (
-      mdAssociationStatus?.message ??
-      t.mdAssociationDefaultDescription()
-    );
+    return mdAssociationStatus?.message ?? t.mdAssociationDefaultDescription();
   }
 
   function getMarkdownAssociationButtonLabel() {
@@ -579,9 +845,7 @@
     if (checkingContextMenu && !contextMenuStatus) {
       return t.contextMenuCheckingDescription();
     }
-    return (
-      contextMenuStatus?.message ?? t.contextMenuDefaultDescription()
-    );
+    return contextMenuStatus?.message ?? t.contextMenuDefaultDescription();
   }
 
   function getContextMenuButtonLabel() {
@@ -617,7 +881,9 @@
     registeringContextMenu = true;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const result = await invoke<{ ok: boolean; message: string }>('register_windows_context_menu');
+      const result = await invoke<{ ok: boolean; message: string }>(
+        'register_windows_context_menu',
+      );
       showStatus(result.message);
       await refreshWindowsContextMenuStatus({ silent: true });
     } catch (error) {
@@ -659,900 +925,927 @@
 </svelte:head>
 
 {#key interfaceLocale}
-<div class="settings-window-shell" data-interface-locale={interfaceLocale}>
-  <aside class="settings-nav" aria-label={t.settingsTitle()}>
-    <div
-      class="settings-brand"
-      data-drag-region
-      role="presentation"
-      on:mousedown={handleWindowDrag}
-    >
-      <span class="settings-brand-logo" aria-hidden="true">
-        <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
-        <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
-      </span>
-      <span>{t.settingsTitle()}</span>
-    </div>
-
-    <nav>
-      {#each categories as category}
-        <button
-          type="button"
-          class:active={activeCategory === category.id}
-          aria-label={t[category.labelKey]()}
-          aria-current={activeCategory === category.id ? 'page' : undefined}
-          on:click={() => {
-            selectCategory(category.id);
-          }}
-        >
-          <svelte:component this={category.icon} size={16} aria-hidden="true" />
-          <span>{t[category.labelKey]()}</span>
-        </button>
-      {/each}
-    </nav>
-  </aside>
-
-  <section class="settings-main" aria-labelledby="settings-title">
-    <header
-      class="settings-header"
-      data-drag-region
-      role="presentation"
-      on:mousedown={handleWindowDrag}
-    >
-      <div class="settings-header-title" data-drag-region>
-        <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
-        <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
+  <div class="settings-window-shell" data-interface-locale={interfaceLocale}>
+    <aside class="settings-nav" aria-label={t.settingsTitle()}>
+      <div
+        class="settings-brand"
+        data-drag-region
+        role="presentation"
+        on:mousedown={handleWindowDrag}
+      >
+        <span class="settings-brand-logo" aria-hidden="true">
+          <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
+          <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
+        </span>
+        <span>{t.settingsTitle()}</span>
       </div>
-      {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
-        <div class="settings-window-controls" aria-label={t.windowControls()}>
+
+      <nav>
+        {#each categories as category}
           <button
             type="button"
-            class="settings-control-button"
-            title={t.minimize()}
-            aria-label={t.minimize()}
-            on:click={minimizeCurrentWindow}
+            class:active={activeCategory === category.id}
+            aria-label={t[category.labelKey]()}
+            aria-current={activeCategory === category.id ? 'page' : undefined}
+            on:click={() => {
+              selectCategory(category.id);
+            }}
           >
-            <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
-              <line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" stroke-width="1.5" />
-            </svg>
+            <svelte:component this={category.icon} size={16} aria-hidden="true" />
+            <span>{t[category.labelKey]()}</span>
           </button>
-          <button
-            type="button"
-            class="settings-control-button close"
-            title={t.close()}
-            aria-label={t.close()}
-            on:click={handleClose}
-          >
-            <X size={15} aria-hidden="true" />
-          </button>
+        {/each}
+      </nav>
+    </aside>
+
+    <section class="settings-main" aria-labelledby="settings-title">
+      <header
+        class="settings-header"
+        data-drag-region
+        role="presentation"
+        on:mousedown={handleWindowDrag}
+      >
+        <div class="settings-header-title" data-drag-region>
+          <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
+          <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
         </div>
-      {:else if !desktopEnabled}
-        <button type="button" class="close-button" aria-label={t.close()} on:click={handleClose}>
-          <X size={18} />
-        </button>
-      {/if}
-    </header>
-
-    {#if !loaded}
-      <div class="settings-loading" role="status">{t.settingsLoading()}</div>
-    {:else}
-      <div class="settings-content">
-        {#if activeCategory === 'general'}
-          <div class="settings-group">
-            <h2>{t.basicBehavior()}</h2>
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.theme()}</span>
-                <p>{t.themeDescription()}</p>
-              </div>
-              <div class="triple-control" role="group" aria-label={t.theme()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.theme === 'light'}
-                  aria-pressed={draftSettings.theme === 'light'}
-                  on:click={() => setTheme('light')}>{t.themeLight()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.theme === 'dark'}
-                  aria-pressed={draftSettings.theme === 'dark'}
-                  on:click={() => setTheme('dark')}>{t.themeDark()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.theme === 'system'}
-                  aria-pressed={draftSettings.theme === 'system'}
-                  on:click={() => setTheme('system')}>{t.themeSystem()}</button
-                >
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.editorModeDefault()}</span>
-                <p>{t.editorModeDefaultDescription()}</p>
-              </div>
-              <div class="segmented-control" role="group" aria-label={t.editorModeDefault()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.editorMode === 'semantic'}
-                  aria-pressed={draftSettings.editorMode === 'semantic'}
-                  on:click={() => setEditorMode('semantic')}>{t.semanticEditing()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.editorMode === 'source'}
-                  aria-pressed={draftSettings.editorMode === 'source'}
-                  on:click={() => setEditorMode('source')}>{t.sourceMode()}</button
-                >
-              </div>
-            </div>
-
-            <label class="toggle-row" for="autoSaveEnabled">
-              <span>
-                <span class="toggle-title">{t.autoSave()}</span>
-                <span class="toggle-desc">{t.autoSaveDescription()}</span>
-              </span>
-              <input
-                id="autoSaveEnabled"
-                type="checkbox"
-                checked={draftSettings.autoSaveEnabled}
-                on:change={(event) => toggleSetting('autoSaveEnabled', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="setting-row">
-              <div>
-                <label for="autoSaveDelayMs" class="setting-label">{t.autoSaveDelay()}</label>
-                <p>{t.autoSaveDelayDescription()}</p>
-              </div>
-              <div class="range-setting">
-                <input
-                  id="autoSaveDelayMs"
-                  type="range"
-                  min="500"
-                  max="5000"
-                  step="100"
-                  value={draftSettings.autoSaveDelayMs}
-                  on:input={(event) => updateNumberSetting('autoSaveDelayMs', event)}
-                />
-                <output for="autoSaveDelayMs">{draftSettings.autoSaveDelayMs}ms</output>
-              </div>
-            </div>
-
-            <label class="toggle-row" for="createSnapshotBeforeSave">
-              <span>
-                <span class="toggle-title">{t.createSnapshotBeforeSave()}</span>
-                <span class="toggle-desc">{t.createSnapshotBeforeSaveDescription()}</span>
-              </span>
-              <input
-                id="createSnapshotBeforeSave"
-                type="checkbox"
-                checked={draftSettings.createSnapshotBeforeSave}
-                on:change={(event) => toggleSetting('createSnapshotBeforeSave', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.interfaceLanguage()}</span>
-                <p>{t.interfaceLanguageDescription()}</p>
-              </div>
-              <select
-                class="select-input"
-                aria-label={t.interfaceLanguage()}
-                value={draftSettings.interfaceLanguage}
-                on:change={handleInterfaceLanguageChange}
-              >
-                {#each INTERFACE_LANGUAGE_OPTIONS as language}
-                  <option value={language.value}>{t[language.labelKey]()}</option>
-                {/each}
-              </select>
-            </div>
+        {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
+          <div class="settings-window-controls" aria-label={t.windowControls()}>
+            <button
+              type="button"
+              class="settings-control-button"
+              title={t.minimize()}
+              aria-label={t.minimize()}
+              on:click={minimizeCurrentWindow}
+            >
+              <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
+                <line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" stroke-width="1.5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="settings-control-button close"
+              title={t.close()}
+              aria-label={t.close()}
+              on:click={handleClose}
+            >
+              <X size={15} aria-hidden="true" />
+            </button>
           </div>
-        {:else if activeCategory === 'editor'}
-          <div class="settings-group">
-            <h2>{t.editorScale()}</h2>
-            <div class="setting-row">
-              <div>
-                <label for="fontSize" class="setting-label">{t.fontSize()}</label>
-                <p>{t.fontSizeDescription()}</p>
-              </div>
-              <div class="range-setting">
-                <input
-                  id="fontSize"
-                  type="range"
-                  min="14"
-                  max="22"
-                  step="1"
-                  value={draftSettings.fontSize}
-                  on:input={(event) => updateNumberSetting('fontSize', event)}
-                />
-                <output for="fontSize">{draftSettings.fontSize}px</output>
-              </div>
-            </div>
+        {:else if !desktopEnabled}
+          <button type="button" class="close-button" aria-label={t.close()} on:click={handleClose}>
+            <X size={18} />
+          </button>
+        {/if}
+      </header>
 
-            <div class="setting-row">
-              <div>
-                <label for="lineHeight" class="setting-label">{t.lineHeight()}</label>
-                <p>{t.lineHeightDescription()}</p>
-              </div>
-              <div class="range-setting">
-                <input
-                  id="lineHeight"
-                  type="range"
-                  min="1.4"
-                  max="2.1"
-                  step="0.05"
-                  value={draftSettings.lineHeight}
-                  on:input={(event) => updateNumberSetting('lineHeight', event)}
-                />
-                <output for="lineHeight">{draftSettings.lineHeight.toFixed(2)}</output>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <label for="contentWidthPercent" class="setting-label">{t.contentWidth()}</label>
-                <p>{t.contentWidthDescription()}</p>
-              </div>
-              <div class="range-setting">
-                <input
-                  id="contentWidthPercent"
-                  type="range"
-                  min="45"
-                  max="90"
-                  step="1"
-                  value={draftSettings.contentWidthPercent}
-                  on:input={(event) => updateNumberSetting('contentWidthPercent', event)}
-                />
-                <output for="contentWidthPercent">{draftSettings.contentWidthPercent}%</output>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.calloutStyle()}</span>
-                <p>{t.calloutStyleDescription()}</p>
-              </div>
-              <div class="segmented-control" role="group" aria-label={t.calloutStyle()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.blockStyle === 'classic'}
-                  aria-pressed={draftSettings.blockStyle === 'classic'}
-                  on:click={() => setBlockStyle('classic')}>{t.classic()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.blockStyle === 'modern'}
-                  aria-pressed={draftSettings.blockStyle === 'modern'}
-                  on:click={() => setBlockStyle('modern')}>{t.modern()}</button
-                >
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <label for="largeDocumentLimit" class="setting-label">{t.largeDocumentLimit()}</label>
-                <p>{t.largeDocumentLimitDescription()}</p>
-              </div>
-              <div class="number-field">
-                <input
-                  id="largeDocumentLimit"
-                  type="number"
-                  min="100000"
-                  max="1000000"
-                  step="10000"
-                  value={draftSettings.largeDocumentLimit}
-                  on:input={(event) => updateNumberSetting('largeDocumentLimit', event)}
-                />
-                <span>{t.charByte()}</span>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.defaultIndent()}</span>
-                <p>{t.defaultIndentDescription()}</p>
-              </div>
-              <div class="triple-control" role="group" aria-label={t.defaultIndent()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.codeBlockIndent === 'spaces-2'}
-                  aria-pressed={draftSettings.codeBlockIndent === 'spaces-2'}
-                  on:click={() => setCodeBlockIndent('spaces-2')}>{t.twoSpaces()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.codeBlockIndent === 'spaces-4'}
-                  aria-pressed={draftSettings.codeBlockIndent === 'spaces-4'}
-                  on:click={() => setCodeBlockIndent('spaces-4')}>{t.fourSpaces()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.codeBlockIndent === 'tab'}
-                  aria-pressed={draftSettings.codeBlockIndent === 'tab'}
-                  on:click={() => setCodeBlockIndent('tab')}>Tab</button
-                >
-              </div>
-            </div>
-
-            <label class="toggle-row" for="codeBlockLineNumbersVisible">
-              <span>
-                <span class="toggle-title">{t.codeBlockLineNumbers()}</span>
-                <span class="toggle-desc">{t.codeBlockLineNumbersDescription()}</span>
-              </span>
-              <input
-                id="codeBlockLineNumbersVisible"
-                type="checkbox"
-                checked={draftSettings.codeBlockLineNumbersVisible}
-                on:change={(event) => toggleSetting('codeBlockLineNumbersVisible', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <label class="toggle-row" for="inlineCodeRenderingEnabled">
-              <span>
-                <span class="toggle-title">{t.inlineCodeRendering()}</span>
-                <span class="toggle-desc">{t.inlineCodeRenderingDescription()}</span>
-              </span>
-              <input
-                id="inlineCodeRenderingEnabled"
-                type="checkbox"
-                checked={draftSettings.inlineCodeRenderingEnabled}
-                on:change={(event) => toggleSetting('inlineCodeRenderingEnabled', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-          </div>
-        {:else if activeCategory === 'appearance'}
-          <div class="settings-group">
-            <h2>{t.visualZoom()}</h2>
-            <div class="setting-row">
-              <div>
-                <label for="zoomPercent" class="setting-label">{t.zoomLevel()}</label>
-                <p>{t.zoomLevelDescription()}</p>
-              </div>
-              <div class="range-setting">
-                <input
-                  id="zoomPercent"
-                  type="range"
-                  min="80"
-                  max="160"
-                  step="5"
-                  value={draftSettings.zoomPercent}
-                  on:input={(event) => updateNumberSetting('zoomPercent', event)}
-                />
-                <output for="zoomPercent">{draftSettings.zoomPercent}%</output>
-              </div>
-            </div>
-
-            <label class="toggle-row" for="ctrlWheelZoomEnabled">
-              <span>
-                <span class="toggle-title">{t.ctrlWheelZoom()}</span>
-                <span class="toggle-desc">{t.ctrlWheelZoomDescription()}</span>
-              </span>
-              <input
-                id="ctrlWheelZoomEnabled"
-                type="checkbox"
-                checked={draftSettings.ctrlWheelZoomEnabled}
-                on:change={(event) => toggleSetting('ctrlWheelZoomEnabled', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="disabled-row" aria-disabled="true">
-              <div>
-                <span class="setting-label">{t.customCssTheme()}</span>
-                <p>{t.customCssThemeDescription()}</p>
-              </div>
-              <span class="disabled-pill">{t.futureVersionSupport()}</span>
-            </div>
-          </div>
-        {:else if activeCategory === 'files'}
-          <div class="settings-group">
-            <h2>{t.filesAndWindows()}</h2>
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.folderOpenDefaultBehavior()}</span>
-                <p>{t.folderOpenDefaultBehaviorDescription()}</p>
-              </div>
-              <div class="triple-control" role="group" aria-label={t.folderOpenDefaultBehavior()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
-                  aria-pressed={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
-                  on:click={() => setFolderBehavior('ask-every-time')}>{t.askEveryTime()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.folderOpenDefaultBehavior === 'current-window'}
-                  aria-pressed={draftSettings.folderOpenDefaultBehavior === 'current-window'}
-                  on:click={() => setFolderBehavior('current-window')}>{t.currentWindow()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.folderOpenDefaultBehavior === 'new-window'}
-                  aria-pressed={draftSettings.folderOpenDefaultBehavior === 'new-window'}
-                  on:click={() => setFolderBehavior('new-window')}>{t.newWindow()}</button
-                >
-              </div>
-            </div>
-
-            <label class="toggle-row" for="filePreviewEnabled">
-              <span>
-                <span class="toggle-title">{t.filePreviewTab()}</span>
-                <span class="toggle-desc">{t.filePreviewTabDescription()}</span>
-              </span>
-              <input
-                id="filePreviewEnabled"
-                type="checkbox"
-                checked={draftSettings.filePreviewEnabled}
-                on:change={(event) => toggleSetting('filePreviewEnabled', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <label class="toggle-row" for="sidebarHidden">
-              <span>
-                <span class="toggle-title">{t.hideExplorerOnLaunch()}</span>
-                <span class="toggle-desc">{t.hideExplorerOnLaunchDescription()}</span>
-              </span>
-              <input
-                id="sidebarHidden"
-                type="checkbox"
-                checked={draftSettings.sidebarHidden}
-                on:change={(event) => toggleSetting('sidebarHidden', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <label class="toggle-row" for="closeToTrayEnabled">
-              <span>
-                <span class="toggle-title">{t.closeToTray()}</span>
-                <span class="toggle-desc">{t.closeToTrayDescription()}</span>
-              </span>
-              <input
-                id="closeToTrayEnabled"
-                type="checkbox"
-                checked={draftSettings.closeToTrayEnabled}
-                on:change={(event) => toggleSetting('closeToTrayEnabled', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.bindMdDefaultApp()}</span>
-                <p>{getMarkdownAssociationDescription()}</p>
-              </div>
-              <div class="association-action">
-                <span class={`association-pill ${getMarkdownAssociationPillClass()}`}>
-                  {getMarkdownAssociationLabel()}
-                </span>
-                <button
-                  type="button"
-                  class="action-button"
-                  disabled={!desktopEnabled ||
-                    !platformCapabilities.isWindows ||
-                    bindingMdAssociation ||
-                    checkingMdAssociation ||
-                    mdAssociationStatus?.is_default}
-                  on:click={bindMarkdownAssociation}
-                >
-                  {getMarkdownAssociationButtonLabel()}
-                </button>
-              </div>
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.registerMdContextMenu()}</span>
-                <p>{getContextMenuDescription()}</p>
-              </div>
-              <div class="association-action">
-                <span class={`association-pill ${getContextMenuPillClass()}`}>
-                  {getContextMenuLabel()}
-                </span>
-                <button
-                  type="button"
-                  class="action-button"
-                  disabled={!desktopEnabled ||
-                    !platformCapabilities.isWindows ||
-                    registeringContextMenu ||
-                    checkingContextMenu ||
-                    contextMenuStatus?.registered}
-                  on:click={registerWindowsContextMenu}
-                >
-                  {getContextMenuButtonLabel()}
-                </button>
-              </div>
-            </div>
-          </div>
-        {:else if activeCategory === 'images'}
-          <div class="settings-group">
-            <h2>{t.imageImport()}</h2>
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.imageHandlingStrategy()}</span>
-                <p>{t.imageHandlingStrategyDescription()}</p>
-              </div>
-              <div class="quad-control" role="group" aria-label={t.imageHandlingStrategy()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-current-folder'}
-                  aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-current-folder'}
-                  on:click={() => setImageStrategy('copy-current-folder')}>{t.currentFolder()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-assets'}
-                  aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-assets'}
-                  on:click={() => setImageStrategy('copy-assets')}>{t.assetsFolder()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-document-assets'}
-                  aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'copy-document-assets'}
-                  on:click={() => setImageStrategy('copy-document-assets')}>{t.documentAssetsFolder()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'upload'}
-                  aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
-                    'upload'}
-                  on:click={() => setImageStrategy('upload')}>{t.upload()}</button
-                >
-              </div>
-            </div>
-
-            <label class="toggle-row" for="autoDeleteUnusedLocalImages">
-              <span>
-                <span class="toggle-title">{t.autoCleanLocalImages()}</span>
-                <span class="toggle-desc">{t.autoCleanLocalImagesDescription()}</span>
-              </span>
-              <input
-                id="autoDeleteUnusedLocalImages"
-                type="checkbox"
-                checked={draftSettings.imageHandlingSettings.autoDeleteUnusedLocalImages}
-                on:change={(event) => toggleImageSetting('autoDeleteUnusedLocalImages', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            {#if draftSettings.imageHandlingSettings.imageInsertStrategy === 'upload'}
+      {#if !loaded}
+        <div class="settings-loading" role="status">{t.settingsLoading()}</div>
+      {:else}
+        <div class="settings-content">
+          {#if activeCategory === 'general'}
+            <div class="settings-group">
+              <h2>{t.basicBehavior()}</h2>
               <div class="setting-row">
                 <div>
-                  <span class="setting-label">{t.uploadProvider()}</span>
-                  <p>{t.uploadProviderDescription()}</p>
+                  <span class="setting-label">{t.theme()}</span>
+                  <p>{t.themeDescription()}</p>
                 </div>
-                <div class="segmented-control" role="group" aria-label={t.uploadProvider()}>
+                <div class="triple-control" role="group" aria-label={t.theme()}>
                   <button
                     type="button"
-                    class:active={draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
-                    aria-pressed={draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
-                    on:click={() => setUploadProvider('picgo')}>PicGo</button
+                    class:active={draftSettings.theme === 'light'}
+                    aria-pressed={draftSettings.theme === 'light'}
+                    on:click={() => setTheme('light')}>{t.themeLight()}</button
                   >
                   <button
                     type="button"
-                    class:active={draftSettings.imageHandlingSettings.uploadProvider ===
-                      'picgo-core'}
-                    aria-pressed={draftSettings.imageHandlingSettings.uploadProvider ===
-                      'picgo-core'}
-                    on:click={() => setUploadProvider('picgo-core')}>PicGo-Core</button
+                    class:active={draftSettings.theme === 'dark'}
+                    aria-pressed={draftSettings.theme === 'dark'}
+                    on:click={() => setTheme('dark')}>{t.themeDark()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.theme === 'system'}
+                    aria-pressed={draftSettings.theme === 'system'}
+                    on:click={() => setTheme('system')}>{t.themeSystem()}</button
                   >
                 </div>
               </div>
 
-              {#if draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
-                <div class="setting-row">
-                  <div>
-                    <label for="picgoServerUrl" class="setting-label">{t.picgoServerUrl()}</label>
-                    <p>{t.picgoServerUrlDescription()}</p>
-                  </div>
-                  <input
-                    id="picgoServerUrl"
-                    class="text-input"
-                    type="url"
-                    value={draftSettings.imageHandlingSettings.picgoServerUrl}
-                    on:input={(event) => updateImageStringSetting('picgoServerUrl', event)}
-                  />
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.editorModeDefault()}</span>
+                  <p>{t.editorModeDefaultDescription()}</p>
                 </div>
-              {:else}
-                <div class="setting-row">
-                  <div>
-                    <label for="picgoCoreCommand" class="setting-label">{t.picgoCoreCommand()}</label>
-                    <p>{t.picgoCoreCommandDescription()}</p>
-                  </div>
-                  <input
-                    id="picgoCoreCommand"
-                    class="text-input"
-                    type="text"
-                    value={draftSettings.imageHandlingSettings.picgoCoreCommand}
-                    on:input={(event) => updateImageStringSetting('picgoCoreCommand', event)}
-                  />
+                <div class="segmented-control" role="group" aria-label={t.editorModeDefault()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.editorMode === 'semantic'}
+                    aria-pressed={draftSettings.editorMode === 'semantic'}
+                    on:click={() => setEditorMode('semantic')}>{t.semanticEditing()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.editorMode === 'source'}
+                    aria-pressed={draftSettings.editorMode === 'source'}
+                    on:click={() => setEditorMode('source')}>{t.sourceMode()}</button
+                  >
                 </div>
+              </div>
+
+              <label class="toggle-row" for="autoSaveEnabled">
+                <span>
+                  <span class="toggle-title">{t.autoSave()}</span>
+                  <span class="toggle-desc">{t.autoSaveDescription()}</span>
+                </span>
+                <input
+                  id="autoSaveEnabled"
+                  type="checkbox"
+                  checked={draftSettings.autoSaveEnabled}
+                  on:change={(event) => toggleSetting('autoSaveEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row">
+                <div>
+                  <label for="autoSaveDelayMs" class="setting-label">{t.autoSaveDelay()}</label>
+                  <p>{t.autoSaveDelayDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="autoSaveDelayMs"
+                    type="range"
+                    min="500"
+                    max="5000"
+                    step="100"
+                    value={draftSettings.autoSaveDelayMs}
+                    on:input={(event) => updateNumberSetting('autoSaveDelayMs', event)}
+                  />
+                  <output for="autoSaveDelayMs">{draftSettings.autoSaveDelayMs}ms</output>
+                </div>
+              </div>
+
+              <label class="toggle-row" for="createSnapshotBeforeSave">
+                <span>
+                  <span class="toggle-title">{t.createSnapshotBeforeSave()}</span>
+                  <span class="toggle-desc">{t.createSnapshotBeforeSaveDescription()}</span>
+                </span>
+                <input
+                  id="createSnapshotBeforeSave"
+                  type="checkbox"
+                  checked={draftSettings.createSnapshotBeforeSave}
+                  on:change={(event) => toggleSetting('createSnapshotBeforeSave', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.interfaceLanguage()}</span>
+                  <p>{t.interfaceLanguageDescription()}</p>
+                </div>
+                <select
+                  class="select-input"
+                  aria-label={t.interfaceLanguage()}
+                  value={draftSettings.interfaceLanguage}
+                  on:change={handleInterfaceLanguageChange}
+                >
+                  {#each INTERFACE_LANGUAGE_OPTIONS as language}
+                    <option value={language.value}>{t[language.labelKey]()}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+          {:else if activeCategory === 'editor'}
+            <div class="settings-group">
+              <h2>{t.editorScale()}</h2>
+              <div class="setting-row">
+                <div>
+                  <label for="fontSize" class="setting-label">{t.fontSize()}</label>
+                  <p>{t.fontSizeDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="fontSize"
+                    type="range"
+                    min="14"
+                    max="22"
+                    step="1"
+                    value={draftSettings.fontSize}
+                    on:input={(event) => updateNumberSetting('fontSize', event)}
+                  />
+                  <output for="fontSize">{draftSettings.fontSize}px</output>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="lineHeight" class="setting-label">{t.lineHeight()}</label>
+                  <p>{t.lineHeightDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="lineHeight"
+                    type="range"
+                    min="1.4"
+                    max="2.1"
+                    step="0.05"
+                    value={draftSettings.lineHeight}
+                    on:input={(event) => updateNumberSetting('lineHeight', event)}
+                  />
+                  <output for="lineHeight">{draftSettings.lineHeight.toFixed(2)}</output>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="contentWidthPercent" class="setting-label">{t.contentWidth()}</label>
+                  <p>{t.contentWidthDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="contentWidthPercent"
+                    type="range"
+                    min="45"
+                    max="90"
+                    step="1"
+                    value={draftSettings.contentWidthPercent}
+                    on:input={(event) => updateNumberSetting('contentWidthPercent', event)}
+                  />
+                  <output for="contentWidthPercent">{draftSettings.contentWidthPercent}%</output>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.calloutStyle()}</span>
+                  <p>{t.calloutStyleDescription()}</p>
+                </div>
+                <div class="segmented-control" role="group" aria-label={t.calloutStyle()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.blockStyle === 'classic'}
+                    aria-pressed={draftSettings.blockStyle === 'classic'}
+                    on:click={() => setBlockStyle('classic')}>{t.classic()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.blockStyle === 'modern'}
+                    aria-pressed={draftSettings.blockStyle === 'modern'}
+                    on:click={() => setBlockStyle('modern')}>{t.modern()}</button
+                  >
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="largeDocumentLimit" class="setting-label"
+                    >{t.largeDocumentLimit()}</label
+                  >
+                  <p>{t.largeDocumentLimitDescription()}</p>
+                </div>
+                <div class="number-field">
+                  <input
+                    id="largeDocumentLimit"
+                    type="number"
+                    min="100000"
+                    max="1000000"
+                    step="10000"
+                    value={draftSettings.largeDocumentLimit}
+                    on:input={(event) => updateNumberSetting('largeDocumentLimit', event)}
+                  />
+                  <span>{t.charByte()}</span>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.defaultIndent()}</span>
+                  <p>{t.defaultIndentDescription()}</p>
+                </div>
+                <div class="triple-control" role="group" aria-label={t.defaultIndent()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.codeBlockIndent === 'spaces-2'}
+                    aria-pressed={draftSettings.codeBlockIndent === 'spaces-2'}
+                    on:click={() => setCodeBlockIndent('spaces-2')}>{t.twoSpaces()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.codeBlockIndent === 'spaces-4'}
+                    aria-pressed={draftSettings.codeBlockIndent === 'spaces-4'}
+                    on:click={() => setCodeBlockIndent('spaces-4')}>{t.fourSpaces()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.codeBlockIndent === 'tab'}
+                    aria-pressed={draftSettings.codeBlockIndent === 'tab'}
+                    on:click={() => setCodeBlockIndent('tab')}>Tab</button
+                  >
+                </div>
+              </div>
+
+              <label class="toggle-row" for="codeBlockLineNumbersVisible">
+                <span>
+                  <span class="toggle-title">{t.codeBlockLineNumbers()}</span>
+                  <span class="toggle-desc">{t.codeBlockLineNumbersDescription()}</span>
+                </span>
+                <input
+                  id="codeBlockLineNumbersVisible"
+                  type="checkbox"
+                  checked={draftSettings.codeBlockLineNumbersVisible}
+                  on:change={(event) => toggleSetting('codeBlockLineNumbersVisible', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <label class="toggle-row" for="inlineCodeRenderingEnabled">
+                <span>
+                  <span class="toggle-title">{t.inlineCodeRendering()}</span>
+                  <span class="toggle-desc">{t.inlineCodeRenderingDescription()}</span>
+                </span>
+                <input
+                  id="inlineCodeRenderingEnabled"
+                  type="checkbox"
+                  checked={draftSettings.inlineCodeRenderingEnabled}
+                  on:change={(event) => toggleSetting('inlineCodeRenderingEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+            </div>
+          {:else if activeCategory === 'appearance'}
+            <div class="settings-group">
+              <h2>{t.visualZoom()}</h2>
+              <div class="setting-row">
+                <div>
+                  <label for="zoomPercent" class="setting-label">{t.zoomLevel()}</label>
+                  <p>{t.zoomLevelDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="zoomPercent"
+                    type="range"
+                    min="80"
+                    max="160"
+                    step="5"
+                    value={draftSettings.zoomPercent}
+                    on:input={(event) => updateNumberSetting('zoomPercent', event)}
+                  />
+                  <output for="zoomPercent">{draftSettings.zoomPercent}%</output>
+                </div>
+              </div>
+
+              <label class="toggle-row" for="ctrlWheelZoomEnabled">
+                <span>
+                  <span class="toggle-title">{t.ctrlWheelZoom()}</span>
+                  <span class="toggle-desc">{t.ctrlWheelZoomDescription()}</span>
+                </span>
+                <input
+                  id="ctrlWheelZoomEnabled"
+                  type="checkbox"
+                  checked={draftSettings.ctrlWheelZoomEnabled}
+                  on:change={(event) => toggleSetting('ctrlWheelZoomEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="disabled-row" aria-disabled="true">
+                <div>
+                  <span class="setting-label">{t.customCssTheme()}</span>
+                  <p>{t.customCssThemeDescription()}</p>
+                </div>
+                <span class="disabled-pill">{t.futureVersionSupport()}</span>
+              </div>
+            </div>
+          {:else if activeCategory === 'files'}
+            <div class="settings-group">
+              <h2>{t.filesAndWindows()}</h2>
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.folderOpenDefaultBehavior()}</span>
+                  <p>{t.folderOpenDefaultBehaviorDescription()}</p>
+                </div>
+                <div class="triple-control" role="group" aria-label={t.folderOpenDefaultBehavior()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
+                    aria-pressed={draftSettings.folderOpenDefaultBehavior === 'ask-every-time'}
+                    on:click={() => setFolderBehavior('ask-every-time')}>{t.askEveryTime()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.folderOpenDefaultBehavior === 'current-window'}
+                    aria-pressed={draftSettings.folderOpenDefaultBehavior === 'current-window'}
+                    on:click={() => setFolderBehavior('current-window')}>{t.currentWindow()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.folderOpenDefaultBehavior === 'new-window'}
+                    aria-pressed={draftSettings.folderOpenDefaultBehavior === 'new-window'}
+                    on:click={() => setFolderBehavior('new-window')}>{t.newWindow()}</button
+                  >
+                </div>
+              </div>
+
+              <label class="toggle-row" for="filePreviewEnabled">
+                <span>
+                  <span class="toggle-title">{t.filePreviewTab()}</span>
+                  <span class="toggle-desc">{t.filePreviewTabDescription()}</span>
+                </span>
+                <input
+                  id="filePreviewEnabled"
+                  type="checkbox"
+                  checked={draftSettings.filePreviewEnabled}
+                  on:change={(event) => toggleSetting('filePreviewEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <label class="toggle-row" for="sidebarHidden">
+                <span>
+                  <span class="toggle-title">{t.hideExplorerOnLaunch()}</span>
+                  <span class="toggle-desc">{t.hideExplorerOnLaunchDescription()}</span>
+                </span>
+                <input
+                  id="sidebarHidden"
+                  type="checkbox"
+                  checked={draftSettings.sidebarHidden}
+                  on:change={(event) => toggleSetting('sidebarHidden', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <label class="toggle-row" for="closeToTrayEnabled">
+                <span>
+                  <span class="toggle-title">{t.closeToTray()}</span>
+                  <span class="toggle-desc">{t.closeToTrayDescription()}</span>
+                </span>
+                <input
+                  id="closeToTrayEnabled"
+                  type="checkbox"
+                  checked={draftSettings.closeToTrayEnabled}
+                  on:change={(event) => toggleSetting('closeToTrayEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.bindMdDefaultApp()}</span>
+                  <p>{getMarkdownAssociationDescription()}</p>
+                </div>
+                <div class="association-action">
+                  <span class={`association-pill ${getMarkdownAssociationPillClass()}`}>
+                    {getMarkdownAssociationLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    class="action-button"
+                    disabled={!desktopEnabled ||
+                      !platformCapabilities.isWindows ||
+                      bindingMdAssociation ||
+                      checkingMdAssociation ||
+                      mdAssociationStatus?.is_default}
+                    on:click={bindMarkdownAssociation}
+                  >
+                    {getMarkdownAssociationButtonLabel()}
+                  </button>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.registerMdContextMenu()}</span>
+                  <p>{getContextMenuDescription()}</p>
+                </div>
+                <div class="association-action">
+                  <span class={`association-pill ${getContextMenuPillClass()}`}>
+                    {getContextMenuLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    class="action-button"
+                    disabled={!desktopEnabled ||
+                      !platformCapabilities.isWindows ||
+                      registeringContextMenu ||
+                      checkingContextMenu ||
+                      contextMenuStatus?.registered}
+                    on:click={registerWindowsContextMenu}
+                  >
+                    {getContextMenuButtonLabel()}
+                  </button>
+                </div>
+              </div>
+            </div>
+          {:else if activeCategory === 'images'}
+            <div class="settings-group">
+              <h2>{t.imageImport()}</h2>
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.imageHandlingStrategy()}</span>
+                  <p>{t.imageHandlingStrategyDescription()}</p>
+                </div>
+                <div class="quad-control" role="group" aria-label={t.imageHandlingStrategy()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-current-folder'}
+                    aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-current-folder'}
+                    on:click={() => setImageStrategy('copy-current-folder')}
+                    >{t.currentFolder()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-assets'}
+                    aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-assets'}
+                    on:click={() => setImageStrategy('copy-assets')}>{t.assetsFolder()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-document-assets'}
+                    aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'copy-document-assets'}
+                    on:click={() => setImageStrategy('copy-document-assets')}
+                    >{t.documentAssetsFolder()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'upload'}
+                    aria-pressed={draftSettings.imageHandlingSettings.imageInsertStrategy ===
+                      'upload'}
+                    on:click={() => setImageStrategy('upload')}>{t.upload()}</button
+                  >
+                </div>
+              </div>
+
+              <label class="toggle-row" for="autoDeleteUnusedLocalImages">
+                <span>
+                  <span class="toggle-title">{t.autoCleanLocalImages()}</span>
+                  <span class="toggle-desc">{t.autoCleanLocalImagesDescription()}</span>
+                </span>
+                <input
+                  id="autoDeleteUnusedLocalImages"
+                  type="checkbox"
+                  checked={draftSettings.imageHandlingSettings.autoDeleteUnusedLocalImages}
+                  on:change={(event) => toggleImageSetting('autoDeleteUnusedLocalImages', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              {#if draftSettings.imageHandlingSettings.imageInsertStrategy === 'upload'}
                 <div class="setting-row">
                   <div>
-                    <label for="picgoCoreConfigPath" class="setting-label"
-                      >{t.picgoCoreConfigPath()}</label
+                    <span class="setting-label">{t.uploadProvider()}</span>
+                    <p>{t.uploadProviderDescription()}</p>
+                  </div>
+                  <div class="segmented-control" role="group" aria-label={t.uploadProvider()}>
+                    <button
+                      type="button"
+                      class:active={draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
+                      aria-pressed={draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
+                      on:click={() => setUploadProvider('picgo')}>PicGo</button
                     >
-                    <p>{t.picgoCoreConfigPathDescription()}</p>
+                    <button
+                      type="button"
+                      class:active={draftSettings.imageHandlingSettings.uploadProvider ===
+                        'picgo-core'}
+                      aria-pressed={draftSettings.imageHandlingSettings.uploadProvider ===
+                        'picgo-core'}
+                      on:click={() => setUploadProvider('picgo-core')}>PicGo-Core</button
+                    >
                   </div>
-                  <input
-                    id="picgoCoreConfigPath"
-                    class="text-input"
-                    type="text"
-                    value={draftSettings.imageHandlingSettings.picgoCoreConfigPath}
-                    on:input={(event) => updateImageStringSetting('picgoCoreConfigPath', event)}
-                  />
+                </div>
+
+                {#if draftSettings.imageHandlingSettings.uploadProvider === 'picgo'}
+                  <div class="setting-row">
+                    <div>
+                      <label for="picgoServerUrl" class="setting-label">{t.picgoServerUrl()}</label>
+                      <p>{t.picgoServerUrlDescription()}</p>
+                    </div>
+                    <input
+                      id="picgoServerUrl"
+                      class="text-input"
+                      type="url"
+                      value={draftSettings.imageHandlingSettings.picgoServerUrl}
+                      on:input={(event) => updateImageStringSetting('picgoServerUrl', event)}
+                    />
+                  </div>
+                {:else}
+                  <div class="setting-row">
+                    <div>
+                      <label for="picgoCoreCommand" class="setting-label"
+                        >{t.picgoCoreCommand()}</label
+                      >
+                      <p>{t.picgoCoreCommandDescription()}</p>
+                    </div>
+                    <input
+                      id="picgoCoreCommand"
+                      class="text-input"
+                      type="text"
+                      value={draftSettings.imageHandlingSettings.picgoCoreCommand}
+                      on:input={(event) => updateImageStringSetting('picgoCoreCommand', event)}
+                    />
+                  </div>
+                  <div class="setting-row">
+                    <div>
+                      <label for="picgoCoreConfigPath" class="setting-label"
+                        >{t.picgoCoreConfigPath()}</label
+                      >
+                      <p>{t.picgoCoreConfigPathDescription()}</p>
+                    </div>
+                    <input
+                      id="picgoCoreConfigPath"
+                      class="text-input"
+                      type="text"
+                      value={draftSettings.imageHandlingSettings.picgoCoreConfigPath}
+                      on:input={(event) => updateImageStringSetting('picgoCoreConfigPath', event)}
+                    />
+                  </div>
+                {/if}
+                <div class="setting-row">
+                  <div>
+                    <span class="setting-label">{t.connectionTest()}</span>
+                    <p>{t.connectionTestDescription()}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="action-button"
+                    disabled={!desktopEnabled || picgoTesting}
+                    on:click={testPicgoConnection}
+                  >
+                    {picgoTesting ? t.testing() : t.testConnection()}
+                  </button>
                 </div>
               {/if}
+
               <div class="setting-row">
                 <div>
-                  <span class="setting-label">{t.connectionTest()}</span>
-                  <p>{t.connectionTestDescription()}</p>
+                  <label for="defaultImageWidth" class="setting-label"
+                    >{t.imageDefaultWidth()}</label
+                  >
+                  <p>{t.imageDefaultWidthDescription()}</p>
                 </div>
-                <button
-                  type="button"
-                  class="action-button"
-                  disabled={!desktopEnabled || picgoTesting}
-                  on:click={testPicgoConnection}
-                >
-                  {picgoTesting ? t.testing() : t.testConnection()}
-                </button>
-              </div>
-            {/if}
-
-            <div class="setting-row">
-              <div>
-                <label for="defaultImageWidth" class="setting-label">{t.imageDefaultWidth()}</label>
-                <p>{t.imageDefaultWidthDescription()}</p>
-              </div>
-              <input
-                id="defaultImageWidth"
-                class="text-input compact"
-                type="text"
-                placeholder={t.emptyPlaceholder()}
-                value={draftSettings.imageHandlingSettings.defaultImageWidth}
-                on:input={(event) => updateImageStringSetting('defaultImageWidth', event)}
-              />
-            </div>
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.imageDefaultAlign()}</span>
-                <p>{t.imageDefaultAlignDescription()}</p>
-              </div>
-              <div class="quad-control" role="group" aria-label={t.imageDefaultAlign()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
-                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
-                  on:click={() => setImageDefaultAlign('none')}>{t.followText()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
-                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
-                  on:click={() => setImageDefaultAlign('left')}>{t.alignLeft()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
-                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'center'}
-                  on:click={() => setImageDefaultAlign('center')}>{t.alignCenter()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
-                  aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
-                  on:click={() => setImageDefaultAlign('right')}>{t.alignRight()}</button
-                >
-              </div>
-            </div>
-          </div>
-        {:else if activeCategory === 'stats'}
-          <div class="settings-group">
-            <h2>{t.statsAndNavigation()}</h2>
-            <label class="toggle-row" for="outlineVisible">
-              <span>
-                <span class="toggle-title">{t.showDocumentOutline()}</span>
-                <span class="toggle-desc">{t.showDocumentOutlineDescription()}</span>
-              </span>
-              <input
-                id="outlineVisible"
-                type="checkbox"
-                checked={draftSettings.outlineVisible}
-                on:change={(event) => toggleSetting('outlineVisible', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <label class="toggle-row" for="writingStatsVisible">
-              <span>
-                <span class="toggle-title">{t.showDocumentStats()}</span>
-                <span class="toggle-desc">{t.showDocumentStatsDescription()}</span>
-              </span>
-              <input
-                id="writingStatsVisible"
-                type="checkbox"
-                checked={draftSettings.writingStatsVisible}
-                on:change={(event) => toggleSetting('writingStatsVisible', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="setting-row">
-              <div>
-                <span class="setting-label">{t.defaultStatsMetric()}</span>
-                <p>{t.defaultStatsMetricDescription()}</p>
-              </div>
-              <div class="triple-control" role="group" aria-label={t.defaultStatsMetric()}>
-                <button
-                  type="button"
-                  class:active={draftSettings.writingStatsMetric === 'lines'}
-                  aria-pressed={draftSettings.writingStatsMetric === 'lines'}
-                  on:click={() => setStatsMetric('lines')}>{t.lines()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.writingStatsMetric === 'words'}
-                  aria-pressed={draftSettings.writingStatsMetric === 'words'}
-                  on:click={() => setStatsMetric('words')}>{t.words()}</button
-                >
-                <button
-                  type="button"
-                  class:active={draftSettings.writingStatsMetric === 'chars'}
-                  aria-pressed={draftSettings.writingStatsMetric === 'chars'}
-                  on:click={() => setStatsMetric('chars')}>{t.chars()}</button
-                >
-              </div>
-            </div>
-
-            <label class="toggle-row" for="readingTimeVisible">
-              <span>
-                <span class="toggle-title">{t.readingTime()}</span>
-                <span class="toggle-desc">{t.readingTimeDescription()}</span>
-              </span>
-              <input
-                id="readingTimeVisible"
-                type="checkbox"
-                checked={draftSettings.readingTimeVisible}
-                on:change={(event) => toggleSetting('readingTimeVisible', event)}
-              />
-              <span class="toggle-switch" aria-hidden="true"></span>
-            </label>
-
-            <div class="setting-row">
-              <div>
-                <label for="outlineDefaultExpandLevel" class="setting-label">{t.outlineDefaultExpandLevel()}</label
-                >
-                <p>{t.outlineDefaultExpandLevelDescription()}</p>
-              </div>
-              <div class="range-setting">
                 <input
-                  id="outlineDefaultExpandLevel"
-                  type="range"
-                  min="1"
-                  max="6"
-                  step="1"
-                  value={draftSettings.outlineDefaultExpandLevel}
-                  on:input={(event) => updateNumberSetting('outlineDefaultExpandLevel', event)}
+                  id="defaultImageWidth"
+                  class="text-input compact"
+                  type="text"
+                  placeholder={t.emptyPlaceholder()}
+                  value={draftSettings.imageHandlingSettings.defaultImageWidth}
+                  on:input={(event) => updateImageStringSetting('defaultImageWidth', event)}
                 />
-                <output for="outlineDefaultExpandLevel"
-                  >H{draftSettings.outlineDefaultExpandLevel}</output
-                >
               </div>
-            </div>
-          </div>
-        {:else if activeCategory === 'advanced'}
-          <div class="settings-group">
-            <h2>{t.defaultInsertBehavior()}</h2>
-            <div class="setting-row">
-              <div>
-                <label for="defaultCodeBlockLanguage" class="setting-label">{t.defaultCodeBlockLanguage()}</label>
-                <p>{t.defaultCodeBlockLanguageDescription()}</p>
-              </div>
-              <input
-                id="defaultCodeBlockLanguage"
-                class="text-input compact"
-                type="text"
-                spellcheck="false"
-                value={draftSettings.defaultCodeBlockLanguage}
-                on:input={(event) => updateStringSetting('defaultCodeBlockLanguage', event)}
-              />
-            </div>
-
-            <div class="setting-row">
-              <div>
-                <label for="defaultDiagramType" class="setting-label">{t.defaultDiagramType()}</label>
-                <p>{t.defaultDiagramTypeDescription()}</p>
-              </div>
-              <select
-                id="defaultDiagramType"
-                class="select-input"
-                value={draftSettings.defaultDiagramType}
-                on:change={(event) => updateStringSetting('defaultDiagramType', event)}
-              >
-                {#each DIAGRAM_TEMPLATES as template}
-                  <option value={template.type}>{getDiagramTypeLabel(template.type)}</option>
-                {/each}
-              </select>
-            </div>
-
-            <div class="shortcut-settings">
-              <h2>{t.customShortcuts()}</h2>
-              {#each shortcutItems as shortcut}
-                <div class="setting-row compact-row">
-                  <div>
-                    <label for={`shortcut-${shortcut.id}`} class="setting-label"
-                      >{t[shortcut.labelKey]()}</label
-                    >
-                    <p>{t.shortcutDescription()}</p>
-                  </div>
-                  <input
-                    id={`shortcut-${shortcut.id}`}
-                    class="text-input compact"
-                    type="text"
-                    spellcheck="false"
-                    value={draftSettings.shortcutPreferences[shortcut.id]}
-                    on:input={(event) => updateShortcut(shortcut.id, event)}
-                  />
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.imageDefaultAlign()}</span>
+                  <p>{t.imageDefaultAlignDescription()}</p>
                 </div>
-              {/each}
+                <div class="quad-control" role="group" aria-label={t.imageDefaultAlign()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
+                    aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'none'}
+                    on:click={() => setImageDefaultAlign('none')}>{t.followText()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
+                    aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'left'}
+                    on:click={() => setImageDefaultAlign('left')}>{t.alignLeft()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.defaultImageAlign ===
+                      'center'}
+                    aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign ===
+                      'center'}
+                    on:click={() => setImageDefaultAlign('center')}>{t.alignCenter()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
+                    aria-pressed={draftSettings.imageHandlingSettings.defaultImageAlign === 'right'}
+                    on:click={() => setImageDefaultAlign('right')}>{t.alignRight()}</button
+                  >
+                </div>
+              </div>
             </div>
-            <div class="disabled-row" aria-disabled="true">
-              <div>
-                <span class="setting-label">{t.exportSettings()}</span>
-                <p>{t.exportSettingsDescription()}</p>
-              </div>
-              <span class="disabled-pill">{t.futureVersionSupport()}</span>
-            </div>
-          </div>
-        {:else if activeCategory === 'about'}
-          <div class="settings-group about-group">
-            <h2>Nomo</h2>
-            <div class="about-mark" aria-label="Nomo">
-              <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
-              <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
-            </div>
-            <dl>
-              <div>
-                <dt>{t.version()}</dt>
-                <dd>{packageInfo.version}</dd>
-              </div>
-              <div>
-                <dt>{t.positioning()}</dt>
-                <dd>{t.positioningDescription()}</dd>
-              </div>
-              <div>
-                <dt>{t.platformStrategy()}</dt>
-                <dd>{t.platformStrategyDescription()}</dd>
-              </div>
-            </dl>
+          {:else if activeCategory === 'stats'}
+            <div class="settings-group">
+              <h2>{t.statsAndNavigation()}</h2>
+              <label class="toggle-row" for="outlineVisible">
+                <span>
+                  <span class="toggle-title">{t.showDocumentOutline()}</span>
+                  <span class="toggle-desc">{t.showDocumentOutlineDescription()}</span>
+                </span>
+                <input
+                  id="outlineVisible"
+                  type="checkbox"
+                  checked={draftSettings.outlineVisible}
+                  on:change={(event) => toggleSetting('outlineVisible', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
 
-            <div class="disabled-row" aria-disabled="true">
-              <div>
-                <span class="setting-label">{t.updateCheck()}</span>
-                <p>{t.updateCheckDescription()}</p>
+              <label class="toggle-row" for="writingStatsVisible">
+                <span>
+                  <span class="toggle-title">{t.showDocumentStats()}</span>
+                  <span class="toggle-desc">{t.showDocumentStatsDescription()}</span>
+                </span>
+                <input
+                  id="writingStatsVisible"
+                  type="checkbox"
+                  checked={draftSettings.writingStatsVisible}
+                  on:change={(event) => toggleSetting('writingStatsVisible', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.defaultStatsMetric()}</span>
+                  <p>{t.defaultStatsMetricDescription()}</p>
+                </div>
+                <div class="triple-control" role="group" aria-label={t.defaultStatsMetric()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.writingStatsMetric === 'lines'}
+                    aria-pressed={draftSettings.writingStatsMetric === 'lines'}
+                    on:click={() => setStatsMetric('lines')}>{t.lines()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.writingStatsMetric === 'words'}
+                    aria-pressed={draftSettings.writingStatsMetric === 'words'}
+                    on:click={() => setStatsMetric('words')}>{t.words()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.writingStatsMetric === 'chars'}
+                    aria-pressed={draftSettings.writingStatsMetric === 'chars'}
+                    on:click={() => setStatsMetric('chars')}>{t.chars()}</button
+                  >
+                </div>
               </div>
-              <span class="disabled-pill">{t.futureVersionSupport()}</span>
+
+              <label class="toggle-row" for="readingTimeVisible">
+                <span>
+                  <span class="toggle-title">{t.readingTime()}</span>
+                  <span class="toggle-desc">{t.readingTimeDescription()}</span>
+                </span>
+                <input
+                  id="readingTimeVisible"
+                  type="checkbox"
+                  checked={draftSettings.readingTimeVisible}
+                  on:change={(event) => toggleSetting('readingTimeVisible', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row">
+                <div>
+                  <label for="outlineDefaultExpandLevel" class="setting-label"
+                    >{t.outlineDefaultExpandLevel()}</label
+                  >
+                  <p>{t.outlineDefaultExpandLevelDescription()}</p>
+                </div>
+                <div class="range-setting">
+                  <input
+                    id="outlineDefaultExpandLevel"
+                    type="range"
+                    min="1"
+                    max="6"
+                    step="1"
+                    value={draftSettings.outlineDefaultExpandLevel}
+                    on:input={(event) => updateNumberSetting('outlineDefaultExpandLevel', event)}
+                  />
+                  <output for="outlineDefaultExpandLevel"
+                    >H{draftSettings.outlineDefaultExpandLevel}</output
+                  >
+                </div>
+              </div>
             </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </section>
-</div>
+          {:else if activeCategory === 'advanced'}
+            <div class="settings-group">
+              <h2>{t.defaultInsertBehavior()}</h2>
+              <div class="setting-row">
+                <div>
+                  <label for="defaultCodeBlockLanguage" class="setting-label"
+                    >{t.defaultCodeBlockLanguage()}</label
+                  >
+                  <p>{t.defaultCodeBlockLanguageDescription()}</p>
+                </div>
+                <input
+                  id="defaultCodeBlockLanguage"
+                  class="text-input compact"
+                  type="text"
+                  spellcheck="false"
+                  value={draftSettings.defaultCodeBlockLanguage}
+                  on:input={(event) => updateStringSetting('defaultCodeBlockLanguage', event)}
+                />
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <label for="defaultDiagramType" class="setting-label"
+                    >{t.defaultDiagramType()}</label
+                  >
+                  <p>{t.defaultDiagramTypeDescription()}</p>
+                </div>
+                <select
+                  id="defaultDiagramType"
+                  class="select-input"
+                  value={draftSettings.defaultDiagramType}
+                  on:change={(event) => updateStringSetting('defaultDiagramType', event)}
+                >
+                  {#each DIAGRAM_TEMPLATES as template}
+                    <option value={template.type}>{getDiagramTypeLabel(template.type)}</option>
+                  {/each}
+                </select>
+              </div>
+
+              <div class="shortcut-settings">
+                <h2>{t.customShortcuts()}</h2>
+                {#each shortcutItems as shortcut}
+                  <div class="setting-row compact-row">
+                    <div>
+                      <label for={`shortcut-${shortcut.id}`} class="setting-label"
+                        >{t[shortcut.labelKey]()}</label
+                      >
+                      <p>{t.shortcutDescription()}</p>
+                    </div>
+                    <input
+                      id={`shortcut-${shortcut.id}`}
+                      class="text-input compact"
+                      type="text"
+                      spellcheck="false"
+                      value={draftSettings.shortcutPreferences[shortcut.id]}
+                      on:input={(event) => updateShortcut(shortcut.id, event)}
+                    />
+                  </div>
+                {/each}
+              </div>
+              <div class="disabled-row" aria-disabled="true">
+                <div>
+                  <span class="setting-label">{t.exportSettings()}</span>
+                  <p>{t.exportSettingsDescription()}</p>
+                </div>
+                <span class="disabled-pill">{t.futureVersionSupport()}</span>
+              </div>
+            </div>
+          {:else if activeCategory === 'about'}
+            <div class="settings-group about-group">
+              <h2>Nomo</h2>
+              <div class="about-mark" aria-label="Nomo">
+                <img class="logo-light" src={nomoLogoLight} alt="" draggable="false" />
+                <img class="logo-dark" src={nomoLogoDark} alt="" draggable="false" />
+              </div>
+              <dl>
+                <div>
+                  <dt>{t.version()}</dt>
+                  <dd>{packageInfo.version}</dd>
+                </div>
+                <div>
+                  <dt>{t.positioning()}</dt>
+                  <dd>{t.positioningDescription()}</dd>
+                </div>
+                <div>
+                  <dt>{t.platformStrategy()}</dt>
+                  <dd>{t.platformStrategyDescription()}</dd>
+                </div>
+              </dl>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.updateCheck()}</span>
+                  <p>{getSoftwareUpdateDescription()}</p>
+                </div>
+                <div class="association-action">
+                  <span class={`association-pill ${getSoftwareUpdatePillClass()}`}>
+                    {getSoftwareUpdatePillLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    class="action-button"
+                    disabled={isSoftwareUpdateButtonDisabled()}
+                    on:click={handleSoftwareUpdateButton}
+                  >
+                    {getSoftwareUpdateButtonLabel()}
+                  </button>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </section>
+  </div>
 {/key}
 
 <style>

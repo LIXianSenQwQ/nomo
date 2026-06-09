@@ -3,6 +3,7 @@ mod external_link;
 mod file_system;
 mod i18n;
 mod models;
+mod software_update;
 mod window;
 
 use tauri::{Emitter, Manager, WindowEvent};
@@ -10,6 +11,8 @@ use tauri::{Emitter, Manager, WindowEvent};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             let targets = crate::window::external_open::collect_external_open_targets_from_args(
                 args,
@@ -125,6 +128,7 @@ pub fn run() {
             crate::window::commands::register_markdown_file_association,
             crate::window::commands::get_windows_context_menu_status,
             crate::window::commands::register_windows_context_menu,
+            crate::software_update::is_windows_installer_installation,
             crate::file_system::get_folder_tree,
             crate::file_system::list_folder_children,
             crate::file_system::start_folder_indexing,
