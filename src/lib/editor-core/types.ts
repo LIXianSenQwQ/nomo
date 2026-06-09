@@ -117,6 +117,7 @@ export type EditorCommand =
   | { type: 'insertToc' }
   | { type: 'insertFrontMatter' }
   | { type: 'insertTable'; rows?: number; columns?: number }
+  | { type: 'resizeTable'; rows: number; columns: number }
   | { type: 'addTableRowBefore' }
   | { type: 'addTableRowAfter' }
   | { type: 'addTableColumnBefore' }

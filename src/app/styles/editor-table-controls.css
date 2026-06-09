@@ -269,15 +269,15 @@
 .table-util-bar {
   position: absolute;
   left: 0;
-  top: -36px;
+  top: -42px;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px 3px;
+  gap: 3px;
+  padding: 3px 4px;
   border: 1px solid color-mix(in srgb, var(--md-editor-table-border) 58%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--md-editor-surface) 94%, transparent);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  background: color-mix(in srgb, var(--md-editor-surface) 98%, transparent);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
   backdrop-filter: blur(10px);
   pointer-events: auto;
   opacity: 0;
@@ -295,7 +295,7 @@
 
 .table-util-separator {
   width: 1px;
-  height: 15px;
+  height: 16px;
   margin: 0 5px;
   background: color-mix(in srgb, var(--md-editor-table-border) 54%, transparent);
 }
@@ -305,8 +305,8 @@
   position: static;
   transform: none;
   width: auto;
-  min-width: 28px;
-  height: 28px;
+  min-width: 30px;
+  height: 30px;
   padding: 0 7px;
   border-color: transparent;
   border-radius: 5px;
@@ -319,7 +319,7 @@
     background-color 0.14s,
     color 0.14s,
     border-color 0.14s,
-    transform 0.14s;
+    box-shadow 0.14s;
 }
 
 .table-util-bar .boundary-insert-btn {
@@ -333,8 +333,8 @@
 }
 
 .table-util-bar .util-btn {
-  min-width: 32px;
-  padding: 0 7px;
+  min-width: 34px;
+  padding: 0;
   color: var(--md-editor-muted-fg);
   font-size: 0;
   line-height: 1;
@@ -413,43 +413,116 @@
     );
 }
 
-.table-util-bar .util-btn::before {
-  display: grid;
+.table-util-bar .util-icon {
+  position: relative;
+  display: inline-grid;
   place-items: center;
-  width: 100%;
-  height: 100%;
+  width: 18px;
+  height: 18px;
   color: currentColor;
+  pointer-events: none;
+}
+
+.table-util-bar .util-icon-align {
+  align-content: center;
+  gap: 3px;
+}
+
+.table-util-bar .util-icon-line {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.table-util-bar .util-icon-align-left .util-icon-line {
+  justify-self: start;
+}
+
+.table-util-bar .util-icon-align-center .util-icon-line {
+  justify-self: center;
+}
+
+.table-util-bar .util-icon-align-right .util-icon-line {
+  justify-self: end;
+}
+
+.table-util-bar .util-icon-align .util-icon-line:nth-child(1),
+.table-util-bar .util-icon-align .util-icon-line:nth-child(3) {
+  width: 16px;
+}
+
+.table-util-bar .util-icon-align .util-icon-line:nth-child(2),
+.table-util-bar .util-icon-align .util-icon-line:nth-child(4) {
+  width: 10px;
+}
+
+.table-util-bar .util-icon-header {
   font-family: var(--md-editor-font-ui);
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: 0;
 }
 
-.table-util-bar .util-align-left::before {
-  content: '≡';
-  transform: scaleX(1.18);
+.table-util-bar .util-icon-header::before {
+  content: '';
+  position: absolute;
+  inset: 2px 1px auto;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.62;
 }
 
-.table-util-bar .util-align-center::before {
-  content: '≣';
-  transform: scaleX(1.18);
+.table-util-bar .util-icon-resize-grid {
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  background:
+    linear-gradient(to right, transparent 0 47%, currentColor 47% 54%, transparent 54%),
+    linear-gradient(to bottom, transparent 0 47%, currentColor 47% 54%, transparent 54%);
+  opacity: 0.86;
 }
 
-.table-util-bar .util-align-right::before {
-  content: '≡';
-  transform: scaleX(1.18);
+.table-util-bar .util-icon-resize-corner {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
 }
 
-.table-util-bar .util-header-row::before {
-  content: 'H';
-  font-size: 16px;
-  font-weight: 800;
+.table-util-bar .util-icon-delete-lid {
+  position: absolute;
+  top: 3px;
+  width: 13px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
-.table-util-bar .util-delete-table::before {
-  content: '⌫';
-  font-size: 19px;
-  font-weight: 700;
+.table-util-bar .util-icon-delete-lid::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: -3px;
+  width: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.table-util-bar .util-icon-delete-body {
+  position: absolute;
+  top: 7px;
+  width: 11px;
+  height: 10px;
+  border: 1.7px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 2px 2px;
 }
 
 .table-util-bar .boundary-insert-btn:hover,
@@ -457,7 +530,6 @@
   border-color: transparent;
   background: color-mix(in srgb, var(--md-editor-accent) 10%, transparent);
   color: var(--md-editor-accent-strong);
-  transform: scale(1.04);
 }
 
 .table-util-bar .boundary-insert-btn:focus-visible,
@@ -468,5 +540,63 @@
 
 .util-btn-danger:hover {
   border-color: var(--md-editor-danger-fg, #e5484d) !important;
+  background: color-mix(in srgb, var(--md-editor-danger-fg, #e5484d) 10%, transparent) !important;
   color: var(--md-editor-danger-fg, #e5484d) !important;
+}
+
+.table-resize-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 30;
+  width: max-content;
+  padding: 10px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-surface);
+  box-shadow: var(--md-editor-shadow);
+}
+
+.table-resize-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 214px;
+  margin-bottom: 8px;
+  color: var(--md-editor-muted-fg);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.table-resize-header strong {
+  color: var(--md-editor-accent-strong);
+  font-family: var(--md-editor-font-mono);
+  font-size: 12px;
+}
+
+.table-resize-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.table-resize-cell {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-sm);
+  background: var(--md-editor-chrome);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.table-resize-cell:hover,
+.table-resize-cell:focus-visible,
+.table-resize-cell.active {
+  border-color: var(--md-editor-accent);
+  background: var(--md-editor-selection-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-editor-accent) 32%, transparent);
 }

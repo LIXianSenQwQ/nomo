@@ -2,7 +2,22 @@ import type { OutlineItem } from '../../lib/outline/outlineService';
 import { slugifyHeading } from '../../lib/toc/tocService';
 import { getOutlineItemAtLine } from './outlineState';
 
-export interface OutlineScrollAnchor {
+export type OutlineScrollAnchor =
+  | {
+      kind: 'outline';
+      outlineId: string;
+      sectionProgress: number;
+      documentProgress: number;
+      sourceLine: number;
+    }
+  | {
+      kind: 'document';
+      sectionProgress: number;
+      documentProgress: number;
+      sourceLine: number;
+    };
+
+interface LegacyOutlineScrollAnchor {
   outlineId: string;
   sectionProgress: number;
 }
@@ -55,12 +70,21 @@ export function getSourceScrollAnchor(
   scrollTop: number,
   lineHeight: number,
   sourceTextarea?: HTMLTextAreaElement,
+  sourcePane?: HTMLElement,
 ): OutlineScrollAnchor | null {
+  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
+  const sourceScrollContainer = sourcePane ?? sourceTextarea?.closest<HTMLElement>('.source-pane');
+  const documentProgress = getScrollProgress(sourceScrollContainer, scrollTop);
+
   if (!outline.length) {
-    return null;
+    return {
+      kind: 'document',
+      sectionProgress: documentProgress,
+      documentProgress,
+      sourceLine: visibleLine,
+    };
   }
 
-  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
   const activeOutlineId = getActiveOutlineIdFromSource(outline, scrollTop, lineHeight);
   const currentIndex = Math.max(
     0,
@@ -73,21 +97,33 @@ export function getSourceScrollAnchor(
   const sectionLineCount = Math.max(1, sectionEndLine - currentItem.line);
   const sectionProgress = clamp((visibleLine - currentItem.line) / sectionLineCount, 0, 1);
 
-  return { outlineId: currentItem.id, sectionProgress };
+  return {
+    kind: 'outline',
+    outlineId: currentItem.id,
+    sectionProgress,
+    documentProgress,
+    sourceLine: visibleLine,
+  };
 }
 
 export function scrollSourceToAnchor(
   outline: OutlineItem[],
   sourcePane: HTMLElement | undefined,
   sourceTextarea: HTMLTextAreaElement | undefined,
-  anchor: OutlineScrollAnchor | null,
+  anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor | null,
 ) {
   if (!sourcePane || !anchor) {
     return;
   }
 
+  if (isDocumentAnchor(anchor)) {
+    sourcePane.scrollTop = getScrollTopByProgress(sourcePane, anchor.documentProgress);
+    return;
+  }
+
   const currentIndex = outline.findIndex((item) => item.id === anchor.outlineId);
   if (currentIndex === -1) {
+    sourcePane.scrollTop = getScrollTopByProgress(sourcePane, getAnchorDocumentProgress(anchor));
     return;
   }
 
@@ -97,7 +133,10 @@ export function scrollSourceToAnchor(
   const sectionEndLine = nextItem?.line ?? totalLineCount + 1;
   const sectionLineCount = Math.max(1, sectionEndLine - currentItem.line);
   const targetLine = currentItem.line + Math.round(sectionLineCount * anchor.sectionProgress);
-  sourcePane.scrollTop = Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea));
+  sourcePane.scrollTop = clampScrollTop(
+    sourcePane,
+    Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea)),
+  );
 }
 
 export function getActiveOutlineIdFromSemantic(
@@ -130,7 +169,16 @@ export function getSemanticScrollAnchor(
 ): OutlineScrollAnchor | null {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (!outline.length || !semanticPane || headingAnchors.length === 0) {
-    return null;
+    if (!semanticPane) {
+      return null;
+    }
+    const documentProgress = getScrollProgress(semanticPane, semanticPane.scrollTop);
+    return {
+      kind: 'document',
+      sectionProgress: documentProgress,
+      documentProgress,
+      sourceLine: 1,
+    };
   }
 
   const visibleTop = semanticPane.scrollTop;
@@ -150,26 +198,43 @@ export function getSemanticScrollAnchor(
     : semanticPane.scrollHeight;
   const sectionHeight = Math.max(1, nextTop - currentTop);
   const sectionProgress = clamp((visibleTop - currentTop) / sectionHeight, 0, 1);
+  const outlineId =
+    headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? outline[0].id;
+  const sourceLine = outline.find((item) => item.id === outlineId)?.line ?? 1;
 
   return {
-    outlineId:
-      headingAnchors[Math.min(activeIndex, headingAnchors.length - 1)]?.id ?? outline[0].id,
+    kind: 'outline',
+    outlineId,
     sectionProgress,
+    documentProgress: getScrollProgress(semanticPane, visibleTop),
+    sourceLine,
   };
 }
 
 export function scrollSemanticToAnchor(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
-  anchor: OutlineScrollAnchor | null,
+  anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor | null,
 ) {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
-  if (!semanticPane || !anchor || headingAnchors.length === 0) {
+  if (!semanticPane || !anchor) {
+    return;
+  }
+
+  if (isDocumentAnchor(anchor) || headingAnchors.length === 0 || !hasAnchorOutlineId(anchor)) {
+    smoothScrollElementTo(
+      semanticPane,
+      getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
+    );
     return;
   }
 
   const currentIndex = headingAnchors.findIndex((item) => item.id === anchor.outlineId);
   if (currentIndex === -1 || !headingAnchors[currentIndex]) {
+    smoothScrollElementTo(
+      semanticPane,
+      getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
+    );
     return;
   }
 
@@ -181,12 +246,12 @@ export function scrollSemanticToAnchor(
     ? getElementTopInScrollContainer(headingAnchors[currentIndex + 1].element, semanticPane)
     : semanticPane.scrollHeight;
   const sectionHeight = Math.max(1, nextTop - currentTop);
-  const top = Math.max(0, currentTop + sectionHeight * anchor.sectionProgress - 32);
+  const top = clampScrollTop(semanticPane, currentTop + sectionHeight * anchor.sectionProgress - 32);
   smoothScrollElementTo(semanticPane, top);
 }
 
 export function smoothScrollElementTo(scrollContainer: HTMLElement, top: number) {
-  const targetTop = Math.max(0, top);
+  const targetTop = clampScrollTop(scrollContainer, top);
   const startTop = scrollContainer.scrollTop;
   const delta = targetTop - startTop;
   const duration = getOutlineScrollDuration();
@@ -268,6 +333,44 @@ function getElementTopInScrollContainer(element: HTMLElement, scrollContainer: H
   const elementTop = element.getBoundingClientRect().top;
   const containerTop = scrollContainer.getBoundingClientRect().top;
   return elementTop - containerTop + scrollContainer.scrollTop;
+}
+
+function isDocumentAnchor(
+  anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor,
+): anchor is Extract<OutlineScrollAnchor, { kind: 'document' }> {
+  return 'kind' in anchor && anchor.kind === 'document';
+}
+
+function hasAnchorOutlineId(
+  anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor,
+): anchor is Extract<OutlineScrollAnchor, { kind: 'outline' }> | LegacyOutlineScrollAnchor {
+  return (
+    'outlineId' in anchor && typeof anchor.outlineId === 'string' && anchor.outlineId.length > 0
+  );
+}
+
+function getAnchorDocumentProgress(anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor) {
+  return 'documentProgress' in anchor ? anchor.documentProgress : anchor.sectionProgress;
+}
+
+function getScrollProgress(scrollContainer: HTMLElement | undefined | null, scrollTop: number) {
+  if (!scrollContainer) {
+    return 0;
+  }
+  const maxScrollTop = getMaxScrollTop(scrollContainer);
+  return maxScrollTop > 0 ? clamp(scrollTop / maxScrollTop, 0, 1) : 0;
+}
+
+function getScrollTopByProgress(scrollContainer: HTMLElement, progress: number) {
+  return clampScrollTop(scrollContainer, getMaxScrollTop(scrollContainer) * clamp(progress, 0, 1));
+}
+
+function clampScrollTop(scrollContainer: HTMLElement, scrollTop: number) {
+  return clamp(scrollTop, 0, getMaxScrollTop(scrollContainer));
+}
+
+function getMaxScrollTop(scrollContainer: HTMLElement) {
+  return Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
 }
 
 function getSourceTotalLineCount(

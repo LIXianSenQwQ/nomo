@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createEditorCore } from './createEditorCore';
+
+function findFirstNode(
+  doc: ProseMirrorNode,
+  typeName: string,
+): { node: ProseMirrorNode; pos: number } {
+  let found: { node: ProseMirrorNode; pos: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (node.type.name === typeName) {
+      found = { node, pos };
+      return false;
+    }
+    return true;
+  });
+  if (!found) {
+    throw new Error(`Node ${typeName} not found`);
+  }
+  return found;
+}
 
 describe('createEditorCore', () => {
   it('keeps Markdown as the observable editor state', () => {
@@ -105,6 +125,35 @@ describe('createEditorCore', () => {
     editor.execute({ type: 'setHeading', level: 2 });
 
     expect(editor.getMarkdown()).toContain('##');
+  });
+
+  it('pressing Backspace below a code block deletes the block instead of entering edit mode', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '```ts\nconst a = 1;\n```\n\n后续正文',
+      target,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findFirstNode(view.state.doc, 'paragraph');
+
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, paragraph.pos + 1)),
+    );
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      bubbles: true,
+      cancelable: true,
+    });
+    let handled = false;
+    view.someProp('handleKeyDown', (handler) => {
+      handled = handler(view, event) || handled;
+      return handled;
+    });
+
+    expect(handled).toBe(true);
+    expect(editor.getMarkdown()).toBe('后续正文');
+    expect(target.querySelector('.code-card')).toBeNull();
   });
 
   it('exposes the active link snapshot through EditorCore', () => {

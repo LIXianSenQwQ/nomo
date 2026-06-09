@@ -91,6 +91,7 @@
   import { createEditorSettingsController } from './services/editorSettingsController';
   import ContextMenu from './components/ContextMenu.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
+  import CloseWindowBehaviorDialog from './components/CloseWindowBehaviorDialog.svelte';
   import type {
     ContextMenuOpenEvent,
     ContextMenuItem,
@@ -109,6 +110,7 @@
     resolveThemePreference,
     type AppPreferences,
     type AppPreferencesPatch,
+    type CloseWindowBehavior,
     type CodeBlockIndentPreference,
     type InterfaceLanguagePreference,
     type SettingsUpdatedPayload,
@@ -119,6 +121,7 @@
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
   import {
+    FIRST_RUN_SAMPLE_DOCUMENT_OPEN_ERROR_KEY,
     FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY,
     shouldMarkFirstRunSampleHandled,
     shouldOpenFirstRunSample,
@@ -136,8 +139,9 @@
   } from '../lib/services/render';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
-  const CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY = 'closeToTrayPromptAnswered';
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
+  type CloseWindowAction = Exclude<CloseWindowBehavior, 'ask-every-time'>;
+  type CloseWindowChoiceResult = { behavior: CloseWindowAction; remember: boolean } | null;
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
@@ -197,6 +201,7 @@
     sourceTextarea: HTMLTextAreaElement,
     semanticPane: HTMLElement,
     sourcePane: HTMLElement;
+  let mountedEditorHost: HTMLDivElement | null = null;
   let pendingSourceScrollTop: number | null = null;
   let refreshEditorViewportLayout: () => void = () => undefined;
   let largeDocumentMode = false,
@@ -204,6 +209,7 @@
     externalFileChange: ExternalFileChangeState = createEmptyExternalFileChange(),
     lastKnownModifiedAt = 0;
   let desktopUnlisteners: Array<() => void> = [];
+  let criticalDesktopEventsReady = false;
   let pendingExternalOpenPaths: string[] = [];
   let currentFolderPath = '',
     folderTree: FileTreeNode[] = [];
@@ -241,14 +247,17 @@
   let deleteConfirmPath = '';
   let deleteConfirmIsDir = false;
   let deleteConfirmName = '';
+  let closeWindowChoiceDialogOpen = false;
+  let rememberCloseWindowChoice = false;
+  let closeWindowChoiceResolver: ((choice: CloseWindowChoiceResult) => void) | null = null;
+  let closeWindowChoicePromise: Promise<CloseWindowChoiceResult> | null = null;
 
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
   let filePreviewEnabled = DEFAULT_APP_PREFERENCES.filePreviewEnabled;
   let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
-  let closeToTrayEnabled = DEFAULT_APP_PREFERENCES.closeToTrayEnabled;
-  let closeToTrayPromptAnswered = false;
+  let closeWindowBehavior = DEFAULT_APP_PREFERENCES.closeWindowBehavior;
   let windowLabel = '';
 
   function persistWorkspaceState() {
@@ -560,9 +569,14 @@
   }
 
   async function closeCurrentWindow() {
-    const shouldHideToTray = await resolveCloseToTrayForCloseRequest();
+    const closeBehavior = await resolveCloseWindowBehaviorForCloseRequest();
+    if (!closeBehavior) {
+      return;
+    }
+
+    const shouldHideToTray = closeBehavior === 'close-to-tray';
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
-    if (!shouldHideToTray && dirtyTabs.length > 0) {
+    if (closeBehavior === 'close-window' && dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
       const ok = confirm(t.unsavedChangesCloseWindow({ names }));
       if (!ok) return;
@@ -570,20 +584,56 @@
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
   }
 
-  async function resolveCloseToTrayForCloseRequest() {
-    if (!desktopEnabled || closeToTrayEnabled || closeToTrayPromptAnswered) {
-      return closeToTrayEnabled;
+  async function resolveCloseWindowBehaviorForCloseRequest(): Promise<CloseWindowAction | null> {
+    if (!desktopEnabled) {
+      return 'close-window';
+    }
+    if (closeWindowBehavior !== 'ask-every-time') {
+      return closeWindowBehavior;
     }
 
-    const shouldHideToTray = confirm(t.closeToTrayFirstPrompt());
-    closeToTrayEnabled = shouldHideToTray;
-    closeToTrayPromptAnswered = true;
-    await Promise.all([
-      updateAppSetting('closeToTrayEnabled', shouldHideToTray),
-      updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true),
-    ]).catch(() => undefined);
+    const choice = await requestCloseWindowChoice();
+    if (!choice) {
+      return null;
+    }
+    if (choice.remember) {
+      await persistCloseWindowBehavior(choice.behavior);
+    }
+    return choice.behavior;
+  }
 
-    return shouldHideToTray;
+  function requestCloseWindowChoice() {
+    if (closeWindowChoicePromise) {
+      return closeWindowChoicePromise;
+    }
+
+    rememberCloseWindowChoice = false;
+    closeWindowChoiceDialogOpen = true;
+    closeWindowChoicePromise = new Promise<CloseWindowChoiceResult>((resolve) => {
+      closeWindowChoiceResolver = resolve;
+    });
+    return closeWindowChoicePromise;
+  }
+
+  async function persistCloseWindowBehavior(behavior: CloseWindowBehavior) {
+    closeWindowBehavior = behavior;
+    await updateAppSetting('closeWindowBehavior', behavior).catch(() => undefined);
+  }
+
+  function resolveCloseWindowChoice(behavior: CloseWindowAction) {
+    closeWindowChoiceDialogOpen = false;
+    const resolver = closeWindowChoiceResolver;
+    closeWindowChoiceResolver = null;
+    closeWindowChoicePromise = null;
+    resolver?.({ behavior, remember: rememberCloseWindowChoice });
+  }
+
+  function cancelCloseWindowChoice() {
+    closeWindowChoiceDialogOpen = false;
+    const resolver = closeWindowChoiceResolver;
+    closeWindowChoiceResolver = null;
+    closeWindowChoicePromise = null;
+    resolver?.(null);
   }
 
   async function requestExitApp() {
@@ -793,6 +843,31 @@
     onImagesDeleted: (event) => handleDeletedImageResources(event),
     onContextMenuOpen: handleContextMenuOpen,
   });
+
+  function hasOpenDocument() {
+    return tabs.length > 0 && Boolean(activeTabId);
+  }
+
+  function detachMountedEditorHostEvents() {
+    if (!mountedEditorHost) return;
+    mountedEditorHost.removeEventListener('image-context-menu', handleImageContextMenu);
+    mountedEditorHost = null;
+  }
+
+  function mountEditorHostIfReady() {
+    if (!hasOpenDocument() || !editorHost || mountedEditorHost === editorHost) {
+      return;
+    }
+
+    detachMountedEditorHostEvents();
+    editor.mount(editorHost);
+    editorHost.addEventListener('image-context-menu', handleImageContextMenu);
+    mountedEditorHost = editorHost;
+  }
+
+  $: if (tabs.length > 0 && activeTabId && editorHost) mountEditorHostIfReady();
+  $: if ((tabs.length === 0 || !activeTabId) && mountedEditorHost) detachMountedEditorHostEvents();
+
   const editorSettings = createEditorSettingsController({
     getDesktopEnabled: () => desktopEnabled,
     getEditor: () => editor,
@@ -1016,6 +1091,11 @@
     getActiveTabId: () => activeTabId,
     setActiveTabId: (value) => {
       activeTabId = value;
+      persistWorkspaceState();
+    },
+    getPreviewTabId: () => previewTabId,
+    setPreviewTabId: (value) => {
+      previewTabId = value;
       persistWorkspaceState();
     },
     setStatusMessage: (value) => {
@@ -1416,7 +1496,7 @@
     imageSettings = preferences.imageHandlingSettings;
     folderOpenDefaultBehavior = preferences.folderOpenDefaultBehavior;
     filePreviewEnabled = preferences.filePreviewEnabled;
-    closeToTrayEnabled = preferences.closeToTrayEnabled;
+    closeWindowBehavior = preferences.closeWindowBehavior;
     focusMode = preferences.sidebarHidden;
     outlineVisible = preferences.outlineVisible;
     writingStatsVisible = preferences.writingStatsVisible;
@@ -1489,7 +1569,7 @@
       largeDocumentLimit,
       folderOpenDefaultBehavior,
       filePreviewEnabled,
-      closeToTrayEnabled,
+      closeWindowBehavior,
       sidebarHidden: focusMode,
       outlineVisible,
       writingStatsVisible,
@@ -1548,8 +1628,6 @@
   async function reloadAppPreferencesFromSettingsWindow() {
     const preferences = await loadAppPreferences(desktopEnabled);
     await applyAppPreferences(preferences, { applyEditorMode: true, refreshInterfaceChrome: true });
-    closeToTrayPromptAnswered = true;
-    await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
   }
 
   async function handleSettingsUpdated(payload: unknown) {
@@ -1559,10 +1637,6 @@
     }
 
     await applyAppPreferencesPatch(payload.patch);
-    if ('closeToTrayEnabled' in payload.patch) {
-      closeToTrayPromptAnswered = true;
-      await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
-    }
   }
 
   async function maybeOpenFirstRunSample(state: FirstRunSampleState) {
@@ -1571,16 +1645,22 @@
     }
 
     if (shouldOpenFirstRunSample(state)) {
-      const document = await installSampleDocument().catch((error) => {
-        statusMessage = error instanceof Error ? error.message : t.sampleOpenFailed({ error });
-        return null;
-      });
-      if (!document) {
+      try {
+        const document = await installSampleDocument();
+        await documentActions.applyNativeDocument(document, t.sampleOpened());
+        await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPEN_ERROR_KEY, '').catch(() => undefined);
+        await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
+      } catch (error) {
+        const message = t.sampleOpenFailed({
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPEN_ERROR_KEY, message).catch(
+          () => undefined,
+        );
+        statusMessage = message;
+        showToast(message, 3500);
         return;
       }
-
-      await documentActions.applyNativeDocument(document, t.sampleOpened());
-      await updateAppSetting(FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY, true).catch(() => undefined);
       return;
     }
 
@@ -1647,11 +1727,9 @@
       windowLabel = getCurrentWindow().label;
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('refresh_window_menu').catch(() => undefined);
+      await setupCriticalDesktopEvents();
 
       settings = await listAppSettings().catch(() => []);
-      closeToTrayPromptAnswered =
-        settings.some((s) => s.key === 'closeToTrayEnabled') ||
-        settings.some((s) => s.key === CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY);
       // 优先读取窗口独立的状态，兼容旧的全局 key
       const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
       const workspaceTabsSetting =
@@ -1716,15 +1794,13 @@
       }
     }
 
-    editor.mount(editorHost);
-    // 监听图片右键菜单自定义事件（冒泡自 ImageNodeView）
-    editorHost.addEventListener('image-context-menu', handleImageContextMenu);
     if (persistedEditorMode && !largeDocumentMode) {
       mode = persistedEditorMode;
       editor.updateOptions({ mode: persistedEditorMode });
     }
     // 确保 blockStyle 默认值写入 DOM
     applyBlockStyleSetting(blockStyle);
+    await setupDesktopEvents();
     await refreshRecentFiles();
     await maybeOpenFirstRunSample({
       settings,
@@ -1732,7 +1808,6 @@
       restoredWorkspaceTabs,
       hasPendingFolder,
     });
-    await setupDesktopEvents();
     scheduleStartupFolderLoad();
     await openExternalMarkdownPaths(pendingExternalOpenPaths);
     pendingExternalOpenPaths = [];
@@ -1753,6 +1828,7 @@
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
     window.removeEventListener('wheel', handleGlobalWheel);
+    detachMountedEditorHostEvents();
     if (systemThemeMediaQuery && systemThemeChangeHandler) {
       systemThemeMediaQuery.removeEventListener('change', systemThemeChangeHandler);
     }
@@ -1978,15 +2054,19 @@
     editor.setMarkdown(removeFrontMatter(editor.getMarkdown()));
   }
 
-  function showUnavailableFeature(featureName: string) {
+  function showToast(message: string, durationMs = 1500) {
     if (toastTimer !== null) {
       window.clearTimeout(toastTimer);
     }
-    toastMessage = t.featureComingSoon({ featureName });
+    toastMessage = message;
     toastTimer = window.setTimeout(() => {
       toastMessage = '';
       toastTimer = null;
-    }, 1500);
+    }, durationMs);
+  }
+
+  function showUnavailableFeature(featureName: string) {
+    showToast(t.featureComingSoon({ featureName }));
   }
 
   $: visibleOutlineIds = new Set(
@@ -2001,6 +2081,27 @@
     frontMatterFocusTarget = 'default';
   }
 
+  async function setupCriticalDesktopEvents() {
+    if (!desktopEnabled || criticalDesktopEventsReady) {
+      return;
+    }
+
+    const { listen } = await import('@tauri-apps/api/event');
+    const [exitRequestUnlisten, closeRequestUnlisten] = await Promise.all([
+      listen('nomo://request-exit-app', () => {
+        requestExitApp().catch(() => undefined);
+      }).catch(() => null),
+      listen('nomo://request-close-window', () => {
+        closeCurrentWindow().catch(() => undefined);
+      }).catch(() => null),
+    ]);
+
+    criticalDesktopEventsReady = true;
+    desktopUnlisteners = [...desktopUnlisteners, exitRequestUnlisten, closeRequestUnlisten].filter(
+      (value): value is () => void => Boolean(value),
+    );
+  }
+
   async function setupDesktopEvents() {
     if (!desktopEnabled) {
       return;
@@ -2011,8 +2112,6 @@
       menuUnlisten,
       dropUnlisten,
       settingsUnlisten,
-      exitRequestUnlisten,
-      closeRequestUnlisten,
       updateInstallRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
@@ -2027,12 +2126,6 @@
       }).catch(() => null),
       listen<SettingsUpdatedPayload>(SETTINGS_UPDATED_EVENT, (event) => {
         handleSettingsUpdated(event.payload).catch(() => undefined);
-      }).catch(() => null),
-      listen('nomo://request-exit-app', () => {
-        requestExitApp().catch(() => undefined);
-      }).catch(() => null),
-      listen('nomo://request-close-window', () => {
-        closeCurrentWindow().catch(() => undefined);
       }).catch(() => null),
       listen<{ requestId?: string }>('nomo://request-update-install', (event) => {
         const requestId = event.payload?.requestId;
@@ -2061,11 +2154,10 @@
     ]);
 
     desktopUnlisteners = [
+      ...desktopUnlisteners,
       menuUnlisten,
       dropUnlisten,
       settingsUnlisten,
-      exitRequestUnlisten,
-      closeRequestUnlisten,
       updateInstallRequestUnlisten,
       openDocumentUnlisten,
       openFolderUnlisten,
@@ -2383,4 +2475,17 @@
   danger={true}
   onConfirm={executeDelete}
   onCancel={closeDeleteConfirm}
+/>
+
+<CloseWindowBehaviorDialog
+  open={closeWindowChoiceDialogOpen}
+  title={t.closeWindowChoiceTitle()}
+  message={t.closeWindowChoiceMessage()}
+  closeWindowLabel={t.closeWindowBehaviorCloseWindow()}
+  closeToTrayLabel={t.closeWindowBehaviorCloseToTray()}
+  rememberLabel={t.rememberCloseWindowChoice()}
+  remember={rememberCloseWindowChoice}
+  onRememberChange={(value) => (rememberCloseWindowChoice = value)}
+  onChoose={resolveCloseWindowChoice}
+  onCancel={cancelCloseWindowChoice}
 />

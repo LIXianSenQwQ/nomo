@@ -217,6 +217,42 @@ describe('settings', () => {
     expect(normalized.inlineCodeRenderingEnabled).toBe(true);
   });
 
+  it('normalizes close window behavior settings', () => {
+    const normalized = normalizeAppPreferences({
+      closeWindowBehavior: {} as never,
+    });
+
+    expect(DEFAULT_APP_PREFERENCES.closeWindowBehavior).toBe('ask-every-time');
+    expect(normalized.closeWindowBehavior).toBe('ask-every-time');
+    expect(
+      normalizeAppPreferences({ closeWindowBehavior: 'close-to-tray' }).closeWindowBehavior,
+    ).toBe('close-to-tray');
+  });
+
+  it('migrates legacy close-to-tray choices into close window behavior', async () => {
+    await expect(
+      loadAppPreferences(true, [
+        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('closeToTrayEnabled', true),
+      ]),
+    ).resolves.toMatchObject({ closeWindowBehavior: 'close-to-tray' });
+
+    await expect(
+      loadAppPreferences(true, [
+        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('closeToTrayEnabled', false),
+        createSetting('closeToTrayPromptAnswered', true),
+      ]),
+    ).resolves.toMatchObject({ closeWindowBehavior: 'close-window' });
+
+    await expect(
+      loadAppPreferences(true, [
+        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('closeToTrayEnabled', false),
+      ]),
+    ).resolves.toMatchObject({ closeWindowBehavior: 'ask-every-time' });
+  });
+
   it('calls the zoom frame callback after applying an immediate zoom value', () => {
     const onFrame = vi.fn();
 

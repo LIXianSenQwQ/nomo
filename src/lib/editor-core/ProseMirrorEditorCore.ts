@@ -50,6 +50,7 @@ import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
 import { createCalloutPlugin } from './callout/calloutPlugin';
 import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
+import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import { contextMenuPlugin } from './plugins/contextMenu';
 import {
@@ -477,6 +478,7 @@ export class ProseMirrorEditorCore implements EditorCore {
           Backspace: chainCommands(
             deleteSelection,
             removeEmptyCalloutOnBackspace,
+            deleteCodeBlockBeforeCursor,
             joinBackward,
             selectNodeBackward,
           ),

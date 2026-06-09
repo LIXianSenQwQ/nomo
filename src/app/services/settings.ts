@@ -23,6 +23,7 @@ export type EffectiveTheme = 'light' | 'dark';
 export type EditorModePreference = 'semantic' | 'source';
 export type BlockStylePreference = 'classic' | 'modern';
 export type FolderOpenDefaultBehavior = 'current-window' | 'new-window' | 'ask-every-time';
+export type CloseWindowBehavior = 'ask-every-time' | 'close-window' | 'close-to-tray';
 export type WritingStatsMetric = 'lines' | 'words' | 'chars';
 export type ImageDefaultAlignPreference = ImageDefaultAlign;
 export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
@@ -65,7 +66,7 @@ export interface AppPreferences {
   largeDocumentLimit: number;
   folderOpenDefaultBehavior: FolderOpenDefaultBehavior;
   filePreviewEnabled: boolean;
-  closeToTrayEnabled: boolean;
+  closeWindowBehavior: CloseWindowBehavior;
   sidebarHidden: boolean;
   outlineVisible: boolean;
   writingStatsVisible: boolean;
@@ -119,7 +120,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   largeDocumentLimit: 300_000,
   folderOpenDefaultBehavior: 'ask-every-time',
   filePreviewEnabled: true,
-  closeToTrayEnabled: false,
+  closeWindowBehavior: 'ask-every-time',
   sidebarHidden: false,
   outlineVisible: true,
   writingStatsVisible: true,
@@ -139,6 +140,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
 
+const LEGACY_CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY = 'closeToTrayPromptAnswered';
 const IMAGE_SETTINGS_STORAGE_KEY = 'nomo-image-handling-settings';
 const THEME_SYSTEM_MIGRATION_KEY = 'themeFollowSystemMigrationV1';
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
@@ -244,7 +246,9 @@ export async function loadAppPreferences(
     largeDocumentLimit: parseSetting<unknown>(settings, 'largeDocumentLimit'),
     folderOpenDefaultBehavior: parseSetting<unknown>(settings, 'folderOpenDefaultBehavior'),
     filePreviewEnabled: parseSetting<unknown>(settings, 'filePreviewEnabled'),
-    closeToTrayEnabled: parseSetting<unknown>(settings, 'closeToTrayEnabled'),
+    closeWindowBehavior:
+      parseSetting<unknown>(settings, 'closeWindowBehavior') ??
+      resolveLegacyCloseWindowBehavior(settings),
     sidebarHidden: parseSetting<unknown>(settings, 'sidebarHidden'),
     outlineVisible: parseSetting<unknown>(settings, 'outlineVisible'),
     writingStatsVisible: parseSetting<unknown>(settings, 'writingStatsVisible'),
@@ -339,10 +343,9 @@ export function normalizeAppPreferences(
       typeof value.filePreviewEnabled === 'boolean'
         ? value.filePreviewEnabled
         : DEFAULT_APP_PREFERENCES.filePreviewEnabled,
-    closeToTrayEnabled:
-      typeof value.closeToTrayEnabled === 'boolean'
-        ? value.closeToTrayEnabled
-        : DEFAULT_APP_PREFERENCES.closeToTrayEnabled,
+    closeWindowBehavior: isCloseWindowBehavior(value.closeWindowBehavior)
+      ? value.closeWindowBehavior
+      : DEFAULT_APP_PREFERENCES.closeWindowBehavior,
     sidebarHidden:
       typeof value.sidebarHidden === 'boolean'
         ? value.sidebarHidden
@@ -523,7 +526,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     largeDocumentLimit: preferences.largeDocumentLimit,
     folderOpenDefaultBehavior: preferences.folderOpenDefaultBehavior,
     filePreviewEnabled: preferences.filePreviewEnabled,
-    closeToTrayEnabled: preferences.closeToTrayEnabled,
+    closeWindowBehavior: preferences.closeWindowBehavior,
     sidebarHidden: preferences.sidebarHidden,
     outlineVisible: preferences.outlineVisible,
     writingStatsVisible: preferences.writingStatsVisible,
@@ -823,6 +826,26 @@ function isBlockStylePreference(value: unknown): value is BlockStylePreference {
 
 function isFolderOpenDefaultBehavior(value: unknown): value is FolderOpenDefaultBehavior {
   return value === 'current-window' || value === 'new-window' || value === 'ask-every-time';
+}
+
+function isCloseWindowBehavior(value: unknown): value is CloseWindowBehavior {
+  return value === 'ask-every-time' || value === 'close-window' || value === 'close-to-tray';
+}
+
+function resolveLegacyCloseWindowBehavior(
+  settings: Map<string, string>,
+): CloseWindowBehavior | undefined {
+  const closeToTrayEnabled = parseSetting<boolean>(settings, 'closeToTrayEnabled');
+  if (closeToTrayEnabled === true) {
+    return 'close-to-tray';
+  }
+
+  const promptAnswered = parseSetting<boolean>(settings, LEGACY_CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY);
+  if (closeToTrayEnabled === false && promptAnswered === true) {
+    return 'close-window';
+  }
+
+  return undefined;
 }
 
 function isWritingStatsMetric(value: unknown): value is WritingStatsMetric {

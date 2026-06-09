@@ -73,10 +73,7 @@ pub(crate) fn write_markdown_file(
 
 #[tauri::command]
 pub(crate) fn install_sample_document(app: AppHandle) -> Result<DocumentPayload, String> {
-    let resource_path = app
-        .path()
-        .resolve(SAMPLE_DOCUMENT_RESOURCE_PATH, BaseDirectory::Resource)
-        .map_err(|error| format!("定位实例文档资源失败：{error}"))?;
+    let resource_path = resolve_sample_document_resource(&app)?;
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -187,7 +184,8 @@ fn install_sample_document_from_paths(
     app_data_dir: &Path,
 ) -> Result<DocumentPayload, String> {
     let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
-    if !target_path.exists() {
+    let should_install = !target_path.exists() || file_size(&target_path.to_string_lossy()) == 0;
+    if should_install {
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).map_err(|error| format!("创建实例文档目录失败：{error}"))?;
         }
@@ -198,6 +196,32 @@ fn install_sample_document_from_paths(
     let markdown =
         fs::read_to_string(&target_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
     document_payload(target_path.to_string_lossy().to_string(), markdown)
+}
+
+fn resolve_sample_document_resource(app: &AppHandle) -> Result<PathBuf, String> {
+    let mut attempts = Vec::new();
+
+    if let Ok(path) = app
+        .path()
+        .resolve(SAMPLE_DOCUMENT_RESOURCE_PATH, BaseDirectory::Resource)
+    {
+        attempts.push(path);
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            attempts.push(exe_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH));
+            attempts.push(exe_dir.join("resources").join(SAMPLE_DOCUMENT_RESOURCE_PATH));
+        }
+    }
+
+    for path in attempts {
+        if path.is_file() && file_size(&path.to_string_lossy()) > 0 {
+            return Ok(path);
+        }
+    }
+
+    Err("定位实例文档资源失败：未找到有效的 samples/sample.md".to_string())
 }
 
 #[tauri::command]
@@ -610,6 +634,29 @@ mod tests {
             "# 用户已修改实例"
         );
         assert_eq!(document.markdown, "# 用户已修改实例");
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn repairs_empty_sample_document() {
+        let root = unique_test_dir("repair-empty-sample");
+        let resource_path = root.join("resource.md");
+        let app_data_dir = root.join("app-data");
+        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(&resource_path, "# 原始实例").expect("write resource");
+        fs::create_dir_all(target_path.parent().expect("target parent")).expect("create samples");
+        fs::write(&target_path, "").expect("write empty target");
+
+        let document =
+            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
+
+        assert_eq!(
+            fs::read_to_string(&target_path).expect("read target"),
+            "# 原始实例"
+        );
+        assert_eq!(document.markdown, "# 原始实例");
 
         cleanup(root);
     }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     FileText,
     FolderOpen,
@@ -69,11 +70,13 @@
 
   const TREE_ROW_HEIGHT = 26;
   const TREE_OVERSCAN = 8;
+  let fileTreeElement: HTMLElement;
   let fileTreeScrollTop = 0;
   let fileTreeViewportHeight = 0;
   let flattenedRows: ExplorerTreeRow[] = [];
   let virtualRows: ExplorerTreeRow[] = [];
   let virtualTreeHeight = 0;
+  let lastAutoScrolledExplorerPath = '';
 
   $: flattenedRows = buildVisibleExplorerRows(
     folderTree,
@@ -82,6 +85,8 @@
     TREE_ROW_HEIGHT,
   );
   $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT;
+  $: hasStandaloneFile = fileName.trim().length > 0 && filePath.trim().length > 0;
+  $: activeExplorerPath = nativePath ?? previewNativePath;
   $: {
     const start = Math.max(0, Math.floor(fileTreeScrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN);
     const visibleCount =
@@ -89,9 +94,58 @@
       TREE_OVERSCAN * 2;
     virtualRows = flattenedRows.slice(start, start + visibleCount);
   }
+  $: if (
+    activeExplorerPath &&
+    activeExplorerPath !== lastAutoScrolledExplorerPath &&
+    flattenedRows.length > 0
+  ) {
+    scrollActiveExplorerRowIntoView(activeExplorerPath);
+  }
 
   function handleFileTreeScroll(event: Event) {
     fileTreeScrollTop = (event.currentTarget as HTMLElement).scrollTop;
+  }
+
+  async function scrollActiveExplorerRowIntoView(path: string) {
+    await tick();
+    if (!fileTreeElement || path !== activeExplorerPath) {
+      return;
+    }
+
+    const activeRow = flattenedRows.find(
+      (row) => row.type === 'file' && sameExplorerPath(row.node.path, path),
+    );
+    if (!activeRow) {
+      return;
+    }
+
+    lastAutoScrolledExplorerPath = path;
+    const viewportTop = fileTreeScrollTop;
+    const viewportBottom = viewportTop + fileTreeViewportHeight;
+    const rowTop = activeRow.top;
+    const rowBottom = rowTop + TREE_ROW_HEIGHT;
+    if (rowTop >= viewportTop && rowBottom <= viewportBottom) {
+      return;
+    }
+
+    const nextScrollTop =
+      rowTop < viewportTop
+        ? rowTop
+        : Math.max(0, rowBottom - Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT));
+    fileTreeElement.scrollTop = nextScrollTop;
+    fileTreeScrollTop = nextScrollTop;
+  }
+
+  function sameExplorerPath(left: string, right: string) {
+    return left.replace(/\\/g, '/').toLowerCase() === right.replace(/\\/g, '/').toLowerCase();
+  }
+
+  function isActiveFilePath(path: string) {
+    return Boolean(nativePath && sameExplorerPath(nativePath, path));
+  }
+
+  function isPreviewFilePath(path: string) {
+    return Boolean(previewNativePath && sameExplorerPath(previewNativePath, path));
   }
 
   function folderCanExpand(node: FileTreeNode) {
@@ -372,6 +426,7 @@
   </header>
 
   <section
+    bind:this={fileTreeElement}
     class="file-tree"
     aria-label={t.folderStructure()}
     bind:clientHeight={fileTreeViewportHeight}
@@ -467,9 +522,10 @@
             <input
               bind:this={creatingInputRef}
               bind:value={creatingValue}
-              on:blur={commitCreating}
+              on:blur={cancelCreating}
               on:keydown={handleCreatingKeydown}
               class="rename-input"
+              use:clickOutside={cancelCreating}
               placeholder={creatingType === 'folder' ? t.newFolder() : t.untitledMarkdown()}
             />
           </div>
@@ -579,9 +635,10 @@
                     <input
                       bind:this={creatingInputRef}
                       bind:value={creatingValue}
-                      on:blur={commitCreating}
+                      on:blur={cancelCreating}
                       on:keydown={handleCreatingKeydown}
                       class="rename-input"
+                      use:clickOutside={cancelCreating}
                       placeholder={creatingType === 'folder' ? t.newFolder() : t.untitledMarkdown()}
                     />
                   </div>
@@ -590,11 +647,11 @@
                   <button
                     type="button"
                     class="tree-file"
-                    class:active={nativePath === node.path}
-                    class:preview={previewNativePath === node.path}
+                    class:active={isActiveFilePath(node.path)}
+                    class:preview={isPreviewFilePath(node.path)}
                     style="padding-left: {34 + row.depth * 12}px"
                     title={node.path}
-                    use:pulseOnChange={nativePath === node.path || previewNativePath === node.path}
+                    use:pulseOnChange={isActiveFilePath(node.path) || isPreviewFilePath(node.path)}
                     on:click={() => handleFileClick(node.path)}
                     on:dblclick={() => handleFileDblClick(node.path)}
                     on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
@@ -607,7 +664,7 @@
             {/each}
           </div>
         {/if}
-      {:else}
+      {:else if hasStandaloneFile}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <div
           role="button"

@@ -39,6 +39,14 @@
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
 /** @typedef {{}} Closetotrayfirstprompt4Inputs */
+/** @typedef {{}} Closewindowbehavior2Inputs */
+/** @typedef {{}} Closewindowbehaviordescription3Inputs */
+/** @typedef {{}} Closewindowbehavioraskeverytime5Inputs */
+/** @typedef {{}} Closewindowbehaviorclosewindow4Inputs */
+/** @typedef {{}} Closewindowbehaviorclosetotray5Inputs */
+/** @typedef {{}} Closewindowchoicetitle3Inputs */
+/** @typedef {{}} Closewindowchoicemessage3Inputs */
+/** @typedef {{}} Rememberclosewindowchoice3Inputs */
 /** @typedef {{}} Foldermissing1Inputs */
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
@@ -269,6 +277,38 @@ export const closetotrayfirstprompt4 = /** @type {(inputs: Closetotrayfirstpromp
 
 确定：隐藏到托盘，并记住此选择。
 取消：直接关闭窗口，之后也可在偏好设置中开启。`)
+};
+
+export const closewindowbehavior2 = /** @type {(inputs: Closewindowbehavior2Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`关闭窗口行为`)
+};
+
+export const closewindowbehaviordescription3 = /** @type {(inputs: Closewindowbehaviordescription3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`设置点击关闭按钮时的主窗口行为。`)
+};
+
+export const closewindowbehavioraskeverytime5 = /** @type {(inputs: Closewindowbehavioraskeverytime5Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`每次选择`)
+};
+
+export const closewindowbehaviorclosewindow4 = /** @type {(inputs: Closewindowbehaviorclosewindow4Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`关闭窗口`)
+};
+
+export const closewindowbehaviorclosetotray5 = /** @type {(inputs: Closewindowbehaviorclosetotray5Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`关闭到托盘`)
+};
+
+export const closewindowchoicetitle3 = /** @type {(inputs: Closewindowchoicetitle3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`关闭 Nomo`)
+};
+
+export const closewindowchoicemessage3 = /** @type {(inputs: Closewindowchoicemessage3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`选择关闭主窗口时的行为。`)
+};
+
+export const rememberclosewindowchoice3 = /** @type {(inputs: Rememberclosewindowchoice3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`以后默认这样做`)
 };
 
 export const foldermissing1 = /** @type {(inputs: Foldermissing1Inputs) => LocalizedString} */ () => {

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>zh_CN</string>
+  <key>CFBundleDisplayName</key>
+  <string>Nomo Quick Look</string>
+  <key>CFBundleExecutable</key>
+  <string>NomoQuickLookPreview</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.nomo.desktop.quicklook</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>NomoQuickLookPreview</string>
+  <key>CFBundlePackageType</key>
+  <string>XPC!</string>
+  <key>CFBundleShortVersionString</key>
+  <string>0.1.3</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.quicklook.preview</string>
+    <key>NSExtensionPrincipalClass</key>
+    <string>NomoQuickLookPreview.PreviewViewController</string>
+    <key>QLSupportedContentTypes</key>
+    <array>
+      <string>net.daringfireball.markdown</string>
+    </array>
+  </dict>
+</dict>
+</plist>

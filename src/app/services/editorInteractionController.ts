@@ -44,13 +44,16 @@ export function createEditorInteractionController(options: EditorInteractionOpti
             options.getSourcePane()?.scrollTop ?? 0,
             options.getSourceLineHeight(),
             options.getSourceTextarea(),
+            options.getSourcePane(),
           );
 
     options.getEditor().updateOptions({ mode: nextMode });
     syncSourceTextareaHeight();
     await tick();
     options.setSuppressOutlineScrollUntil(Date.now() + 300);
-    requestAnimationFrame(() => {
+
+    scheduleAfterFrames(() => {
+      measureEditorViewportLayout(null);
       if (nextMode === 'semantic') {
         scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), scrollAnchor);
         refreshEditorViewportLayout();
@@ -64,7 +67,7 @@ export function createEditorInteractionController(options: EditorInteractionOpti
         scrollAnchor,
       );
       refreshEditorViewportLayout();
-    });
+    }, 2);
   }
 
   function updateMarkdown(event: Event) {
@@ -144,6 +147,20 @@ export function createEditorInteractionController(options: EditorInteractionOpti
         raf(callback);
       }
     });
+  }
+
+  function scheduleAfterFrames(callback: () => void, frameCount = 1) {
+    const raf = getRequestAnimationFrame();
+    const run = (remainingFrames: number) => {
+      raf(() => {
+        if (remainingFrames <= 1) {
+          callback();
+          return;
+        }
+        run(remainingFrames - 1);
+      });
+    };
+    run(Math.max(1, frameCount));
   }
 
   function clampPaneScrollTop(pane: HTMLElement | undefined, preferredScrollTop?: number) {

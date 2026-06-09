@@ -39,6 +39,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const appCommandsSource = readFileSync(resolve(__dirname, 'services/appCommands.ts'), 'utf-8');
+  const documentActionsSource = readFileSync(
+    resolve(__dirname, 'services/documentActionsController.ts'),
+    'utf-8',
+  );
   const settingsServiceSource = readFileSync(resolve(__dirname, 'services/settings.ts'), 'utf-8');
   const editorSettingsControllerSource = readFileSync(
     resolve(__dirname, 'services/editorSettingsController.ts'),
@@ -121,6 +125,14 @@ describe('App outline layout', () => {
     resolve(__dirname, '../lib/editor-core/nodeViews/TocBlockNodeView.ts'),
     'utf-8',
   );
+  const tableControlsSource = readFileSync(
+    resolve(__dirname, '../lib/editor-core/plugins/tableControls.ts'),
+    'utf-8',
+  );
+  const tableControlsStyles = readFileSync(
+    resolve(__dirname, 'styles/editor-table-controls.css'),
+    'utf-8',
+  );
   const styles = [
     'styles/app.css',
     'styles/app-layout.css',
@@ -128,6 +140,7 @@ describe('App outline layout', () => {
     'styles/app-responsive.css',
     'styles/editor-document.css',
     'styles/editor-outline.css',
+    'styles/editor-table-controls.css',
   ]
     .map((path) => readFileSync(resolve(__dirname, path), 'utf-8'))
     .join('\n');
@@ -179,9 +192,7 @@ describe('App outline layout', () => {
   });
 
   it('refreshes editor viewport layout after content width and zoom changes', () => {
-    const contentWidthStart = editorSettingsControllerSource.indexOf(
-      'function updateContentWidth',
-    );
+    const contentWidthStart = editorSettingsControllerSource.indexOf('function updateContentWidth');
     const contentWidthEnd = editorSettingsControllerSource.indexOf(
       'function updateBlockStyle',
       contentWidthStart,
@@ -197,10 +208,10 @@ describe('App outline layout', () => {
     const wheelEnd = appSource.indexOf('function setupSystemThemeListener', wheelStart);
     const wheelSource = appSource.slice(wheelStart, wheelEnd);
 
-    expect(editorSettingsControllerSource).toContain(
-      'refreshEditorViewportLayout(): void;',
+    expect(editorSettingsControllerSource).toContain('refreshEditorViewportLayout(): void;');
+    expect(contentWidthSource).toContain(
+      'applyEditorLayoutSettings(options.getContentWidthPercent())',
     );
-    expect(contentWidthSource).toContain('applyEditorLayoutSettings(options.getContentWidthPercent())');
     expect(contentWidthSource).toContain('options.refreshEditorViewportLayout();');
     expect(appSource).toContain(
       'refreshEditorViewportLayout = editorInteraction.refreshEditorViewportLayout;',
@@ -279,6 +290,27 @@ describe('App outline layout', () => {
     expect(emptyWorkspaceSource).toContain('FolderOpen');
   });
 
+  it('mounts the semantic editor only after an open document renders its host', () => {
+    const mountStart = appSource.indexOf('function mountEditorHostIfReady()');
+    const onMountStart = appSource.indexOf('onMount(async () => {');
+    const onMountEnd = appSource.indexOf('  });', onMountStart);
+    const mountSource = appSource.slice(mountStart, onMountStart);
+    const onMountSource = appSource.slice(onMountStart, onMountEnd);
+
+    expect(mountStart).toBeGreaterThan(-1);
+    expect(mountSource).toContain('if (!hasOpenDocument() || !editorHost');
+    expect(mountSource).toContain('editor.mount(editorHost);');
+    expect(mountSource).toContain("editorHost.addEventListener('image-context-menu'");
+    expect(appSource).toContain(
+      '$: if (tabs.length > 0 && activeTabId && editorHost) mountEditorHostIfReady();',
+    );
+    expect(appSource).toContain(
+      '$: if ((tabs.length === 0 || !activeTabId) && mountedEditorHost) detachMountedEditorHostEvents();',
+    );
+    expect(onMountSource).not.toContain('editor.mount(editorHost);');
+    expect(onMountSource).not.toContain("editorHost.addEventListener('image-context-menu'");
+  });
+
   it('keeps outline navigation in the current editor mode', () => {
     const jumpStart = outlineInteractionSource.indexOf('function jumpToOutlineItem');
     const jumpEnd = outlineInteractionSource.indexOf(
@@ -334,6 +366,23 @@ describe('App outline layout', () => {
     expect(tocNodeViewSource).toContain('empty.textContent = t.documentHasNoHeadings()');
   });
 
+  it('keeps table inline controls aligned and exposes compact table utility actions', () => {
+    expect(tableControlsSource).toContain('getOverlayScale(view.dom)');
+    expect(tableControlsSource).toContain('tableRect.width / scale.x');
+    expect(tableControlsSource).toContain('resizeCurrentTable(rows, columns)');
+    expect(tableControlsSource).toContain('t.resizeTable()');
+    expect(tableControlsSource).toContain("setTableColumnAlignment('left')");
+    expect(tableControlsSource).toContain("setTableColumnAlignment('center')");
+    expect(tableControlsSource).toContain("setTableColumnAlignment('right')");
+    expect(tableControlsSource).toContain('toggleFirstTableRowHeader()');
+    expect(tableControlsSource).toContain('deleteCurrentTable()');
+    expect(tableControlsStyles).toContain('.util-icon-align-left');
+    expect(tableControlsStyles).toContain('.util-icon-resize-grid');
+    expect(tableControlsStyles).toContain('.table-resize-popover');
+    expect(tableControlsStyles).not.toContain("content: '≡'");
+    expect(tableControlsStyles).not.toContain("content: '⌫'");
+  });
+
   it('wires Mermaid diagram insertion through toolbar, titlebar and native menu', () => {
     expect(toolbarSource).toContain('DIAGRAM_TEMPLATES');
     expect(toolbarSource).toContain("type: 'insertMermaidBlock'");
@@ -349,7 +398,8 @@ describe('App outline layout', () => {
     expect(appCommandsSource).toContain("command.startsWith('menu-chart:')");
     expect(appCommandsSource).toContain("type: 'insertDiagramBlock'");
     expect(tauriMenuSource).toContain('SubmenuBuilder::new(app, tr(locale, "menu_chart"))');
-    expect(tauriMenuSource).toContain('"menu-chart", tr(locale, "menu_chart_blank")');
+    expect(tauriMenuSource).toContain('"menu-chart"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_chart_blank")');
     expect(tauriMenuSource).toContain('menu-chart:flowchart');
     expect(tauriMenuSource).toContain('menu-chart:erDiagram');
   });
@@ -547,7 +597,15 @@ describe('App outline layout', () => {
     expect(appSource).toContain("let startupFolderPath = ''");
     expect(appSource).toContain('function scheduleStartupFolderLoad()');
     expect(appSource).toContain('startupFolderPath = folderPath');
-    expect(appSource).toMatch(/await setupDesktopEvents\(\);\s*scheduleStartupFolderLoad\(\);/);
+    const mountStart = appSource.indexOf('onMount(async () =>');
+    const setupDesktopEventsIndex = appSource.indexOf('await setupDesktopEvents();', mountStart);
+    const scheduleStartupFolderLoadIndex = appSource.indexOf(
+      'scheduleStartupFolderLoad();',
+      mountStart,
+    );
+
+    expect(setupDesktopEventsIndex).toBeGreaterThan(mountStart);
+    expect(scheduleStartupFolderLoadIndex).toBeGreaterThan(setupDesktopEventsIndex);
     expect(appSource).toContain('queueMicrotask(runStartupFolderLoad)');
     expect(appSource).toContain('window.setTimeout(runStartupFolderLoad, 0)');
     expect(appSource).toContain('await loadFolder(folderPath);');
@@ -574,7 +632,8 @@ describe('App outline layout', () => {
   it('does not mark ancestor folders as selected when a file is active', () => {
     expect(explorerSidebarSource).not.toContain('function isFolderActive');
     expect(explorerSidebarSource).not.toContain('class:active={isFolderActive(');
-    expect(explorerSidebarSource).toContain('class:active={nativePath === node.path}');
+    expect(explorerSidebarSource).toContain('function isActiveFilePath(path: string)');
+    expect(explorerSidebarSource).toContain('class:active={isActiveFilePath(node.path)}');
   });
 
   it('mirrors the app chrome menu into the native macOS menubar', () => {
@@ -589,7 +648,8 @@ describe('App outline layout', () => {
     expect(tauriMenuSource).toContain('"toggle-ordered-list",');
     expect(tauriMenuSource).toContain('"toggle-bullet-list",');
     expect(tauriMenuSource).toContain('"toggle-task-list",');
-    expect(tauriMenuSource).toContain('"open-settings", tr(locale, "menu_preferences")');
+    expect(tauriMenuSource).toContain('"open-settings"');
+    expect(tauriMenuSource).toContain('tr(locale, "menu_preferences")');
     expect(tauriMenuSource).toContain('Some("CmdOrCtrl+N")');
     expect(tauriMenuSource).toContain('"Cmd+Q"');
     expect(tauriMenuSource).toContain('"Alt+F4"');
@@ -618,7 +678,9 @@ describe('App outline layout', () => {
     expect(frontMatterCardSource).toContain('t.editDocumentMetadata()');
     expect(frontMatterCardSource).toContain('t.viewDocumentMetadata()');
     expect(frontMatterCardSource).not.toContain('YAML Front Matter');
-    expect(frontMatterCardSource).toContain("import { clickOutside } from '../actions/clickOutside';");
+    expect(frontMatterCardSource).toContain(
+      "import { clickOutside } from '../actions/clickOutside';",
+    );
     expect(frontMatterCardSource).toContain('readonly={readonly}');
     expect(frontMatterCardSource).toContain('use:clickOutside={leaveEdit}');
     expect(frontMatterCardSource).toContain('on:focus={enterEdit}');
@@ -743,6 +805,14 @@ describe('App outline layout', () => {
     expect(explorerSidebarSource).toContain('commitRenaming();');
   });
 
+  it('cancels explorer create mode when the new node input loses focus or receives an outside click', () => {
+    expect(explorerSidebarSource).toContain('on:blur={cancelCreating}');
+    expect(explorerSidebarSource.match(/use:clickOutside=\{cancelCreating\}/g)).toHaveLength(2);
+    expect(explorerSidebarSource).toContain('commitCreating();');
+    expect(explorerSidebarSource).toContain("} else if (event.key === 'Escape') {");
+    expect(explorerSidebarSource).toContain('cancelCreating();');
+  });
+
   it('recomputes explorer virtual rows when folder expansion changes', () => {
     expect(explorerSidebarSource).toContain(
       "import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';",
@@ -810,7 +880,7 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain('writingStatsVisible');
     expect(settingsWindowSource).toContain('writingStatsMetric');
     expect(settingsWindowSource).toContain('readingTimeVisible');
-    expect(settingsWindowSource).toContain('closeToTrayEnabled');
+    expect(settingsWindowSource).toContain('closeWindowBehavior');
     expect(settingsWindowSource).toContain('defaultImageWidth');
     expect(settingsWindowSource).toContain('disabled-pill');
     expect(settingsWindowSource).toContain('t.autoCleanLocalImages()');
@@ -818,7 +888,7 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain('t.defaultDiagramType()');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.filePreviewEnabled');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.autoSaveEnabled');
-    expect(appSource).toContain('DEFAULT_APP_PREFERENCES.closeToTrayEnabled');
+    expect(appSource).toContain('DEFAULT_APP_PREFERENCES.closeWindowBehavior');
     expect(appSource).toContain('SETTINGS_UPDATED_EVENT');
     expect(appSource).toContain('applyAppPreferences');
     expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');
@@ -897,7 +967,48 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('i18n::app_text(app, "tray_exit")');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
-    expect(tauriTraySource).toContain('closeToTrayEnabled');
+    expect(tauriTraySource).toContain('closeWindowBehavior');
+  });
+
+  it('registers desktop close and exit listeners before first-run sample work', () => {
+    const mountStart = appSource.indexOf('onMount(async () =>');
+    const setupCriticalEventsIndex = appSource.indexOf(
+      'await setupCriticalDesktopEvents();',
+      mountStart,
+    );
+    const listSettingsIndex = appSource.indexOf('settings = await listAppSettings()', mountStart);
+    const firstRunIndex = appSource.indexOf('await maybeOpenFirstRunSample({', mountStart);
+
+    expect(appSource).toContain('async function setupCriticalDesktopEvents()');
+    expect(appSource).toContain("listen('nomo://request-exit-app'");
+    expect(appSource).toContain("listen('nomo://request-close-window'");
+    expect(setupCriticalEventsIndex).toBeGreaterThan(mountStart);
+    expect(listSettingsIndex).toBeGreaterThan(setupCriticalEventsIndex);
+    expect(firstRunIndex).toBeGreaterThan(setupCriticalEventsIndex);
+  });
+
+  it('uses a controlled IDEA-style close behavior choice instead of raw confirm for repeated closes', () => {
+    const resolverStart = appSource.indexOf(
+      'async function resolveCloseWindowBehaviorForCloseRequest',
+    );
+    const resolverEnd = appSource.indexOf('function requestCloseWindowChoice', resolverStart);
+    const resolverSource = appSource.slice(resolverStart, resolverEnd);
+
+    expect(appSource).toContain('let closeWindowChoiceDialogOpen = false;');
+    expect(appSource).toContain('function requestCloseWindowChoice()');
+    expect(appSource).toContain('function resolveCloseWindowChoice(behavior: CloseWindowAction)');
+    expect(appSource).toContain(
+      'if (choice.remember) {\n      await persistCloseWindowBehavior(choice.behavior);',
+    );
+    expect(appSource).toContain("updateAppSetting('closeWindowBehavior', behavior)");
+    expect(resolverSource).not.toContain('confirm(');
+    expect(appSource).not.toContain('closeToTrayFirstPrompt');
+    expect(appSource).toContain('open={closeWindowChoiceDialogOpen}');
+    expect(appSource).toContain('closeWindowLabel={t.closeWindowBehaviorCloseWindow()}');
+    expect(appSource).toContain('closeToTrayLabel={t.closeWindowBehaviorCloseToTray()}');
+    expect(settingsWindowSource).toContain("setCloseWindowBehavior('ask-every-time')");
+    expect(settingsWindowSource).toContain("setCloseWindowBehavior('close-window')");
+    expect(settingsWindowSource).toContain("setCloseWindowBehavior('close-to-tray')");
   });
 
   it('bundles and opens the first-run sample document through the normal document flow', () => {
@@ -913,6 +1024,24 @@ describe('App outline layout', () => {
     expect(appSource).toContain('maybeOpenFirstRunSample');
     expect(appSource).toContain('documentActions.applyNativeDocument(document,');
     expect(appSource).toContain('FIRST_RUN_SAMPLE_DOCUMENT_OPENED_KEY');
+    expect(appSource).toContain('showToast(message, 3500)');
+  });
+
+  it('does not render a fake standalone explorer file without an open document', () => {
+    expect(explorerSidebarSource).toContain(
+      '$: hasStandaloneFile = fileName.trim().length > 0 && filePath.trim().length > 0;',
+    );
+    expect(explorerSidebarSource).toContain('{:else if hasStandaloneFile}');
+  });
+
+  it('promotes an explorer preview tab when the same file is formally opened', () => {
+    expect(explorerSidebarSource).toContain("openRecentEntry(path, 'file')");
+    expect(documentActionsSource).toContain('getPreviewTabId(): string | null;');
+    expect(documentActionsSource).toContain('setPreviewTabId(value: string | null): void;');
+    expect(documentActionsSource).toContain('existingTab.id === options.getPreviewTabId()');
+    expect(documentActionsSource).toContain('options.setPreviewTabId(null)');
+    expect(appSource).toContain('getPreviewTabId: () => previewTabId');
+    expect(appSource).toContain('setPreviewTabId: (value) => {');
   });
 
   it('removes application-level workspace storage path configuration', () => {

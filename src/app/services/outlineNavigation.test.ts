@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OutlineItem } from '../../lib/outline/outlineService';
-import { getActiveOutlineIdFromSemantic, scrollSemanticToAnchor } from './outlineNavigation';
+import {
+  getActiveOutlineIdFromSemantic,
+  getSemanticScrollAnchor,
+  getSourceScrollAnchor,
+  scrollSemanticToAnchor,
+  scrollSourceToAnchor,
+} from './outlineNavigation';
 
 describe('outlineNavigation', () => {
   const originalRequestAnimationFrame = window.requestAnimationFrame;
@@ -73,6 +79,116 @@ describe('outlineNavigation', () => {
       ),
     ).toBe('same-2');
   });
+
+  it('maps a source section anchor into the matching semantic heading section', () => {
+    useInstantScroll();
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 1200,
+      clientHeight: 400,
+      scrollTop: 500,
+    });
+    const sourceTextarea = createTextarea(80);
+    sourcePane.append(sourceTextarea);
+    const anchor = getSourceScrollAnchor(createOutline(), sourcePane.scrollTop, 20, sourceTextarea);
+    const semanticPane = createSemanticPane([
+      { tag: 'h1', title: '第一章', top: 40 },
+      { tag: 'h2', title: '第二章', top: 440 },
+    ], 1000, 300);
+
+    scrollSemanticToAnchor(createOutline(), semanticPane, anchor);
+
+    expect(semanticPane.scrollTop).toBe(258);
+  });
+
+  it('maps a semantic section anchor back into the matching source lines', () => {
+    useInstantScroll();
+    const semanticPane = createSemanticPane([
+      { tag: 'h1', title: '第一章', top: 40 },
+      { tag: 'h2', title: '第二章', top: 440 },
+    ], 1000, 300);
+    semanticPane.scrollTop = 250;
+    const anchor = getSemanticScrollAnchor(createOutline(), semanticPane);
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 1600,
+      clientHeight: 400,
+      scrollTop: 0,
+    });
+    const sourceTextarea = createTextarea(80);
+    sourcePane.append(sourceTextarea);
+
+    scrollSourceToAnchor(createOutline(), sourcePane, sourceTextarea, anchor);
+
+    expect(sourcePane.scrollTop).toBe(420);
+  });
+
+  it('falls back to document progress when source mode has no headings', () => {
+    useInstantScroll();
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 1000,
+      clientHeight: 400,
+      scrollTop: 300,
+    });
+    const sourceTextarea = createTextarea(50);
+    sourcePane.append(sourceTextarea);
+    const anchor = getSourceScrollAnchor([], sourcePane.scrollTop, 20, sourceTextarea);
+    const semanticPane = createSemanticPane([], 1100, 300);
+
+    scrollSemanticToAnchor([], semanticPane, anchor);
+
+    expect(semanticPane.scrollTop).toBe(400);
+  });
+
+  it('falls back to document progress when semantic mode has no headings', () => {
+    useInstantScroll();
+    const semanticPane = createSemanticPane([], 1100, 300);
+    semanticPane.scrollTop = 400;
+    const anchor = getSemanticScrollAnchor([], semanticPane);
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 1000,
+      clientHeight: 400,
+      scrollTop: 0,
+    });
+    const sourceTextarea = createTextarea(50);
+    sourcePane.append(sourceTextarea);
+
+    scrollSourceToAnchor([], sourcePane, sourceTextarea, anchor);
+
+    expect(sourcePane.scrollTop).toBe(300);
+  });
+
+  it('keeps rich-block height differences inside the same outline section', () => {
+    useInstantScroll();
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTop: 920,
+    });
+    const sourceTextarea = createTextarea(100);
+    sourcePane.append(sourceTextarea);
+    const outline: OutlineItem[] = [
+      { id: 'intro', level: 1, title: 'Intro', line: 1 },
+      { id: 'details', level: 2, title: 'Details', line: 31 },
+      { id: 'next', level: 2, title: 'Next', line: 70 },
+    ];
+    const anchor = getSourceScrollAnchor(outline, sourcePane.scrollTop, 20, sourceTextarea);
+    const semanticPane = createSemanticPane([
+      { tag: 'h1', title: 'Intro', top: 20 },
+      { tag: 'h2', title: 'Details', top: 760 },
+      { tag: 'h2', title: 'Next', top: 1560 },
+    ], 2200, 500);
+
+    scrollSemanticToAnchor(outline, semanticPane, anchor);
+
+    expect(anchor?.kind).toBe('outline');
+    expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('details');
+    expect(semanticPane.scrollTop).toBeGreaterThan(760);
+    expect(semanticPane.scrollTop).toBeLessThan(1560);
+  });
 });
 
 function createRect(top: number): DOMRect {
@@ -87,4 +203,73 @@ function createRect(top: number): DOMRect {
     height: 20,
     toJSON: () => ({}),
   };
+}
+
+function createOutline(): OutlineItem[] {
+  return [
+    { id: '第一章', level: 1, title: '第一章', line: 1 },
+    { id: '第二章', level: 2, title: '第二章', line: 41 },
+  ];
+}
+
+function useInstantScroll() {
+  window.requestAnimationFrame = undefined as never;
+  window.cancelAnimationFrame = vi.fn();
+}
+
+function createSemanticPane(
+  headings: Array<{ tag: 'h1' | 'h2'; title: string; top: number }>,
+  scrollHeight: number,
+  clientHeight: number,
+) {
+  const semanticPane = createScrollableElement('section', {
+    className: 'semantic-pane',
+    scrollHeight,
+    clientHeight,
+    scrollTop: 0,
+  });
+  semanticPane.getBoundingClientRect = () => createRect(0);
+
+  const editor = document.createElement('div');
+  editor.className = 'ProseMirror';
+  headings.forEach((heading) => {
+    const element = document.createElement(heading.tag);
+    element.textContent = heading.title;
+    element.getBoundingClientRect = () => createRect(heading.top - semanticPane.scrollTop);
+    editor.append(element);
+  });
+  semanticPane.append(editor);
+  return semanticPane;
+}
+
+function createTextarea(lineCount: number) {
+  const textarea = document.createElement('textarea');
+  textarea.style.lineHeight = '20px';
+  textarea.value = Array.from({ length: lineCount }, (_, index) => `line ${index + 1}`).join('\n');
+  return textarea;
+}
+
+function createScrollableElement<K extends keyof HTMLElementTagNameMap>(
+  tagName: K,
+  options: {
+    className?: string;
+    scrollHeight: number;
+    clientHeight: number;
+    scrollTop: number;
+  },
+) {
+  const element = document.createElement(tagName);
+  if (options.className) {
+    element.className = options.className;
+  }
+  Object.defineProperty(element, 'scrollHeight', {
+    configurable: true,
+    value: options.scrollHeight,
+  });
+  Object.defineProperty(element, 'clientHeight', {
+    configurable: true,
+    value: options.clientHeight,
+  });
+  element.scrollTop = options.scrollTop;
+  return element;
 }

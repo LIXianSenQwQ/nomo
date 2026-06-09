@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Node as PmNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import { TableMap } from 'prosemirror-tables';
 import { executeEditorCommand } from './editorCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
@@ -471,6 +472,27 @@ describe('editorCommands', () => {
     target.remove();
   });
 
+  it('通过编辑命令调整当前表格尺寸', () => {
+    const doc = schema.nodes.doc.create(null, [createTableNode(1, 2)]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, findTableCellTextPosition(doc, 1, 0)),
+      }),
+    });
+
+    executeEditorCommand({ type: 'resizeTable', rows: 3, columns: 4 }, view, '', () => undefined);
+
+    const table = view.state.doc.child(0);
+    expect(table.childCount).toBe(3);
+    expect(table.child(0).childCount).toBe(4);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('在文档中间插入代码块时，在新代码块后补空段落', () => {
     const doc = schema.nodes.doc.create(null, [
       schema.nodes.paragraph.create(null, schema.text('上方')),
@@ -931,6 +953,13 @@ function getTopLevelNodeNames(doc: PmNode): string[] {
   const names: string[] = [];
   doc.forEach((node) => names.push(node.type.name));
   return names;
+}
+
+function findTableCellTextPosition(doc: PmNode, rowIndex: number, columnIndex: number): number {
+  const table = doc.child(0);
+  const tableStart = 1;
+  const map = TableMap.get(table);
+  return tableStart + map.positionAt(rowIndex, columnIndex, table) + 2;
 }
 
 function createFootnoteDoc(): PmNode {

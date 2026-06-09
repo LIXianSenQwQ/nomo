@@ -46,6 +46,8 @@ interface DocumentActionsOptions {
   setTabs(value: Tab[]): void;
   getActiveTabId(): string;
   setActiveTabId(value: string): void;
+  getPreviewTabId(): string | null;
+  setPreviewTabId(value: string | null): void;
   setStatusMessage(value: string): void;
   setRecentFiles(value: Awaited<ReturnType<typeof loadRecentEntries>>): void;
   saveActiveTabState(): void;
@@ -189,6 +191,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       document.sizeBytes > options.getLargeDocumentLimit();
     const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
     if (existingTab && !saved) {
+      // 预览标签再次通过“正式打开”路径打开时，升级为固定标签。
+      if (existingTab.id === options.getPreviewTabId()) {
+        options.setPreviewTabId(null);
+      }
       options.switchTab(existingTab.id);
       options.setStatusMessage(t.switchedToOpenedTab());
       return;
@@ -227,14 +233,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       options.setStatusMessage(t.largeDocumentReadonlyOpened());
     }
 
-    const parentDir = getDirectoryLabel(document.path);
-    if (parentDir && parentDir !== t.currentFolder()) {
-      if (!options.getCurrentFolderPath()) {
-        options.loadFolder(parentDir).catch(() => undefined);
-      } else {
-        options.expandAncestors(document.path, options.getCurrentFolderPath());
-      }
-    }
+    await revealDocumentInExplorer(document.path);
   }
 
   async function applySavedNativeDocument(
@@ -287,14 +286,22 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       options.setStatusMessage(t.largeDocumentReadonlyOpened());
     }
 
-    const parentDir = getDirectoryLabel(document.path);
-    if (parentDir && parentDir !== t.currentFolder()) {
-      if (!options.getCurrentFolderPath()) {
-        options.loadFolder(parentDir).catch(() => undefined);
-      } else {
-        options.expandAncestors(document.path, options.getCurrentFolderPath());
-      }
+    await revealDocumentInExplorer(document.path);
+  }
+
+  async function revealDocumentInExplorer(documentPath: string) {
+    const parentDir = getDirectoryLabel(documentPath);
+    if (!parentDir || parentDir === t.currentFolder()) {
+      return;
     }
+
+    const currentFolderPath = options.getCurrentFolderPath();
+    if (!currentFolderPath) {
+      await options.loadFolder(parentDir).catch(() => undefined);
+      return;
+    }
+
+    options.expandAncestors(documentPath, currentFolderPath);
   }
 
   function createNewFile() {

@@ -39,6 +39,14 @@
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
 /** @typedef {{}} Closetotrayfirstprompt4Inputs */
+/** @typedef {{}} Closewindowbehavior2Inputs */
+/** @typedef {{}} Closewindowbehaviordescription3Inputs */
+/** @typedef {{}} Closewindowbehavioraskeverytime5Inputs */
+/** @typedef {{}} Closewindowbehaviorclosewindow4Inputs */
+/** @typedef {{}} Closewindowbehaviorclosetotray5Inputs */
+/** @typedef {{}} Closewindowchoicetitle3Inputs */
+/** @typedef {{}} Closewindowchoicemessage3Inputs */
+/** @typedef {{}} Rememberclosewindowchoice3Inputs */
 /** @typedef {{}} Foldermissing1Inputs */
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
@@ -269,6 +277,38 @@ export const closetotrayfirstprompt4 = /** @type {(inputs: Closetotrayfirstpromp
 
 OK: hide to tray and remember this choice.
 Cancel: close the window directly. You can enable this later in Preferences.`)
+};
+
+export const closewindowbehavior2 = /** @type {(inputs: Closewindowbehavior2Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Close window behavior`)
+};
+
+export const closewindowbehaviordescription3 = /** @type {(inputs: Closewindowbehaviordescription3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Choose what the close button does to the main window.`)
+};
+
+export const closewindowbehavioraskeverytime5 = /** @type {(inputs: Closewindowbehavioraskeverytime5Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Ask every time`)
+};
+
+export const closewindowbehaviorclosewindow4 = /** @type {(inputs: Closewindowbehaviorclosewindow4Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Close window`)
+};
+
+export const closewindowbehaviorclosetotray5 = /** @type {(inputs: Closewindowbehaviorclosetotray5Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Close to tray`)
+};
+
+export const closewindowchoicetitle3 = /** @type {(inputs: Closewindowchoicetitle3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Close Nomo`)
+};
+
+export const closewindowchoicemessage3 = /** @type {(inputs: Closewindowchoicemessage3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Choose what happens to the main window.`)
+};
+
+export const rememberclosewindowchoice3 = /** @type {(inputs: Rememberclosewindowchoice3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Use this as the default`)
 };
 
 export const foldermissing1 = /** @type {(inputs: Foldermissing1Inputs) => LocalizedString} */ () => {

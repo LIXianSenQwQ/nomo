@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { schema } from './schema';
+
+function createDocWithCodeBlockAndParagraph(paragraphText = ''): {
+  doc: ProseMirrorNode;
+  codeBlock: ProseMirrorNode;
+} {
+  const codeBlock = schema.nodes.code_block.create({ params: 'ts' }, schema.text('const a = 1;'));
+  const paragraph = paragraphText
+    ? schema.nodes.paragraph.create(null, schema.text(paragraphText))
+    : schema.nodes.paragraph.create();
+  return {
+    doc: schema.nodes.doc.create(null, [codeBlock, paragraph]),
+    codeBlock,
+  };
+}
 
 describe('code_block markdown 解析', () => {
   it('解析带语言的 fenced code block', () => {
@@ -183,5 +199,59 @@ describe('code_block 与其他节点共存', () => {
     const doc = parseMarkdown(markdown);
     const serialized = serializeMarkdown(doc).trim();
     expect(serialized).toBe(markdown);
+  });
+});
+
+describe('code_block Backspace 行为', () => {
+  it('光标在代码块下方空段落开头时，Backspace 直接删除上方代码块', () => {
+    const { doc, codeBlock } = createDocWithCodeBlockAndParagraph();
+    let capturedTr: Transaction | undefined;
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, codeBlock.nodeSize + 1),
+    });
+
+    const handled = deleteCodeBlockBeforeCursor(state, (tr) => {
+      capturedTr = tr;
+    });
+
+    expect(handled).toBe(true);
+    expect(capturedTr?.doc.childCount).toBe(1);
+    expect(capturedTr?.doc.child(0).type).toBe(schema.nodes.paragraph);
+    expect(capturedTr?.selection.from).toBe(1);
+  });
+
+  it('光标在代码块下方正文段落开头时，Backspace 删除代码块并保留正文', () => {
+    const { doc, codeBlock } = createDocWithCodeBlockAndParagraph('后续正文');
+    let capturedTr: Transaction | undefined;
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, codeBlock.nodeSize + 1),
+    });
+
+    const handled = deleteCodeBlockBeforeCursor(state, (tr) => {
+      capturedTr = tr;
+    });
+
+    expect(handled).toBe(true);
+    expect(capturedTr?.doc.childCount).toBe(1);
+    expect(capturedTr?.doc.textContent).toBe('后续正文');
+    expect(capturedTr?.selection.from).toBe(1);
+  });
+
+  it('光标不在下方段落开头时，不拦截默认 Backspace 行为', () => {
+    const { doc, codeBlock } = createDocWithCodeBlockAndParagraph('后续正文');
+    let capturedTr: Transaction | undefined;
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, codeBlock.nodeSize + 2),
+    });
+
+    const handled = deleteCodeBlockBeforeCursor(state, (tr) => {
+      capturedTr = tr;
+    });
+
+    expect(handled).toBe(false);
+    expect(capturedTr).toBeUndefined();
   });
 });

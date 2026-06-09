@@ -40,6 +40,7 @@
     type AppPreferenceKey,
     type AppPreferencesPatch,
     type BlockStylePreference,
+    type CloseWindowBehavior,
     type CodeBlockIndentPreference,
     type EditorModePreference,
     type FolderOpenDefaultBehavior,
@@ -671,6 +672,10 @@
 
   function setFolderBehavior(folderOpenDefaultBehavior: FolderOpenDefaultBehavior) {
     updateDraft({ folderOpenDefaultBehavior });
+  }
+
+  function setCloseWindowBehavior(closeWindowBehavior: CloseWindowBehavior) {
+    updateDraft({ closeWindowBehavior });
   }
 
   function setStatsMetric(writingStatsMetric: WritingStatsMetric) {
@@ -1410,19 +1415,35 @@
                 <span class="toggle-switch" aria-hidden="true"></span>
               </label>
 
-              <label class="toggle-row" for="closeToTrayEnabled">
-                <span>
-                  <span class="toggle-title">{t.closeToTray()}</span>
-                  <span class="toggle-desc">{t.closeToTrayDescription()}</span>
-                </span>
-                <input
-                  id="closeToTrayEnabled"
-                  type="checkbox"
-                  checked={draftSettings.closeToTrayEnabled}
-                  on:change={(event) => toggleSetting('closeToTrayEnabled', event)}
-                />
-                <span class="toggle-switch" aria-hidden="true"></span>
-              </label>
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.closeWindowBehavior()}</span>
+                  <p>{t.closeWindowBehaviorDescription()}</p>
+                </div>
+                <div class="triple-control" role="group" aria-label={t.closeWindowBehavior()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.closeWindowBehavior === 'ask-every-time'}
+                    aria-pressed={draftSettings.closeWindowBehavior === 'ask-every-time'}
+                    on:click={() => setCloseWindowBehavior('ask-every-time')}
+                    >{t.closeWindowBehaviorAskEveryTime()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.closeWindowBehavior === 'close-window'}
+                    aria-pressed={draftSettings.closeWindowBehavior === 'close-window'}
+                    on:click={() => setCloseWindowBehavior('close-window')}
+                    >{t.closeWindowBehaviorCloseWindow()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.closeWindowBehavior === 'close-to-tray'}
+                    aria-pressed={draftSettings.closeWindowBehavior === 'close-to-tray'}
+                    on:click={() => setCloseWindowBehavior('close-to-tray')}
+                    >{t.closeWindowBehaviorCloseToTray()}</button
+                  >
+                </div>
+              </div>
 
               <div class="setting-row">
                 <div>

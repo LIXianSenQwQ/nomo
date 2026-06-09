@@ -38,6 +38,14 @@
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
 /** @typedef {{}} Closetotrayfirstprompt4Inputs */
+/** @typedef {{}} Closewindowbehavior2Inputs */
+/** @typedef {{}} Closewindowbehaviordescription3Inputs */
+/** @typedef {{}} Closewindowbehavioraskeverytime5Inputs */
+/** @typedef {{}} Closewindowbehaviorclosewindow4Inputs */
+/** @typedef {{}} Closewindowbehaviorclosetotray5Inputs */
+/** @typedef {{}} Closewindowchoicetitle3Inputs */
+/** @typedef {{}} Closewindowchoicemessage3Inputs */
+/** @typedef {{}} Rememberclosewindowchoice3Inputs */
 /** @typedef {{}} Foldermissing1Inputs */
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
@@ -148,6 +156,14 @@ export const unsavedchangesclosewindow3: (inputs: Unsavedchangesclosewindow3Inpu
 export const unsavedchangesexitapp3: (inputs: Unsavedchangesexitapp3Inputs) => LocalizedString;
 export const unsavedchangesclosetabs3: (inputs: Unsavedchangesclosetabs3Inputs) => LocalizedString;
 export const closetotrayfirstprompt4: (inputs: Closetotrayfirstprompt4Inputs) => LocalizedString;
+export const closewindowbehavior2: (inputs: Closewindowbehavior2Inputs) => LocalizedString;
+export const closewindowbehaviordescription3: (inputs: Closewindowbehaviordescription3Inputs) => LocalizedString;
+export const closewindowbehavioraskeverytime5: (inputs: Closewindowbehavioraskeverytime5Inputs) => LocalizedString;
+export const closewindowbehaviorclosewindow4: (inputs: Closewindowbehaviorclosewindow4Inputs) => LocalizedString;
+export const closewindowbehaviorclosetotray5: (inputs: Closewindowbehaviorclosetotray5Inputs) => LocalizedString;
+export const closewindowchoicetitle3: (inputs: Closewindowchoicetitle3Inputs) => LocalizedString;
+export const closewindowchoicemessage3: (inputs: Closewindowchoicemessage3Inputs) => LocalizedString;
+export const rememberclosewindowchoice3: (inputs: Rememberclosewindowchoice3Inputs) => LocalizedString;
 export const foldermissing1: (inputs: Foldermissing1Inputs) => LocalizedString;
 export const filemissing1: (inputs: Filemissing1Inputs) => LocalizedString;
 export const previewopenfailed2: (inputs: Previewopenfailed2Inputs) => LocalizedString;
@@ -265,6 +281,14 @@ export type Unsavedchangesclosetabs3Inputs = {
     names: NonNullable<unknown>;
 };
 export type Closetotrayfirstprompt4Inputs = {};
+export type Closewindowbehavior2Inputs = {};
+export type Closewindowbehaviordescription3Inputs = {};
+export type Closewindowbehavioraskeverytime5Inputs = {};
+export type Closewindowbehaviorclosewindow4Inputs = {};
+export type Closewindowbehaviorclosetotray5Inputs = {};
+export type Closewindowchoicetitle3Inputs = {};
+export type Closewindowchoicemessage3Inputs = {};
+export type Rememberclosewindowchoice3Inputs = {};
 export type Foldermissing1Inputs = {};
 export type Filemissing1Inputs = {};
 export type Previewopenfailed2Inputs = {};

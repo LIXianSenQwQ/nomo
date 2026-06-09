@@ -72,6 +72,14 @@ export type Unsavedchangesclosetabs3Inputs = {
     names: NonNullable<unknown>;
 };
 export type Closetotrayfirstprompt4Inputs = {};
+export type Closewindowbehavior2Inputs = {};
+export type Closewindowbehaviordescription3Inputs = {};
+export type Closewindowbehavioraskeverytime5Inputs = {};
+export type Closewindowbehaviorclosewindow4Inputs = {};
+export type Closewindowbehaviorclosetotray5Inputs = {};
+export type Closewindowchoicetitle3Inputs = {};
+export type Closewindowchoicemessage3Inputs = {};
+export type Rememberclosewindowchoice3Inputs = {};
 export type Foldermissing1Inputs = {};
 export type Filemissing1Inputs = {};
 export type Previewopenfailed2Inputs = {};
@@ -727,6 +735,118 @@ declare const unsavedchangesclosetabs3: ((inputs: Unsavedchangesclosetabs3Inputs
 declare const closetotrayfirstprompt4: ((inputs?: Closetotrayfirstprompt4Inputs, options?: {
     locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Closetotrayfirstprompt4Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Close window behavior" |
+*
+* @param {Closewindowbehavior2Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowbehavior2: ((inputs?: Closewindowbehavior2Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowbehavior2Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Choose what the close button does to the main window." |
+*
+* @param {Closewindowbehaviordescription3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowbehaviordescription3: ((inputs?: Closewindowbehaviordescription3Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowbehaviordescription3Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Ask every time" |
+*
+* @param {Closewindowbehavioraskeverytime5Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowbehavioraskeverytime5: ((inputs?: Closewindowbehavioraskeverytime5Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowbehavioraskeverytime5Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Close window" |
+*
+* @param {Closewindowbehaviorclosewindow4Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowbehaviorclosewindow4: ((inputs?: Closewindowbehaviorclosewindow4Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowbehaviorclosewindow4Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Close to tray" |
+*
+* @param {Closewindowbehaviorclosetotray5Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowbehaviorclosetotray5: ((inputs?: Closewindowbehaviorclosetotray5Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowbehaviorclosetotray5Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Close Nomo" |
+*
+* @param {Closewindowchoicetitle3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowchoicetitle3: ((inputs?: Closewindowchoicetitle3Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowchoicetitle3Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Choose what happens to the main window." |
+*
+* @param {Closewindowchoicemessage3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const closewindowchoicemessage3: ((inputs?: Closewindowchoicemessage3Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Closewindowchoicemessage3Inputs, {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}, {}>;
+/**
+* | output |
+* | --- |
+* | "Use this as the default" |
+*
+* @param {Rememberclosewindowchoice3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+declare const rememberclosewindowchoice3: ((inputs?: Rememberclosewindowchoice3Inputs, options?: {
+    locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Rememberclosewindowchoice3Inputs, {
     locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
 }, {}>;
 /**
@@ -1695,4 +1815,4 @@ declare const interfacelanguagejajp3: ((inputs?: Interfacelanguagejajp3Inputs, o
 }) => LocalizedString) & import("../runtime.js").MessageMetadata<Interfacelanguagejajp3Inputs, {
     locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP";
 }, {}>;
-export { appname1 as "appName", settingstitle1 as "settingsTitle", settingswindowtitle2 as "settingsWindowTitle", settingscategorygeneral2 as "settingsCategoryGeneral", settingscategoryeditor2 as "settingsCategoryEditor", settingscategoryappearance2 as "settingsCategoryAppearance", settingscategoryfiles2 as "settingsCategoryFiles", settingscategoryimages2 as "settingsCategoryImages", settingscategorystats2 as "settingsCategoryStats", settingscategoryadvanced2 as "settingsCategoryAdvanced", settingscategoryabout2 as "settingsCategoryAbout", settingscategoryabouttitle3 as "settingsCategoryAboutTitle", interfacelanguage1 as "interfaceLanguage", interfacelanguagedescription2 as "interfaceLanguageDescription", interfacelanguagesystem2 as "interfaceLanguageSystem", interfacelanguagezhcn3 as "interfaceLanguageZhCn", interfacelanguagezhtw3 as "interfaceLanguageZhTw", interfacelanguageenus3 as "interfaceLanguageEnUs", settingssaved1 as "settingsSaved", settingssaving1 as "settingsSaving", settingssavefailed2 as "settingsSaveFailed", settingsloading1 as "settingsLoading", themedescription1 as "themeDescription", themelight1 as "themeLight", themedark1 as "themeDark", themesystem1 as "themeSystem", editormodedefault2 as "editorModeDefault", editormodedefaultdescription3 as "editorModeDefaultDescription", semanticediting1 as "semanticEditing", sourcemode1 as "sourceMode", autosave1 as "autoSave", autosavedescription2 as "autoSaveDescription", restorewindow1 as "restoreWindow", _delete as "delete", confirmdelete1 as "confirmDelete", unsavedchangesclosewindow3 as "unsavedChangesCloseWindow", unsavedchangesexitapp3 as "unsavedChangesExitApp", unsavedchangesclosetabs3 as "unsavedChangesCloseTabs", closetotrayfirstprompt4 as "closeToTrayFirstPrompt", foldermissing1 as "folderMissing", filemissing1 as "fileMissing", previewopenfailed2 as "previewOpenFailed", removedfromexplorer2 as "removedFromExplorer", currentfolder1 as "currentFolder", newfolder1 as "newFolder", untitledmarkdown1 as "untitledMarkdown", deletedtype1 as "deletedType", deletefailed1 as "deleteFailed", createfolderfailed2 as "createFolderFailed", renamefailed1 as "renameFailed", largedocumentreadonly2 as "largeDocumentReadonly", sampleopenfailed2 as "sampleOpenFailed", sampleopened1 as "sampleOpened", readonlycannoteditlink3 as "readonlyCannotEditLink", switchsemanticbeforeeditlink4 as "switchSemanticBeforeEditLink", openinglink1 as "openingLink", openinglinkshort2 as "openingLinkShort", openlinkfailed2 as "openLinkFailed", linkhrefrequired2 as "linkHrefRequired", linkhrefinvalid2 as "linkHrefInvalid", linknothingtoremove3 as "linkNothingToRemove", readonlycannoteditmetadata3 as "readonlyCannotEditMetadata", readonlycannotdeletemetadata3 as "readonlyCannotDeleteMetadata", featurecomingsoon2 as "featureComingSoon", zoomstatus1 as "zoomStatus", imagecleanupremovedfailed3 as "imageCleanupRemovedFailed", imagecleanupremoved2 as "imageCleanupRemoved", imagecleanupfailed2 as "imageCleanupFailed", confirmdeletemessage2 as "confirmDeleteMessage", externalfilechanged2 as "externalFileChanged", reloadexternalversion2 as "reloadExternalVersion", saveascurrentcontent3 as "saveAsCurrentContent", overwriteexternalversion2 as "overwriteExternalVersion", markdownsource1 as "markdownSource", semanticeditorarea2 as "semanticEditorArea", documentoutline1 as "documentOutline", expandheading1 as "expandHeading", collapseheading1 as "collapseHeading", expandnamedheading2 as "expandNamedHeading", collapsenamedheading2 as "collapseNamedHeading", documenthasnoheadings3 as "documentHasNoHeadings", folderopenquestion2 as "folderOpenQuestion", openincurrentwindow3 as "openInCurrentWindow", openinnewwindow3 as "openInNewWindow", rememberfolderopenchoice3 as "rememberFolderOpenChoice", calloutnote1 as "calloutNote", callouttip1 as "calloutTip", calloutimportant1 as "calloutImportant", calloutwarning1 as "calloutWarning", calloutcaution1 as "calloutCaution", confirmdeletemetadata2 as "confirmDeleteMetadata", deletemetadata1 as "deleteMetadata", documentmetadata1 as "documentMetadata", documentmetadataediting2 as "documentMetadataEditing", editdocumentmetadatacontent3 as "editDocumentMetadataContent", viewdocumentmetadata2 as "viewDocumentMetadata", editdocumentmetadata2 as "editDocumentMetadata", metadatacreated1 as "metadataCreated", metadataupdated1 as "metadataUpdated", metadatamorefields2 as "metadataMoreFields", editlink1 as "editLink", linktitleplaceholder2 as "linkTitlePlaceholder", linktitle1 as "linkTitle", linkhref1 as "linkHref", applylink1 as "applyLink", removelink1 as "removeLink", closelinkeditor2 as "closeLinkEditor", interfacelanguagejajp3 as "interfaceLanguageJaJp" };
+export { appname1 as "appName", settingstitle1 as "settingsTitle", settingswindowtitle2 as "settingsWindowTitle", settingscategorygeneral2 as "settingsCategoryGeneral", settingscategoryeditor2 as "settingsCategoryEditor", settingscategoryappearance2 as "settingsCategoryAppearance", settingscategoryfiles2 as "settingsCategoryFiles", settingscategoryimages2 as "settingsCategoryImages", settingscategorystats2 as "settingsCategoryStats", settingscategoryadvanced2 as "settingsCategoryAdvanced", settingscategoryabout2 as "settingsCategoryAbout", settingscategoryabouttitle3 as "settingsCategoryAboutTitle", interfacelanguage1 as "interfaceLanguage", interfacelanguagedescription2 as "interfaceLanguageDescription", interfacelanguagesystem2 as "interfaceLanguageSystem", interfacelanguagezhcn3 as "interfaceLanguageZhCn", interfacelanguagezhtw3 as "interfaceLanguageZhTw", interfacelanguageenus3 as "interfaceLanguageEnUs", settingssaved1 as "settingsSaved", settingssaving1 as "settingsSaving", settingssavefailed2 as "settingsSaveFailed", settingsloading1 as "settingsLoading", themedescription1 as "themeDescription", themelight1 as "themeLight", themedark1 as "themeDark", themesystem1 as "themeSystem", editormodedefault2 as "editorModeDefault", editormodedefaultdescription3 as "editorModeDefaultDescription", semanticediting1 as "semanticEditing", sourcemode1 as "sourceMode", autosave1 as "autoSave", autosavedescription2 as "autoSaveDescription", restorewindow1 as "restoreWindow", _delete as "delete", confirmdelete1 as "confirmDelete", unsavedchangesclosewindow3 as "unsavedChangesCloseWindow", unsavedchangesexitapp3 as "unsavedChangesExitApp", unsavedchangesclosetabs3 as "unsavedChangesCloseTabs", closetotrayfirstprompt4 as "closeToTrayFirstPrompt", closewindowbehavior2 as "closeWindowBehavior", closewindowbehaviordescription3 as "closeWindowBehaviorDescription", closewindowbehavioraskeverytime5 as "closeWindowBehaviorAskEveryTime", closewindowbehaviorclosewindow4 as "closeWindowBehaviorCloseWindow", closewindowbehaviorclosetotray5 as "closeWindowBehaviorCloseToTray", closewindowchoicetitle3 as "closeWindowChoiceTitle", closewindowchoicemessage3 as "closeWindowChoiceMessage", rememberclosewindowchoice3 as "rememberCloseWindowChoice", foldermissing1 as "folderMissing", filemissing1 as "fileMissing", previewopenfailed2 as "previewOpenFailed", removedfromexplorer2 as "removedFromExplorer", currentfolder1 as "currentFolder", newfolder1 as "newFolder", untitledmarkdown1 as "untitledMarkdown", deletedtype1 as "deletedType", deletefailed1 as "deleteFailed", createfolderfailed2 as "createFolderFailed", renamefailed1 as "renameFailed", largedocumentreadonly2 as "largeDocumentReadonly", sampleopenfailed2 as "sampleOpenFailed", sampleopened1 as "sampleOpened", readonlycannoteditlink3 as "readonlyCannotEditLink", switchsemanticbeforeeditlink4 as "switchSemanticBeforeEditLink", openinglink1 as "openingLink", openinglinkshort2 as "openingLinkShort", openlinkfailed2 as "openLinkFailed", linkhrefrequired2 as "linkHrefRequired", linkhrefinvalid2 as "linkHrefInvalid", linknothingtoremove3 as "linkNothingToRemove", readonlycannoteditmetadata3 as "readonlyCannotEditMetadata", readonlycannotdeletemetadata3 as "readonlyCannotDeleteMetadata", featurecomingsoon2 as "featureComingSoon", zoomstatus1 as "zoomStatus", imagecleanupremovedfailed3 as "imageCleanupRemovedFailed", imagecleanupremoved2 as "imageCleanupRemoved", imagecleanupfailed2 as "imageCleanupFailed", confirmdeletemessage2 as "confirmDeleteMessage", externalfilechanged2 as "externalFileChanged", reloadexternalversion2 as "reloadExternalVersion", saveascurrentcontent3 as "saveAsCurrentContent", overwriteexternalversion2 as "overwriteExternalVersion", markdownsource1 as "markdownSource", semanticeditorarea2 as "semanticEditorArea", documentoutline1 as "documentOutline", expandheading1 as "expandHeading", collapseheading1 as "collapseHeading", expandnamedheading2 as "expandNamedHeading", collapsenamedheading2 as "collapseNamedHeading", documenthasnoheadings3 as "documentHasNoHeadings", folderopenquestion2 as "folderOpenQuestion", openincurrentwindow3 as "openInCurrentWindow", openinnewwindow3 as "openInNewWindow", rememberfolderopenchoice3 as "rememberFolderOpenChoice", calloutnote1 as "calloutNote", callouttip1 as "calloutTip", calloutimportant1 as "calloutImportant", calloutwarning1 as "calloutWarning", calloutcaution1 as "calloutCaution", confirmdeletemetadata2 as "confirmDeleteMetadata", deletemetadata1 as "deleteMetadata", documentmetadata1 as "documentMetadata", documentmetadataediting2 as "documentMetadataEditing", editdocumentmetadatacontent3 as "editDocumentMetadataContent", viewdocumentmetadata2 as "viewDocumentMetadata", editdocumentmetadata2 as "editDocumentMetadata", metadatacreated1 as "metadataCreated", metadataupdated1 as "metadataUpdated", metadatamorefields2 as "metadataMoreFields", editlink1 as "editLink", linktitleplaceholder2 as "linkTitlePlaceholder", linktitle1 as "linkTitle", linkhref1 as "linkHref", applylink1 as "applyLink", removelink1 as "removeLink", closelinkeditor2 as "closeLinkEditor", interfacelanguagejajp3 as "interfaceLanguageJaJp" };

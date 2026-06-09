@@ -69,6 +69,7 @@ import {
   deleteCurrentTable,
   deleteCurrentTableColumn,
   deleteCurrentTableRow,
+  resizeCurrentTable,
   setTableColumnAlignment,
   toggleFirstTableRowHeader,
 } from './tableCommands';
@@ -840,6 +841,8 @@ export function executeEditorCommand(
       const tableNode = createTableNode(command.rows ?? 3, command.columns ?? 3);
       return insertTable(view, tableNode);
     }
+    case 'resizeTable':
+      return run(resizeCurrentTable(command.rows, command.columns));
     case 'addTableRowBefore':
       return run(addTableRowBefore());
     case 'addTableRowAfter':

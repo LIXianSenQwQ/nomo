@@ -41,6 +41,14 @@ import { getLocale, experimentalStaticLocale } from "../runtime.js"
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
 /** @typedef {{}} Closetotrayfirstprompt4Inputs */
+/** @typedef {{}} Closewindowbehavior2Inputs */
+/** @typedef {{}} Closewindowbehaviordescription3Inputs */
+/** @typedef {{}} Closewindowbehavioraskeverytime5Inputs */
+/** @typedef {{}} Closewindowbehaviorclosewindow4Inputs */
+/** @typedef {{}} Closewindowbehaviorclosetotray5Inputs */
+/** @typedef {{}} Closewindowchoicetitle3Inputs */
+/** @typedef {{}} Closewindowchoicemessage3Inputs */
+/** @typedef {{}} Rememberclosewindowchoice3Inputs */
 /** @typedef {{}} Foldermissing1Inputs */
 /** @typedef {{}} Filemissing1Inputs */
 /** @typedef {{}} Previewopenfailed2Inputs */
@@ -779,6 +787,142 @@ const closetotrayfirstprompt4 = /** @type {((inputs?: Closetotrayfirstprompt4Inp
 	return __ja_jp2.closetotrayfirstprompt4(inputs)
 });
 export { closetotrayfirstprompt4 as "closeToTrayFirstPrompt" }
+/**
+* | output |
+* | --- |
+* | "Close window behavior" |
+*
+* @param {Closewindowbehavior2Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowbehavior2 = /** @type {((inputs?: Closewindowbehavior2Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowbehavior2Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowbehavior2(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowbehavior2(inputs)
+	if (locale === "en-US") return __en_us2.closewindowbehavior2(inputs)
+	return __ja_jp2.closewindowbehavior2(inputs)
+});
+export { closewindowbehavior2 as "closeWindowBehavior" }
+/**
+* | output |
+* | --- |
+* | "Choose what the close button does to the main window." |
+*
+* @param {Closewindowbehaviordescription3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowbehaviordescription3 = /** @type {((inputs?: Closewindowbehaviordescription3Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowbehaviordescription3Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowbehaviordescription3(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowbehaviordescription3(inputs)
+	if (locale === "en-US") return __en_us2.closewindowbehaviordescription3(inputs)
+	return __ja_jp2.closewindowbehaviordescription3(inputs)
+});
+export { closewindowbehaviordescription3 as "closeWindowBehaviorDescription" }
+/**
+* | output |
+* | --- |
+* | "Ask every time" |
+*
+* @param {Closewindowbehavioraskeverytime5Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowbehavioraskeverytime5 = /** @type {((inputs?: Closewindowbehavioraskeverytime5Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowbehavioraskeverytime5Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowbehavioraskeverytime5(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowbehavioraskeverytime5(inputs)
+	if (locale === "en-US") return __en_us2.closewindowbehavioraskeverytime5(inputs)
+	return __ja_jp2.closewindowbehavioraskeverytime5(inputs)
+});
+export { closewindowbehavioraskeverytime5 as "closeWindowBehaviorAskEveryTime" }
+/**
+* | output |
+* | --- |
+* | "Close window" |
+*
+* @param {Closewindowbehaviorclosewindow4Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowbehaviorclosewindow4 = /** @type {((inputs?: Closewindowbehaviorclosewindow4Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowbehaviorclosewindow4Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowbehaviorclosewindow4(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowbehaviorclosewindow4(inputs)
+	if (locale === "en-US") return __en_us2.closewindowbehaviorclosewindow4(inputs)
+	return __ja_jp2.closewindowbehaviorclosewindow4(inputs)
+});
+export { closewindowbehaviorclosewindow4 as "closeWindowBehaviorCloseWindow" }
+/**
+* | output |
+* | --- |
+* | "Close to tray" |
+*
+* @param {Closewindowbehaviorclosetotray5Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowbehaviorclosetotray5 = /** @type {((inputs?: Closewindowbehaviorclosetotray5Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowbehaviorclosetotray5Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowbehaviorclosetotray5(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowbehaviorclosetotray5(inputs)
+	if (locale === "en-US") return __en_us2.closewindowbehaviorclosetotray5(inputs)
+	return __ja_jp2.closewindowbehaviorclosetotray5(inputs)
+});
+export { closewindowbehaviorclosetotray5 as "closeWindowBehaviorCloseToTray" }
+/**
+* | output |
+* | --- |
+* | "Close Nomo" |
+*
+* @param {Closewindowchoicetitle3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowchoicetitle3 = /** @type {((inputs?: Closewindowchoicetitle3Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowchoicetitle3Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowchoicetitle3(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowchoicetitle3(inputs)
+	if (locale === "en-US") return __en_us2.closewindowchoicetitle3(inputs)
+	return __ja_jp2.closewindowchoicetitle3(inputs)
+});
+export { closewindowchoicetitle3 as "closeWindowChoiceTitle" }
+/**
+* | output |
+* | --- |
+* | "Choose what happens to the main window." |
+*
+* @param {Closewindowchoicemessage3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const closewindowchoicemessage3 = /** @type {((inputs?: Closewindowchoicemessage3Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Closewindowchoicemessage3Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.closewindowchoicemessage3(inputs)
+	if (locale === "zh-TW") return __zh_tw2.closewindowchoicemessage3(inputs)
+	if (locale === "en-US") return __en_us2.closewindowchoicemessage3(inputs)
+	return __ja_jp2.closewindowchoicemessage3(inputs)
+});
+export { closewindowchoicemessage3 as "closeWindowChoiceMessage" }
+/**
+* | output |
+* | --- |
+* | "Use this as the default" |
+*
+* @param {Rememberclosewindowchoice3Inputs} inputs
+* @param {{ locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }} options
+* @returns {LocalizedString}
+*/
+const rememberclosewindowchoice3 = /** @type {((inputs?: Rememberclosewindowchoice3Inputs, options?: { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }) => LocalizedString) & import('../runtime.js').MessageMetadata<Rememberclosewindowchoice3Inputs, { locale?: "zh-CN" | "zh-TW" | "en-US" | "ja-JP" }, {}>} */ ((inputs = {}, options = {}) => {
+	const locale = experimentalStaticLocale ?? options.locale ?? getLocale()
+	if (locale === "zh-CN") return __zh_cn2.rememberclosewindowchoice3(inputs)
+	if (locale === "zh-TW") return __zh_tw2.rememberclosewindowchoice3(inputs)
+	if (locale === "en-US") return __en_us2.rememberclosewindowchoice3(inputs)
+	return __ja_jp2.rememberclosewindowchoice3(inputs)
+});
+export { rememberclosewindowchoice3 as "rememberCloseWindowChoice" }
 /**
 * | output |
 * | --- |

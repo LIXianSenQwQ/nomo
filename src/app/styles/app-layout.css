@@ -147,11 +147,14 @@
 .file-tree {
   --explorer-scrollbar-size: 8px;
   --explorer-scrollbar-safe-area: 8px;
+  --explorer-row-height: 26px;
+  --explorer-row-control-height: 24px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 6px var(--explorer-scrollbar-safe-area) 10px 8px;
+  padding: 8px var(--explorer-scrollbar-safe-area) 12px 8px;
+  scroll-padding-block: 8px 12px;
   user-select: none;
 }
 
@@ -204,7 +207,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 26px;
+  height: var(--explorer-row-height);
   min-width: 0;
   will-change: transform;
 }
@@ -237,12 +240,13 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 26px;
+  min-height: var(--explorer-row-height);
   padding: 0 6px;
   border: 0;
   border-radius: var(--md-editor-radius-sm);
   background: transparent;
   color: var(--md-editor-fg);
+  line-height: 1;
   text-align: left;
 }
 
@@ -381,7 +385,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  min-height: 26px;
+  min-height: var(--explorer-row-height);
   padding: 0 8px;
   border-radius: var(--md-editor-radius-sm);
   background: color-mix(in srgb, var(--md-editor-accent) 6%, transparent);
