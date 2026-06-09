@@ -471,7 +471,7 @@ export const baseLocale: "zh-CN";
  *     throw new Error('Locale is not available');
  *   }
  */
-export const locales: readonly ["zh-CN", "zh-TW", "en-US"];
+export const locales: readonly ["zh-CN", "zh-TW", "en-US", "ja-JP"];
 /** @type {string} */
 export const cookieName: string;
 /** @type {number} */

@@ -101,8 +101,11 @@ export function createFolderExplorerController(options: FolderExplorerController
       options.getExpandedFolders(),
       missingPaths,
     );
+    let nextFolderTree = options.getFolderTree();
+    let nextExpandedFolders = options.getExpandedFolders();
     if (missingPaths.length > 0) {
-      removeMissingPaths(missingPaths, false);
+      nextFolderTree = removeTreePaths(nextFolderTree, missingPaths);
+      nextExpandedFolders = pruneExpandedFolders(nextExpandedFolders, missingPaths);
     }
 
     for (const folderPath of foldersToReload) {
@@ -112,15 +115,21 @@ export function createFolderExplorerController(options: FolderExplorerController
           clearMissingRoot(rootPath);
           return;
         }
-        removeMissingPaths([folderPath], false);
+        nextFolderTree = removeTreePaths(nextFolderTree, [folderPath]);
+        nextExpandedFolders = pruneExpandedFolders(nextExpandedFolders, [folderPath]);
         continue;
       }
 
       if (samePath(folderPath, rootPath)) {
-        options.setFolderTree(normalizeFolderEntries(result));
-      } else if (findTreeNode(options.getFolderTree(), folderPath)?.is_dir) {
-        options.setFolderTree(updateFolderChildren(options.getFolderTree(), folderPath, result));
+        nextFolderTree = normalizeFolderEntries(result);
+      } else if (findTreeNode(nextFolderTree, folderPath)?.is_dir) {
+        nextFolderTree = updateFolderChildren(nextFolderTree, folderPath, result);
       }
+    }
+
+    options.setFolderTree(nextFolderTree);
+    if (nextExpandedFolders !== options.getExpandedFolders()) {
+      options.setExpandedFolders(nextExpandedFolders);
     }
 
     if (missingPaths.length > 0) {

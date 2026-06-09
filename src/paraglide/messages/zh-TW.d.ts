@@ -21,7 +21,6 @@
 /** @typedef {{}} Settingssaving1Inputs */
 /** @typedef {{}} Settingssavefailed2Inputs */
 /** @typedef {{}} Settingsloading1Inputs */
-/** @typedef {{}} ThemeInputs */
 /** @typedef {{}} Themedescription1Inputs */
 /** @typedef {{}} Themelight1Inputs */
 /** @typedef {{}} Themedark1Inputs */
@@ -32,15 +31,9 @@
 /** @typedef {{}} Sourcemode1Inputs */
 /** @typedef {{}} Autosave1Inputs */
 /** @typedef {{}} Autosavedescription2Inputs */
-/** @typedef {{}} CloseInputs */
-/** @typedef {{}} MinimizeInputs */
-/** @typedef {{}} MaximizeInputs */
 /** @typedef {{}} Restorewindow1Inputs */
-/** @typedef {{}} CancelInputs */
 /** @typedef {{}} _DeleteInputs */
 /** @typedef {{}} Confirmdelete1Inputs */
-/** @typedef {{}} FileInputs */
-/** @typedef {{}} FolderInputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosewindow3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
@@ -87,7 +80,6 @@
 /** @typedef {{ title: NonNullable<unknown> }} Expandnamedheading2Inputs */
 /** @typedef {{ title: NonNullable<unknown> }} Collapsenamedheading2Inputs */
 /** @typedef {{}} Documenthasnoheadings3Inputs */
-/** @typedef {{}} EditorInputs */
 /** @typedef {{ folderName: NonNullable<unknown> }} Folderopenquestion2Inputs */
 /** @typedef {{}} Openincurrentwindow3Inputs */
 /** @typedef {{}} Openinnewwindow3Inputs */
@@ -107,7 +99,6 @@
 /** @typedef {{ date: NonNullable<unknown> }} Metadatacreated1Inputs */
 /** @typedef {{ date: NonNullable<unknown> }} Metadataupdated1Inputs */
 /** @typedef {{ count: NonNullable<unknown> }} Metadatamorefields2Inputs */
-/** @typedef {{}} TagsInputs */
 /** @typedef {{}} Editlink1Inputs */
 /** @typedef {{}} Linktitleplaceholder2Inputs */
 /** @typedef {{}} Linktitle1Inputs */
@@ -115,6 +106,7 @@
 /** @typedef {{}} Applylink1Inputs */
 /** @typedef {{}} Removelink1Inputs */
 /** @typedef {{}} Closelinkeditor2Inputs */
+/** @typedef {{}} Interfacelanguagejajp3Inputs */
 export const appname1: (inputs: Appname1Inputs) => LocalizedString;
 export const settingstitle1: (inputs: Settingstitle1Inputs) => LocalizedString;
 export const settingswindowtitle2: (inputs: Settingswindowtitle2Inputs) => LocalizedString;
@@ -137,7 +129,6 @@ export const settingssaved1: (inputs: Settingssaved1Inputs) => LocalizedString;
 export const settingssaving1: (inputs: Settingssaving1Inputs) => LocalizedString;
 export const settingssavefailed2: (inputs: Settingssavefailed2Inputs) => LocalizedString;
 export const settingsloading1: (inputs: Settingsloading1Inputs) => LocalizedString;
-export const theme: (inputs: ThemeInputs) => LocalizedString;
 export const themedescription1: (inputs: Themedescription1Inputs) => LocalizedString;
 export const themelight1: (inputs: Themelight1Inputs) => LocalizedString;
 export const themedark1: (inputs: Themedark1Inputs) => LocalizedString;
@@ -148,15 +139,9 @@ export const semanticediting1: (inputs: Semanticediting1Inputs) => LocalizedStri
 export const sourcemode1: (inputs: Sourcemode1Inputs) => LocalizedString;
 export const autosave1: (inputs: Autosave1Inputs) => LocalizedString;
 export const autosavedescription2: (inputs: Autosavedescription2Inputs) => LocalizedString;
-export const close: (inputs: CloseInputs) => LocalizedString;
-export const minimize: (inputs: MinimizeInputs) => LocalizedString;
-export const maximize: (inputs: MaximizeInputs) => LocalizedString;
 export const restorewindow1: (inputs: Restorewindow1Inputs) => LocalizedString;
-export const cancel: (inputs: CancelInputs) => LocalizedString;
 export const _delete: (inputs: _DeleteInputs) => LocalizedString;
 export const confirmdelete1: (inputs: Confirmdelete1Inputs) => LocalizedString;
-export const file: (inputs: FileInputs) => LocalizedString;
-export const folder: (inputs: FolderInputs) => LocalizedString;
 export const unsavedchangesclosewindow3: (inputs: Unsavedchangesclosewindow3Inputs) => LocalizedString;
 export const unsavedchangesexitapp3: (inputs: Unsavedchangesexitapp3Inputs) => LocalizedString;
 export const unsavedchangesclosetabs3: (inputs: Unsavedchangesclosetabs3Inputs) => LocalizedString;
@@ -203,7 +188,6 @@ export const collapseheading1: (inputs: Collapseheading1Inputs) => LocalizedStri
 export const expandnamedheading2: (inputs: Expandnamedheading2Inputs) => LocalizedString;
 export const collapsenamedheading2: (inputs: Collapsenamedheading2Inputs) => LocalizedString;
 export const documenthasnoheadings3: (inputs: Documenthasnoheadings3Inputs) => LocalizedString;
-export const editor: (inputs: EditorInputs) => LocalizedString;
 export const folderopenquestion2: (inputs: Folderopenquestion2Inputs) => LocalizedString;
 export const openincurrentwindow3: (inputs: Openincurrentwindow3Inputs) => LocalizedString;
 export const openinnewwindow3: (inputs: Openinnewwindow3Inputs) => LocalizedString;
@@ -223,7 +207,6 @@ export const editdocumentmetadata2: (inputs: Editdocumentmetadata2Inputs) => Loc
 export const metadatacreated1: (inputs: Metadatacreated1Inputs) => LocalizedString;
 export const metadataupdated1: (inputs: Metadataupdated1Inputs) => LocalizedString;
 export const metadatamorefields2: (inputs: Metadatamorefields2Inputs) => LocalizedString;
-export const tags: (inputs: TagsInputs) => LocalizedString;
 export const editlink1: (inputs: Editlink1Inputs) => LocalizedString;
 export const linktitleplaceholder2: (inputs: Linktitleplaceholder2Inputs) => LocalizedString;
 export const linktitle1: (inputs: Linktitle1Inputs) => LocalizedString;
@@ -231,6 +214,7 @@ export const linkhref1: (inputs: Linkhref1Inputs) => LocalizedString;
 export const applylink1: (inputs: Applylink1Inputs) => LocalizedString;
 export const removelink1: (inputs: Removelink1Inputs) => LocalizedString;
 export const closelinkeditor2: (inputs: Closelinkeditor2Inputs) => LocalizedString;
+export const interfacelanguagejajp3: (inputs: Interfacelanguagejajp3Inputs) => LocalizedString;
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Appname1Inputs = {};
 export type Settingstitle1Inputs = {};
@@ -254,7 +238,6 @@ export type Settingssaved1Inputs = {};
 export type Settingssaving1Inputs = {};
 export type Settingssavefailed2Inputs = {};
 export type Settingsloading1Inputs = {};
-export type ThemeInputs = {};
 export type Themedescription1Inputs = {};
 export type Themelight1Inputs = {};
 export type Themedark1Inputs = {};
@@ -265,15 +248,9 @@ export type Semanticediting1Inputs = {};
 export type Sourcemode1Inputs = {};
 export type Autosave1Inputs = {};
 export type Autosavedescription2Inputs = {};
-export type CloseInputs = {};
-export type MinimizeInputs = {};
-export type MaximizeInputs = {};
 export type Restorewindow1Inputs = {};
-export type CancelInputs = {};
 export type _DeleteInputs = {};
 export type Confirmdelete1Inputs = {};
-export type FileInputs = {};
-export type FolderInputs = {};
 export type Unsavedchangesclosewindow3Inputs = {
     names: NonNullable<unknown>;
 };
@@ -358,7 +335,6 @@ export type Collapsenamedheading2Inputs = {
     title: NonNullable<unknown>;
 };
 export type Documenthasnoheadings3Inputs = {};
-export type EditorInputs = {};
 export type Folderopenquestion2Inputs = {
     folderName: NonNullable<unknown>;
 };
@@ -386,7 +362,6 @@ export type Metadataupdated1Inputs = {
 export type Metadatamorefields2Inputs = {
     count: NonNullable<unknown>;
 };
-export type TagsInputs = {};
 export type Editlink1Inputs = {};
 export type Linktitleplaceholder2Inputs = {};
 export type Linktitle1Inputs = {};
@@ -394,3 +369,4 @@ export type Linkhref1Inputs = {};
 export type Applylink1Inputs = {};
 export type Removelink1Inputs = {};
 export type Closelinkeditor2Inputs = {};
+export type Interfacelanguagejajp3Inputs = {};

@@ -19,6 +19,10 @@ interface SemanticHeadingCache {
 }
 
 const semanticHeadingCache = new WeakMap<HTMLElement, SemanticHeadingCache>();
+const outlineScrollAnimations = new WeakMap<HTMLElement, number>();
+
+const OUTLINE_SCROLL_DURATION_MS = 260;
+const OUTLINE_SCROLL_REDUCED_DURATION_MS = 140;
 
 export function getSourceLineHeight(sourceTextarea: HTMLTextAreaElement | undefined) {
   if (!sourceTextarea) {
@@ -178,11 +182,44 @@ export function scrollSemanticToAnchor(
     : semanticPane.scrollHeight;
   const sectionHeight = Math.max(1, nextTop - currentTop);
   const top = Math.max(0, currentTop + sectionHeight * anchor.sectionProgress - 32);
-  if (typeof semanticPane.scrollTo === 'function') {
-    semanticPane.scrollTo({ top, behavior: 'smooth' });
-  } else {
-    semanticPane.scrollTop = top;
+  smoothScrollElementTo(semanticPane, top);
+}
+
+export function smoothScrollElementTo(scrollContainer: HTMLElement, top: number) {
+  const targetTop = Math.max(0, top);
+  const startTop = scrollContainer.scrollTop;
+  const delta = targetTop - startTop;
+  const duration = getOutlineScrollDuration();
+  const raf = typeof window !== 'undefined' ? window.requestAnimationFrame?.bind(window) : null;
+  const cancelRaf =
+    typeof window !== 'undefined' ? window.cancelAnimationFrame?.bind(window) : null;
+
+  const activeFrame = outlineScrollAnimations.get(scrollContainer);
+  if (activeFrame !== undefined && cancelRaf) {
+    cancelRaf(activeFrame);
   }
+
+  if (!raf || Math.abs(delta) < 1 || duration <= 0) {
+    scrollContainer.scrollTop = targetTop;
+    outlineScrollAnimations.delete(scrollContainer);
+    return;
+  }
+
+  const startedAt = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - startedAt;
+    const progress = clamp(elapsed / duration, 0, 1);
+    scrollContainer.scrollTop = startTop + delta * easeOutCubic(progress);
+
+    if (progress < 1) {
+      outlineScrollAnimations.set(scrollContainer, raf(tick));
+    } else {
+      scrollContainer.scrollTop = targetTop;
+      outlineScrollAnimations.delete(scrollContainer);
+    }
+  };
+
+  outlineScrollAnimations.set(scrollContainer, raf(tick));
 }
 
 function getSemanticHeadings(semanticPane: HTMLElement | undefined) {
@@ -245,4 +282,16 @@ function getSourceTotalLineCount(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getOutlineScrollDuration() {
+  const reduceMotion =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return reduceMotion ? OUTLINE_SCROLL_REDUCED_DURATION_MS : OUTLINE_SCROLL_DURATION_MS;
+}
+
+function easeOutCubic(progress: number) {
+  return 1 - Math.pow(1 - progress, 3);
 }

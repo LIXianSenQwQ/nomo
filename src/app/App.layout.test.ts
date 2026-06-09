@@ -587,6 +587,12 @@ describe('App outline layout', () => {
     expect(explorerSidebarSource).toContain('class="folder-actions"');
     expect(styles).toMatch(/\.file-tree\s*\{[\s\S]*?scrollbar-gutter:\s*stable;/);
     expect(styles).toMatch(/--explorer-scrollbar-safe-area:\s*8px;/);
+    expect(styles).toMatch(
+      /\.rail:not\(:hover\) \.file-tree\s*\{[\s\S]*?scrollbar-color:\s*var\(--md-scrollbar-thumb-idle\) var\(--md-scrollbar-track\);/,
+    );
+    expect(styles).toMatch(
+      /\.rail:hover \.file-tree\s*\{[\s\S]*?scrollbar-color:\s*var\(--md-scrollbar-thumb\) var\(--md-scrollbar-track\);/,
+    );
     expect(styles).toMatch(/\.tree-root,\s*\.recent-tree\s*\{[\s\S]*?min-width:\s*0;/);
     expect(styles).toMatch(/\.recursive-tree-container\s*\{[\s\S]*?min-width:\s*0;/);
     expect(styles).toMatch(/\.recursive-tree-container\s*\{[\s\S]*?max-width:\s*100%;/);

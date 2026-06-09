@@ -1,9 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OutlineItem } from '../../lib/outline/outlineService';
 import { getActiveOutlineIdFromSemantic, scrollSemanticToAnchor } from './outlineNavigation';
 
 describe('outlineNavigation', () => {
-  it('matches semantic headings by generated id and scrolls smoothly', () => {
+  const originalRequestAnimationFrame = window.requestAnimationFrame;
+  const originalCancelAnimationFrame = window.cancelAnimationFrame;
+
+  afterEach(() => {
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    window.cancelAnimationFrame = originalCancelAnimationFrame;
+    vi.restoreAllMocks();
+  });
+
+  it('matches semantic headings by generated id without native instant scrolling', () => {
     const semanticPane = document.createElement('section');
     semanticPane.className = 'semantic-pane';
     Object.defineProperty(semanticPane, 'scrollHeight', { value: 800, configurable: true });
@@ -26,13 +35,16 @@ describe('outlineNavigation', () => {
       { id: 'same', level: 1, title: 'Same', line: 1 },
       { id: 'same-2', level: 2, title: 'Same', line: 3 },
     ];
+    window.requestAnimationFrame = undefined as never;
+    window.cancelAnimationFrame = vi.fn();
 
     scrollSemanticToAnchor(outline, semanticPane, {
       outlineId: 'same-2',
       sectionProgress: 0,
     });
 
-    expect(scrollTo).toHaveBeenCalledWith({ top: 208, behavior: 'smooth' });
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(semanticPane.scrollTop).toBe(208);
   });
 
   it('reports the active semantic heading by generated id', () => {

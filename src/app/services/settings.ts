@@ -130,7 +130,10 @@ const IMAGE_SETTINGS_STORAGE_KEY = 'nomo-image-handling-settings';
 const THEME_SYSTEM_MIGRATION_KEY = 'themeFollowSystemMigrationV1';
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
 const THEME_TRANSITION_MS = 180;
+const ZOOM_TRANSITION_MS = 150;
+const ZOOM_REDUCED_TRANSITION_MS = 90;
 let themeTransitionTimer: number | null = null;
+let zoomAnimationFrame: number | null = null;
 
 export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
@@ -421,8 +424,46 @@ export function applyEditorLayoutSettings(contentWidthPercent: number) {
   );
 }
 
-export function applyZoomSetting(zoomPercent: number) {
-  document.documentElement.style.setProperty('--md-editor-zoom', String(zoomPercent / 100));
+export function applyZoomSetting(zoomPercent: number, options?: { transition?: boolean }) {
+  const targetZoom = zoomPercent / 100;
+  if (!options?.transition || typeof window === 'undefined') {
+    cancelZoomAnimation();
+    setZoomValue(targetZoom);
+    return;
+  }
+
+  const raf = window.requestAnimationFrame?.bind(window);
+  if (!raf) {
+    cancelZoomAnimation();
+    setZoomValue(targetZoom);
+    return;
+  }
+
+  cancelZoomAnimation();
+
+  const startZoom = getCurrentZoomValue();
+  const delta = targetZoom - startZoom;
+  if (Math.abs(delta) < 0.001) {
+    setZoomValue(targetZoom);
+    return;
+  }
+
+  const duration = prefersReducedMotion() ? ZOOM_REDUCED_TRANSITION_MS : ZOOM_TRANSITION_MS;
+  const startedAt = Date.now();
+  const tick = () => {
+    const elapsed = Date.now() - startedAt;
+    const progress = Math.min(1, Math.max(0, elapsed / duration));
+    setZoomValue(startZoom + delta * easeOutCubic(progress));
+
+    if (progress < 1) {
+      zoomAnimationFrame = raf(tick);
+    } else {
+      setZoomValue(targetZoom);
+      zoomAnimationFrame = null;
+    }
+  };
+
+  zoomAnimationFrame = raf(tick);
 }
 
 export function applyCodeBlockLineNumberSetting(visible: boolean) {
@@ -679,6 +720,32 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, numberValue));
+}
+
+function getCurrentZoomValue() {
+  const inlineValue = document.documentElement.style.getPropertyValue('--md-editor-zoom');
+  const computedValue = getComputedStyle(document.documentElement).getPropertyValue(
+    '--md-editor-zoom',
+  );
+  const parsed = Number.parseFloat(inlineValue || computedValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function cancelZoomAnimation() {
+  if (zoomAnimationFrame === null || typeof window === 'undefined') {
+    zoomAnimationFrame = null;
+    return;
+  }
+  window.cancelAnimationFrame?.(zoomAnimationFrame);
+  zoomAnimationFrame = null;
+}
+
+function setZoomValue(value: number) {
+  document.documentElement.style.setProperty('--md-editor-zoom', String(value));
+}
+
+function easeOutCubic(progress: number) {
+  return 1 - Math.pow(1 - progress, 3);
 }
 
 function isThemePreference(value: unknown): value is ThemePreference {

@@ -134,6 +134,14 @@ describe('settings', () => {
     expect(normalized.interfaceLanguage).toBe('system');
   });
 
+  it('preserves the Japanese interface language preference', () => {
+    const normalized = normalizeAppPreferences({
+      interfaceLanguage: 'ja-JP',
+    });
+
+    expect(normalized.interfaceLanguage).toBe('ja-JP');
+  });
+
   it('falls back to enabled inline code rendering for invalid preference values', () => {
     const normalized = normalizeAppPreferences({
       inlineCodeRenderingEnabled: 'false' as never,

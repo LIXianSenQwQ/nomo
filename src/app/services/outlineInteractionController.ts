@@ -6,6 +6,7 @@ import {
   getSourceHeadingSelection,
   getSourceLineHeight as getTextareaLineHeight,
   scrollSemanticToAnchor,
+  smoothScrollElementTo,
 } from './outlineNavigation';
 import {
   isOutlineItemExpandable as getOutlineItemExpandable,
@@ -64,13 +65,17 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
       }
 
       const sourceTextarea = options.getSourceTextarea();
+      const sourcePane = options.getSourcePane();
       const selection = getSourceHeadingSelection(options.getMarkdown(), item);
-      sourceTextarea.focus();
+      const restoreScrollTop = sourcePane?.scrollTop ?? 0;
+
+      sourceTextarea.focus({ preventScroll: true });
       sourceTextarea.setSelectionRange(selection.end, selection.end);
       const lineHeightPx = getSourceLineHeight();
-      options
-        .getSourcePane()
-        ?.scrollTo({ top: Math.max(0, (item.line - 1) * lineHeightPx - 40), behavior: 'smooth' });
+      if (sourcePane) {
+        sourcePane.scrollTop = restoreScrollTop;
+        smoothScrollElementTo(sourcePane, Math.max(0, (item.line - 1) * lineHeightPx - 40));
+      }
     });
   }
 

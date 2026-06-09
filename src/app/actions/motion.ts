@@ -11,6 +11,14 @@ const durationByKind: Record<MotionKind, number> = {
   mode: 0.14,
 };
 
+const reducedDurationByKind: Record<MotionKind, number> = {
+  micro: 0.08,
+  popover: 0.09,
+  panel: 0.1,
+  row: 0.09,
+  mode: 0.08,
+};
+
 const ease = 'power2.out';
 const reducedMotionQuery = '(prefers-reduced-motion: reduce)';
 
@@ -26,7 +34,7 @@ export function prefersReducedMotion(): boolean {
 }
 
 export function motionDuration(kind: MotionKind = 'micro'): number {
-  return prefersReducedMotion() ? 0 : durationByKind[kind];
+  return prefersReducedMotion() ? reducedDurationByKind[kind] : durationByKind[kind];
 }
 
 export function transitionDuration(kind: MotionKind = 'micro'): number {
@@ -86,25 +94,22 @@ export function motionIn(node: HTMLElement, options: MotionInOptions = {}) {
   } = options;
   let tween: gsap.core.Tween | null = null;
 
-  if (prefersReducedMotion()) {
-    gsap.set(node, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
-  } else {
-    tween = gsap.fromTo(
-      node,
-      { autoAlpha: 0, x, y, scale },
-      {
-        autoAlpha: 1,
-        x: 0,
-        y: 0,
-        scale: 1,
-        duration: motionDuration(kind),
-        delay,
-        ease,
-        overwrite: 'auto',
-        clearProps: 'transform,visibility',
-      },
-    );
-  }
+  const reduced = prefersReducedMotion();
+  tween = gsap.fromTo(
+    node,
+    { autoAlpha: reduced ? 0.78 : 0, x: reduced ? 0 : x, y: reduced ? 0 : y, scale: 1 },
+    {
+      autoAlpha: 1,
+      x: 0,
+      y: 0,
+      scale: 1,
+      duration: motionDuration(kind),
+      delay,
+      ease,
+      overwrite: 'auto',
+      clearProps: 'transform,visibility',
+    },
+  );
 
   return {
     destroy() {
@@ -119,11 +124,10 @@ export function pulseOnChange(node: HTMLElement, value: unknown) {
   let tween: gsap.core.Tween | null = null;
 
   function pulse() {
-    if (prefersReducedMotion()) return;
     tween?.kill();
     tween = gsap.fromTo(
       node,
-      { scale: 0.94 },
+      { scale: prefersReducedMotion() ? 0.98 : 0.94 },
       {
         scale: 1,
         duration: motionDuration('micro'),

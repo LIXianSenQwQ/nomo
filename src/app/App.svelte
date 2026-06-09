@@ -1980,7 +1980,7 @@
       return;
     }
     zoomPercent = nextZoom;
-    applyZoomSetting(zoomPercent);
+    applyZoomSetting(zoomPercent, { transition: true });
     updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
     statusMessage = t.zoomStatus({ percent: zoomPercent });
   }

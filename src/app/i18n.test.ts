@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_EFFECTIVE_INTERFACE_LOCALE,
+  INTERFACE_LANGUAGE_OPTIONS,
   applyInterfaceLanguagePreference,
   getInterfaceLocale,
   resolveInterfaceLocale,
@@ -12,6 +13,7 @@ describe('interface language i18n', () => {
     expect(resolveInterfaceLocale('zh-CN', ['en-US'])).toBe('zh-CN');
     expect(resolveInterfaceLocale('zh-TW', ['zh-CN'])).toBe('zh-TW');
     expect(resolveInterfaceLocale('en-US', ['zh-CN'])).toBe('en-US');
+    expect(resolveInterfaceLocale('ja-JP', ['en-US'])).toBe('ja-JP');
   });
 
   it('maps system language candidates to supported locales', () => {
@@ -22,8 +24,10 @@ describe('interface language i18n', () => {
     expect(resolveInterfaceLocale('system', ['zh-Hant-TW'])).toBe('zh-TW');
     expect(resolveInterfaceLocale('system', ['zh-HK'])).toBe('zh-TW');
     expect(resolveInterfaceLocale('system', ['en-US'])).toBe('en-US');
+    expect(resolveInterfaceLocale('system', ['ja'])).toBe('ja-JP');
+    expect(resolveInterfaceLocale('system', ['ja-JP'])).toBe('ja-JP');
+    expect(resolveInterfaceLocale('system', ['ja_JP'])).toBe('ja-JP');
     expect(resolveInterfaceLocale('system', ['fr-FR'])).toBe('en-US');
-    expect(resolveInterfaceLocale('system', ['ja'])).toBe('en-US');
     expect(resolveInterfaceLocale('system', [])).toBe(DEFAULT_EFFECTIVE_INTERFACE_LOCALE);
   });
 
@@ -33,6 +37,21 @@ describe('interface language i18n', () => {
     expect(locale).toBe('zh-TW');
     expect(getInterfaceLocale()).toBe('zh-TW');
     expect(document.documentElement.lang).toBe('zh-TW');
+
+    const japaneseLocale = applyInterfaceLanguagePreference('system', ['ja-JP']);
+    expect(japaneseLocale).toBe('ja-JP');
+    expect(getInterfaceLocale()).toBe('ja-JP');
+    expect(document.documentElement.lang).toBe('ja-JP');
+  });
+
+  it('exposes Japanese in the interface language options', () => {
+    expect(INTERFACE_LANGUAGE_OPTIONS).toContainEqual({
+      value: 'ja-JP',
+      labelKey: 'interfaceLanguageJaJp',
+    });
+
+    applyInterfaceLanguagePreference('ja-JP');
+    expect(t.interfaceLanguageJaJp()).toBe('日本語');
   });
 
   it('provides software update messages for supported interface languages', () => {
@@ -48,6 +67,12 @@ describe('interface language i18n', () => {
     applyInterfaceLanguagePreference('en-US');
     expect(t.softwareUpdateRestartAndInstall()).toBe('Restart and install');
     expect(t.softwareUpdateIntegrityFailed()).toContain('verification failed');
+
+    applyInterfaceLanguagePreference('ja-JP');
+    expect(t.softwareUpdateRestartAndInstall()).toBe('再起動してインストール');
+    expect(t.softwareUpdateIntegrityFailed()).toContain('検証に失敗');
+    expect(t.imageImport()).toContain('画像');
+    expect(t.insertTableSize({ rows: 2, columns: 3 })).toContain('2');
   });
 
   it('keeps generated message access safe through the translation proxy', () => {

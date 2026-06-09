@@ -22,7 +22,6 @@
 /** @typedef {{}} Settingssaving1Inputs */
 /** @typedef {{}} Settingssavefailed2Inputs */
 /** @typedef {{}} Settingsloading1Inputs */
-/** @typedef {{}} ThemeInputs */
 /** @typedef {{}} Themedescription1Inputs */
 /** @typedef {{}} Themelight1Inputs */
 /** @typedef {{}} Themedark1Inputs */
@@ -33,15 +32,9 @@
 /** @typedef {{}} Sourcemode1Inputs */
 /** @typedef {{}} Autosave1Inputs */
 /** @typedef {{}} Autosavedescription2Inputs */
-/** @typedef {{}} CloseInputs */
-/** @typedef {{}} MinimizeInputs */
-/** @typedef {{}} MaximizeInputs */
 /** @typedef {{}} Restorewindow1Inputs */
-/** @typedef {{}} CancelInputs */
 /** @typedef {{}} _DeleteInputs */
 /** @typedef {{}} Confirmdelete1Inputs */
-/** @typedef {{}} FileInputs */
-/** @typedef {{}} FolderInputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosewindow3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesexitapp3Inputs */
 /** @typedef {{ names: NonNullable<unknown> }} Unsavedchangesclosetabs3Inputs */
@@ -88,7 +81,6 @@
 /** @typedef {{ title: NonNullable<unknown> }} Expandnamedheading2Inputs */
 /** @typedef {{ title: NonNullable<unknown> }} Collapsenamedheading2Inputs */
 /** @typedef {{}} Documenthasnoheadings3Inputs */
-/** @typedef {{}} EditorInputs */
 /** @typedef {{ folderName: NonNullable<unknown> }} Folderopenquestion2Inputs */
 /** @typedef {{}} Openincurrentwindow3Inputs */
 /** @typedef {{}} Openinnewwindow3Inputs */
@@ -108,7 +100,6 @@
 /** @typedef {{ date: NonNullable<unknown> }} Metadatacreated1Inputs */
 /** @typedef {{ date: NonNullable<unknown> }} Metadataupdated1Inputs */
 /** @typedef {{ count: NonNullable<unknown> }} Metadatamorefields2Inputs */
-/** @typedef {{}} TagsInputs */
 /** @typedef {{}} Editlink1Inputs */
 /** @typedef {{}} Linktitleplaceholder2Inputs */
 /** @typedef {{}} Linktitle1Inputs */
@@ -116,6 +107,7 @@
 /** @typedef {{}} Applylink1Inputs */
 /** @typedef {{}} Removelink1Inputs */
 /** @typedef {{}} Closelinkeditor2Inputs */
+/** @typedef {{}} Interfacelanguagejajp3Inputs */
 
 
 export const appname1 = /** @type {(inputs: Appname1Inputs) => LocalizedString} */ () => {
@@ -206,10 +198,6 @@ export const settingsloading1 = /** @type {(inputs: Settingsloading1Inputs) => L
 	return /** @type {LocalizedString} */ (`正在读取设置...`)
 };
 
-export const theme = /** @type {(inputs: ThemeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`主题`)
-};
-
 export const themedescription1 = /** @type {(inputs: Themedescription1Inputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`保存后同步到主窗口和渲染服务。`)
 };
@@ -250,24 +238,8 @@ export const autosavedescription2 = /** @type {(inputs: Autosavedescription2Inpu
 	return /** @type {LocalizedString} */ (`编辑后自动写入当前本地文件。`)
 };
 
-export const close = /** @type {(inputs: CloseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`关闭`)
-};
-
-export const minimize = /** @type {(inputs: MinimizeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`最小化`)
-};
-
-export const maximize = /** @type {(inputs: MaximizeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`最大化`)
-};
-
 export const restorewindow1 = /** @type {(inputs: Restorewindow1Inputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`还原窗口`)
-};
-
-export const cancel = /** @type {(inputs: CancelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`取消`)
 };
 
 export const _delete = /** @type {(inputs: _DeleteInputs) => LocalizedString} */ () => {
@@ -276,14 +248,6 @@ export const _delete = /** @type {(inputs: _DeleteInputs) => LocalizedString} */
 
 export const confirmdelete1 = /** @type {(inputs: Confirmdelete1Inputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`确认删除`)
-};
-
-export const file = /** @type {(inputs: FileInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`文件`)
-};
-
-export const folder = /** @type {(inputs: FolderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`文件夹`)
 };
 
 export const unsavedchangesclosewindow3 = /** @type {(inputs: Unsavedchangesclosewindow3Inputs) => LocalizedString} */ (i) => {
@@ -473,10 +437,6 @@ export const documenthasnoheadings3 = /** @type {(inputs: Documenthasnoheadings3
 	return /** @type {LocalizedString} */ (`当前文档还没有标题`)
 };
 
-export const editor = /** @type {(inputs: EditorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`编辑器`)
-};
-
 export const folderopenquestion2 = /** @type {(inputs: Folderopenquestion2Inputs) => LocalizedString} */ (i) => {
 	return /** @type {LocalizedString} */ (`如何打开文件夹 “${i?.folderName}”？`)
 };
@@ -553,10 +513,6 @@ export const metadatamorefields2 = /** @type {(inputs: Metadatamorefields2Inputs
 	return /** @type {LocalizedString} */ (`更多元数据 ${i?.count}`)
 };
 
-export const tags = /** @type {(inputs: TagsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`标签`)
-};
-
 export const editlink1 = /** @type {(inputs: Editlink1Inputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`编辑超链接`)
 };
@@ -583,4 +539,8 @@ export const removelink1 = /** @type {(inputs: Removelink1Inputs) => LocalizedSt
 
 export const closelinkeditor2 = /** @type {(inputs: Closelinkeditor2Inputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`关闭链接编辑器`)
+};
+
+export const interfacelanguagejajp3 = /** @type {(inputs: Interfacelanguagejajp3Inputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`日本語`)
 };

@@ -162,6 +162,24 @@
   border-width: 2px;
 }
 
+.rail:not(:hover) .file-tree {
+  scrollbar-color: var(--md-scrollbar-thumb-idle) var(--md-scrollbar-track);
+}
+
+.rail:not(:hover) .file-tree::-webkit-scrollbar-thumb {
+  background: var(--md-scrollbar-thumb-idle);
+  background-clip: content-box;
+}
+
+.rail:hover .file-tree {
+  scrollbar-color: var(--md-scrollbar-thumb) var(--md-scrollbar-track);
+}
+
+.rail:hover .file-tree::-webkit-scrollbar-thumb {
+  background: var(--md-scrollbar-thumb);
+  background-clip: content-box;
+}
+
 .tree-file:hover {
   background: var(--md-editor-surface);
 }

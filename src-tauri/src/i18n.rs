@@ -5,6 +5,7 @@ pub(crate) enum InterfaceLocale {
     ZhCn,
     ZhTw,
     EnUs,
+    JaJp,
 }
 
 pub(crate) fn effective_locale<R: Runtime>(app: &AppHandle<R>) -> InterfaceLocale {
@@ -25,8 +26,9 @@ pub(crate) fn resolve_locale_preference(
         "zh-CN" => InterfaceLocale::ZhCn,
         "zh-TW" => InterfaceLocale::ZhTw,
         "en-US" => InterfaceLocale::EnUs,
-        "ja-JP" | "ko-KR" | "fr-FR" | "de-DE" | "es-ES" | "pt-BR" | "ru-RU" | "it-IT"
-        | "tr-TR" | "vi-VN" | "th-TH" | "id-ID" => InterfaceLocale::EnUs,
+        "ja-JP" => InterfaceLocale::JaJp,
+        "ko-KR" | "fr-FR" | "de-DE" | "es-ES" | "pt-BR" | "ru-RU" | "it-IT" | "tr-TR" | "vi-VN"
+        | "th-TH" | "id-ID" => InterfaceLocale::EnUs,
         _ => resolve_system_locale(system_locale),
     }
 }
@@ -62,6 +64,10 @@ pub(crate) fn resolve_system_locale(system_locale: Option<&str>) -> InterfaceLoc
         return InterfaceLocale::EnUs;
     }
 
+    if normalized == "ja" || normalized.starts_with("ja-") {
+        return InterfaceLocale::JaJp;
+    }
+
     InterfaceLocale::EnUs
 }
 
@@ -70,6 +76,7 @@ pub(crate) fn text(locale: InterfaceLocale, key: &str) -> &'static str {
         InterfaceLocale::ZhCn => zh_cn(key),
         InterfaceLocale::ZhTw => zh_tw(key),
         InterfaceLocale::EnUs => en_us(key),
+        InterfaceLocale::JaJp => ja_jp(key),
     }
 }
 
@@ -155,9 +162,13 @@ fn zh_cn(key: &str) -> &'static str {
         "open_with_nomo" => "用 Nomo 打开",
         "open_folder_with_nomo" => "用 Nomo 打开文件夹",
         "md_assoc_registered_default" => ".md 默认打开方式已绑定到 Nomo。",
-        "md_assoc_registered_optional" => "Nomo 已注册为可选 Markdown 应用，请在 Windows 默认应用中选择 Nomo。",
+        "md_assoc_registered_optional" => {
+            "Nomo 已注册为可选 Markdown 应用，请在 Windows 默认应用中选择 Nomo。"
+        }
         "md_assoc_not_registered" => "尚未注册 Nomo 的 .md 打开方式。",
-        "md_assoc_registered_message" => "已注册 Nomo，并打开 Windows 默认应用设置；请选择 Nomo 后这里会显示已绑定。",
+        "md_assoc_registered_message" => {
+            "已注册 Nomo，并打开 Windows 默认应用设置；请选择 Nomo 后这里会显示已绑定。"
+        }
         "context_menu_registered" => "已注册 .md 文件和文件夹右键菜单。",
         "context_menu_not_registered" => "尚未注册 .md 文件和文件夹右键菜单。",
         "windows_default_only" => "当前默认打开方式绑定仅支持 Windows。",
@@ -244,9 +255,13 @@ fn zh_tw(key: &str) -> &'static str {
         "open_with_nomo" => "用 Nomo 開啟",
         "open_folder_with_nomo" => "用 Nomo 開啟資料夾",
         "md_assoc_registered_default" => ".md 預設開啟方式已綁定到 Nomo。",
-        "md_assoc_registered_optional" => "Nomo 已註冊為可選 Markdown 應用程式，請在 Windows 預設應用程式中選擇 Nomo。",
+        "md_assoc_registered_optional" => {
+            "Nomo 已註冊為可選 Markdown 應用程式，請在 Windows 預設應用程式中選擇 Nomo。"
+        }
         "md_assoc_not_registered" => "尚未註冊 Nomo 的 .md 開啟方式。",
-        "md_assoc_registered_message" => "已註冊 Nomo，並開啟 Windows 預設應用程式設定；請選擇 Nomo 後這裡會顯示已綁定。",
+        "md_assoc_registered_message" => {
+            "已註冊 Nomo，並開啟 Windows 預設應用程式設定；請選擇 Nomo 後這裡會顯示已綁定。"
+        }
         "context_menu_registered" => "已註冊 .md 檔案和資料夾右鍵選單。",
         "context_menu_not_registered" => "尚未註冊 .md 檔案和資料夾右鍵選單。",
         "windows_default_only" => "目前預設開啟方式綁定僅支援 Windows。",
@@ -344,26 +359,139 @@ fn en_us(key: &str) -> &'static str {
     }
 }
 
+fn ja_jp(key: &str) -> &'static str {
+    match key {
+        "settings_window_title" => "環境設定 - Nomo",
+        "tray_open" => "Nomo を開く",
+        "tray_exit" => "終了",
+        "menu_file" => "ファイル(&F)",
+        "menu_new" => "新規(&N)",
+        "menu_new_window" => "新規ウィンドウ(&W)",
+        "menu_open" => "開く(&O)...",
+        "menu_open_folder" => "フォルダーを開く...",
+        "menu_open_recent" => "最近使った項目を開く",
+        "menu_no_recent" => "最近使ったファイルはありません",
+        "menu_untitled" => "無題.md",
+        "menu_save" => "保存(&S)",
+        "menu_save_as" => "名前を付けて保存(&A)...",
+        "menu_close_file" => "現在のファイルを閉じる",
+        "menu_close_window" => "ウィンドウを閉じる",
+        "menu_quit" => "終了(&X)",
+        "menu_edit" => "編集(&E)",
+        "menu_undo" => "元に戻す(&U)",
+        "menu_redo" => "やり直し(&R)",
+        "menu_paragraph" => "段落",
+        "menu_heading" => "見出し",
+        "menu_heading_1" => "見出し 1",
+        "menu_heading_2" => "見出し 2",
+        "menu_heading_3" => "見出し 3",
+        "menu_heading_4" => "見出し 4",
+        "menu_heading_5" => "見出し 5",
+        "menu_heading_6" => "見出し 6",
+        "menu_lift_heading" => "見出しレベルを上げる",
+        "menu_sink_heading" => "見出しレベルを下げる",
+        "menu_table" => "表",
+        "menu_code_block" => "コードブロック",
+        "menu_math_block" => "数式ブロック",
+        "menu_blockquote" => "引用",
+        "menu_callout" => "コールアウト",
+        "menu_comment_block" => "コメントブロック",
+        "menu_ordered_list" => "番号付きリスト",
+        "menu_bullet_list" => "箇条書きリスト",
+        "menu_task_list" => "タスクリスト",
+        "menu_insert_before" => "上に段落を挿入",
+        "menu_insert_after" => "下に段落を挿入",
+        "menu_footnote" => "脚注",
+        "menu_horizontal_rule" => "水平線",
+        "menu_toc" => "目次",
+        "menu_front_matter" => "文書メタデータ",
+        "menu_format" => "書式(&O)",
+        "menu_bold" => "太字",
+        "menu_italic" => "斜体",
+        "menu_underline" => "下線",
+        "menu_inline_code" => "インラインコード",
+        "menu_inline_math" => "インライン数式",
+        "menu_strike" => "取り消し線",
+        "menu_highlight" => "ハイライト",
+        "menu_comment" => "コメント",
+        "menu_link" => "リンク",
+        "menu_image" => "画像",
+        "menu_clear_format" => "書式をクリア",
+        "menu_view" => "表示(&V)",
+        "menu_toggle_source" => "ソースモードを切り替え",
+        "menu_toggle_outline" => "文書アウトラインを表示/非表示",
+        "menu_toggle_theme" => "テーマを切り替え",
+        "menu_toggle_explorer" => "エクスプローラーを表示/非表示",
+        "menu_settings" => "設定",
+        "menu_preferences" => "環境設定...",
+        "menu_chart" => "図表",
+        "menu_chart_blank" => "空白の図表",
+        "menu_chart_flowchart" => "フローチャート",
+        "menu_chart_sequence" => "シーケンス図",
+        "menu_chart_class" => "クラス図",
+        "menu_chart_state" => "状態図",
+        "menu_chart_pie" => "円グラフ",
+        "menu_chart_gantt" => "ガントチャート",
+        "menu_chart_er" => "ER 図",
+        "file_assoc_description" => "軽量 Markdown-first エディター",
+        "open_with_nomo" => "Nomo で開く",
+        "open_folder_with_nomo" => "Nomo でフォルダーを開く",
+        "md_assoc_registered_default" => ".md の既定アプリは Nomo に関連付けられています。",
+        "md_assoc_registered_optional" => "Nomo は任意の Markdown アプリとして登録されています。Windows の既定のアプリで Nomo を選択してください。",
+        "md_assoc_not_registered" => "Nomo の .md 開くアプリはまだ登録されていません。",
+        "md_assoc_registered_message" => "Nomo を登録し、Windows の既定のアプリ設定を開きました。そこで Nomo を選択すると、ここに関連付け済みと表示されます。",
+        "context_menu_registered" => ".md ファイルとフォルダーのコンテキストメニューを登録しました。",
+        "context_menu_not_registered" => ".md ファイルとフォルダーのコンテキストメニューはまだ登録されていません。",
+        "windows_default_only" => "既定アプリの関連付けは現在 Windows のみ対応しています。",
+        "windows_context_only" => "コンテキストメニュー登録は現在 Windows のみ対応しています。",
+        _ => "",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{resolve_locale_preference, resolve_system_locale, text, InterfaceLocale};
 
     #[test]
     fn resolves_explicit_preferences() {
-        assert_eq!(resolve_locale_preference("zh-CN", Some("en-US")), InterfaceLocale::ZhCn);
-        assert_eq!(resolve_locale_preference("zh-TW", Some("zh-CN")), InterfaceLocale::ZhTw);
-        assert_eq!(resolve_locale_preference("en-US", Some("zh-CN")), InterfaceLocale::EnUs);
-        assert_eq!(resolve_locale_preference("ja-JP", Some("zh-CN")), InterfaceLocale::EnUs);
-        assert_eq!(resolve_locale_preference("fr-FR", Some("zh-CN")), InterfaceLocale::EnUs);
+        assert_eq!(
+            resolve_locale_preference("zh-CN", Some("en-US")),
+            InterfaceLocale::ZhCn
+        );
+        assert_eq!(
+            resolve_locale_preference("zh-TW", Some("zh-CN")),
+            InterfaceLocale::ZhTw
+        );
+        assert_eq!(
+            resolve_locale_preference("en-US", Some("zh-CN")),
+            InterfaceLocale::EnUs
+        );
+        assert_eq!(
+            resolve_locale_preference("ja-JP", Some("zh-CN")),
+            InterfaceLocale::JaJp
+        );
+        assert_eq!(
+            resolve_locale_preference("fr-FR", Some("zh-CN")),
+            InterfaceLocale::EnUs
+        );
     }
 
     #[test]
     fn resolves_system_locale_families() {
         assert_eq!(resolve_system_locale(Some("zh-CN")), InterfaceLocale::ZhCn);
-        assert_eq!(resolve_system_locale(Some("zh-Hans-CN")), InterfaceLocale::ZhCn);
+        assert_eq!(
+            resolve_system_locale(Some("zh-Hans-CN")),
+            InterfaceLocale::ZhCn
+        );
         assert_eq!(resolve_system_locale(Some("zh_TW")), InterfaceLocale::ZhTw);
-        assert_eq!(resolve_system_locale(Some("zh-Hant-HK")), InterfaceLocale::ZhTw);
+        assert_eq!(
+            resolve_system_locale(Some("zh-Hant-HK")),
+            InterfaceLocale::ZhTw
+        );
         assert_eq!(resolve_system_locale(Some("en-US")), InterfaceLocale::EnUs);
+        assert_eq!(resolve_system_locale(Some("ja")), InterfaceLocale::JaJp);
+        assert_eq!(resolve_system_locale(Some("ja-JP")), InterfaceLocale::JaJp);
+        assert_eq!(resolve_system_locale(Some("ja_JP")), InterfaceLocale::JaJp);
         assert_eq!(resolve_system_locale(Some("fr-FR")), InterfaceLocale::EnUs);
         assert_eq!(resolve_system_locale(None), InterfaceLocale::EnUs);
     }
@@ -373,9 +501,22 @@ mod tests {
         assert_eq!(text(InterfaceLocale::ZhCn, "tray_open"), "打开 Nomo");
         assert_eq!(text(InterfaceLocale::ZhTw, "tray_open"), "開啟 Nomo");
         assert_eq!(text(InterfaceLocale::EnUs, "tray_open"), "Open Nomo");
+        assert_eq!(text(InterfaceLocale::JaJp, "tray_open"), "Nomo を開く");
 
         assert_eq!(text(InterfaceLocale::ZhCn, "menu_chart_blank"), "空白图表");
         assert_eq!(text(InterfaceLocale::ZhTw, "menu_chart_blank"), "空白圖表");
-        assert_eq!(text(InterfaceLocale::EnUs, "menu_chart_blank"), "Blank Diagram");
+        assert_eq!(
+            text(InterfaceLocale::EnUs, "menu_chart_blank"),
+            "Blank Diagram"
+        );
+        assert_eq!(
+            text(InterfaceLocale::JaJp, "menu_chart_blank"),
+            "空白の図表"
+        );
+        assert_eq!(text(InterfaceLocale::JaJp, "menu_file"), "ファイル(&F)");
+        assert_eq!(
+            text(InterfaceLocale::JaJp, "settings_window_title"),
+            "環境設定 - Nomo"
+        );
     }
 }

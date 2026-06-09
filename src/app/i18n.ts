@@ -1,8 +1,9 @@
 import * as messages from '../paraglide/messages';
 import { writable } from 'svelte/store';
 import { getLocale, overwriteGetLocale, type Locale } from '../paraglide/runtime';
+import { JA_JP_EXTRA_TRANSLATIONS } from './i18n.ja';
 
-export type EffectiveInterfaceLocale = 'zh-CN' | 'zh-TW' | 'en-US';
+export type EffectiveInterfaceLocale = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP';
 export type InterfaceLanguagePreference = 'system' | EffectiveInterfaceLocale;
 
 export interface InterfaceLanguageOption {
@@ -10,12 +11,18 @@ export interface InterfaceLanguageOption {
   labelKey: string;
 }
 
-export const SUPPORTED_INTERFACE_LOCALES: EffectiveInterfaceLocale[] = ['zh-CN', 'zh-TW', 'en-US'];
+export const SUPPORTED_INTERFACE_LOCALES: EffectiveInterfaceLocale[] = [
+  'zh-CN',
+  'zh-TW',
+  'en-US',
+  'ja-JP',
+];
 export const INTERFACE_LANGUAGE_OPTIONS: InterfaceLanguageOption[] = [
   { value: 'system', labelKey: 'interfaceLanguageSystem' },
   { value: 'zh-CN', labelKey: 'interfaceLanguageZhCn' },
   { value: 'zh-TW', labelKey: 'interfaceLanguageZhTw' },
   { value: 'en-US', labelKey: 'interfaceLanguageEnUs' },
+  { value: 'ja-JP', labelKey: 'interfaceLanguageJaJp' },
 ];
 export const INTERFACE_LOCALE_CHANGED_EVENT = 'nomo://interface-locale-changed';
 
@@ -197,8 +204,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateFailed: '更新检查或下载失败。',
     softwareUpdateIntegrityFailed: '更新包校验失败，可能已被篡改或发布清单不一致。',
     softwareUpdateInstallFailed: '更新安装失败。',
-    softwareUpdateUnsupported:
-      '当前环境不支持自动更新；如使用免安装 zip 版，请手动下载新版。',
+    softwareUpdateUnsupported: '当前环境不支持自动更新；如使用免安装 zip 版，请手动下载新版。',
     softwareUpdateLatest: '已是最新',
     softwareUpdateReady: '可安装',
     softwareUpdateManual: '手动检查',
@@ -604,8 +610,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateFailed: '更新檢查或下載失敗。',
     softwareUpdateIntegrityFailed: '更新包校驗失敗，可能已被竄改或發布清單不一致。',
     softwareUpdateInstallFailed: '更新安裝失敗。',
-    softwareUpdateUnsupported:
-      '目前環境不支援自動更新；如使用免安裝 zip 版，請手動下載新版。',
+    softwareUpdateUnsupported: '目前環境不支援自動更新；如使用免安裝 zip 版，請手動下載新版。',
     softwareUpdateLatest: '已是最新',
     softwareUpdateReady: '可安裝',
     softwareUpdateManual: '手動檢查',
@@ -846,6 +851,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     imageContentEmpty: '圖片內容為空，無法匯入',
     largeDocumentStayReadonlySource: '大檔案已進入唯讀原始碼模式，暫不切回語義編輯以避免卡頓',
   },
+  'ja-JP': JA_JP_EXTRA_TRANSLATIONS,
   'en-US': {
     interfaceLanguageJaJp: 'Japanese',
     interfaceLanguageKoKr: 'Korean',
@@ -1018,7 +1024,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateDownloading: 'Downloading update package...',
     softwareUpdateDownloadingPercent: 'Downloading update package: {percent}%.',
     softwareUpdateDownloadingShort: 'Downloading...',
-    softwareUpdateDownloaded: 'Update downloaded and verified with MD5. Restart to finish installing.',
+    softwareUpdateDownloaded:
+      'Update downloaded and verified with MD5. Restart to finish installing.',
     softwareUpdateWaitingInstall:
       'Update downloaded and verified with MD5. Waiting for restart and install confirmation.',
     softwareUpdateRestartAndInstall: 'Restart and install',
