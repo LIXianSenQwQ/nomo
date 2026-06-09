@@ -64,6 +64,7 @@
     closeAppWindow as closeDesktopWindow,
     createAppWindow,
     exitApp as exitDesktopApp,
+    getDesktopSystemTheme,
     maximizeAppWindow,
     minimizeAppWindow,
     openSettingsWindow,
@@ -148,7 +149,8 @@
   let themePreference: ThemePreference = DEFAULT_APP_PREFERENCES.theme;
   let theme: 'light' | 'dark' = resolveThemePreference(themePreference);
   let interfaceLanguage: InterfaceLanguagePreference = DEFAULT_APP_PREFERENCES.interfaceLanguage;
-  let interfaceLocale: EffectiveInterfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
+  let interfaceLocale: EffectiveInterfaceLocale =
+    applyInterfaceLanguagePreference(interfaceLanguage);
   let fileName = '',
     filePath = '';
   let nativePath: string | null = null;
@@ -564,9 +566,7 @@
       return closeToTrayEnabled;
     }
 
-    const shouldHideToTray = confirm(
-      t.closeToTrayFirstPrompt(),
-    );
+    const shouldHideToTray = confirm(t.closeToTrayFirstPrompt());
     closeToTrayEnabled = shouldHideToTray;
     closeToTrayPromptAnswered = true;
     await Promise.all([
@@ -1083,8 +1083,31 @@
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const updateMarkdown = editorInteraction.updateMarkdown;
   const runCommand = editorInteraction.runCommand;
-  function syncDesktopIconTheme(nextTheme: 'light' | 'dark' = theme) {
-    setDesktopIconTheme(desktopEnabled, nextTheme).catch(() => undefined);
+  async function getDesktopEffectiveSystemTheme() {
+    return (await getDesktopSystemTheme(desktopEnabled)) ?? resolveThemePreference('system');
+  }
+
+  async function syncDesktopIconTheme(nextTheme?: 'light' | 'dark') {
+    const effectiveTheme =
+      nextTheme ?? (themePreference === 'system' ? await getDesktopEffectiveSystemTheme() : theme);
+    await setDesktopIconTheme(desktopEnabled, effectiveTheme).catch(() => undefined);
+  }
+
+  async function syncSystemThemeFromDesktop(options?: { transition?: boolean }) {
+    if (themePreference !== 'system') {
+      return;
+    }
+
+    const nextTheme = await getDesktopEffectiveSystemTheme();
+    const previousTheme = theme;
+    theme = applyThemeSetting(themePreference, {
+      effectiveTheme: nextTheme,
+      transition: options?.transition,
+    });
+    if (previousTheme !== nextTheme) {
+      editor.updateTheme({ name: nextTheme });
+    }
+    await syncDesktopIconTheme(nextTheme);
   }
 
   function toggleTheme() {
@@ -1093,7 +1116,7 @@
     theme = applyThemeSetting(themePreference, { transition: true });
     localStorage.setItem('nomo-theme', themePreference);
     updateAppSetting('theme', themePreference).catch(() => undefined);
-    syncDesktopIconTheme(theme);
+    syncDesktopIconTheme().catch(() => undefined);
     editor.updateTheme({ name: theme });
   }
   const updateContentWidth = editorSettings.updateContentWidth;
@@ -1359,13 +1382,17 @@
 
   const unsubscribe = editor.subscribe(syncFromEditor);
 
-  function applyAppPreferences(
+  async function applyAppPreferences(
     preferences: AppPreferences,
     options: { applyEditorMode?: boolean } = {},
   ) {
     themePreference = preferences.theme;
-    theme = applyThemeSetting(themePreference, { transition: true });
-    syncDesktopIconTheme(theme);
+    if (themePreference === 'system') {
+      await syncSystemThemeFromDesktop({ transition: true });
+    } else {
+      theme = applyThemeSetting(themePreference, { transition: true });
+      await syncDesktopIconTheme(theme);
+    }
     interfaceLanguage = preferences.interfaceLanguage;
     interfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
     void refreshInterfaceLanguageChrome(desktopEnabled);
@@ -1452,7 +1479,7 @@
 
   async function reloadAppPreferencesFromSettingsWindow() {
     const preferences = await loadAppPreferences(desktopEnabled);
-    applyAppPreferences(preferences, { applyEditorMode: true });
+    await applyAppPreferences(preferences, { applyEditorMode: true });
     closeToTrayPromptAnswered = true;
     await updateAppSetting(CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY, true).catch(() => undefined);
   }
@@ -1525,7 +1552,7 @@
       }
 
       const appPreferences = await loadAppPreferences(desktopEnabled);
-      applyAppPreferences(appPreferences, { applyEditorMode: false });
+      await applyAppPreferences(appPreferences, { applyEditorMode: false });
       persistedEditorMode = appPreferences.editorMode;
 
       // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
@@ -1959,9 +1986,7 @@
       if (themePreference !== 'system') {
         return;
       }
-      theme = applyThemeSetting(themePreference, { transition: true });
-      syncDesktopIconTheme(theme);
-      editor.updateTheme({ name: theme });
+      syncSystemThemeFromDesktop({ transition: true }).catch(() => undefined);
     };
     systemThemeMediaQuery.addEventListener('change', systemThemeChangeHandler);
   }

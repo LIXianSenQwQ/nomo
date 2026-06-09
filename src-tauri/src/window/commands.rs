@@ -60,6 +60,11 @@ pub(crate) fn set_desktop_icon_theme(app: AppHandle, theme: String) -> Result<()
 }
 
 #[tauri::command]
+pub(crate) fn get_desktop_system_theme() -> &'static str {
+    crate::window::os::system_theme()
+}
+
+#[tauri::command]
 pub(crate) fn create_new_window(
     app: AppHandle,
     pending_folder: Option<String>,
@@ -94,7 +99,7 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
         return Ok(());
     }
 
-    let mut builder = WebviewWindowBuilder::new(
+    let builder = WebviewWindowBuilder::new(
         &app,
         SETTINGS_WINDOW_LABEL,
         WebviewUrl::App(PathBuf::from("index.html?view=settings")),
@@ -108,11 +113,16 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
     .skip_taskbar(true)
     .visible(false);
 
-    if let Some(owner) = settings_owner_window(&app) {
-        builder = builder
-            .owner(&owner)
-            .map_err(|error| format!("绑定偏好设置父窗口失败：{error}"))?;
-    }
+    #[cfg(windows)]
+    let builder = {
+        let mut builder = builder;
+        if let Some(owner) = settings_owner_window(&app) {
+            builder = builder
+                .owner(&owner)
+                .map_err(|error| format!("绑定偏好设置父窗口失败：{error}"))?;
+        }
+        builder
+    };
 
     let window = builder
         .build()
@@ -215,6 +225,7 @@ fn force_close_labels() -> &'static Mutex<HashSet<String>> {
     FORCE_CLOSE_LABELS.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+#[cfg(windows)]
 fn settings_owner_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     for (label, window) in app.webview_windows() {
         if crate::window::external_open::is_document_window_label(&label)
@@ -228,7 +239,7 @@ fn settings_owner_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow
 }
 
 fn bring_settings_window_to_front<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
-    // 步骤1：先恢复并聚焦偏好设置。新建窗口已绑定 owner，Windows 会保证它在主窗口上方。
+    // 步骤1：先恢复并聚焦偏好设置。Windows 新建窗口会绑定 owner，保证它在主窗口上方。
     window
         .set_skip_taskbar(true)
         .map_err(|error| format!("从任务栏隐藏偏好设置窗口失败：{error}"))?;

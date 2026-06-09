@@ -536,6 +536,10 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
+    expect(titleBarSource).toContain(
+      'shouldShowWindowMenu = !platformCapabilities.usesNativeWindowControls',
+    );
+    expect(titleBarSource).toContain('{#if shouldShowWindowMenu}');
     expect(titleBarSource).not.toContain('nomoAppIcon');
     expect(titleBarSource).not.toContain('class="app-logo"');
     expect(titleBarSource).not.toContain('<img class="app-logo"');
@@ -545,21 +549,25 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('t.hideExplorerSidebar()');
     expect(titleBarSource).toContain('export let focusMode: boolean');
     expect(titleBarSource).toContain('title={isMaximized ? t.restoreWindow() : t.maximize()}');
-    expect(titleBarSource).toContain(
-      'aria-label={isMaximized ? t.restoreWindow() : t.maximize()}',
-    );
+    expect(titleBarSource).toContain('aria-label={isMaximized ? t.restoreWindow() : t.maximize()}');
     expect(titleBarSource).toContain('handleMaximizeWindow');
     expect(titleBarSource).toContain('syncWindowState');
     expect(desktopWindowSource).toContain("title: 'Nomo'");
     expect(desktopWindowSource).toContain('} - Nomo');
     expect(desktopWindowSource).toContain('getNewWindowChromeOptions');
     expect(desktopWindowSource).toContain("titleBarStyle: 'overlay'");
+    expect(desktopWindowSource).toContain('trafficLightPosition: new LogicalPosition(16, 14)');
     expect(desktopWindowSource).toContain('hiddenTitle: true');
     expect(tauriMacosSource).toContain('uses_overlay_titlebar(window.label())');
     expect(tauriMacosSource).toContain('label != "window-settings"');
+    expect(tauriConfigSource).toContain('"y": 14');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).not.toContain('border-bottom: 1px solid var(--md-titlebar-border);');
-    expect(styles).toContain('padding-left: 82px;');
+    expect(styles).toContain('padding-left: 78px;');
+    const macSidebarToggleStyles =
+      styles.match(/\.titlebar\.is-mac \.sidebar-toggle-btn\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(macSidebarToggleStyles).toContain('height: 28px;');
+    expect(macSidebarToggleStyles).toContain('transform: translateY(-8px);');
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).not.toContain('.app-logo');
     expect(styles).toMatch(/\.app-name\s*\{[\s\S]*?font-size:\s*13px;/);
@@ -733,12 +741,20 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('nomo-tray-light-inactive-24-preview.png');
     expect(tauriTraySource).toContain('set_tray_active');
     expect(tauriTraySource).toContain('set_desktop_icon_theme');
-    expect(tauriTraySource).not.toContain('apply_window_icons');
-    expect(tauriTraySource).not.toContain('refresh_taskbar_icon');
-    expect(tauriTraySource).not.toContain('set_skip_taskbar');
+    expect(tauriTraySource).toContain('nomo-app-light-256.png');
+    expect(tauriTraySource).toContain('nomo-app-dark-256.png');
+    expect(tauriWindowCommandsSource).toContain('get_desktop_system_theme');
+    expect(tauriLibSource).toContain('crate::window::commands::get_desktop_system_theme');
+    expect(tauriTraySource).toContain('apply_window_icons');
+    expect(tauriTraySource).toContain('.set_icon(icon.clone())');
+    expect(tauriTraySource).toContain('apply_dock_icon(app, theme)');
+    expect(tauriTraySource).toContain('run_on_main_thread');
+    expect(tauriTraySource).toContain('setApplicationIconImage(Some(&icon))');
     expect(tauriLibSource).toContain('crate::window::commands::set_desktop_icon_theme');
     expect(desktopWindowSource).toContain("invoke('set_desktop_icon_theme'");
-    expect(appSource).toContain('syncDesktopIconTheme(theme)');
+    expect(desktopWindowSource).toContain("invoke<'light' | 'dark'>('get_desktop_system_theme'");
+    expect(appSource).toContain('getDesktopEffectiveSystemTheme');
+    expect(appSource).toContain('syncSystemThemeFromDesktop({ transition: true })');
     expect(tauriTraySource).toContain('i18n::app_text(app, "tray_exit")');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');

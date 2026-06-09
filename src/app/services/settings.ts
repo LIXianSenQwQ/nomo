@@ -93,7 +93,7 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
 };
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
-  theme: 'light',
+  theme: 'system',
   interfaceLanguage: DEFAULT_INTERFACE_LANGUAGE,
   editorMode: 'semantic',
   autoSaveEnabled: false,
@@ -127,6 +127,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
 
 const IMAGE_SETTINGS_STORAGE_KEY = 'nomo-image-handling-settings';
+const THEME_SYSTEM_MIGRATION_KEY = 'themeFollowSystemMigrationV1';
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
 const THEME_TRANSITION_MS = 180;
 let themeTransitionTimer: number | null = null;
@@ -205,10 +206,13 @@ export async function loadAppPreferences(desktopEnabled: boolean): Promise<AppPr
   const nativeSettings = desktopEnabled ? await listAppSettings().catch(() => []) : [];
   const settings = new Map(nativeSettings.map((setting) => [setting.key, setting.valueJson]));
   const local = readLocalPreferenceFallbacks();
+  const storedTheme = parseSetting<unknown>(settings, 'theme') ?? local.theme;
+  const theme = await migrateThemePreferenceToSystem(desktopEnabled, settings, storedTheme);
 
   return normalizeAppPreferences({
-    theme: parseSetting<unknown>(settings, 'theme') ?? local.theme,
-    interfaceLanguage: parseSetting<unknown>(settings, 'interfaceLanguage') ?? local.interfaceLanguage,
+    theme,
+    interfaceLanguage:
+      parseSetting<unknown>(settings, 'interfaceLanguage') ?? local.interfaceLanguage,
     editorMode: parseSetting<unknown>(settings, 'editorMode'),
     autoSaveEnabled: parseSetting<unknown>(settings, 'autoSaveEnabled'),
     autoSaveDelayMs: parseSetting<unknown>(settings, 'autoSaveDelayMs'),
@@ -246,6 +250,7 @@ export async function saveAppPreferences(desktopEnabled: boolean, preferences: A
   const normalized = normalizeAppPreferences(preferences);
 
   writeLocalPreferenceFallbacks(normalized);
+  markThemeSystemMigrationDone(desktopEnabled);
   persistImageSettings(desktopEnabled, normalized.imageHandlingSettings);
 
   if (!desktopEnabled) {
@@ -375,7 +380,10 @@ export function resolveThemePreference(theme: ThemePreference): EffectiveTheme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-export function applyThemeSetting(theme: ThemePreference, options?: { transition?: boolean }) {
+export function applyThemeSetting(
+  theme: ThemePreference,
+  options?: { transition?: boolean; effectiveTheme?: EffectiveTheme },
+) {
   if (options?.transition && !prefersReducedMotion()) {
     document.documentElement.classList.add(THEME_TRANSITION_CLASS);
     if (themeTransitionTimer !== null) {
@@ -387,7 +395,7 @@ export function applyThemeSetting(theme: ThemePreference, options?: { transition
     }, THEME_TRANSITION_MS + 40);
   }
 
-  const effectiveTheme = resolveThemePreference(theme);
+  const effectiveTheme = options?.effectiveTheme ?? resolveThemePreference(theme);
   document.documentElement.dataset.theme = effectiveTheme === 'dark' ? 'dark' : '';
   document.documentElement.dataset.themePreference = theme;
   return effectiveTheme;
@@ -485,6 +493,50 @@ function writeLocalPreferenceFallbacks(preferences: AppPreferences) {
   localStorage.setItem('nomo-line-height', String(preferences.lineHeight));
   localStorage.setItem('nomo-content-width-percent', String(preferences.contentWidthPercent));
   localStorage.setItem('nomo-block-style', preferences.blockStyle);
+}
+
+async function migrateThemePreferenceToSystem(
+  desktopEnabled: boolean,
+  settings: Map<string, string>,
+  storedTheme: unknown,
+): Promise<unknown> {
+  if (isThemeSystemMigrationDone(settings)) {
+    return storedTheme;
+  }
+
+  markThemeSystemMigrationDone(desktopEnabled);
+  if (storedTheme === 'light' || storedTheme === 'dark') {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('nomo-theme', 'system');
+    }
+    if (desktopEnabled) {
+      updateAppSetting('theme', 'system').catch(() => undefined);
+    }
+    return 'system';
+  }
+
+  return storedTheme;
+}
+
+function isThemeSystemMigrationDone(settings: Map<string, string>) {
+  const nativeDone = parseSetting<boolean>(settings, THEME_SYSTEM_MIGRATION_KEY);
+  if (nativeDone === true) {
+    return true;
+  }
+  if (typeof localStorage === 'undefined') {
+    return false;
+  }
+  return localStorage.getItem(THEME_SYSTEM_MIGRATION_KEY) === 'true';
+}
+
+function markThemeSystemMigrationDone(desktopEnabled: boolean) {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(THEME_SYSTEM_MIGRATION_KEY, 'true');
+  }
+  if (!desktopEnabled) {
+    return;
+  }
+  updateAppSetting(THEME_SYSTEM_MIGRATION_KEY, true).catch(() => undefined);
 }
 
 function parseSetting<T>(settings: Map<string, string>, key: string): T | null {
@@ -596,7 +648,9 @@ function isCodeBlockIndentPreference(value: unknown): value is CodeBlockIndentPr
 
 function normalizeShortcutPreferences(value: unknown): ShortcutPreferences {
   const source =
-    value && typeof value === 'object' ? (value as Partial<Record<ShortcutCommandId, unknown>>) : {};
+    value && typeof value === 'object'
+      ? (value as Partial<Record<ShortcutCommandId, unknown>>)
+      : {};
   const normalized = { ...DEFAULT_SHORTCUT_PREFERENCES };
   for (const key of Object.keys(DEFAULT_SHORTCUT_PREFERENCES) as ShortcutCommandId[]) {
     const shortcut = source[key];

@@ -102,6 +102,7 @@ pub fn run() {
             crate::window::commands::refresh_window_menu,
             crate::window::commands::refresh_interface_language_chrome,
             crate::window::commands::set_desktop_icon_theme,
+            crate::window::commands::get_desktop_system_theme,
             crate::file_system::list_folder_markdown_files,
             crate::file_system::create_folder,
             crate::file_system::rename_file,

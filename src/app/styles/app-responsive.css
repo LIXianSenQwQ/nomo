@@ -74,7 +74,7 @@
 }
 
 .titlebar.is-mac:not(.is-fullscreen) .titlebar-row.top-row {
-  padding-left: 82px; /* 为 macOS 原生红绿灯留出空间，让侧边栏按钮出现在其右侧 */
+  padding-left: 78px; /* 为 macOS 原生红绿灯留出空间，让侧边栏按钮出现在其右侧 */
 }
 
 .titlebar-row.bottom-row {
@@ -301,6 +301,12 @@
 .sidebar-toggle-btn {
   flex-shrink: 0;
   color: var(--md-editor-muted-fg);
+}
+
+.titlebar.is-mac .sidebar-toggle-btn {
+  width: 28px;
+  height: 28px;
+  transform: translateY(-8px);
 }
 
 .sidebar-toggle-btn:hover,

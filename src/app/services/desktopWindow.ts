@@ -157,6 +157,23 @@ export async function refreshInterfaceLanguageChrome(desktopEnabled: boolean) {
   }
 }
 
+export async function getDesktopSystemTheme(
+  desktopEnabled: boolean,
+): Promise<'light' | 'dark' | undefined> {
+  if (!desktopEnabled) {
+    return undefined;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const theme = await invoke<'light' | 'dark'>('get_desktop_system_theme');
+    return theme === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    console.error('读取系统主题失败:', error);
+    return undefined;
+  }
+}
+
 export async function updateAppWindowTitle(
   desktopEnabled: boolean,
   fileName: string,
