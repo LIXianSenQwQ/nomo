@@ -93,7 +93,6 @@ export function getSourceScrollAnchorAtLine(
   sourceTextarea?: HTMLTextAreaElement,
   sourcePane?: HTMLElement,
 ): OutlineScrollAnchor | null {
-  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
   const anchorLine = Math.max(1, Math.floor(sourceLine));
   const sourceScrollContainer = sourcePane ?? sourceTextarea?.closest<HTMLElement>('.source-pane');
   const documentProgress = getScrollProgress(sourceScrollContainer, scrollTop);
@@ -116,7 +115,10 @@ export function getSourceScrollAnchorAtLine(
   );
   const currentItem = outline[currentIndex] ?? outline[0];
   const nextItem = outline[currentIndex + 1];
-  const totalLineCount = getSourceTotalLineCount(sourceTextarea, visibleLine);
+  const totalLineCount = getSourceTotalLineCount(
+    sourceTextarea,
+    Math.max(1, Math.floor(scrollTop / lineHeight) + 1),
+  );
   const sectionEndLine = nextItem?.line ?? totalLineCount + 1;
   const sectionLineCount = Math.max(1, sectionEndLine - currentItem.line);
   const sectionProgress = clamp((anchorLine - currentItem.line) / sectionLineCount, 0, 1);
