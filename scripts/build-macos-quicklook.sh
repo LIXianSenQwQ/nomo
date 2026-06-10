@@ -28,12 +28,17 @@ cp -R "$RENDERER_DIR" "$RESOURCES_DIR/quicklook-renderer"
 APP_VERSION="$(node -p "require('./package.json').version")"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$CONTENTS_DIR/Info.plist"
 
+# 获取当前 macOS 版本用于构建 target
+MACOS_VERSION=$(sw_vers -productVersion | awk -F. '{print $1 "." $2}')
+ARCH=$(uname -m)
+
 xcrun swiftc \
   "$EXTENSION_SRC_DIR/PreviewViewController.swift" \
   -module-name NomoQuickLookPreview \
   -parse-as-library \
   -application-extension \
   -emit-library \
+  -target "${ARCH}-apple-macosx12.0" \
   -o "$MACOS_DIR/NomoQuickLookPreview" \
   -framework Cocoa \
   -framework QuickLook \
