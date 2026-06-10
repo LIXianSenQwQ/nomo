@@ -156,6 +156,28 @@ describe('createEditorCore', () => {
     expect(target.querySelector('.code-card')).toBeNull();
   });
 
+  it('pressing Tab in body text inserts a tab character instead of leaving the editor', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    });
+    let handled = false;
+    view.someProp('handleKeyDown', (handler) => {
+      handled = handler(view, event) || handled;
+      return handled;
+    });
+
+    expect(handled).toBe(true);
+    expect(editor.getMarkdown()).toBe('正\t文');
+  });
+
   it('exposes the active link snapshot through EditorCore', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({

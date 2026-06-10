@@ -475,8 +475,16 @@ export class ProseMirrorEditorCore implements EditorCore {
             joinBackward,
             selectNodeBackward,
           ),
-          Tab: chainCommands(goToNextCell(1), sinkListItem(schema.nodes.list_item)),
-          'Shift-Tab': chainCommands(goToNextCell(-1), liftListItem(schema.nodes.list_item)),
+          Tab: chainCommands(
+            goToNextCell(1),
+            sinkListItem(schema.nodes.list_item),
+            insertTabInTextblock,
+          ),
+          'Shift-Tab': chainCommands(
+            goToNextCell(-1),
+            liftListItem(schema.nodes.list_item),
+            removeTabBeforeCursorInTextblock,
+          ),
           'Shift-Ctrl-[': (state, dispatch) =>
             toggleList(state, dispatch, schema.nodes.ordered_list),
           'Shift-Ctrl-]': (state, dispatch) =>
@@ -679,6 +687,40 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
     command.type === 'toggleUnderline' ||
     command.type === 'toggleHighlight'
   );
+}
+
+function insertTabInTextblock(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { $from } = state.selection;
+  if (!$from.parent.isTextblock) {
+    return false;
+  }
+  if (dispatch) {
+    dispatch(state.tr.insertText('\t').scrollIntoView());
+  }
+  return true;
+}
+
+function removeTabBeforeCursorInTextblock(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { selection } = state;
+  if (!selection.empty || !selection.$from.parent.isTextblock) {
+    return false;
+  }
+
+  const cursor = selection.from;
+  if (cursor <= selection.$from.start() || state.doc.textBetween(cursor - 1, cursor) !== '\t') {
+    return false;
+  }
+
+  if (dispatch) {
+    dispatch(state.tr.delete(cursor - 1, cursor).scrollIntoView());
+  }
+  return true;
 }
 
 function clampDocPosition(doc: ProseMirrorNode, position: number): number {
