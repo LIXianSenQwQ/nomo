@@ -49,6 +49,7 @@
     type ThemePreference,
     type WritingStatsMetric,
   } from '../services/settings';
+  import { logDebug, createPerfTimer } from '../../lib/services/logger';
   import {
     INTERFACE_LANGUAGE_OPTIONS,
     applyInterfaceLanguagePreference,
@@ -212,9 +213,11 @@
   }
 
   async function loadPreferences() {
+    const timer = createPerfTimer('SettingsWindow', 'loadPreferences');
     draftSettings = await loadAppPreferences(desktopEnabled);
     applySettingsToThisWindow(draftSettings);
     loaded = true;
+    timer.end({ desktopEnabled });
   }
 
   async function saveLatestSettings() {

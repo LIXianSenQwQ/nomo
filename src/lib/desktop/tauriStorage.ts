@@ -306,14 +306,18 @@ export async function updateAppSettings(entries: Record<string, unknown>): Promi
   await invoke('update_app_settings', { inputs });
 }
 
+import { logDebug, perfAsync } from '../../lib/services/logger';
+
 export async function listAppSettings(): Promise<SettingRecord[]> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  const rows = await invoke<SettingRecordPayload[]>('list_app_settings');
-  return rows.map((row) => ({
-    key: row.key,
-    valueJson: row.value_json,
-    updatedAt: row.updated_at,
-  }));
+  return perfAsync('tauriStorage', 'list_app_settings', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const rows = await invoke<SettingRecordPayload[]>('list_app_settings');
+    return rows.map((row) => ({
+      key: row.key,
+      valueJson: row.value_json,
+      updatedAt: row.updated_at,
+    }));
+  });
 }
 
 export async function updateWindowState(state: WindowState): Promise<void> {

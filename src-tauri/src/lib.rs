@@ -59,6 +59,11 @@ pub fn run() {
         })
         .setup(|app| {
             use tauri::Manager;
+            let database = crate::database::AppDatabase::from_app(app.handle())
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            app.manage(database.clone());
+            database.warm_up_async();
+
             if let Some(window) = app.get_webview_window("main") {
                 crate::window::os::setup_window(&window);
                 crate::window::menu::install_window_menu(app.handle(), &window)

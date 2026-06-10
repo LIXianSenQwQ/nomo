@@ -12,6 +12,7 @@ import {
   type ImageInsertStrategy,
   type ImageUploadProvider,
 } from '../../lib/services/render';
+import { logDebug, perfAsync } from '../../lib/services/logger';
 import {
   DEFAULT_INTERFACE_LANGUAGE,
   isInterfaceLanguagePreference,
@@ -155,7 +156,9 @@ export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
   nativeSettings?: SettingRecord[],
 ): Promise<PersistedEditorSettings> {
-  const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
+  const settings = await perfAsync('settings', 'readNativeSettingsMap(editor)', () =>
+    readNativeSettingsMap(desktopEnabled, nativeSettings),
+  );
   const savedTheme = parseSetting<string>(settings, 'theme') ?? localStorage.getItem('nomo-theme');
   const savedFontSize = Number(
     parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('nomo-font-size'),
@@ -225,7 +228,9 @@ export async function loadAppPreferences(
   desktopEnabled: boolean,
   nativeSettings?: SettingRecord[],
 ): Promise<AppPreferences> {
-  const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
+  const settings = await perfAsync('settings', 'readNativeSettingsMap(prefs)', () =>
+    readNativeSettingsMap(desktopEnabled, nativeSettings),
+  );
   const local = readLocalPreferenceFallbacks();
   const storedTheme = parseSetting<unknown>(settings, 'theme') ?? local.theme;
   const theme = await migrateThemePreferenceToSystem(desktopEnabled, settings, storedTheme);
@@ -273,8 +278,14 @@ async function readNativeSettingsMap(
   desktopEnabled: boolean,
   nativeSettings?: SettingRecord[],
 ): Promise<Map<string, string>> {
+  const start = performance.now();
   const settingsRows =
     nativeSettings ?? (desktopEnabled ? await listAppSettings().catch(() => []) : []);
+  logDebug('settings', `readNativeSettingsMap: 读取到 ${settingsRows.length} 条设置`, {
+    desktopEnabled,
+    hasNativeSettings: !!nativeSettings,
+    elapsedMs: Math.round(performance.now() - start),
+  });
   return new Map(settingsRows.map((setting) => [setting.key, setting.valueJson]));
 }
 
