@@ -249,7 +249,7 @@
   let deleteConfirmIsDir = false;
   let deleteConfirmName = '';
   let closeWindowChoiceDialogOpen = false;
-  let rememberCloseWindowChoice = false;
+  let rememberCloseWindowChoice = true;
   let closeWindowChoiceResolver: ((choice: CloseWindowChoiceResult) => void) | null = null;
   let closeWindowChoicePromise: Promise<CloseWindowChoiceResult> | null = null;
 
@@ -608,7 +608,7 @@
       return closeWindowChoicePromise;
     }
 
-    rememberCloseWindowChoice = false;
+    rememberCloseWindowChoice = true;
     closeWindowChoiceDialogOpen = true;
     closeWindowChoicePromise = new Promise<CloseWindowChoiceResult>((resolve) => {
       closeWindowChoiceResolver = resolve;
@@ -2105,7 +2105,9 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
-      listen('nomo://request-close-window', () => {
+      listen('nomo://request-close-window', (event) => {
+        // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
+        if (event.windowLabel !== windowLabel) return;
         closeCurrentWindow().catch(() => undefined);
       }).catch(() => null),
     ]);
