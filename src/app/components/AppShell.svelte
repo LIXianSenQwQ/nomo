@@ -61,6 +61,7 @@
   export let writingStatsVisible: boolean;
   export let writingStatsMetric: StatsMetric;
   export let readingTimeVisible: boolean;
+  export let zoomPercent: number;
   export let tablePickerOpen: boolean;
   export let linkPickerOpen: boolean;
   export let linkText: string;
@@ -130,6 +131,7 @@
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
+  export let onZoomChange: (percent: number) => void;
 
   $: hasOpenDocument = tabs.length > 0 && Boolean(activeTabId);
 </script>
@@ -311,16 +313,6 @@
           {removeLink}
           {closeLinkPicker}
         />
-
-        {#if writingStatsVisible}
-          <StatusBar
-            {interfaceLocale}
-            {stats}
-            activeMetric={writingStatsMetric}
-            {readingTimeVisible}
-            onMetricChange={setWritingStatsMetric}
-          />
-        {/if}
       {:else}
         <EmptyWorkspace
           {interfaceLocale}
@@ -330,5 +322,17 @@
         />
       {/if}
     </section>
+
+    {#if hasOpenDocument && writingStatsVisible}
+      <StatusBar
+        {interfaceLocale}
+        {stats}
+        activeMetric={writingStatsMetric}
+        {readingTimeVisible}
+        {zoomPercent}
+        onMetricChange={setWritingStatsMetric}
+        {onZoomChange}
+      />
+    {/if}
   </main>
 </div>

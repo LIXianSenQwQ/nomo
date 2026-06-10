@@ -46,6 +46,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   visualZoom: 'ビジュアルズーム',
   zoomLevel: 'ズームレベル',
   zoomLevelDescription: 'ドキュメントエディターとソースモードの全体的なスケールを調整します。',
+  decreaseZoom: '縮小',
+  increaseZoom: '拡大',
   ctrlWheelZoom: 'Ctrl ホイールズーム',
   ctrlWheelZoomDescription: 'Ctrl を押したままマウス ホイールをスクロールしてズームを調整します。',
   customCssTheme: 'カスタムCSSテーマ',

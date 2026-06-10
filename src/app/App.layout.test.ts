@@ -205,8 +205,11 @@ describe('App outline layout', () => {
     const preferencesEnd = appSource.indexOf('function getCurrentAppPreferences', preferencesStart);
     const preferencesSource = appSource.slice(preferencesStart, preferencesEnd);
     const wheelStart = appSource.indexOf('function handleGlobalWheel');
-    const wheelEnd = appSource.indexOf('function setupSystemThemeListener', wheelStart);
+    const wheelEnd = appSource.indexOf('function handleZoomChange', wheelStart);
     const wheelSource = appSource.slice(wheelStart, wheelEnd);
+    const zoomChangeStart = appSource.indexOf('function handleZoomChange');
+    const zoomChangeEnd = appSource.indexOf('function setupSystemThemeListener', zoomChangeStart);
+    const zoomChangeSource = appSource.slice(zoomChangeStart, zoomChangeEnd);
 
     expect(editorSettingsControllerSource).toContain('refreshEditorViewportLayout(): void;');
     expect(contentWidthSource).toContain(
@@ -221,9 +224,9 @@ describe('App outline layout', () => {
     expect(preferencesSource).toContain(
       'applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout });',
     );
-    expect(wheelSource).toContain(
-      'applyZoomSetting(zoomPercent, { transition: true, onFrame: refreshEditorViewportLayout });',
-    );
+    expect(zoomChangeSource).toContain('applyZoomSetting(zoomPercent, {');
+    expect(zoomChangeSource).toContain('transition: true,');
+    expect(zoomChangeSource).toContain('refreshEditorViewportLayout');
   });
 
   it('keeps front matter aligned with the zoomed document body', () => {
@@ -255,13 +258,14 @@ describe('App outline layout', () => {
     const branchEndIndex = appShellSource.indexOf('      {/if}', emptyBranchIndex);
     const documentBranch = appShellSource.slice(documentBranchIndex, emptyBranchIndex);
     const emptyBranch = appShellSource.slice(emptyBranchIndex, branchEndIndex);
+    const sectionEndIndex = appShellSource.indexOf('</section>');
 
     expect(tabsIndex).toBeGreaterThan(-1);
     expect(documentBranchIndex).toBeGreaterThan(tabsIndex);
     expect(documentBranch).toContain('<EditorToolbar');
     expect(documentBranch).toContain('<EditorWorkspace');
     expect(documentBranch).toContain('<LinkQuickEditor');
-    expect(documentBranch).toContain('<StatusBar');
+    expect(appShellSource.indexOf('<StatusBar')).toBeGreaterThan(sectionEndIndex);
     expect(emptyBranch).toContain('<EmptyWorkspace');
     expect(emptyBranch).toContain('{createNewFile}');
     expect(emptyBranch).toContain('{openFileDialog}');

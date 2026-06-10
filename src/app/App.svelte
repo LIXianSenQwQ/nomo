@@ -2217,6 +2217,27 @@
     statusMessage = t.zoomStatus({ percent: zoomPercent });
   }
 
+  // 步骤1：校验目标缩放值并更新状态
+  // 步骤2：保存滚动锚点，缩放后恢复阅读位置
+  // 步骤3：应用缩放动画并持久化到设置
+  function handleZoomChange(nextZoom: number) {
+    const clamped = Math.min(160, Math.max(80, nextZoom));
+    if (clamped === zoomPercent) {
+      return;
+    }
+    zoomPercent = clamped;
+    const anchor = saveScrollAnchor();
+    applyZoomSetting(zoomPercent, {
+      transition: true,
+      onFrame: () => {
+        refreshEditorViewportLayout();
+        restoreScrollAnchor(anchor);
+      },
+    });
+    updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
+    statusMessage = t.zoomStatus({ percent: zoomPercent });
+  }
+
   // 记录当前可见面板中视口中心内容的相对位置（0~1），
   // 缩放后按相同比例恢复 scrollTop，保持阅读位置不变。
   function saveScrollAnchor(): { pane: HTMLElement; ratio: number } | null {
@@ -2384,6 +2405,7 @@
   {writingStatsVisible}
   {writingStatsMetric}
   {readingTimeVisible}
+  {zoomPercent}
   {tablePickerOpen}
   {linkPickerOpen}
   {linkText}
@@ -2452,6 +2474,7 @@
   {openMarkdownFile}
   {openSettings}
   {setWritingStatsMetric}
+  onZoomChange={handleZoomChange}
   on:createNode={handleCreateNode}
   on:renameNode={handleRenameNode}
   on:refreshFolder={handleRefreshFolder}
