@@ -33,8 +33,8 @@
   export let getDirectoryLabel: (path: string) => string;
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (path: string) => void;
-  export let openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   export let openPreviewFile: (path: string) => void;
+  export let pinPreviewFile: () => void;
   export let previewNativePath: string | null;
   export let startResize: (event: MouseEvent) => void;
 
@@ -174,7 +174,8 @@
       pendingClickTimer = null;
       pendingClickPath = null;
     }
-    openRecentEntry(path, 'file');
+    openPreviewFile(path);
+    pinPreviewFile();
   }
 
   function startCreating(parentPath: string, type: 'folder' | 'file', event?: MouseEvent) {
@@ -296,7 +297,10 @@
     });
     items.push({
       label: t.openInNewTab(),
-      action: () => openRecentEntry(node.path, 'file'),
+      action: () => {
+        openPreviewFile(node.path);
+        pinPreviewFile();
+      },
     });
 
     items.push({ label: '', action: () => {}, separator: true });

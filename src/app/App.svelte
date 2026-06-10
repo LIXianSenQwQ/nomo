@@ -1697,6 +1697,8 @@
           ) {
             await expandAncestors(nativePath, currentFolderPath);
           }
+          await rememberNativeFolder(folderPath);
+          await refreshRecentFiles();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           statusMessage = `${t.loadFolderTreeFailed()}：${message}`;
@@ -1722,6 +1724,7 @@
     let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
     let restoredWorkspaceTabs = false;
     let hasPendingFolder = false;
+    let restoredFolderPath = '';
 
     if (desktopEnabled) {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -1742,6 +1745,7 @@
           if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
             currentFolderPath = state.currentFolderPath;
             startupFolderPath = state.currentFolderPath;
+            restoredFolderPath = state.currentFolderPath;
           }
           if (state.tabs && state.tabs.length > 0) {
             tabs = state.tabs;
@@ -1767,6 +1771,15 @@
           const folderPath = JSON.parse(pendingFolderSetting.valueJson);
           if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
             hasPendingFolder = true;
+            // 若恢复的标签页属于不同文件夹，先清除旧标签页
+            if (
+              restoredWorkspaceTabs &&
+              restoredFolderPath &&
+              !sameFileSystemPath(restoredFolderPath, folderPath)
+            ) {
+              clearAllTabsWithoutCreatingBlank();
+              restoredWorkspaceTabs = false;
+            }
             currentFolderPath = folderPath;
             startupFolderPath = folderPath;
             // 标记为已消费，避免刷新时重复处理
@@ -2427,8 +2440,8 @@
   {createNewFile}
   {openFileDialog}
   {openFolderDialog}
-  {openRecentEntry}
   {openPreviewFile}
+  pinPreviewFile={pinPreviewTab}
   {clearRecentEntriesList}
   {removeRecentEntry}
   {closeCurrentFile}
