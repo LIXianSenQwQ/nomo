@@ -944,7 +944,9 @@ describe('App outline layout', () => {
   it('supports closing windows to the system tray when enabled', () => {
     expect(tauriLibSource).toContain('crate::window::tray::install_app_tray');
     expect(tauriLibSource).toContain('crate::window::commands::hide_window_to_tray');
-    expect(tauriLibSource).toContain('crate::window::tray::set_tray_active');
+    expect(tauriLibSource).toContain(
+      'crate::window::tray::sync_tray_active_with_window_visibility',
+    );
     expect(tauriLibSource).toContain('WindowEvent::CloseRequested');
     expect(tauriTraySource).toContain('TrayIconBuilder::with_id');
     expect(tauriTraySource).toContain('i18n::app_text(app, "tray_open")');
@@ -953,6 +955,7 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('nomo-tray-light-active-24-preview.png');
     expect(tauriTraySource).toContain('nomo-tray-light-inactive-24-preview.png');
     expect(tauriTraySource).toContain('set_tray_active');
+    expect(tauriTraySource).toContain('sync_tray_active_with_window_visibility');
     expect(tauriTraySource).toContain('set_desktop_icon_theme');
     expect(tauriTraySource).toContain('nomo-app-light-256.png');
     expect(tauriTraySource).toContain('nomo-app-dark-256.png');
@@ -972,6 +975,27 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');
     expect(tauriTraySource).toContain('closeWindowBehavior');
+    const showMainWindowStart = tauriTraySource.indexOf('pub(crate) fn show_main_window');
+    const showMainWindowEnd = tauriTraySource.indexOf(
+      'fn show_window_by_label',
+      showMainWindowStart,
+    );
+    const showMainWindowSource = tauriTraySource.slice(showMainWindowStart, showMainWindowEnd);
+    expect(tauriLibSource).toContain('WindowEvent::Focused(true)');
+    expect(tauriLibSource).toContain('record_last_active_window(window.app_handle(), label)');
+    expect(tauriLibSource).toContain('WindowEvent::Destroyed');
+    expect(tauriLibSource).toContain('forget_window(window.app_handle(), label)');
+    expect(tauriTraySource).toContain('static LAST_ACTIVE_WINDOW');
+    expect(tauriTraySource).toContain('static WINDOW_TITLES');
+    expect(tauriTraySource).toContain('const TRAY_WINDOW_PREFIX');
+    expect(tauriTraySource).toContain('choose_last_active_window(windows.iter().filter');
+    expect(tauriTraySource).toContain('tray-window:');
+    expect(tauriTraySource).toContain('show_window_by_label');
+    expect(tauriTraySource).toContain('window_display_title');
+    expect(showMainWindowSource).not.toContain('for (_label, window) in app.webview_windows()');
+    expect(tauriWindowCommandsSource).toContain('pub(crate) fn report_window_title');
+    expect(tauriLibSource).toContain('crate::window::commands::report_window_title');
+    expect(desktopWindowSource).toContain("invoke('report_window_title'");
   });
 
   it('registers desktop close and exit listeners before first-run sample work', () => {

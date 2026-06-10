@@ -43,6 +43,18 @@ pub fn run() {
                 crate::app_logger::debug("Window", &format!("持久化窗口状态：{}", window.label()));
                 crate::window::state::persist_current_window_state(window);
             }
+            WindowEvent::Focused(true) => {
+                let label = window.label();
+                if crate::window::external_open::is_document_window_label(label) {
+                    crate::window::tray::record_last_active_window(window.app_handle(), label);
+                }
+            }
+            WindowEvent::Destroyed => {
+                let label = window.label();
+                if crate::window::external_open::is_document_window_label(label) {
+                    crate::window::tray::forget_window(window.app_handle(), label);
+                }
+            }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
                 crate::app_logger::info("Window", &format!("收到窗口关闭请求：{label}"));
@@ -58,7 +70,10 @@ pub fn run() {
                     crate::app_logger::info("Window", &format!("窗口隐藏到托盘：{label}"));
                     let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
-                    crate::window::tray::set_tray_active(window.app_handle(), false);
+                    crate::window::tray::sync_tray_active_with_window_visibility(
+                        window.app_handle(),
+                    );
+                    let _ = crate::window::tray::refresh_tray_menu(window.app_handle());
                 } else {
                     crate::app_logger::info("Window", &format!("请求前端确认关闭：{label}"));
                     let _ = window.emit("nomo://request-close-window", ());
@@ -140,6 +155,7 @@ pub fn run() {
             crate::database::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
+            crate::window::commands::report_window_title,
             crate::window::commands::refresh_interface_language_chrome,
             crate::window::commands::set_desktop_icon_theme,
             crate::window::commands::get_desktop_system_theme,

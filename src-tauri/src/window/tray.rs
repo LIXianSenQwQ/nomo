@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use tauri::{
     image::Image,
     menu::{Menu, MenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime,
+    AppHandle, Manager, Runtime, WebviewWindow,
 };
 
 use crate::i18n;
@@ -11,6 +12,7 @@ use crate::i18n;
 const TRAY_ID: &str = "nomo-main-tray";
 const TRAY_OPEN_ID: &str = "tray-open-main-window";
 const TRAY_EXIT_ID: &str = "tray-exit-app";
+const TRAY_WINDOW_PREFIX: &str = "tray-window:";
 const TRAY_DARK_ACTIVE_ICON_BYTES: &[u8] =
     include_bytes!("../../icons/nomo/tray/nomo-tray-dark-active-24-preview.png");
 const TRAY_DARK_INACTIVE_ICON_BYTES: &[u8] =
@@ -36,6 +38,12 @@ struct TrayVisualState {
     theme: TrayTheme,
 }
 
+struct DocumentTrayWindow<R: Runtime> {
+    label: String,
+    window: WebviewWindow<R>,
+    visible: bool,
+}
+
 impl Default for TrayVisualState {
     fn default() -> Self {
         Self {
@@ -46,6 +54,8 @@ impl Default for TrayVisualState {
 }
 
 static TRAY_STATE: OnceLock<Mutex<TrayVisualState>> = OnceLock::new();
+static LAST_ACTIVE_WINDOW: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static WINDOW_TITLES: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if app.tray_by_id(TRAY_ID).is_some() {
@@ -59,12 +69,19 @@ pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Str
         .menu(&menu)
         .show_menu_on_left_click(false)
         .tooltip("Nomo")
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            TRAY_OPEN_ID => show_main_window(app),
-            TRAY_EXIT_ID => {
-                let _ = crate::window::commands::emit_exit_request(app);
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            match id {
+                TRAY_OPEN_ID => show_main_window(app),
+                TRAY_EXIT_ID => {
+                    let _ = crate::window::commands::emit_exit_request(app);
+                }
+                _ if id.starts_with(TRAY_WINDOW_PREFIX) => {
+                    let label = &id[TRAY_WINDOW_PREFIX.len()..];
+                    show_window_by_label(app, label);
+                }
+                _ => {}
             }
-            _ => {}
         })
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::DoubleClick {
@@ -103,12 +120,59 @@ pub(crate) fn refresh_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<(), St
 }
 
 fn build_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<Menu<R>, String> {
-    MenuBuilder::new(app)
-        .text(TRAY_OPEN_ID, i18n::app_text(app, "tray_open"))
+    let windows = collect_document_windows(app);
+    let mut builder = MenuBuilder::new(app).text(TRAY_OPEN_ID, i18n::app_text(app, "tray_open"));
+
+    if !windows.is_empty() {
+        builder = builder.separator();
+        for info in &windows {
+            let prefix = if info.visible { "●" } else { "○" };
+            let menu_id = format!("{TRAY_WINDOW_PREFIX}{}", info.label);
+            let title = window_display_title(&info.label, &info.window);
+            builder = builder.text(menu_id, format!("{prefix} {title}"));
+        }
+    }
+
+    builder
         .separator()
         .text(TRAY_EXIT_ID, i18n::app_text(app, "tray_exit"))
         .build()
         .map_err(|error| format!("构建托盘菜单失败：{error}"))
+}
+
+pub(crate) fn record_last_active_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    crate::app_logger::debug("Tray", &format!("记录最后活跃窗口：{label}"));
+    let _ = last_active_window().lock().map(|mut active| {
+        *active = Some(label.to_string());
+    });
+    let _ = refresh_tray_menu(app);
+}
+
+pub(crate) fn record_window_title<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &str,
+    title: &str,
+) -> Result<(), String> {
+    window_titles()
+        .lock()
+        .map(|mut titles| {
+            titles.insert(label.to_string(), title.to_string());
+        })
+        .map_err(|error| format!("记录窗口标题失败：{error}"))?;
+    refresh_tray_menu(app)
+}
+
+pub(crate) fn forget_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    crate::app_logger::debug("Tray", &format!("清理托盘窗口记录：{label}"));
+    let _ = window_titles().lock().map(|mut titles| {
+        titles.remove(label);
+    });
+    let _ = last_active_window().lock().map(|mut active| {
+        if active.as_deref() == Some(label) {
+            *active = None;
+        }
+    });
+    let _ = refresh_tray_menu(app);
 }
 
 pub(crate) fn set_tray_active<R: Runtime>(app: &AppHandle<R>, active: bool) {
@@ -117,6 +181,13 @@ pub(crate) fn set_tray_active<R: Runtime>(app: &AppHandle<R>, active: bool) {
         return;
     };
     let _ = apply_tray_icon(app, state);
+}
+
+pub(crate) fn sync_tray_active_with_window_visibility<R: Runtime>(app: &AppHandle<R>) {
+    let active = collect_document_windows(app)
+        .iter()
+        .any(|info| info.visible);
+    set_tray_active(app, active);
 }
 
 pub(crate) fn set_desktop_icon_theme<R: Runtime>(
@@ -143,23 +214,84 @@ pub(crate) fn close_to_tray_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
-    crate::app_logger::info("Tray", "从托盘恢复主窗口");
-    let mut has_document_window = false;
+    crate::app_logger::info("Tray", "从托盘打开文档窗口");
+    let windows = collect_document_windows(app);
+    let has_visible_window = windows.iter().any(|info| info.visible);
+    let target = if has_visible_window {
+        choose_last_active_window(windows.iter().filter(|info| info.visible))
+    } else {
+        choose_last_active_window(windows.iter())
+    };
 
-    for (_label, window) in app.webview_windows() {
-        if !crate::window::external_open::is_document_window_label(window.label()) {
-            continue;
+    if let Some(window) = target {
+        show_document_window(app, &window);
+    }
+}
+
+fn show_window_by_label<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    let Some(window) = app.get_webview_window(label) else {
+        return;
+    };
+    if !crate::window::external_open::is_document_window_label(window.label()) {
+        return;
+    }
+    show_document_window(app, &window);
+}
+
+fn show_document_window<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
+    let _ = window.set_skip_taskbar(false);
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    crate::window::os::bring_window_to_front(window);
+    set_tray_active(app, true);
+    let _ = refresh_tray_menu(app);
+}
+
+fn collect_document_windows<R: Runtime>(app: &AppHandle<R>) -> Vec<DocumentTrayWindow<R>> {
+    app.webview_windows()
+        .into_iter()
+        .filter(|(label, _window)| crate::window::external_open::is_document_window_label(label))
+        .map(|(label, window)| {
+            let visible = window.is_visible().unwrap_or(false);
+            DocumentTrayWindow {
+                label,
+                window,
+                visible,
+            }
+        })
+        .collect()
+}
+
+fn choose_last_active_window<'a, R: Runtime>(
+    windows: impl Iterator<Item = &'a DocumentTrayWindow<R>>,
+) -> Option<WebviewWindow<R>> {
+    let windows = windows.collect::<Vec<_>>();
+    let active_label = current_last_active_window();
+    if let Some(active_label) = active_label {
+        if let Some(info) = windows.iter().find(|info| info.label == active_label) {
+            return Some(info.window.clone());
         }
-
-        has_document_window = true;
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
     }
 
-    if has_document_window {
-        set_tray_active(app, true);
+    windows.first().map(|info| info.window.clone())
+}
+
+fn window_display_title<R: Runtime>(label: &str, window: &WebviewWindow<R>) -> String {
+    if let Some(title) = window_titles()
+        .lock()
+        .ok()
+        .and_then(|titles| titles.get(label).cloned())
+        .filter(|title| !title.trim().is_empty())
+    {
+        return title;
     }
+
+    window
+        .title()
+        .ok()
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or_else(|| label.to_string())
 }
 
 fn database_bool_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<bool> {
@@ -174,6 +306,21 @@ fn database_string_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<
 
 fn tray_state() -> &'static Mutex<TrayVisualState> {
     TRAY_STATE.get_or_init(|| Mutex::new(TrayVisualState::default()))
+}
+
+fn last_active_window() -> &'static Mutex<Option<String>> {
+    LAST_ACTIVE_WINDOW.get_or_init(|| Mutex::new(None))
+}
+
+fn current_last_active_window() -> Option<String> {
+    last_active_window()
+        .lock()
+        .ok()
+        .and_then(|active| active.clone())
+}
+
+fn window_titles() -> &'static Mutex<HashMap<String, String>> {
+    WINDOW_TITLES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn current_tray_state() -> TrayVisualState {

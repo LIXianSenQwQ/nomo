@@ -41,6 +41,19 @@ pub(crate) fn refresh_window_menu(
 }
 
 #[tauri::command]
+pub(crate) fn report_window_title(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    title: String,
+) -> Result<(), String> {
+    if !crate::window::external_open::is_document_window_label(window.label()) {
+        return Ok(());
+    }
+
+    crate::window::tray::record_window_title(&app, window.label(), &title)
+}
+
+#[tauri::command]
 pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), String> {
     crate::app_logger::info("Window", "刷新界面语言相关窗口 chrome");
     for (_label, window) in app.webview_windows() {
@@ -206,7 +219,8 @@ pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), St
     window
         .hide()
         .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))?;
-    crate::window::tray::set_tray_active(window.app_handle(), false);
+    crate::window::tray::sync_tray_active_with_window_visibility(window.app_handle());
+    crate::window::tray::refresh_tray_menu(window.app_handle())?;
     Ok(())
 }
 

@@ -205,6 +205,8 @@ export async function updateAppWindowTitle(
   const win = getCurrentWindow();
   const title = `${fileName}${dirty ? ' *' : ''} - Nomo`;
   await win.setTitle(title).catch(() => undefined);
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('report_window_title', { title }).catch(() => undefined);
 }
 
 function formatError(error: unknown): string {
