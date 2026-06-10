@@ -5,7 +5,8 @@ import { createTocBlock } from '../../lib/toc/tocService';
 import { t } from '../i18n';
 import {
   type OutlineScrollAnchor,
-  getSourceScrollAnchor,
+  getSemanticScrollAnchorForBlock,
+  getSourceScrollAnchorAtLine,
   scrollSemanticToAnchor,
   scrollSourceToAnchor,
   setScrollTop,
@@ -46,14 +47,8 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     const savedSourceScrollTop = sourcePane?.scrollTop ?? 0;
     const scrollAnchor =
       options.getMode() === 'semantic'
-        ? getDocumentScrollAnchor(semanticPane, savedSemanticScrollTop)
-        : getSourceScrollAnchor(
-            outline,
-            savedSourceScrollTop,
-            options.getSourceLineHeight(),
-            options.getSourceTextarea(),
-            options.getSourcePane(),
-          );
+        ? getSemanticModeSwitchAnchor(outline, semanticPane, savedSemanticScrollTop)
+        : getSourceModeSwitchAnchor(outline, sourcePane, savedSourceScrollTop);
     options.getEditor().updateOptions({ mode: nextMode });
     await tick();
     options.setSuppressOutlineScrollUntil(Date.now() + 300);
@@ -229,22 +224,119 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     return Math.ceil(lineCount * options.getSourceLineHeight());
   }
 
-  function getDocumentScrollAnchor(
-    pane: HTMLElement | undefined,
-    scrollTop: number,
+  function getSemanticModeSwitchAnchor(
+    outline: OutlineItem[],
+    semanticPane: HTMLElement | undefined,
+    savedScrollTop: number,
   ): OutlineScrollAnchor | null {
-    if (!pane) {
+    if (!semanticPane) {
       return null;
     }
-    const maxScrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight);
-    const documentProgress =
-      maxScrollTop > 0 ? Math.min(1, Math.max(0, scrollTop / maxScrollTop)) : 0;
-    return {
-      kind: 'document',
-      sectionProgress: documentProgress,
-      documentProgress,
-      sourceLine: 1,
-    };
+
+    const selectionRect = options.getEditor().getSelectionAnchorRect();
+    const anchorBlock = isRectVisibleInPane(selectionRect, semanticPane)
+      ? findSemanticBlockAtRect(semanticPane, selectionRect)
+      : findFirstVisibleSemanticBlock(semanticPane);
+
+    return getSemanticScrollAnchorForBlock(
+      outline,
+      semanticPane,
+      anchorBlock,
+      savedScrollTop,
+    );
+  }
+
+  function getSourceModeSwitchAnchor(
+    outline: OutlineItem[],
+    sourcePane: HTMLElement | undefined,
+    savedScrollTop: number,
+  ): OutlineScrollAnchor | null {
+    const sourceTextarea = options.getSourceTextarea();
+    const lineHeight = options.getSourceLineHeight();
+    const selectionLine = getSourceSelectionLine(sourceTextarea);
+    const anchorLine =
+      sourcePane && selectionLine && isSourceLineVisible(sourcePane, selectionLine, lineHeight)
+        ? selectionLine
+        : Math.max(1, Math.floor(savedScrollTop / lineHeight) + 1);
+
+    return getSourceScrollAnchorAtLine(
+      outline,
+      anchorLine,
+      savedScrollTop,
+      lineHeight,
+      sourceTextarea,
+      sourcePane,
+    );
+  }
+
+  function isRectVisibleInPane(rect: DOMRect | null, pane: HTMLElement) {
+    if (!rect) {
+      return false;
+    }
+    const paneRect = pane.getBoundingClientRect();
+    if (rect.height > paneRect.height * 1.5) {
+      return false;
+    }
+    return rect.bottom > paneRect.top && rect.top < paneRect.bottom;
+  }
+
+  function findSemanticBlockAtRect(pane: HTMLElement, rect: DOMRect | null) {
+    if (!rect || typeof document === 'undefined') {
+      return null;
+    }
+    const paneRect = pane.getBoundingClientRect();
+    const x = clamp(rect.left + rect.width / 2, paneRect.left + 1, paneRect.right - 1);
+    const y = clamp(rect.top + rect.height / 2, paneRect.top + 1, paneRect.bottom - 1);
+    const element = document.elementFromPoint(x, y);
+    const editor = pane.querySelector<HTMLElement>('.ProseMirror');
+    if (!editor || !(element instanceof HTMLElement) || !editor.contains(element)) {
+      return findVisibleSemanticBlockNearY(pane, y);
+    }
+
+    let current: HTMLElement | null = element;
+    while (current && current.parentElement !== editor) {
+      current = current.parentElement;
+    }
+    return current ?? findVisibleSemanticBlockNearY(pane, y);
+  }
+
+  function findFirstVisibleSemanticBlock(pane: HTMLElement) {
+    const paneRect = pane.getBoundingClientRect();
+    return getSemanticBlocks(pane).find((block) => {
+      const rect = block.getBoundingClientRect();
+      return rect.bottom > paneRect.top && rect.top < paneRect.bottom;
+    });
+  }
+
+  function findVisibleSemanticBlockNearY(pane: HTMLElement, y: number) {
+    return getSemanticBlocks(pane).find((block) => {
+      const rect = block.getBoundingClientRect();
+      return rect.bottom >= y && rect.top <= y;
+    });
+  }
+
+  function getSemanticBlocks(pane: HTMLElement) {
+    return Array.from(pane.querySelectorAll<HTMLElement>('.ProseMirror > *'));
+  }
+
+  function getSourceSelectionLine(sourceTextarea: HTMLTextAreaElement | undefined) {
+    if (!sourceTextarea) {
+      return null;
+    }
+    return sourceTextarea.value.slice(0, sourceTextarea.selectionStart).split(/\r?\n/).length;
+  }
+
+  function isSourceLineVisible(sourcePane: HTMLElement, sourceLine: number, lineHeight: number) {
+    const lineTop = Math.max(0, (sourceLine - 1) * lineHeight);
+    const lineBottom = lineTop + lineHeight;
+    return (
+      lineBottom > sourcePane.scrollTop &&
+      lineTop < sourcePane.scrollTop + sourcePane.clientHeight
+    );
+  }
+
+  function clamp(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function getAnchorDocumentProgress(scrollAnchor: OutlineScrollAnchor | null) {

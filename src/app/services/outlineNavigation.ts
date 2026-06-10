@@ -75,6 +75,26 @@ export function getSourceScrollAnchor(
   sourcePane?: HTMLElement,
 ): OutlineScrollAnchor | null {
   const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
+  return getSourceScrollAnchorAtLine(
+    outline,
+    visibleLine,
+    scrollTop,
+    lineHeight,
+    sourceTextarea,
+    sourcePane,
+  );
+}
+
+export function getSourceScrollAnchorAtLine(
+  outline: OutlineItem[],
+  sourceLine: number,
+  scrollTop: number,
+  lineHeight: number,
+  sourceTextarea?: HTMLTextAreaElement,
+  sourcePane?: HTMLElement,
+): OutlineScrollAnchor | null {
+  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
+  const anchorLine = Math.max(1, Math.floor(sourceLine));
   const sourceScrollContainer = sourcePane ?? sourceTextarea?.closest<HTMLElement>('.source-pane');
   const documentProgress = getScrollProgress(sourceScrollContainer, scrollTop);
 
@@ -83,11 +103,13 @@ export function getSourceScrollAnchor(
       kind: 'document',
       sectionProgress: documentProgress,
       documentProgress,
-      sourceLine: visibleLine,
+      sourceLine: anchorLine,
     };
   }
 
-  const activeOutlineId = getActiveOutlineIdFromSource(outline, scrollTop, lineHeight);
+  const activeOutlineId =
+    getOutlineItemAtLine(outline, anchorLine)?.id ??
+    getActiveOutlineIdFromSource(outline, scrollTop, lineHeight);
   const currentIndex = Math.max(
     0,
     outline.findIndex((item) => item.id === activeOutlineId),
@@ -97,14 +119,14 @@ export function getSourceScrollAnchor(
   const totalLineCount = getSourceTotalLineCount(sourceTextarea, visibleLine);
   const sectionEndLine = nextItem?.line ?? totalLineCount + 1;
   const sectionLineCount = Math.max(1, sectionEndLine - currentItem.line);
-  const sectionProgress = clamp((visibleLine - currentItem.line) / sectionLineCount, 0, 1);
+  const sectionProgress = clamp((anchorLine - currentItem.line) / sectionLineCount, 0, 1);
 
   return {
     kind: 'outline',
     outlineId: currentItem.id,
     sectionProgress,
     documentProgress,
-    sourceLine: visibleLine,
+    sourceLine: anchorLine,
   };
 }
 
@@ -170,6 +192,37 @@ export function getSemanticScrollAnchor(
   semanticPane: HTMLElement | undefined,
   savedScrollTop?: number,
 ): OutlineScrollAnchor | null {
+  return getSemanticScrollAnchorAtTop(
+    outline,
+    semanticPane,
+    semanticPane?.scrollTop ?? 0,
+    savedScrollTop,
+  );
+}
+
+export function getSemanticScrollAnchorForBlock(
+  outline: OutlineItem[],
+  semanticPane: HTMLElement | undefined,
+  blockElement: HTMLElement | null | undefined,
+  savedScrollTop?: number,
+): OutlineScrollAnchor | null {
+  if (!semanticPane || !blockElement) {
+    return getSemanticScrollAnchor(outline, semanticPane, savedScrollTop);
+  }
+  return getSemanticScrollAnchorAtTop(
+    outline,
+    semanticPane,
+    getElementTopInScrollContainer(blockElement, semanticPane),
+    savedScrollTop,
+  );
+}
+
+function getSemanticScrollAnchorAtTop(
+  outline: OutlineItem[],
+  semanticPane: HTMLElement | undefined,
+  anchorTop: number,
+  savedScrollTop?: number,
+): OutlineScrollAnchor | null {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   // 面板处于 display:none 时 getBoundingClientRect().height 为 0，
   // 且浏览器会将 scrollHeight/clientHeight 也重置为 0，
@@ -180,12 +233,13 @@ export function getSemanticScrollAnchor(
     if (!semanticPane) {
       return null;
     }
-    const scrollTop = savedScrollTop ?? semanticPane.scrollTop;
+    const scrollTop = paneHidden ? (savedScrollTop ?? semanticPane.scrollTop) : anchorTop;
     // 面板隐藏时 scrollHeight 为 0，需要从缓存中获取真实的面板尺寸
     const cached = semanticHeadingCache.get(semanticPane);
-    const maxScrollTop = cached && cached.scrollHeight > 0
-      ? Math.max(0, cached.scrollHeight - cached.clientHeight)
-      : getMaxScrollTop(semanticPane);
+    const maxScrollTop =
+      cached && cached.scrollHeight > 0
+        ? Math.max(0, cached.scrollHeight - cached.clientHeight)
+        : getMaxScrollTop(semanticPane);
     const documentProgress = maxScrollTop > 0 ? clamp(scrollTop / maxScrollTop, 0, 1) : 0;
     return {
       kind: 'document',
@@ -195,7 +249,7 @@ export function getSemanticScrollAnchor(
     };
   }
 
-  const visibleTop = semanticPane.scrollTop;
+  const visibleTop = clamp(anchorTop, 0, getMaxScrollTop(semanticPane));
   let activeIndex = 0;
   headingAnchors.forEach(({ element }, index) => {
     if (getElementTopInScrollContainer(element, semanticPane) <= visibleTop + 24) {
