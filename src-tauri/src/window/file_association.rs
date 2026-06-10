@@ -188,6 +188,101 @@ pub(crate) fn register_windows_context_menu<R: Runtime>(
 }
 
 #[cfg(target_os = "windows")]
+pub(crate) fn unregister_markdown_file_association<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    let locale = crate::i18n::effective_locale(app);
+
+    // 步骤1：删除 Nomo.Markdown ProgId
+    let _ = run_reg_delete("HKCU\\Software\\Classes\\Nomo.Markdown", &["/f"]);
+    // 步骤2：删除 Applications 下的 nomo.exe 条目
+    let exe_path = std::env::current_exe()
+        .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
+    let exe_file_name = exe_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("nomo.exe")
+        .to_string();
+    let _ = run_reg_delete(
+        &format!("HKCU\\Software\\Classes\\Applications\\{exe_file_name}"),
+        &["/f"],
+    );
+    // 步骤3：清理 .md 默认值（如果是 Nomo.Markdown）
+    if let Ok(Some(default_prog)) = query_reg_value("HKCU\\Software\\Classes\\.md", "") {
+        if prog_id_matches_nomo(&default_prog, &exe_file_name) {
+            let _ = run_reg_delete("HKCU\\Software\\Classes\\.md", &["/ve", "/f"]);
+        }
+    }
+    // 步骤4：清理 .markdown 默认值
+    if let Ok(Some(default_prog)) = query_reg_value("HKCU\\Software\\Classes\\.markdown", "") {
+        if prog_id_matches_nomo(&default_prog, &exe_file_name) {
+            let _ = run_reg_delete("HKCU\\Software\\Classes\\.markdown", &["/ve", "/f"]);
+        }
+    }
+    // 步骤5：删除 OpenWithProgids 中的 Nomo.Markdown
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\.md\\OpenWithProgids",
+        &["/v", NOMO_MARKDOWN_PROG_ID, "/f"],
+    );
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\.markdown\\OpenWithProgids",
+        &["/v", NOMO_MARKDOWN_PROG_ID, "/f"],
+    );
+    // 步骤6：删除 Capabilities 和 RegisteredApplications
+    let _ = run_reg_delete("HKCU\\Software\\Nomo\\Capabilities\\FileAssociations", &["/f"]);
+    let _ = run_reg_delete("HKCU\\Software\\Nomo\\Capabilities", &["/f"]);
+    let _ = run_reg_delete(REGISTERED_APPLICATIONS_KEY, &["/v", APP_NAME, "/f"]);
+
+    Ok(DesktopActionPayload {
+        ok: true,
+        message: crate::i18n::text(locale, "md_assoc_unregistered_message").to_string(),
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn unregister_markdown_file_association<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    Err(crate::i18n::app_text(app, "windows_default_only").to_string())
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn unregister_windows_context_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    let locale = crate::i18n::effective_locale(app);
+
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\Nomo.Open",
+        &["/f"],
+    );
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\Nomo.Open",
+        &["/f"],
+    );
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\Directory\\shell\\Nomo.OpenFolder",
+        &["/f"],
+    );
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Classes\\Directory\\Background\\shell\\Nomo.OpenFolder",
+        &["/f"],
+    );
+
+    Ok(DesktopActionPayload {
+        ok: true,
+        message: crate::i18n::text(locale, "context_menu_unregistered_message").to_string(),
+    })
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn unregister_windows_context_menu<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<DesktopActionPayload, String> {
+    Err(crate::i18n::app_text(app, "windows_context_only").to_string())
+}
+
+#[cfg(target_os = "windows")]
 fn write_prog_id(open_command: &str, icon_value: &str) -> Result<(), String> {
     run_reg_add(&[
         "HKCU\\Software\\Classes\\Nomo.Markdown",
@@ -485,10 +580,15 @@ fn prog_id_matches_nomo(prog_id: &str, exe_file_name: &str) -> bool {
 }
 
 #[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
 fn run_reg_add(args: &[&str]) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
     let output = std::process::Command::new("reg")
         .arg("add")
         .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|error| format!("调用 reg.exe 失败：{error}"))?;
     if output.status.success() {
@@ -504,7 +604,36 @@ fn run_reg_add(args: &[&str]) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
+fn run_reg_delete(key: &str, args: &[&str]) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let output = std::process::Command::new("reg")
+        .arg("delete")
+        .arg(key)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|error| format!("调用 reg.exe 失败：{error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_ascii_lowercase();
+    // 键或值不存在时视为成功（已经清理过了）
+    if stderr.contains("error:") || stderr.contains("找不到") || stderr.contains("unable to find")
+    {
+        return Ok(());
+    }
+
+    Err(if stderr.is_empty() {
+        format!("删除注册表项失败，退出码：{}", output.status)
+    } else {
+        format!("删除注册表项失败：{}", stderr)
+    })
+}
+
+#[cfg(target_os = "windows")]
 fn query_reg_value(key: &str, value_name: &str) -> Result<Option<String>, String> {
+    use std::os::windows::process::CommandExt;
     let mut command = std::process::Command::new("reg");
     command.arg("query").arg(key);
     if value_name.is_empty() {
@@ -512,6 +641,7 @@ fn query_reg_value(key: &str, value_name: &str) -> Result<Option<String>, String
     } else {
         command.arg("/v").arg(value_name);
     }
+    command.creation_flags(CREATE_NO_WINDOW);
 
     let output = command
         .output()

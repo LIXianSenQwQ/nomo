@@ -119,14 +119,17 @@
   let platformCapabilities = getPlatformCapabilities();
   let picgoTesting = false;
   let bindingMdAssociation = false;
+  let unbindingMdAssociation = false;
   let checkingMdAssociation = false;
   let mdAssociationStatus: MarkdownAssociationStatus | null = null;
   let mdAssociationError = '';
   let filesIntegrationStatusRequested = false;
   let registeringContextMenu = false;
+  let unregisteringContextMenu = false;
   let checkingContextMenu = false;
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
+  let focusDebounceTimer: number | null = null;
   let downloadedSoftwareUpdate: DownloadedSoftwareUpdate | null = null;
   let updateState: SoftwareUpdateUiState = {
     status: 'idle',
@@ -185,6 +188,9 @@
       if (autoSaveTimer !== null) {
         window.clearTimeout(autoSaveTimer);
       }
+      if (focusDebounceTimer !== null) {
+        window.clearTimeout(focusDebounceTimer);
+      }
       if (updateDecisionUnlisten) {
         updateDecisionUnlisten();
       }
@@ -194,10 +200,18 @@
 
   function handleWindowFocus() {
     logToTerminal('debug', 'SettingsWindow', '设置窗口获得焦点', { activeCategory });
-    if (activeCategory === 'files') {
+    if (activeCategory !== 'files') {
+      return;
+    }
+    // 防抖：避免频繁切换焦点导致反复查询
+    if (focusDebounceTimer !== null) {
+      window.clearTimeout(focusDebounceTimer);
+    }
+    focusDebounceTimer = window.setTimeout(() => {
+      focusDebounceTimer = null;
       void refreshMarkdownAssociationStatus({ silent: true });
       void refreshWindowsContextMenuStatus({ silent: true });
-    }
+    }, 300);
   }
 
   function selectCategory(categoryId: CategoryId) {
@@ -215,9 +229,16 @@
     }
 
     const timer = createPerfTimer('SettingsWindow', 'ensureFilesIntegrationStatus');
-    filesIntegrationStatusRequested = true;
-    await Promise.all([refreshMarkdownAssociationStatus(), refreshWindowsContextMenuStatus()]);
-    timer.end();
+    try {
+      await Promise.all([refreshMarkdownAssociationStatus(), refreshWindowsContextMenuStatus()]);
+      filesIntegrationStatusRequested = true;
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '文件集成状态首次刷新失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      timer.end();
+    }
   }
 
   async function loadPreferences() {
@@ -819,6 +840,16 @@
       mdAssociationError = '';
     }
 
+    // 超时后备：防止子进程异常导致状态永久卡住
+    let completed = false;
+    const timeoutId = window.setTimeout(() => {
+      if (!completed) {
+        checkingMdAssociation = false;
+        mdAssociationError = mdAssociationError || '查询超时，请重试';
+        logToTerminal('error', 'SettingsWindow', 'Markdown 关联状态查询超时');
+      }
+    }, 8000);
+
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       mdAssociationStatus = await invoke<MarkdownAssociationStatus>(
@@ -835,6 +866,8 @@
         error: mdAssociationError,
       });
     } finally {
+      completed = true;
+      window.clearTimeout(timeoutId);
       checkingMdAssociation = false;
     }
   }
@@ -911,6 +944,16 @@
       contextMenuError = '';
     }
 
+    // 超时后备：防止子进程异常导致状态永久卡住
+    let completed = false;
+    const timeoutId = window.setTimeout(() => {
+      if (!completed) {
+        checkingContextMenu = false;
+        contextMenuError = contextMenuError || '查询超时，请重试';
+        logToTerminal('error', 'SettingsWindow', '右键菜单状态查询超时');
+      }
+    }, 8000);
+
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       contextMenuStatus = await invoke<WindowsContextMenuStatus>('get_windows_context_menu_status');
@@ -924,6 +967,8 @@
         error: contextMenuError,
       });
     } finally {
+      completed = true;
+      window.clearTimeout(timeoutId);
       checkingContextMenu = false;
     }
   }
@@ -976,6 +1021,84 @@
     }
     return 'idle';
   }
+
+  // Svelte 5 兼容模式下，函数体内部的依赖无法被编译器穿透追踪，
+  // 必须将条件逻辑直接展开到 $: 声明中，确保状态变化时 UI 正确更新。
+  $: mdAssociationLabel =
+    !desktopEnabled || !platformCapabilities.isWindows
+      ? t.unsupported()
+      : checkingMdAssociation && !mdAssociationStatus
+        ? t.checking()
+        : mdAssociationError
+          ? t.checkFailed()
+          : mdAssociationStatus?.is_default
+            ? t.bound()
+            : mdAssociationStatus?.registered
+              ? t.pendingSelection()
+              : t.unbound();
+
+  $: mdAssociationDesc =
+    !desktopEnabled
+      ? t.mdAssociationDesktopOnly()
+      : !platformCapabilities.isWindows
+        ? t.mdAssociationWindowsOnly()
+        : mdAssociationError
+          ? mdAssociationError
+          : checkingMdAssociation && !mdAssociationStatus
+            ? t.mdAssociationCheckingDescription()
+            : mdAssociationStatus?.message ?? t.mdAssociationDefaultDescription();
+
+  $: mdAssociationBtnLabel = bindingMdAssociation
+    ? t.opening()
+    : unbindingMdAssociation
+      ? t.unbinding()
+      : mdAssociationStatus?.is_default || mdAssociationStatus?.registered
+        ? t.unbindMd()
+        : t.bindMd();
+
+  $: mdAssociationPillClass = mdAssociationStatus?.is_default
+    ? 'bound'
+    : mdAssociationError
+      ? 'error'
+      : mdAssociationStatus?.registered
+        ? 'pending'
+        : 'idle';
+
+  $: contextMenuLabel =
+    !desktopEnabled || !platformCapabilities.isWindows
+      ? t.unsupported()
+      : checkingContextMenu && !contextMenuStatus
+        ? t.checking()
+        : contextMenuError
+          ? t.checkFailed()
+          : contextMenuStatus?.registered
+            ? t.registered()
+            : t.unregistered();
+
+  $: contextMenuDesc =
+    !desktopEnabled
+      ? t.contextMenuDesktopOnly()
+      : !platformCapabilities.isWindows
+        ? t.contextMenuWindowsOnly()
+        : contextMenuError
+          ? contextMenuError
+          : checkingContextMenu && !contextMenuStatus
+            ? t.contextMenuCheckingDescription()
+            : contextMenuStatus?.message ?? t.contextMenuDefaultDescription();
+
+  $: contextMenuBtnLabel = registeringContextMenu
+    ? t.registering()
+    : unregisteringContextMenu
+      ? t.unregistering()
+      : contextMenuStatus?.registered
+        ? t.unregisterContextMenu()
+        : t.registerContextMenu();
+
+  $: contextMenuPillClass = contextMenuStatus?.registered
+    ? 'bound'
+    : contextMenuError
+      ? 'error'
+      : 'idle';
 
   async function registerWindowsContextMenu() {
     if (!desktopEnabled || !platformCapabilities.isWindows || registeringContextMenu) {
@@ -1048,6 +1171,58 @@
       showStatus(error instanceof Error ? error.message : String(error));
     } finally {
       bindingMdAssociation = false;
+    }
+  }
+
+  async function unbindMarkdownAssociation() {
+    if (!desktopEnabled || !platformCapabilities.isWindows || unbindingMdAssociation) {
+      return;
+    }
+    logToTerminal('info', 'SettingsWindow', '点击取消绑定默认打开方式按钮');
+
+    unbindingMdAssociation = true;
+    try {
+      logToTerminal('info', 'SettingsWindow', '开始取消 Markdown 默认打开方式绑定');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ ok: boolean; message: string }>(
+        'unregister_markdown_file_association',
+      );
+      logToTerminal('info', 'SettingsWindow', '取消绑定默认打开方式完成', { ok: result.ok });
+      showStatus(result.message);
+      await refreshMarkdownAssociationStatus({ silent: true });
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '取消绑定默认打开方式失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      unbindingMdAssociation = false;
+    }
+  }
+
+  async function unregisterWindowsContextMenu() {
+    if (!desktopEnabled || !platformCapabilities.isWindows || unregisteringContextMenu) {
+      return;
+    }
+    logToTerminal('info', 'SettingsWindow', '点击取消注册右键菜单按钮');
+
+    unregisteringContextMenu = true;
+    try {
+      logToTerminal('info', 'SettingsWindow', '开始取消右键菜单注册');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ ok: boolean; message: string }>(
+        'unregister_windows_context_menu',
+      );
+      logToTerminal('info', 'SettingsWindow', '取消右键菜单注册完成', { ok: result.ok });
+      showStatus(result.message);
+      await refreshWindowsContextMenuStatus({ silent: true });
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '取消右键菜单注册失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      showStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      unregisteringContextMenu = false;
     }
   }
 </script>
@@ -1544,11 +1719,11 @@
               <div class="setting-row">
                 <div>
                   <span class="setting-label">{t.bindMdDefaultApp()}</span>
-                  <p>{getMarkdownAssociationDescription()}</p>
+                  <p>{mdAssociationDesc}</p>
                 </div>
                 <div class="association-action">
-                  <span class={`association-pill ${getMarkdownAssociationPillClass()}`}>
-                    {getMarkdownAssociationLabel()}
+                  <span class={`association-pill ${mdAssociationPillClass}`}>
+                    {mdAssociationLabel}
                   </span>
                   <button
                     type="button"
@@ -1556,10 +1731,17 @@
                     disabled={!desktopEnabled ||
                       !platformCapabilities.isWindows ||
                       bindingMdAssociation ||
+                      unbindingMdAssociation ||
                       checkingMdAssociation}
-                    on:click={bindMarkdownAssociation}
+                    on:click={() => {
+                      if (mdAssociationStatus?.is_default || mdAssociationStatus?.registered) {
+                        void unbindMarkdownAssociation();
+                      } else {
+                        void bindMarkdownAssociation();
+                      }
+                    }}
                   >
-                    {getMarkdownAssociationButtonLabel()}
+                    {mdAssociationBtnLabel}
                   </button>
                 </div>
               </div>
@@ -1567,11 +1749,11 @@
               <div class="setting-row">
                 <div>
                   <span class="setting-label">{t.registerMdContextMenu()}</span>
-                  <p>{getContextMenuDescription()}</p>
+                  <p>{contextMenuDesc}</p>
                 </div>
                 <div class="association-action">
-                  <span class={`association-pill ${getContextMenuPillClass()}`}>
-                    {getContextMenuLabel()}
+                  <span class={`association-pill ${contextMenuPillClass}`}>
+                    {contextMenuLabel}
                   </span>
                   <button
                     type="button"
@@ -1579,10 +1761,17 @@
                     disabled={!desktopEnabled ||
                       !platformCapabilities.isWindows ||
                       registeringContextMenu ||
+                      unregisteringContextMenu ||
                       checkingContextMenu}
-                    on:click={registerWindowsContextMenu}
+                    on:click={() => {
+                      if (contextMenuStatus?.registered) {
+                        void unregisterWindowsContextMenu();
+                      } else {
+                        void registerWindowsContextMenu();
+                      }
+                    }}
                   >
-                    {getContextMenuButtonLabel()}
+                    {contextMenuBtnLabel}
                   </button>
                 </div>
               </div>

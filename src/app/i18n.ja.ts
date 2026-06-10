@@ -91,8 +91,12 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   opening: 'オープニング...',
   chooseNomo: '野茂を選ぶ',
   bindMd: '.mdをバインド',
+  unbinding: 'バインド解除中...',
+  unbindMd: 'バインド解除',
   registering: '登録中...',
+  unregistering: '登録解除中...',
   registerContextMenu: 'コンテキストメニューの登録',
+  unregisterContextMenu: '登録解除',
   mdAssociationDesktopOnly:
     'システムのデフォルトの open-with アプリをバインドできるのは、Windows デスクトップ アプリのみです。',
   mdAssociationWindowsOnly:

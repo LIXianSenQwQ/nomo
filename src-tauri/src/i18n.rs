@@ -169,8 +169,10 @@ fn zh_cn(key: &str) -> &'static str {
         "md_assoc_registered_message" => {
             "已注册 Nomo，并打开 Windows 默认应用设置；请选择 Nomo 后这里会显示已绑定。"
         }
+        "md_assoc_unregistered_message" => "已取消 Nomo 的 .md 默认打开方式绑定。",
         "context_menu_registered" => "已注册 .md 文件和文件夹右键菜单。",
         "context_menu_not_registered" => "尚未注册 .md 文件和文件夹右键菜单。",
+        "context_menu_unregistered_message" => "已取消 .md 文件和文件夹右键菜单注册。",
         "windows_default_only" => "当前默认打开方式绑定仅支持 Windows。",
         "windows_context_only" => "当前右键菜单注册仅支持 Windows。",
         _ => "",
@@ -262,8 +264,10 @@ fn zh_tw(key: &str) -> &'static str {
         "md_assoc_registered_message" => {
             "已註冊 Nomo，並開啟 Windows 預設應用程式設定；請選擇 Nomo 後這裡會顯示已綁定。"
         }
+        "md_assoc_unregistered_message" => "已取消 Nomo 的 .md 預設開啟方式綁定。",
         "context_menu_registered" => "已註冊 .md 檔案和資料夾右鍵選單。",
         "context_menu_not_registered" => "尚未註冊 .md 檔案和資料夾右鍵選單。",
+        "context_menu_unregistered_message" => "已取消 .md 檔案和資料夾右鍵選單註冊。",
         "windows_default_only" => "目前預設開啟方式綁定僅支援 Windows。",
         "windows_context_only" => "目前右鍵選單註冊僅支援 Windows。",
         _ => zh_cn(key),
@@ -351,8 +355,10 @@ fn en_us(key: &str) -> &'static str {
         "md_assoc_registered_optional" => "Nomo is registered as an optional Markdown app. Choose Nomo in Windows default apps.",
         "md_assoc_not_registered" => "Nomo is not registered as a .md open-with app yet.",
         "md_assoc_registered_message" => "Nomo has been registered and Windows default app settings were opened. Choose Nomo there, then this status will show it is bound.",
+        "md_assoc_unregistered_message" => "Nomo .md default app binding has been removed.",
         "context_menu_registered" => "Registered .md file and folder context menus.",
         "context_menu_not_registered" => ".md file and folder context menus are not registered yet.",
+        "context_menu_unregistered_message" => ".md file and folder context menu registration has been removed.",
         "windows_default_only" => "Default app binding is currently supported only on Windows.",
         "windows_context_only" => "Context menu registration is currently supported only on Windows.",
         _ => "",
@@ -440,8 +446,10 @@ fn ja_jp(key: &str) -> &'static str {
         "md_assoc_registered_optional" => "Nomo は任意の Markdown アプリとして登録されています。Windows の既定のアプリで Nomo を選択してください。",
         "md_assoc_not_registered" => "Nomo の .md 開くアプリはまだ登録されていません。",
         "md_assoc_registered_message" => "Nomo を登録し、Windows の既定のアプリ設定を開きました。そこで Nomo を選択すると、ここに関連付け済みと表示されます。",
+        "md_assoc_unregistered_message" => "Nomo の .md 既定アプリの関連付けを解除しました。",
         "context_menu_registered" => ".md ファイルとフォルダーのコンテキストメニューを登録しました。",
         "context_menu_not_registered" => ".md ファイルとフォルダーのコンテキストメニューはまだ登録されていません。",
+        "context_menu_unregistered_message" => ".md ファイルとフォルダーのコンテキストメニュー登録を解除しました。",
         "windows_default_only" => "既定アプリの関連付けは現在 Windows のみ対応しています。",
         "windows_context_only" => "コンテキストメニュー登録は現在 Windows のみ対応しています。",
         _ => "",

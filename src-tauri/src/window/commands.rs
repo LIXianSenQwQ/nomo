@@ -373,3 +373,50 @@ pub(crate) fn register_windows_context_menu(
     }
     result
 }
+
+#[tauri::command]
+pub(crate) fn unregister_markdown_file_association(
+    app: AppHandle,
+) -> Result<crate::models::DesktopActionPayload, String> {
+    crate::app_logger::info("Settings", "开始取消 Markdown 默认打开方式绑定");
+    let result = crate::window::file_association::unregister_markdown_file_association(&app);
+    match &result {
+        Ok(payload) => {
+            if payload.ok {
+                crate::app_logger::info("Settings", "取消 Markdown 默认打开方式绑定成功");
+            } else {
+                crate::app_logger::warn(
+                    "Settings",
+                    &format!("取消 Markdown 默认打开方式绑定未完成：{}", payload.message),
+                );
+            }
+        }
+        Err(e) => crate::app_logger::error(
+            "Settings",
+            &format!("取消 Markdown 默认打开方式绑定失败：{e}"),
+        ),
+    }
+    result
+}
+
+#[tauri::command]
+pub(crate) fn unregister_windows_context_menu(
+    app: AppHandle,
+) -> Result<crate::models::DesktopActionPayload, String> {
+    crate::app_logger::info("Settings", "开始取消 Windows 右键菜单注册");
+    let result = crate::window::file_association::unregister_windows_context_menu(&app);
+    match &result {
+        Ok(payload) => {
+            if payload.ok {
+                crate::app_logger::info("Settings", "取消右键菜单注册成功");
+            } else {
+                crate::app_logger::warn(
+                    "Settings",
+                    &format!("取消右键菜单注册未完成：{}", payload.message),
+                );
+            }
+        }
+        Err(e) => crate::app_logger::error("Settings", &format!("取消右键菜单注册失败：{e}")),
+    }
+    result
+}
