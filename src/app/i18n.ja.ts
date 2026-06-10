@@ -1,4 +1,6 @@
 export const JA_JP_EXTRA_TRANSLATIONS = {
+  close: '閉じる',
+  theme: 'テーマ',
   interfaceLanguageJaJp: '日本語',
   interfaceLanguageKoKr: '韓国語',
   interfaceLanguageFrFr: 'フランス語',

@@ -123,13 +123,30 @@ pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result
 
     let label = window.label().to_string();
     let _ = persist_pending_external_open(app, &label, &paths);
+
+    // 恢复窗口显示并强制到前台（处理托盘/最小化/后台等各种状态）
     let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;
     window
+        .unminimize()
+        .map_err(|error| format!("还原外部打开目标窗口失败：{error}"))?;
+    window
         .set_focus()
         .map_err(|error| format!("聚焦外部打开目标窗口失败：{error}"))?;
+    crate::window::os::bring_window_to_front(&window);
+
+    // 延迟补一次激活，确保在 WebView 初始化或异步场景下也能成功
+    let window_for_focus = window.clone();
+    tauri::async_runtime::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let _ = window_for_focus.show();
+        let _ = window_for_focus.unminimize();
+        let _ = window_for_focus.set_focus();
+        crate::window::os::bring_window_to_front(&window_for_focus);
+    });
+
     window
         .emit(
             OPEN_DOCUMENT_EVENT,
@@ -168,13 +185,30 @@ pub(crate) fn route_external_folder_open(
 
     let label = window.label().to_string();
     let _ = persist_pending_external_folder_open(app, &label, &folder_path);
+
+    // 恢复窗口显示并强制到前台（处理托盘/最小化/后台等各种状态）
     let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;
     window
+        .unminimize()
+        .map_err(|error| format!("还原外部打开目标窗口失败：{error}"))?;
+    window
         .set_focus()
         .map_err(|error| format!("聚焦外部打开目标窗口失败：{error}"))?;
+    crate::window::os::bring_window_to_front(&window);
+
+    // 延迟补一次激活，确保在 WebView 初始化或异步场景下也能成功
+    let window_for_focus = window.clone();
+    tauri::async_runtime::spawn(async move {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let _ = window_for_focus.show();
+        let _ = window_for_focus.unminimize();
+        let _ = window_for_focus.set_focus();
+        crate::window::os::bring_window_to_front(&window_for_focus);
+    });
+
     window
         .emit(
             OPEN_FOLDER_EVENT,
@@ -290,10 +324,23 @@ fn same_path(left: &Path, right: &Path) -> bool {
 }
 
 fn normalize_path(path: &Path) -> String {
-    path.canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf())
-        .to_string_lossy()
-        .to_string()
+    let canonical = path
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+
+    let path_str = canonical.to_string_lossy();
+    // Windows 上 canonicalize() 会产生 \\?\ 前缀的扩展长度路径，需要去除以友好显示
+    if path_str.starts_with(r"\\?\") {
+        let without_prefix = &path_str[4..];
+        if without_prefix.starts_with(r"UNC\") {
+            // 网络路径: \\?\UNC\server\share → \\server\share
+            format!(r"\\{}", &without_prefix[4..])
+        } else {
+            without_prefix.to_string()
+        }
+    } else {
+        path_str.to_string()
+    }
 }
 
 #[cfg(test)]

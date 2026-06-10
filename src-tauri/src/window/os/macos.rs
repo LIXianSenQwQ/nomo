@@ -26,3 +26,7 @@ pub(crate) fn setup_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) 
 fn uses_overlay_titlebar(label: &str) -> bool {
     label == "main" || (label.starts_with("window-") && label != "window-settings")
 }
+
+pub(crate) fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.set_focus();
+}

@@ -41,6 +41,8 @@ const generatedMessages = { ...messages.m } as unknown as MessageBag;
 
 const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTable>> = {
   'zh-CN': {
+    close: '关闭',
+    theme: '主题',
     interfaceLanguageJaJp: '日本語',
     interfaceLanguageKoKr: '한국어',
     interfaceLanguageFrFr: 'Français',
@@ -465,6 +467,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     largeDocumentStayReadonlySource: '大文件已进入只读源码模式，暂不切回语义编辑以避免卡顿',
   },
   'zh-TW': {
+    close: '關閉',
+    theme: '主題',
     interfaceLanguageJaJp: '日本語',
     interfaceLanguageKoKr: '한국어',
     interfaceLanguageFrFr: 'Français',
@@ -887,6 +891,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
   },
   'ja-JP': JA_JP_EXTRA_TRANSLATIONS,
   'en-US': {
+    close: 'Close',
+    theme: 'Theme',
     interfaceLanguageJaJp: 'Japanese',
     interfaceLanguageKoKr: 'Korean',
     interfaceLanguageFrFr: 'French',
