@@ -49,6 +49,7 @@ static TRAY_STATE: OnceLock<Mutex<TrayVisualState>> = OnceLock::new();
 
 pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if app.tray_by_id(TRAY_ID).is_some() {
+        crate::app_logger::debug("Tray", "托盘已存在，跳过安装");
         return Ok(());
     }
 
@@ -87,11 +88,13 @@ pub(crate) fn install_app_tray<R: Runtime>(app: &AppHandle<R>) -> Result<(), Str
     builder
         .build(app)
         .map_err(|error| format!("创建托盘图标失败：{error}"))?;
+    crate::app_logger::info("Tray", "托盘图标创建完成");
     Ok(())
 }
 
 pub(crate) fn refresh_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        crate::app_logger::info("Tray", "刷新托盘菜单");
         let menu = build_tray_menu(app)?;
         tray.set_menu(Some(menu))
             .map_err(|error| format!("刷新托盘菜单失败：{error}"))?;
@@ -109,6 +112,7 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>) -> Result<Menu<R>, String> {
 }
 
 pub(crate) fn set_tray_active<R: Runtime>(app: &AppHandle<R>, active: bool) {
+    crate::app_logger::debug("Tray", &format!("设置托盘激活状态：{active}"));
     let Ok(state) = update_tray_state(|state| state.active = active) else {
         return;
     };
@@ -139,6 +143,7 @@ pub(crate) fn close_to_tray_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
+    crate::app_logger::info("Tray", "从托盘恢复主窗口");
     let mut has_document_window = false;
 
     for (_label, window) in app.webview_windows() {
@@ -214,7 +219,7 @@ fn apply_dock_icon<R: Runtime>(app: &AppHandle<R>, theme: TrayTheme) -> Result<(
 
     app.run_on_main_thread(move || {
         if let Err(error) = apply_dock_icon_on_main_thread(theme) {
-            eprintln!("{error}");
+            crate::app_logger::error("Tray", &error);
         }
     })
     .map_err(|error| format!("同步 Nomo Dock 图标失败：{error}"))

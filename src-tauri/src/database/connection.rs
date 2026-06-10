@@ -45,8 +45,11 @@ impl AppDatabase {
     pub(crate) fn warm_up_async(&self) {
         let database = self.clone();
         thread::spawn(move || {
+            let timer = std::time::Instant::now();
             if let Err(error) = database.warm_up() {
-                eprintln!("预热 SQLite 连接失败：{error}");
+                crate::app_logger::error("Database", &format!("预热 SQLite 连接失败：{error}"));
+            } else {
+                crate::app_logger::perf("Database", "预热 SQLite 连接", timer.elapsed());
             }
         });
     }
@@ -114,6 +117,8 @@ impl AppDatabase {
             return Ok(());
         }
 
+        let timer = std::time::Instant::now();
+        crate::app_logger::info("Database", &format!("打开 SQLite：{}", db_path.display()));
         // 步骤1：首次访问时打开 SQLite 文件。这里在锁内执行，确保冷启动并发访问只触发一次打开。
         let next_connection =
             Connection::open(db_path).map_err(|error| format!("打开 SQLite 失败：{error}"))?;
@@ -121,6 +126,7 @@ impl AppDatabase {
         // 步骤2：连接建立后立即执行建表与轻量迁移，保证所有业务查询看到一致结构。
         super::init_database(&next_connection)?;
         *connection = Some(next_connection);
+        crate::app_logger::perf("Database", "打开并初始化 SQLite", timer.elapsed());
         Ok(())
     }
 }

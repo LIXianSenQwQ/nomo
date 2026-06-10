@@ -19,16 +19,19 @@ const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/sample.md";
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {
+    crate::app_logger::info("FileSystem", &format!("创建文件夹：{path}"));
     fs::create_dir_all(&path).map_err(|error| format!("创建文件夹失败：{error}"))
 }
 
 #[tauri::command]
 pub(crate) fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    crate::app_logger::info("FileSystem", &format!("重命名：{old_path} -> {new_path}"));
     fs::rename(&old_path, &new_path).map_err(|error| format!("重命名失败：{error}"))
 }
 
 #[tauri::command]
 pub(crate) fn delete_file(path: String) -> Result<(), String> {
+    crate::app_logger::info("FileSystem", &format!("删除文件或目录：{path}"));
     let file_path = Path::new(&path);
     if !file_path.exists() {
         return Err(format!("文件不存在：{path}"));
@@ -42,6 +45,8 @@ pub(crate) fn delete_file(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::info("FileSystem", &format!("开始打开文档：{path}"));
     let status = file_status(&path);
     if !status.exists {
         return Err(format!("文件不存在：{path}"));
@@ -52,7 +57,9 @@ pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String
 
     let markdown =
         fs::read_to_string(&path).map_err(|error| format!("读取 Markdown 文件失败：{error}"))?;
-    document_payload(path, markdown)
+    let payload = document_payload(path, markdown)?;
+    crate::app_logger::perf("FileSystem", "文档打开", timer.elapsed());
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -60,6 +67,11 @@ pub(crate) fn write_markdown_file(
     path: String,
     markdown: String,
 ) -> Result<DocumentPayload, String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::info(
+        "FileSystem",
+        &format!("开始保存文档：{path} bytes={}", markdown.len()),
+    );
     if let Some(parent) = Path::new(&path).parent() {
         if !parent.exists() {
             return Err(format!("保存目录不存在：{}", parent.display()));
@@ -68,27 +80,36 @@ pub(crate) fn write_markdown_file(
 
     fs::write(&path, markdown.as_bytes())
         .map_err(|error| format!("保存 Markdown 文件失败：{error}"))?;
-    document_payload(path, markdown)
+    let payload = document_payload(path, markdown)?;
+    crate::app_logger::perf("FileSystem", "文档保存", timer.elapsed());
+    Ok(payload)
 }
 
 #[tauri::command]
 pub(crate) fn install_sample_document(app: AppHandle) -> Result<DocumentPayload, String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::info("FileSystem", "安装或打开实例文档");
     let resource_path = resolve_sample_document_resource(&app)?;
     let app_data_dir = app
         .path()
         .app_data_dir()
         .map_err(|error| format!("定位应用数据目录失败：{error}"))?;
 
-    install_sample_document_from_paths(&resource_path, &app_data_dir)
+    let payload = install_sample_document_from_paths(&resource_path, &app_data_dir)?;
+    crate::app_logger::perf("FileSystem", "安装或打开实例文档", timer.elapsed());
+    Ok(payload)
 }
 
 #[tauri::command]
 pub(crate) fn stat_markdown_file(path: String) -> FileStatus {
+    crate::app_logger::debug("FileSystem", &format!("读取文件状态：{path}"));
     file_status(&path)
 }
 
 #[tauri::command]
 pub(crate) fn list_folder_markdown_files(path: String) -> Result<Vec<FolderFileInfo>, String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::info("FileSystem", &format!("列出目录 Markdown 文件：{path}"));
     let dir = Path::new(&path);
     if !dir.is_dir() {
         return Err(format!("不是一个有效的目录：{path}"));
@@ -112,11 +133,13 @@ pub(crate) fn list_folder_markdown_files(path: String) -> Result<Vec<FolderFileI
         }
     }
     files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    crate::app_logger::perf("FileSystem", "列出目录 Markdown 文件", timer.elapsed());
     Ok(files)
 }
 
 #[tauri::command]
 pub(crate) fn get_folder_tree(path: String) -> Result<Vec<FileTreeEntry>, String> {
+    crate::app_logger::info("FileSystem", &format!("读取文件夹树：{path}"));
     list_folder_children(path.clone(), Some(path))
 }
 
@@ -125,6 +148,8 @@ pub(crate) fn list_folder_children(
     path: String,
     root_path: Option<String>,
 ) -> Result<Vec<FileTreeEntry>, String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::debug("FileSystem", &format!("读取目录子项：{path}"));
     let dir = Path::new(&path);
     if !dir.is_dir() {
         return Err(format!("不是一个有效的目录：{path}"));
@@ -136,11 +161,14 @@ pub(crate) fn list_folder_children(
         .map(Path::new)
         .unwrap_or(dir);
     let ignore_rules = IgnoreRules::load(root, Some(dir));
-    read_dir_children(dir, root, &ignore_rules)
+    let children = read_dir_children(dir, root, &ignore_rules)?;
+    crate::app_logger::perf("FileSystem", "读取目录子项", timer.elapsed());
+    Ok(children)
 }
 
 #[tauri::command]
 pub(crate) fn start_folder_indexing(app: AppHandle, path: String) -> Result<(), String> {
+    crate::app_logger::info("FileSystem", &format!("开始后台索引文件夹：{path}"));
     let root = PathBuf::from(&path);
     if !root.is_dir() {
         return Err(format!("不是一个有效的目录：{path}"));
@@ -211,7 +239,11 @@ fn resolve_sample_document_resource(app: &AppHandle) -> Result<PathBuf, String> 
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             attempts.push(exe_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH));
-            attempts.push(exe_dir.join("resources").join(SAMPLE_DOCUMENT_RESOURCE_PATH));
+            attempts.push(
+                exe_dir
+                    .join("resources")
+                    .join(SAMPLE_DOCUMENT_RESOURCE_PATH),
+            );
         }
     }
 
@@ -226,6 +258,10 @@ fn resolve_sample_document_resource(app: &AppHandle) -> Result<PathBuf, String> 
 
 #[tauri::command]
 pub(crate) fn check_paths_exist(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    crate::app_logger::debug(
+        "FileSystem",
+        &format!("批量检查路径存在性：count={}", paths.len()),
+    );
     Ok(paths
         .into_iter()
         .map(|path| Path::new(&path).exists())
@@ -326,6 +362,7 @@ fn read_dir_children(
 }
 
 fn index_folder_in_background(app: AppHandle, root: PathBuf) {
+    let timer = std::time::Instant::now();
     let root_path = root.to_string_lossy().to_string();
     let ignore_rules = IgnoreRules::load(&root, None);
     let mut stack = vec![root.clone()];
@@ -377,11 +414,16 @@ fn index_folder_in_background(app: AppHandle, root: PathBuf) {
     let _ = app.emit(
         FOLDER_INDEX_FINISHED_EVENT,
         FolderIndexFinished {
-            root_path,
+            root_path: root_path.clone(),
             scanned_dirs,
             scanned_files,
         },
     );
+    crate::app_logger::info(
+        "FileSystem",
+        &format!("文件夹索引完成：{root_path} dirs={scanned_dirs} files={scanned_files}"),
+    );
+    crate::app_logger::perf("FileSystem", "后台索引文件夹", timer.elapsed());
 }
 
 fn emit_folder_index_batch(

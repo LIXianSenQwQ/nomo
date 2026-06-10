@@ -49,7 +49,7 @@
     type ThemePreference,
     type WritingStatsMetric,
   } from '../services/settings';
-  import { logDebug, createPerfTimer } from '../../lib/services/logger';
+  import { createPerfTimer, logToTerminal } from '../../lib/services/logger';
   import {
     INTERFACE_LANGUAGE_OPTIONS,
     applyInterfaceLanguagePreference,
@@ -122,11 +122,11 @@
   let checkingMdAssociation = false;
   let mdAssociationStatus: MarkdownAssociationStatus | null = null;
   let mdAssociationError = '';
+  let filesIntegrationStatusRequested = false;
   let registeringContextMenu = false;
   let checkingContextMenu = false;
   let contextMenuStatus: WindowsContextMenuStatus | null = null;
   let contextMenuError = '';
-  let filesIntegrationStatusRequested = false;
   let downloadedSoftwareUpdate: DownloadedSoftwareUpdate | null = null;
   let updateState: SoftwareUpdateUiState = {
     status: 'idle',
@@ -162,9 +162,11 @@
   ];
 
   onMount(() => {
+    logToTerminal('info', 'SettingsWindow', '设置窗口打开');
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
     if (!isSoftwareUpdateSupported()) {
+      logToTerminal('warn', 'SettingsWindow', '当前运行环境不支持软件更新');
       updateState = {
         status: 'unsupported',
         message: t.softwareUpdateUnsupported(),
@@ -176,6 +178,7 @@
     window.addEventListener('focus', handleWindowFocus);
 
     return () => {
+      logToTerminal('info', 'SettingsWindow', '设置窗口关闭（组件卸载）');
       if (statusTimer !== null) {
         window.clearTimeout(statusTimer);
       }
@@ -190,6 +193,7 @@
   });
 
   function handleWindowFocus() {
+    logToTerminal('debug', 'SettingsWindow', '设置窗口获得焦点', { activeCategory });
     if (activeCategory === 'files') {
       void refreshMarkdownAssociationStatus({ silent: true });
       void refreshWindowsContextMenuStatus({ silent: true });
@@ -197,6 +201,7 @@
   }
 
   function selectCategory(categoryId: CategoryId) {
+    logToTerminal('info', 'SettingsWindow', `切换到分类: ${categoryId}`);
     activeCategory = categoryId;
     if (categoryId === 'files') {
       void ensureFilesIntegrationStatus();
@@ -205,25 +210,33 @@
 
   async function ensureFilesIntegrationStatus() {
     if (filesIntegrationStatusRequested) {
+      logToTerminal('debug', 'SettingsWindow', '文件集成状态已请求过，跳过首次刷新');
       return;
     }
 
+    const timer = createPerfTimer('SettingsWindow', 'ensureFilesIntegrationStatus');
     filesIntegrationStatusRequested = true;
     await Promise.all([refreshMarkdownAssociationStatus(), refreshWindowsContextMenuStatus()]);
+    timer.end();
   }
 
   async function loadPreferences() {
+    logToTerminal('info', 'SettingsWindow', '开始加载偏好设置');
     const timer = createPerfTimer('SettingsWindow', 'loadPreferences');
     draftSettings = await loadAppPreferences(desktopEnabled);
     applySettingsToThisWindow(draftSettings);
     loaded = true;
     timer.end({ desktopEnabled });
+    logToTerminal('info', 'SettingsWindow', '偏好设置加载完成');
   }
 
   async function saveLatestSettings() {
     if (!loaded) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '开始保存偏好设置', {
+      keys: Array.from(dirtyPreferenceKeys),
+    });
 
     if (saveInFlight) {
       saveQueued = true;
@@ -248,9 +261,15 @@
               draftSettings = saved;
               applySettingsToThisWindow(saved);
             }
+            logToTerminal('info', 'SettingsWindow', '偏好设置保存成功', {
+              keys: keysToSave,
+            });
             showStatus(t.settingsSaved());
           } catch (error) {
             keysToSave.forEach((key) => dirtyPreferenceKeys.add(key));
+            logToTerminal('error', 'SettingsWindow', '偏好设置保存失败', {
+              error: error instanceof Error ? error.message : String(error),
+            });
             showStatus(error instanceof Error ? error.message : t.settingsSaveFailed());
           }
         } while (saveQueued);
@@ -288,6 +307,7 @@
   }
 
   async function handleClose() {
+    logToTerminal('info', 'SettingsWindow', '用户点击关闭按钮');
     await flushPendingSettingsSave();
     await closeCurrentWindow();
   }
@@ -336,9 +356,11 @@
     if (['checking', 'downloading', 'installing'].includes(updateState.status)) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '点击检查软件更新按钮');
 
     downloadedSoftwareUpdate = null;
     if (!isSoftwareUpdateSupported()) {
+      logToTerminal('warn', 'SettingsWindow', '当前平台不支持软件更新');
       updateState = {
         status: 'unsupported',
         message: t.softwareUpdateUnsupported(),
@@ -354,6 +376,7 @@
     try {
       const result = await checkSoftwareUpdate();
       if (!result.supported) {
+        logToTerminal('warn', 'SettingsWindow', '软件更新不支持：非安装包版本');
         updateState = {
           status: 'unsupported',
           message: t.softwareUpdateUnsupported(),
@@ -362,6 +385,9 @@
       }
 
       if (!result.available || !result.candidate) {
+        logToTerminal('info', 'SettingsWindow', '软件已是最新版本', {
+          currentVersion: result.currentVersion,
+        });
         updateState = {
           status: 'upToDate',
           message: t.softwareUpdateUpToDate(),
@@ -369,6 +395,9 @@
         return;
       }
 
+      logToTerminal('info', 'SettingsWindow', '发现新版本', {
+        version: result.version,
+      });
       updateState = {
         status: 'available',
         message: t.softwareUpdateAvailable({ version: result.version ?? '' }),
@@ -384,6 +413,7 @@
         };
       });
 
+      logToTerminal('info', 'SettingsWindow', '软件更新下载完成');
       updateState = {
         status: 'downloaded',
         message: t.softwareUpdateDownloaded(),
@@ -392,6 +422,9 @@
       };
     } catch (error) {
       downloadedSoftwareUpdate = null;
+      logToTerminal('error', 'SettingsWindow', '软件更新检查/下载失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       updateState = {
         status: 'error',
         message: isSoftwareUpdateIntegrityFailure(error)
@@ -403,18 +436,25 @@
   }
 
   async function refreshSoftwareUpdateSupport() {
+    const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
     try {
       if (!(await isSoftwareUpdateInstallerSupported())) {
+        logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
         updateState = {
           status: 'unsupported',
           message: t.softwareUpdateUnsupported(),
         };
       }
-    } catch {
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       updateState = {
         status: 'unsupported',
         message: t.softwareUpdateUnsupported(),
       };
+    } finally {
+      timer.end();
     }
   }
 
@@ -422,10 +462,12 @@
     if (!downloadedSoftwareUpdate || updateState.status !== 'downloaded') {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '开始安装软件更新');
 
     try {
       const approved = await requestUpdateInstallApproval();
       if (!approved) {
+        logToTerminal('info', 'SettingsWindow', '用户取消安装更新');
         updateState = {
           ...updateState,
           status: 'downloaded',
@@ -440,7 +482,11 @@
         message: t.softwareUpdateInstalling(),
       };
       await installSoftwareUpdate(downloadedSoftwareUpdate);
+      logToTerminal('info', 'SettingsWindow', '软件更新安装完成');
     } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '软件更新安装失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       updateState = {
         ...updateState,
         status: 'error',
@@ -576,6 +622,8 @@
   }
 
   function updateDraft(patch: Partial<AppPreferences>) {
+    const changedKeys = Object.keys(patch) as AppPreferenceKey[];
+    logToTerminal('debug', 'SettingsWindow', '设置项变更', { keys: changedKeys });
     const nextSettings = normalizeAppPreferences({
       ...draftSettings,
       ...patch,
@@ -620,7 +668,7 @@
     if (!desktopEnabled) {
       return;
     }
-
+    logToTerminal('info', 'SettingsWindow', '最小化窗口');
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('minimize_window').catch(() => undefined);
   }
@@ -737,6 +785,7 @@
     if (!desktopEnabled || picgoTesting) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '测试 PicGo 连接');
     picgoTesting = true;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -747,8 +796,12 @@
           command: draftSettings.imageHandlingSettings.picgoCoreCommand,
         },
       });
+      logToTerminal('info', 'SettingsWindow', 'PicGo 连接测试结果', { ok: result.ok });
       showStatus(result.message);
     } catch (error) {
+      logToTerminal('error', 'SettingsWindow', 'PicGo 连接测试失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showStatus(error instanceof Error ? error.message : String(error));
     } finally {
       picgoTesting = false;
@@ -759,6 +812,7 @@
     if (!desktopEnabled || !platformCapabilities.isWindows || checkingMdAssociation) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '查询 Markdown 默认打开方式状态');
 
     checkingMdAssociation = true;
     if (!options.silent) {
@@ -771,8 +825,15 @@
         'get_markdown_file_association_status',
       );
       mdAssociationError = '';
+      logToTerminal('info', 'SettingsWindow', 'Markdown 关联状态查询完成', {
+        isDefault: mdAssociationStatus?.is_default,
+        registered: mdAssociationStatus?.registered,
+      });
     } catch (error) {
       mdAssociationError = error instanceof Error ? error.message : String(error);
+      logToTerminal('error', 'SettingsWindow', 'Markdown 关联状态查询失败', {
+        error: mdAssociationError,
+      });
     } finally {
       checkingMdAssociation = false;
     }
@@ -843,6 +904,7 @@
     if (!desktopEnabled || !platformCapabilities.isWindows || checkingContextMenu) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '查询右键菜单状态');
 
     checkingContextMenu = true;
     if (!options.silent) {
@@ -853,8 +915,14 @@
       const { invoke } = await import('@tauri-apps/api/core');
       contextMenuStatus = await invoke<WindowsContextMenuStatus>('get_windows_context_menu_status');
       contextMenuError = '';
+      logToTerminal('info', 'SettingsWindow', '右键菜单状态查询完成', {
+        registered: contextMenuStatus?.registered,
+      });
     } catch (error) {
       contextMenuError = error instanceof Error ? error.message : String(error);
+      logToTerminal('error', 'SettingsWindow', '右键菜单状态查询失败', {
+        error: contextMenuError,
+      });
     } finally {
       checkingContextMenu = false;
     }
@@ -910,24 +978,36 @@
   }
 
   async function registerWindowsContextMenu() {
-    if (
-      !desktopEnabled ||
-      !platformCapabilities.isWindows ||
-      registeringContextMenu ||
-      contextMenuStatus?.registered
-    ) {
+    if (!desktopEnabled || !platformCapabilities.isWindows || registeringContextMenu) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '点击注册右键菜单按钮');
 
     registeringContextMenu = true;
     try {
+      // 步骤1：先异步查询当前状态
+      await refreshWindowsContextMenuStatus({ silent: true });
+
+      // 步骤2：如果已注册，直接提示并返回
+      if (contextMenuStatus?.registered) {
+        logToTerminal('info', 'SettingsWindow', '右键菜单已注册，跳过');
+        showStatus(t.registered());
+        return;
+      }
+
+      // 步骤3：执行注册
+      logToTerminal('info', 'SettingsWindow', '开始注册右键菜单');
       const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke<{ ok: boolean; message: string }>(
         'register_windows_context_menu',
       );
+      logToTerminal('info', 'SettingsWindow', '右键菜单注册完成', { ok: result.ok });
       showStatus(result.message);
       await refreshWindowsContextMenuStatus({ silent: true });
     } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '右键菜单注册失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showStatus(error instanceof Error ? error.message : String(error));
     } finally {
       registeringContextMenu = false;
@@ -935,23 +1015,36 @@
   }
 
   async function bindMarkdownAssociation() {
-    if (
-      !desktopEnabled ||
-      !platformCapabilities.isWindows ||
-      bindingMdAssociation ||
-      mdAssociationStatus?.is_default
-    ) {
+    if (!desktopEnabled || !platformCapabilities.isWindows || bindingMdAssociation) {
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '点击绑定默认打开方式按钮');
+
     bindingMdAssociation = true;
     try {
+      // 步骤1：先异步查询当前状态
+      await refreshMarkdownAssociationStatus({ silent: true });
+
+      // 步骤2：如果已经是默认，直接提示并返回
+      if (mdAssociationStatus?.is_default) {
+        logToTerminal('info', 'SettingsWindow', '已是默认打开方式，跳过');
+        showStatus(t.bound());
+        return;
+      }
+
+      // 步骤3：执行绑定
+      logToTerminal('info', 'SettingsWindow', '开始绑定 Markdown 默认打开方式');
       const { invoke } = await import('@tauri-apps/api/core');
       const result = await invoke<{ ok: boolean; message: string }>(
         'register_markdown_file_association',
       );
+      logToTerminal('info', 'SettingsWindow', '绑定默认打开方式完成', { ok: result.ok });
       showStatus(result.message);
       await refreshMarkdownAssociationStatus({ silent: true });
     } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '绑定默认打开方式失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showStatus(error instanceof Error ? error.message : String(error));
     } finally {
       bindingMdAssociation = false;
@@ -1463,8 +1556,7 @@
                     disabled={!desktopEnabled ||
                       !platformCapabilities.isWindows ||
                       bindingMdAssociation ||
-                      checkingMdAssociation ||
-                      mdAssociationStatus?.is_default}
+                      checkingMdAssociation}
                     on:click={bindMarkdownAssociation}
                   >
                     {getMarkdownAssociationButtonLabel()}
@@ -1487,8 +1579,7 @@
                     disabled={!desktopEnabled ||
                       !platformCapabilities.isWindows ||
                       registeringContextMenu ||
-                      checkingContextMenu ||
-                      contextMenuStatus?.registered}
+                      checkingContextMenu}
                     on:click={registerWindowsContextMenu}
                   >
                     {getContextMenuButtonLabel()}

@@ -23,6 +23,7 @@ const FOLDER_CONTEXT_MENU_COMMAND_NAME: &str = "Nomo.OpenFolder";
 pub(crate) fn get_markdown_file_association_status<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<MarkdownAssociationStatus, String> {
+    let start = std::time::Instant::now();
     let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
@@ -52,6 +53,11 @@ pub(crate) fn get_markdown_file_association_status<R: Runtime>(
         crate::i18n::text(locale, "md_assoc_not_registered").to_string()
     };
 
+    crate::app_logger::perf(
+        "Settings",
+        "get_markdown_file_association_status",
+        start.elapsed(),
+    );
     Ok(MarkdownAssociationStatus {
         supported: true,
         registered,
@@ -97,6 +103,7 @@ pub(crate) fn register_markdown_file_association<R: Runtime>(
 pub(crate) fn get_windows_context_menu_status<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<WindowsContextMenuStatus, String> {
+    let start = std::time::Instant::now();
     let locale = crate::i18n::effective_locale(app);
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
@@ -107,6 +114,11 @@ pub(crate) fn get_windows_context_menu_status<R: Runtime>(
     } else {
         crate::i18n::text(locale, "context_menu_not_registered").to_string()
     };
+    crate::app_logger::perf(
+        "Settings",
+        "get_windows_context_menu_status",
+        start.elapsed(),
+    );
 
     Ok(WindowsContextMenuStatus {
         supported: true,

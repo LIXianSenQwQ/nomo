@@ -1,11 +1,11 @@
 /**
- * Nomo 日志工具
+ * Nomo 全局日志工具。
  *
- * 规则：仅在开发环境输出日志，打包后自动静默。
- * 使用 Vite 的 import.meta.env.DEV 判断环境。
+ * 前端日志统一输出到 DevTools，并在 Tauri 环境转发到 Rust，由 Rust 负责终端输出和 ./logs 文件落盘。
  */
 
-const IS_DEV = typeof import.meta !== 'undefined' && import.meta.env?.DEV === true;
+const LOGGER_ENABLED_KEY = 'nomo-logger-enabled';
+const MAX_BUFFER_SIZE = 500;
 
 /** 日志级别 */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -19,22 +19,58 @@ interface LogEntry {
 }
 
 let logBuffer: LogEntry[] = [];
-const MAX_BUFFER_SIZE = 500;
+let loggerEnabled = readInitialEnabled();
 
 function now(): string {
   const d = new Date();
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}.${d.getMilliseconds().toString().padStart(3, '0')}`;
 }
 
-function pushLog(entry: LogEntry): void {
-  if (!IS_DEV) {
+function readInitialEnabled(): boolean {
+  if (typeof localStorage === 'undefined') {
+    return true;
+  }
+  return localStorage.getItem(LOGGER_ENABLED_KEY) !== 'false';
+}
+
+function persistEnabled(enabled: boolean): void {
+  loggerEnabled = enabled;
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(LOGGER_ENABLED_KEY, String(enabled));
+  }
+  syncNativeLoggerEnabled(enabled);
+}
+
+function isTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+function syncNativeLoggerEnabled(enabled: boolean): void {
+  if (!isTauriRuntime()) {
     return;
   }
+  import('@tauri-apps/api/core')
+    .then(({ invoke }) => {
+      void invoke('set_logger_enabled', { enabled });
+    })
+    .catch(() => undefined);
+}
+
+function pushLog(entry: LogEntry): void {
+  if (!loggerEnabled) {
+    return;
+  }
+
   logBuffer.push(entry);
   if (logBuffer.length > MAX_BUFFER_SIZE) {
     logBuffer = logBuffer.slice(logBuffer.length - MAX_BUFFER_SIZE);
   }
 
+  writeDevTools(entry);
+  writeNative(entry);
+}
+
+function writeDevTools(entry: LogEntry): void {
   const prefix = `[${entry.timestamp}][${entry.level.toUpperCase()}][${entry.tag}]`;
   switch (entry.level) {
     case 'debug':
@@ -56,6 +92,82 @@ function pushLog(entry: LogEntry): void {
   }
 }
 
+function writeNative(entry: LogEntry): void {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  const data = serializeData(entry.data);
+  import('@tauri-apps/api/core')
+    .then(({ invoke }) => {
+      void invoke('log_message', {
+        level: entry.level.toUpperCase(),
+        tag: entry.tag,
+        message: data ? `${entry.message} ${data}` : entry.message,
+      });
+    })
+    .catch(() => undefined);
+}
+
+function serializeData(data: unknown): string {
+  if (data === undefined || data === null || data === '') {
+    return '';
+  }
+  if (typeof data === 'string') {
+    return data;
+  }
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return String(data);
+  }
+}
+
+export function initializeLogger(): void {
+  exposeLoggerControls();
+  syncNativeLoggerEnabled(loggerEnabled);
+  logInfo('Logger', `日志输出已${loggerEnabled ? '开启' : '关闭'}`);
+}
+
+function exposeLoggerControls(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  Object.assign(window as unknown as { NomoLogger?: unknown }, {
+    NomoLogger: {
+      enable: enableLogger,
+      disable: disableLogger,
+      toggle: toggleLogger,
+      isEnabled: isLoggerEnabled,
+      buffer: getLogBuffer,
+      clear: clearLogBuffer,
+    },
+  });
+}
+
+export function isLoggerEnabled(): boolean {
+  return loggerEnabled;
+}
+
+export function enableLogger(): void {
+  persistEnabled(true);
+  logInfo('Logger', '日志输出已开启');
+}
+
+export function disableLogger(): void {
+  logInfo('Logger', '日志输出已关闭');
+  persistEnabled(false);
+}
+
+export function toggleLogger(): boolean {
+  if (loggerEnabled) {
+    disableLogger();
+  } else {
+    enableLogger();
+  }
+  return loggerEnabled;
+}
+
 export function logDebug(tag: string, message: string, data?: unknown): void {
   pushLog({ level: 'debug', tag, message, timestamp: now(), data });
 }
@@ -72,12 +184,17 @@ export function logError(tag: string, message: string, data?: unknown): void {
   pushLog({ level: 'error', tag, message, timestamp: now(), data });
 }
 
+export function logToTerminal(
+  level: LogLevel,
+  tag: string,
+  message: string,
+  data?: unknown,
+): void {
+  pushLog({ level, tag, message, timestamp: now(), data });
+}
+
 /**
  * 创建一个计时器，用于测量异步操作耗时。
- * 使用方式：
- *   const timer = createPerfTimer('Settings', 'loadAppPreferences');
- *   await loadAppPreferences();
- *   timer.end();
  */
 export function createPerfTimer(tag: string, operation: string) {
   const start = performance.now();
@@ -86,18 +203,22 @@ export function createPerfTimer(tag: string, operation: string) {
   return {
     end(extraData?: Record<string, unknown>): void {
       const elapsed = Math.round(performance.now() - start);
-      logDebug(tag, `${operation} 完成，耗时 ${elapsed}ms`, {
-        startTime,
-        elapsedMs: elapsed,
-        ...extraData,
+      pushLog({
+        level: 'debug',
+        tag,
+        message: `${operation} 完成，耗时 ${elapsed}ms`,
+        timestamp: now(),
+        data: {
+          startTime,
+          elapsedMs: elapsed,
+          ...extraData,
+        },
       });
     },
   };
 }
 
-/**
- * 测量并记录同步操作耗时。
- */
+/** 测量并记录同步操作耗时。 */
 export function perf<T>(tag: string, operation: string, fn: () => T): T {
   const timer = createPerfTimer(tag, operation);
   try {
@@ -107,9 +228,7 @@ export function perf<T>(tag: string, operation: string, fn: () => T): T {
   }
 }
 
-/**
- * 测量并记录异步操作耗时。
- */
+/** 测量并记录异步操作耗时。 */
 export async function perfAsync<T>(tag: string, operation: string, fn: () => Promise<T>): Promise<T> {
   const timer = createPerfTimer(tag, operation);
   try {
@@ -119,12 +238,12 @@ export async function perfAsync<T>(tag: string, operation: string, fn: () => Pro
   }
 }
 
-/** 获取当前日志缓冲区（仅开发环境有内容） */
+/** 获取当前日志缓冲区。 */
 export function getLogBuffer(): readonly LogEntry[] {
   return logBuffer;
 }
 
-/** 清空日志缓冲区 */
+/** 清空日志缓冲区。 */
 export function clearLogBuffer(): void {
   logBuffer = [];
 }

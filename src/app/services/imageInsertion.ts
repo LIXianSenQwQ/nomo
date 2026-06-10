@@ -1,6 +1,7 @@
 import type { EditorCore, EditorMode } from '../../lib/editor-core';
 import { getImageLoader } from '../../lib/editor-core/renderers';
 import type { ImageContext } from '../../lib/services/render';
+import { createPerfTimer, logError, logInfo } from '../../lib/services/logger';
 import { t } from '../i18n';
 import { createImageMarkdown, getImageFiles } from './imageMarkdown';
 
@@ -39,8 +40,11 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
   }
 
   async function insertImageFiles(files: File[]) {
+    const timer = createPerfTimer('ImageInsertion', '插入图片');
+    logInfo('ImageInsertion', '开始插入图片', { count: files.length });
     const loader = getImageLoader();
     if (!loader) {
+      timer.end({ failed: true, reason: 'loader-not-ready' });
       options.setStatusMessage(t.imageServiceNotReady());
       return;
     }
@@ -51,6 +55,7 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
       options.setStatusMessage(t.saveBeforeInsertLocalImage());
       await options.saveMarkdownFile(true);
       if (!options.getNativePath()) {
+        timer.end({ cancelled: true, reason: 'document-not-saved' });
         options.setStatusMessage(t.imageInsertCancelled());
         return;
       }
@@ -73,7 +78,10 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
         imported.push({ src: result.markdownSrc, alt: file.name || 'image' });
       } catch (error) {
         failed += 1;
-        console.error('Failed to import image:', error);
+        logError('ImageInsertion', 'Failed to import image', {
+          fileName: file.name,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -106,6 +114,8 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     } else {
       options.setStatusMessage(t.imagesInserted({ inserted: imported.length }));
     }
+    timer.end({ inserted: imported.length, failed });
+    logInfo('ImageInsertion', '图片插入完成', { inserted: imported.length, failed });
   }
 
   function insertSourceMarkdown(items: Array<{ src: string; alt: string }>) {

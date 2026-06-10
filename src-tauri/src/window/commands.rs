@@ -17,6 +17,7 @@ pub(crate) fn update_window_state(
     key: String,
     input: WindowStateInput,
 ) -> Result<(), String> {
+    crate::app_logger::debug("Window", &format!("更新窗口状态：key={key}"));
     database::update_app_setting(
         app,
         crate::models::SettingInput {
@@ -32,6 +33,7 @@ pub(crate) fn refresh_window_menu(
     app: AppHandle,
     window: tauri::WebviewWindow,
 ) -> Result<(), String> {
+    crate::app_logger::info("Window", &format!("刷新窗口菜单：{}", window.label()));
     crate::window::os::setup_window(&window);
     install_window_menu(&app, &window)?;
     crate::window::state::restore_window_state(&app, window.label());
@@ -40,6 +42,7 @@ pub(crate) fn refresh_window_menu(
 
 #[tauri::command]
 pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), String> {
+    crate::app_logger::info("Window", "刷新界面语言相关窗口 chrome");
     for (_label, window) in app.webview_windows() {
         if crate::window::external_open::is_document_window_label(window.label()) {
             crate::window::os::setup_window(&window);
@@ -56,12 +59,15 @@ pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), St
 
 #[tauri::command]
 pub(crate) fn set_desktop_icon_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    crate::app_logger::info("Tray", &format!("设置桌面图标主题：{theme}"));
     crate::window::tray::set_desktop_icon_theme(&app, &theme)
 }
 
 #[tauri::command]
 pub(crate) fn get_desktop_system_theme() -> &'static str {
-    crate::window::os::system_theme()
+    let theme = crate::window::os::system_theme();
+    crate::app_logger::debug("Window", &format!("读取系统主题：{theme}"));
+    theme
 }
 
 #[tauri::command]
@@ -69,7 +75,15 @@ pub(crate) fn create_new_window(
     app: AppHandle,
     pending_folder: Option<String>,
 ) -> Result<String, String> {
+    let timer = std::time::Instant::now();
     let id = format!("window-{}", database::now_ts());
+    crate::app_logger::info(
+        "Window",
+        &format!(
+            "准备创建新窗口：id={id} pendingFolder={}",
+            pending_folder.as_deref().unwrap_or("")
+        ),
+    );
 
     // 新窗口加载前先写入待打开目录，避免前端初始化读取设置时发生竞态。
     if let Some(folder) = pending_folder {
@@ -83,6 +97,7 @@ pub(crate) fn create_new_window(
         )?;
     }
 
+    crate::app_logger::perf("Window", "创建新窗口准备", timer.elapsed());
     Ok(id)
 }
 
@@ -94,8 +109,13 @@ pub(crate) async fn open_settings_window(app: AppHandle) -> Result<(), String> {
 pub(crate) async fn open_settings_window_for_app<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<(), String> {
+    let timer = std::time::Instant::now();
+    crate::app_logger::info("Settings", "开始打开设置窗口");
+
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
+        crate::app_logger::info("Settings", "设置窗口已存在，将其前置");
         bring_settings_window_to_front(&window)?;
+        crate::app_logger::perf("Settings", "打开设置窗口（已存在）", timer.elapsed());
         return Ok(());
     }
 
@@ -132,12 +152,15 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
     crate::window::os::setup_window(&window);
     crate::window::state::restore_window_state(&app, window.label());
     bring_settings_window_to_front(&window)?;
+    crate::app_logger::info("Settings", "设置窗口创建并显示完成");
+    crate::app_logger::perf("Settings", "打开设置窗口", timer.elapsed());
 
     Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn minimize_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::app_logger::info("Window", &format!("最小化窗口：{}", window.label()));
     window
         .minimize()
         .map_err(|error| format!("最小化窗口失败：{error}"))
@@ -145,6 +168,7 @@ pub(crate) fn minimize_window(window: tauri::WebviewWindow) -> Result<(), String
 
 #[tauri::command]
 pub(crate) fn maximize_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::app_logger::info("Window", &format!("切换最大化窗口：{}", window.label()));
     let maximized = window
         .is_maximized()
         .map_err(|error| format!("获取窗口最大化状态失败：{error}"))?;
@@ -162,6 +186,7 @@ pub(crate) fn maximize_window(window: tauri::WebviewWindow) -> Result<(), String
 #[tauri::command]
 pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
     let label = window.label().to_string();
+    crate::app_logger::info("Window", &format!("关闭窗口：{label}"));
     allow_next_close(&label)?;
     let result = window
         .close()
@@ -174,6 +199,7 @@ pub(crate) fn close_window(window: tauri::WebviewWindow) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::app_logger::info("Window", &format!("隐藏窗口到托盘：{}", window.label()));
     window
         .set_skip_taskbar(true)
         .map_err(|error| format!("从任务栏隐藏窗口失败：{error}"))?;
@@ -186,11 +212,13 @@ pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), St
 
 #[tauri::command]
 pub(crate) fn exit_app(app: AppHandle) {
+    crate::app_logger::info("App", "退出应用");
     app.exit(0);
 }
 
 #[tauri::command]
 pub(crate) fn request_exit_app(app: AppHandle) -> Result<(), String> {
+    crate::app_logger::info("App", "请求退出应用");
     emit_exit_request(&app)
 }
 
@@ -269,26 +297,79 @@ fn bring_settings_window_to_front<R: Runtime>(window: &WebviewWindow<R>) -> Resu
 pub(crate) fn get_markdown_file_association_status(
     app: AppHandle,
 ) -> Result<crate::models::MarkdownAssociationStatus, String> {
-    crate::window::file_association::get_markdown_file_association_status(&app)
+    crate::app_logger::info("Settings", "查询 Markdown 默认打开方式状态");
+    let result = crate::window::file_association::get_markdown_file_association_status(&app);
+    match &result {
+        Ok(status) => crate::app_logger::info(
+            "Settings",
+            &format!(
+                "Markdown 关联状态：registered={} is_default={}",
+                status.registered, status.is_default
+            ),
+        ),
+        Err(e) => crate::app_logger::error("Settings", &format!("查询 Markdown 关联状态失败：{e}")),
+    }
+    result
 }
 
 #[tauri::command]
 pub(crate) fn register_markdown_file_association(
     app: AppHandle,
 ) -> Result<crate::models::DesktopActionPayload, String> {
-    crate::window::file_association::register_markdown_file_association(&app)
+    crate::app_logger::info("Settings", "开始注册 Markdown 默认打开方式");
+    let result = crate::window::file_association::register_markdown_file_association(&app);
+    match &result {
+        Ok(payload) => {
+            if payload.ok {
+                crate::app_logger::info("Settings", "注册 Markdown 默认打开方式成功");
+            } else {
+                crate::app_logger::warn(
+                    "Settings",
+                    &format!("注册 Markdown 默认打开方式未完成：{}", payload.message),
+                );
+            }
+        }
+        Err(e) => {
+            crate::app_logger::error("Settings", &format!("注册 Markdown 默认打开方式失败：{e}"))
+        }
+    }
+    result
 }
 
 #[tauri::command]
 pub(crate) fn get_windows_context_menu_status(
     app: AppHandle,
 ) -> Result<crate::models::WindowsContextMenuStatus, String> {
-    crate::window::file_association::get_windows_context_menu_status(&app)
+    crate::app_logger::info("Settings", "查询右键菜单状态");
+    let result = crate::window::file_association::get_windows_context_menu_status(&app);
+    match &result {
+        Ok(status) => crate::app_logger::info(
+            "Settings",
+            &format!("右键菜单状态：registered={}", status.registered),
+        ),
+        Err(e) => crate::app_logger::error("Settings", &format!("查询右键菜单状态失败：{e}")),
+    }
+    result
 }
 
 #[tauri::command]
 pub(crate) fn register_windows_context_menu(
     app: AppHandle,
 ) -> Result<crate::models::DesktopActionPayload, String> {
-    crate::window::file_association::register_windows_context_menu(&app)
+    crate::app_logger::info("Settings", "开始注册 Windows 右键菜单");
+    let result = crate::window::file_association::register_windows_context_menu(&app);
+    match &result {
+        Ok(payload) => {
+            if payload.ok {
+                crate::app_logger::info("Settings", "注册右键菜单成功");
+            } else {
+                crate::app_logger::warn(
+                    "Settings",
+                    &format!("注册右键菜单未完成：{}", payload.message),
+                );
+            }
+        }
+        Err(e) => crate::app_logger::error("Settings", &format!("注册右键菜单失败：{e}")),
+    }
+    result
 }

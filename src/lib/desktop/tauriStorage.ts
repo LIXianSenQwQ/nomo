@@ -1,4 +1,5 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
+import { createPerfTimer, logDebug, logInfo, perfAsync } from '../../lib/services/logger';
 
 export interface NativeDocument {
   path: string;
@@ -127,6 +128,8 @@ export function isTauriRuntime(): boolean {
 }
 
 export async function openMarkdownWithDialog(): Promise<NativeDocument | null> {
+  const timer = createPerfTimer('tauriStorage', '打开文件对话框');
+  logInfo('tauriStorage', '打开 Markdown 文件选择对话框');
   const { open } = await import('@tauri-apps/plugin-dialog');
   const selected = await open({
     multiple: false,
@@ -139,32 +142,51 @@ export async function openMarkdownWithDialog(): Promise<NativeDocument | null> {
   });
 
   if (typeof selected !== 'string') {
+    timer.end({ cancelled: true });
+    logInfo('tauriStorage', '用户取消打开 Markdown 文件');
     return null;
   }
 
-  return readMarkdownFile(selected);
+  const document = await readMarkdownFile(selected);
+  timer.end({ path: selected });
+  return document;
 }
 
 export async function openFolderWithDialog(): Promise<string | null> {
+  const timer = createPerfTimer('tauriStorage', '打开文件夹对话框');
+  logInfo('tauriStorage', '打开文件夹选择对话框');
   const { open } = await import('@tauri-apps/plugin-dialog');
   const selected = await open({
     multiple: false,
     directory: true,
   });
 
+  timer.end({ selected: typeof selected === 'string' });
   return typeof selected === 'string' ? selected : null;
 }
 
 export async function readMarkdownFile(path: string): Promise<NativeDocument> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return normalizeDocumentPayload(
-    await invoke<NativeDocumentPayload>('read_markdown_file', { path }),
-  );
+  return perfAsync('tauriStorage', 'read_markdown_file', async () => {
+    logInfo('tauriStorage', '开始读取 Markdown 文件', { path });
+    const { invoke } = await import('@tauri-apps/api/core');
+    const document = normalizeDocumentPayload(
+      await invoke<NativeDocumentPayload>('read_markdown_file', { path }),
+    );
+    logInfo('tauriStorage', 'Markdown 文件读取完成', {
+      path,
+      sizeBytes: document.sizeBytes,
+      readonly: document.readonly,
+    });
+    return document;
+  });
 }
 
 export async function installSampleDocument(): Promise<NativeDocument> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return normalizeDocumentPayload(await invoke<NativeDocumentPayload>('install_sample_document'));
+  return perfAsync('tauriStorage', 'install_sample_document', async () => {
+    logInfo('tauriStorage', '安装或打开实例文档');
+    const { invoke } = await import('@tauri-apps/api/core');
+    return normalizeDocumentPayload(await invoke<NativeDocumentPayload>('install_sample_document'));
+  });
 }
 
 export async function saveMarkdownNative(
@@ -172,6 +194,12 @@ export async function saveMarkdownNative(
   markdown: string,
   fallbackName: string,
 ): Promise<NativeDocument | null> {
+  const timer = createPerfTimer('tauriStorage', '保存 Markdown 文件');
+  logInfo('tauriStorage', '开始保存 Markdown 文件', {
+    path,
+    fallbackName,
+    bytes: markdown.length,
+  });
   const { invoke } = await import('@tauri-apps/api/core');
   const { save } = await import('@tauri-apps/plugin-dialog');
   const targetPath =
@@ -187,22 +215,33 @@ export async function saveMarkdownNative(
     }));
 
   if (!targetPath) {
+    timer.end({ cancelled: true });
+    logInfo('tauriStorage', '用户取消保存 Markdown 文件');
     return null;
   }
 
-  return normalizeDocumentPayload(
+  const document = normalizeDocumentPayload(
     await invoke<NativeDocumentPayload>('write_markdown_file', { path: targetPath, markdown }),
   );
+  timer.end({ path: targetPath, bytes: document.sizeBytes });
+  logInfo('tauriStorage', 'Markdown 文件保存完成', {
+    path: targetPath,
+    sizeBytes: document.sizeBytes,
+  });
+  return document;
 }
 
 export async function checkPathsExist(paths: string[]): Promise<boolean[]> {
+  logDebug('tauriStorage', '检查路径是否存在', { count: paths.length });
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<boolean[]>('check_paths_exist', { paths });
 }
 
 export async function statMarkdownFile(path: string): Promise<FileStatus> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  return normalizeFileStatus(await invoke<FileStatusPayload>('stat_markdown_file', { path }));
+  return perfAsync('tauriStorage', 'stat_markdown_file', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return normalizeFileStatus(await invoke<FileStatusPayload>('stat_markdown_file', { path }));
+  });
 }
 
 export async function rememberRecentEntry(
@@ -211,6 +250,7 @@ export async function rememberRecentEntry(
   title: string | null,
   wordCount: number,
 ): Promise<void> {
+  logInfo('tauriStorage', '记录最近打开项', { path, entryType, title, wordCount });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('remember_recent_entry', {
     input: {
@@ -232,16 +272,19 @@ export async function rememberRecentFile(
 }
 
 export async function listRecentEntries(): Promise<RecentEntry[]> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  const rows = await invoke<RecentEntryPayload[]>('list_recent_entries');
-  return rows.map((row) => ({
-    path: row.path,
-    entryType: row.entry_type,
-    title: row.title,
-    modifiedAt: row.modified_at,
-    wordCount: row.word_count,
-    openedAt: row.opened_at,
-  }));
+  return perfAsync('tauriStorage', 'list_recent_entries', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const rows = await invoke<RecentEntryPayload[]>('list_recent_entries');
+    logDebug('tauriStorage', '最近打开项读取完成', { count: rows.length });
+    return rows.map((row) => ({
+      path: row.path,
+      entryType: row.entry_type,
+      title: row.title,
+      modifiedAt: row.modified_at,
+      wordCount: row.word_count,
+      openedAt: row.opened_at,
+    }));
+  });
 }
 
 /** @deprecated 使用 listRecentEntries */
@@ -250,6 +293,7 @@ export async function listRecentFiles(): Promise<RecentDocument[]> {
 }
 
 export async function clearRecentEntries(): Promise<void> {
+  logInfo('tauriStorage', '清空最近打开项');
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('clear_recent_entries');
 }
@@ -259,6 +303,7 @@ export async function createDocumentSnapshot(
   markdown: string,
   reason: string,
 ): Promise<void> {
+  logInfo('tauriStorage', '创建文档快照', { path, reason, bytes: markdown.length });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('create_document_snapshot', {
     input: {
@@ -270,19 +315,23 @@ export async function createDocumentSnapshot(
 }
 
 export async function listDocumentSnapshots(path: string): Promise<SnapshotRecord[]> {
-  const { invoke } = await import('@tauri-apps/api/core');
-  const rows = await invoke<SnapshotRecordPayload[]>('list_document_snapshots', { path });
-  return rows.map((row) => ({
-    id: row.id,
-    documentPath: row.document_path,
-    contentHash: row.content_hash,
-    markdown: row.markdown,
-    createdAt: row.created_at,
-    reason: row.reason,
-  }));
+  return perfAsync('tauriStorage', 'list_document_snapshots', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const rows = await invoke<SnapshotRecordPayload[]>('list_document_snapshots', { path });
+    logDebug('tauriStorage', '文档快照读取完成', { path, count: rows.length });
+    return rows.map((row) => ({
+      id: row.id,
+      documentPath: row.document_path,
+      contentHash: row.content_hash,
+      markdown: row.markdown,
+      createdAt: row.created_at,
+      reason: row.reason,
+    }));
+  });
 }
 
 export async function updateAppSetting(key: string, value: unknown): Promise<void> {
+  logDebug('tauriStorage', '更新应用设置', { key });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('update_app_setting', {
     input: {
@@ -293,6 +342,7 @@ export async function updateAppSetting(key: string, value: unknown): Promise<voi
 }
 
 export async function updateAppSettings(entries: Record<string, unknown>): Promise<void> {
+  logDebug('tauriStorage', '批量更新应用设置', { keys: Object.keys(entries) });
   const inputs = Object.entries(entries).map(([key, value]) => ({
     key,
     value_json: JSON.stringify(value),
@@ -302,11 +352,11 @@ export async function updateAppSettings(entries: Record<string, unknown>): Promi
     return;
   }
 
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('update_app_settings', { inputs });
+  await perfAsync('tauriStorage', 'update_app_settings', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('update_app_settings', { inputs });
+  });
 }
-
-import { logDebug, perfAsync } from '../../lib/services/logger';
 
 export async function listAppSettings(): Promise<SettingRecord[]> {
   return perfAsync('tauriStorage', 'list_app_settings', async () => {
@@ -321,6 +371,7 @@ export async function listAppSettings(): Promise<SettingRecord[]> {
 }
 
 export async function updateWindowState(state: WindowState): Promise<void> {
+  logDebug('tauriStorage', '更新窗口状态', state);
   const { invoke } = await import('@tauri-apps/api/core');
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const label = getCurrentWindow().label || 'main';
@@ -331,6 +382,7 @@ export async function updateWindowState(state: WindowState): Promise<void> {
 }
 
 export async function openExternalLink(href: string): Promise<void> {
+  logInfo('tauriStorage', '打开外部链接', { href });
   if (!isTauriRuntime()) {
     window.open(href, '_blank', 'noopener,noreferrer');
     return;
@@ -341,26 +393,31 @@ export async function openExternalLink(href: string): Promise<void> {
 }
 
 export async function createFolder(path: string): Promise<void> {
+  logInfo('tauriStorage', '创建文件夹', { path });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('create_folder', { path });
 }
 
 export async function renameFile(oldPath: string, newPath: string): Promise<void> {
+  logInfo('tauriStorage', '重命名文件', { oldPath, newPath });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('rename_file', { oldPath, newPath });
 }
 
 export async function deleteFile(path: string): Promise<void> {
+  logInfo('tauriStorage', '删除文件', { path });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('delete_file', { path });
 }
 
 export async function revealInExplorer(path: string): Promise<void> {
+  logInfo('tauriStorage', '在资源管理器中显示', { path });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('reveal_in_explorer', { path });
 }
 
 export async function readCurrentWindowState(): Promise<WindowState> {
+  const timer = createPerfTimer('tauriStorage', '读取当前窗口状态');
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   const currentWindow = getCurrentWindow();
   const [position, size] = await Promise.all([
@@ -368,12 +425,14 @@ export async function readCurrentWindowState(): Promise<WindowState> {
     currentWindow.innerSize(),
   ]);
 
-  return {
+  const state = {
     x: position.x,
     y: position.y,
     width: size.width,
     height: size.height,
   };
+  timer.end(state);
+  return state;
 }
 
 export async function listenDesktopMenuCommands(

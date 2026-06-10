@@ -1,3 +1,4 @@
+mod app_logger;
 mod database;
 mod external_link;
 mod file_system;
@@ -10,6 +11,9 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    crate::app_logger::init();
+    let startup_timer = std::time::Instant::now();
+
     // 强制 WebView2 使用 GPU 加速
     #[cfg(target_os = "windows")]
     unsafe {
@@ -21,6 +25,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            crate::app_logger::info("App", "收到单实例启动参数");
             let targets = crate::window::external_open::collect_external_open_targets_from_args(
                 args,
                 Some(std::path::PathBuf::from(cwd)),
@@ -35,10 +40,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                crate::app_logger::debug("Window", &format!("持久化窗口状态：{}", window.label()));
                 crate::window::state::persist_current_window_state(window);
             }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
+                crate::app_logger::info("Window", &format!("收到窗口关闭请求：{label}"));
                 if !crate::window::external_open::is_document_window_label(label) {
                     return;
                 }
@@ -48,31 +55,38 @@ pub fn run() {
 
                 api.prevent_close();
                 if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
+                    crate::app_logger::info("Window", &format!("窗口隐藏到托盘：{label}"));
                     let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
                     crate::window::tray::set_tray_active(window.app_handle(), false);
                 } else {
+                    crate::app_logger::info("Window", &format!("请求前端确认关闭：{label}"));
                     let _ = window.emit("nomo://request-close-window", ());
                 }
             }
             _ => {}
         })
-        .setup(|app| {
+        .setup(move |app| {
             use tauri::Manager;
+            let setup_timer = std::time::Instant::now();
+            crate::app_logger::info("App", "开始 Tauri setup");
             let database = crate::database::AppDatabase::from_app(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             app.manage(database.clone());
             database.warm_up_async();
 
             if let Some(window) = app.get_webview_window("main") {
+                crate::app_logger::info("Window", "初始化主窗口系统适配和菜单");
                 crate::window::os::setup_window(&window);
                 crate::window::menu::install_window_menu(app.handle(), &window)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
+            crate::app_logger::info("Tray", "安装应用托盘");
             crate::window::tray::install_app_tray(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             crate::window::state::restore_window_state(app.handle(), "main");
             if let Some(window) = app.get_webview_window("main") {
+                crate::app_logger::info("Window", "显示并聚焦主窗口");
                 window
                     .set_skip_taskbar(false)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
@@ -85,6 +99,14 @@ pub fn run() {
             }
             let startup_targets =
                 crate::window::external_open::collect_external_open_targets_from_startup_args();
+            crate::app_logger::info(
+                "App",
+                &format!(
+                    "启动待打开目标：files={} folders={}",
+                    startup_targets.markdown_paths.len(),
+                    startup_targets.folder_paths.len()
+                ),
+            );
             crate::window::external_open::persist_pending_external_open(
                 app.handle(),
                 "main",
@@ -99,6 +121,8 @@ pub fn run() {
                 )
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
+            crate::app_logger::perf("App", "Tauri setup", setup_timer.elapsed());
+            crate::app_logger::perf("App", "软件打开", startup_timer.elapsed());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -141,6 +165,9 @@ pub fn run() {
             crate::window::commands::register_markdown_file_association,
             crate::window::commands::get_windows_context_menu_status,
             crate::window::commands::register_windows_context_menu,
+            crate::app_logger::log_message,
+            crate::app_logger::set_logger_enabled,
+            crate::app_logger::get_logger_enabled,
             crate::software_update::is_windows_installer_installation,
             crate::software_update::check_software_update,
             crate::software_update::download_software_update,
