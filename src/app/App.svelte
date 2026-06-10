@@ -2440,6 +2440,7 @@
   {createNewFile}
   {openFileDialog}
   {openFolderDialog}
+  {openRecentEntry}
   {openPreviewFile}
   pinPreviewFile={pinPreviewTab}
   {clearRecentEntriesList}

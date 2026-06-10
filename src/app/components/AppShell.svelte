@@ -84,6 +84,7 @@
   export let createNewFile: () => void;
   export let openFileDialog: () => void;
   export let openFolderDialog: () => void;
+  export let openRecentEntry: (path: string, entryType: 'file' | 'folder') => void;
   export let openPreviewFile: (path: string) => void;
   export let pinPreviewFile: () => void;
   export let clearRecentEntriesList: () => void;
