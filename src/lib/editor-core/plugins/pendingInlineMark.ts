@@ -243,22 +243,22 @@ function handleMarkBoundaryArrowKey(
 
   if (key === 'ArrowRight' && atOpeningBoundary && !currentlyInside) {
     dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
-    return true;
+    return false;
   }
 
   if (key === 'ArrowLeft' && atOpeningBoundary && currentlyInside) {
     dispatch(state.tr.setStoredMarks([]));
-    return true;
+    return false;
   }
 
   if (key === 'ArrowRight' && !atOpeningBoundary && currentlyInside) {
     dispatch(state.tr.setStoredMarks([]));
-    return true;
+    return false;
   }
 
   if (key === 'ArrowLeft' && !atOpeningBoundary && !currentlyInside) {
     dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
-    return true;
+    return false;
   }
 
   return false;
