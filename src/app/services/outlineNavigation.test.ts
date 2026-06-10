@@ -3,7 +3,9 @@ import type { OutlineItem } from '../../lib/outline/outlineService';
 import {
   getActiveOutlineIdFromSemantic,
   getSemanticScrollAnchor,
+  getSemanticScrollAnchorForBlock,
   getSourceScrollAnchor,
+  getSourceScrollAnchorAtLine,
   scrollSemanticToAnchor,
   scrollSourceToAnchor,
 } from './outlineNavigation';
@@ -188,6 +190,48 @@ describe('outlineNavigation', () => {
     expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('details');
     expect(semanticPane.scrollTop).toBeGreaterThan(760);
     expect(semanticPane.scrollTop).toBeLessThan(1560);
+  });
+
+  it('uses the visible source cursor line as the mode switch anchor', () => {
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollTop: 800,
+    });
+    const sourceTextarea = createTextarea(100);
+    const anchor = getSourceScrollAnchorAtLine(
+      createOutline(),
+      50,
+      sourcePane.scrollTop,
+      20,
+      sourceTextarea,
+      sourcePane,
+    );
+
+    expect(anchor?.kind).toBe('outline');
+    expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('第二章');
+    expect(anchor?.sourceLine).toBe(50);
+    expect(anchor?.sectionProgress).toBeCloseTo(9 / 60);
+  });
+
+  it('uses the semantic cursor block instead of the viewport top when it is visible', () => {
+    const semanticPane = createSemanticPane([
+      { tag: 'h1', title: '第一章', top: 40 },
+      { tag: 'h2', title: '第二章', top: 440 },
+    ], 1200, 300);
+    semanticPane.scrollTop = 100;
+    const paragraph = document.createElement('p');
+    paragraph.textContent = 'cursor block';
+    paragraph.getBoundingClientRect = () => createRect(300 - semanticPane.scrollTop);
+    semanticPane.querySelector('.ProseMirror')?.append(paragraph);
+
+    const anchor = getSemanticScrollAnchorForBlock(createOutline(), semanticPane, paragraph);
+
+    expect(anchor?.kind).toBe('outline');
+    expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('第一章');
+    expect(anchor?.sectionProgress).toBeCloseTo(260 / 400);
+    expect(anchor?.documentProgress).toBeCloseTo(300 / 900);
   });
 });
 
