@@ -33,23 +33,23 @@ MACOS_VERSION=$(sw_vers -productVersion | awk -F. '{print $1 "." $2}')
 ARCH=$(uname -m)
 
 xcrun swiftc \
+  "$EXTENSION_SRC_DIR/main.swift" \
   "$EXTENSION_SRC_DIR/PreviewViewController.swift" \
   -module-name NomoQuickLookPreview \
-  -parse-as-library \
   -application-extension \
-  -emit-library \
   -target "${ARCH}-apple-macosx12.0" \
   -o "$MACOS_DIR/NomoQuickLookPreview" \
   -framework Cocoa \
   -framework QuickLook \
+  -framework QuickLookUI \
   -framework WebKit
 
-chmod +x "$MACOS_DIR/NomoQuickLookPreview"
+ENTITLEMENTS="$EXTENSION_SRC_DIR/NomoQuickLookPreview.entitlements"
 
 if [[ -n "${APPLE_CODESIGN_IDENTITY:-}" ]]; then
-  /usr/bin/codesign --force --sign "$APPLE_CODESIGN_IDENTITY" "$OUTPUT_DIR"
+  /usr/bin/codesign --force --sign "$APPLE_CODESIGN_IDENTITY" --entitlements "$ENTITLEMENTS" "$OUTPUT_DIR"
 else
-  /usr/bin/codesign --force --sign - "$OUTPUT_DIR"
+  /usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS" "$OUTPUT_DIR"
 fi
 
 echo "Built $OUTPUT_DIR"

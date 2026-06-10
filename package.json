@@ -9,7 +9,7 @@
     "build": "vite build",
     "build:quicklook-renderer": "vite build --config vite.quicklook.config.ts",
     "build:quicklook-extension": "bash scripts/build-macos-quicklook.sh",
-    "build:macos": "pnpm run build:quicklook-extension && tauri build --bundles app,dmg",
+    "build:macos": "pnpm run build:quicklook-extension && tauri build --bundles app,dmg && bash scripts/embed-quicklook-extension.sh",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",

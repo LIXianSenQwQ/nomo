@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Quick Look 扩展必须启用 App Sandbox -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <!-- 允许读取用户选择的文件（Quick Look 传入的文件 URL） -->
+  <key>com.apple.security.files.user-selected.read-only</key>
+  <true/>
+</dict>
+</plist>
