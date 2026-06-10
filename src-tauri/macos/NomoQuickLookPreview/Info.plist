@@ -18,19 +18,52 @@
   <key>CFBundlePackageType</key>
   <string>XPC!</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.3</string>
+  <string>0.1.4</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
   <key>NSExtension</key>
   <dict>
     <key>NSExtensionPointIdentifier</key>
     <string>com.apple.quicklook.preview</string>
     <key>NSExtensionPrincipalClass</key>
-    <string>NomoQuickLookPreview.PreviewViewController</string>
-    <key>QLSupportedContentTypes</key>
-    <array>
-      <string>net.daringfireball.markdown</string>
-    </array>
+    <string>PreviewViewController</string>
+    <key>NSExtensionAttributes</key>
+    <dict>
+      <key>QLSupportedContentTypes</key>
+      <array>
+        <string>net.daringfireball.markdown</string>
+        <string>public.markdown</string>
+      </array>
+      <key>QLIsDataBasedPreview</key>
+      <false/>
+      <key>QLSupportsSearchableItems</key>
+      <false/>
+    </dict>
   </dict>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>net.daringfireball.markdown</string>
+      <key>UTTypeDescription</key>
+      <string>Markdown Document</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.plain-text</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>md</string>
+          <string>markdown</string>
+          <string>mdown</string>
+          <string>mkd</string>
+        </array>
+      </dict>
+    </dict>
+  </array>
 </dict>
 </plist>

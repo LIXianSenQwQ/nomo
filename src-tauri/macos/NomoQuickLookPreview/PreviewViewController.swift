@@ -1,5 +1,5 @@
 import Cocoa
-import QuickLook
+import QuickLookUI
 import WebKit
 
 @objc(PreviewViewController)
@@ -35,18 +35,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         try loadMarkdownPreview(for: url)
     }
 
-    func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
-        DispatchQueue.main.async {
-            do {
-                try self.loadMarkdownPreview(for: url)
-                handler(nil)
-            } catch {
-                self.loadErrorPreview(error)
-                handler(error)
-            }
-        }
-    }
-
     private func loadMarkdownPreview(for url: URL) throws {
         let markdown = try String(contentsOf: url, encoding: .utf8)
 
@@ -54,7 +42,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
             let rendererIndexUrl = Bundle.main.url(
                 forResource: "index",
                 withExtension: "html",
-                subdirectory: "quicklook-renderer"
+                subdirectory: "quicklook-renderer/src/quicklook"
             )
         else {
             throw PreviewError.rendererMissing
@@ -62,15 +50,24 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
 
         let htmlTemplate = try String(contentsOf: rendererIndexUrl, encoding: .utf8)
         let payload = try makePreviewPayload(markdown: markdown, fileUrl: url)
-        let hydratedHtml = htmlTemplate.replacingOccurrences(
-            of: "window.__NOMO_QUICKLOOK_PAYLOAD__ = null;",
-            with: "window.__NOMO_QUICKLOOK_PAYLOAD__ = \(payload);"
-        )
 
-        webView.loadHTMLString(
-            hydratedHtml,
-            baseURL: rendererIndexUrl.deletingLastPathComponent()
-        )
+        // 注入预览数据并移除 crossorigin 属性（file:// 协议不支持 CORS）
+        let hydratedHtml = htmlTemplate
+            .replacingOccurrences(of: " crossorigin", with: "")
+            .replacingOccurrences(
+                of: "window.__NOMO_QUICKLOOK_PAYLOAD__ = null;",
+                with: "window.__NOMO_QUICKLOOK_PAYLOAD__ = \(payload);"
+            )
+
+        // 使用 loadFileURL 替代 loadHTMLString，沙盒中可正确加载相对路径资源
+        try hydratedHtml.write(to: rendererIndexUrl, atomically: true, encoding: .utf8)
+
+        let resourceBaseUrl = rendererIndexUrl
+            .deletingLastPathComponent() // src/quicklook/
+            .deletingLastPathComponent() // src/
+            .deletingLastPathComponent() // quicklook-renderer/
+
+        webView.loadFileURL(rendererIndexUrl, allowingReadAccessTo: resourceBaseUrl)
     }
 
     private func makePreviewPayload(markdown: String, fileUrl: URL) throws -> String {
