@@ -6,6 +6,7 @@ import {
   getSourceHeadingSelection,
   getSourceLineHeight as getTextareaLineHeight,
   scrollSemanticToAnchor,
+  setScrollTop,
   smoothScrollElementTo,
 } from './outlineNavigation';
 import {
@@ -73,7 +74,7 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
       sourceTextarea.setSelectionRange(selection.end, selection.end);
       const lineHeightPx = getSourceLineHeight();
       if (sourcePane) {
-        sourcePane.scrollTop = restoreScrollTop;
+        setScrollTop(sourcePane, restoreScrollTop);
         smoothScrollElementTo(sourcePane, Math.max(0, (item.line - 1) * lineHeightPx - 40));
       }
     });

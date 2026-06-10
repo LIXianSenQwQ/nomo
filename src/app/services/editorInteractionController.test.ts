@@ -156,6 +156,96 @@ describe('editorInteractionController viewport layout', () => {
 
     expect(sourcePane.scrollTop).toBe(420);
   });
+
+  it('restores semantic scroll after round-trip through source mode', async () => {
+    // 模拟真实浏览器行为：display:none 的面板 getBoundingClientRect().height 为 0，
+    // 且 scrollTop 会被浏览器重置为 0。
+    const callbacks: FrameRequestCallback[] = [];
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    }) as typeof window.requestAnimationFrame;
+    const mode = { value: 'semantic' as EditorMode };
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(300);
+    const sourcePane = createPane({
+      className: 'source-pane',
+      scrollHeight: 1200,
+      clientHeight: 400,
+      scrollTop: 0,
+    });
+    const sourceTextarea = createTextarea({ scrollHeight: 1600, clientHeight: 300, lineCount: 80 });
+    sourcePane.append(sourceTextarea);
+    const semanticScrollHeight = 1000;
+    const semanticClientHeight = 300;
+    let semanticHidden = false;
+    const editor = createEditorCoreStub((nextMode) => {
+      mode.value = nextMode;
+      semanticHidden = nextMode === 'source';
+    });
+    const semanticPane = createPane({
+      scrollHeight: semanticScrollHeight,
+      clientHeight: semanticClientHeight,
+      scrollTop: 250,
+    });
+    semanticPane.className = 'semantic-pane';
+    semanticPane.getBoundingClientRect = () => createRect(semanticHidden ? 0 : 40);
+    Object.defineProperty(semanticPane, 'getBoundingClientRect', {
+      value: () => ({
+        ...createRect(semanticHidden ? 0 : 40),
+        height: semanticHidden ? 0 : semanticClientHeight,
+      }),
+    });
+    // 模拟 display:hidden 的行为：scrollTop 被浏览器重置
+    Object.defineProperty(semanticPane, 'scrollTop', {
+      get() {
+        return semanticHidden ? 0 : Number(semanticPane.dataset.scrollTop ?? 0);
+      },
+      set(v: number) {
+        semanticPane.dataset.scrollTop = String(v);
+      },
+      configurable: true,
+    });
+    semanticPane.scrollTop = 250;
+
+    const editor2 = document.createElement('div');
+    editor2.className = 'ProseMirror';
+    const h1 = document.createElement('h1');
+    h1.textContent = '第一章';
+    h1.getBoundingClientRect = () => createRect(40 - (semanticHidden ? 0 : semanticPane.scrollTop));
+    const h2 = document.createElement('h2');
+    h2.textContent = '第二章';
+    h2.getBoundingClientRect = () => createRect(440 - (semanticHidden ? 0 : semanticPane.scrollTop));
+    editor2.append(h1, h2);
+    semanticPane.append(editor2);
+
+    const controller = createController({
+      mode,
+      editor,
+      outline: createOutline(),
+      sourcePane,
+      semanticPane,
+      sourceTextarea,
+      sourceLineHeight: 20,
+    });
+
+    // 步骤1：从语义模式切换到源码模式（语义面板被隐藏）
+    await controller.setMode('source');
+    while (callbacks.length > 0) flushAnimationFrame(callbacks);
+    expect(sourcePane.scrollTop).toBeGreaterThan(0);
+
+    // 步骤2：从源码模式切回语义模式（语义面板恢复显示）
+    await controller.setMode('semantic');
+
+    // 刷新所有动画帧，触发最终的滚动恢复
+    while (callbacks.length > 0) flushAnimationFrame(callbacks);
+
+    // 应该恢复到接近原始位置（250），而不是 0
+    expect(semanticPane.scrollTop).toBeGreaterThan(0);
+  });
 });
 
 function createController(options: {

@@ -4,10 +4,11 @@ import type { OutlineItem } from '../../lib/outline/outlineService';
 import { createTocBlock } from '../../lib/toc/tocService';
 import { t } from '../i18n';
 import {
-  getSemanticScrollAnchor,
+  type OutlineScrollAnchor,
   getSourceScrollAnchor,
   scrollSemanticToAnchor,
   scrollSourceToAnchor,
+  setScrollTop,
 } from './outlineNavigation';
 
 interface EditorInteractionOptions {
@@ -35,38 +36,36 @@ export function createEditorInteractionController(options: EditorInteractionOpti
       return;
     }
 
+    // 在切换模式前保存两个面板的滚动位置。
+    // 浏览器会将 display:none 的元素 scrollTop 重置为 0，
+    // 因此必须在 CSS 生效前捕获当前值。
     const outline = options.getOutline();
+    const semanticPane = options.getSemanticPane();
+    const sourcePane = options.getSourcePane();
+    const savedSemanticScrollTop = semanticPane?.scrollTop ?? 0;
+    const savedSourceScrollTop = sourcePane?.scrollTop ?? 0;
     const scrollAnchor =
       options.getMode() === 'semantic'
-        ? getSemanticScrollAnchor(outline, options.getSemanticPane())
+        ? getDocumentScrollAnchor(semanticPane, savedSemanticScrollTop)
         : getSourceScrollAnchor(
             outline,
-            options.getSourcePane()?.scrollTop ?? 0,
+            savedSourceScrollTop,
             options.getSourceLineHeight(),
             options.getSourceTextarea(),
             options.getSourcePane(),
           );
-
     options.getEditor().updateOptions({ mode: nextMode });
-    syncSourceTextareaHeight();
     await tick();
     options.setSuppressOutlineScrollUntil(Date.now() + 300);
 
     scheduleAfterFrames(() => {
-      measureEditorViewportLayout(null);
       if (nextMode === 'semantic') {
         scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), scrollAnchor);
         refreshEditorViewportLayout();
         return;
       }
 
-      scrollSourceToAnchor(
-        options.getOutline(),
-        options.getSourcePane(),
-        options.getSourceTextarea(),
-        scrollAnchor,
-      );
-      refreshEditorViewportLayout();
+      restoreSourceScrollAnchorWhenReady(scrollAnchor);
     }, 2);
   }
 
@@ -122,21 +121,65 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     scheduleViewportMeasure(() => measureEditorViewportLayout(null), 2);
   }
 
+  function restoreSourceScrollAnchorWhenReady(
+    scrollAnchor: OutlineScrollAnchor | null,
+    attemptsRemaining = 120,
+  ) {
+    measureEditorViewportLayout(null);
+    const sourcePane = options.getSourcePane();
+    const maxScrollTop = sourcePane ? Math.max(0, sourcePane.scrollHeight - sourcePane.clientHeight) : 0;
+    const expectedProgress = getAnchorDocumentProgress(scrollAnchor);
+
+    if (sourcePane && maxScrollTop > 0) {
+      scrollSourceToAnchor(
+        options.getOutline(),
+        sourcePane,
+        options.getSourceTextarea(),
+        scrollAnchor,
+      );
+      refreshEditorViewportLayout();
+    }
+
+    const needsRetry =
+      attemptsRemaining > 0 &&
+      (!sourcePane ||
+        maxScrollTop <= 0 ||
+        (expectedProgress > 0.01 && sourcePane.scrollTop <= 1));
+    if (needsRetry) {
+      scheduleAfterFrames(() =>
+        restoreSourceScrollAnchorWhenReady(scrollAnchor, attemptsRemaining - 1),
+      );
+    }
+  }
+
   function measureEditorViewportLayout(restoreScrollTop: number | null) {
-    const sourceTextarea = options.getSourceTextarea();
-    if (sourceTextarea) {
-      sourceTextarea.style.height = 'auto';
-      sourceTextarea.style.height = `${Math.max(sourceTextarea.scrollHeight, sourceTextarea.clientHeight)}px`;
+    if (options.getMode() === 'semantic') {
+      clampPaneScrollTop(options.getSemanticPane());
+      return;
     }
 
     const sourcePane = options.getSourcePane();
-    if (restoreScrollTop !== null && sourcePane && options.getMode() === 'source') {
+    if (!isPaneLayoutVisible(sourcePane)) {
+      return;
+    }
+    const scrollTopBeforeMeasure = sourcePane?.scrollTop ?? 0;
+
+    const sourceTextarea = options.getSourceTextarea();
+    if (sourceTextarea) {
+      sourceTextarea.style.height = 'auto';
+      sourceTextarea.style.height = `${Math.max(
+        sourceTextarea.scrollHeight,
+        sourceTextarea.clientHeight,
+        estimateSourceTextareaContentHeight(sourceTextarea),
+      )}px`;
+    }
+
+    if (restoreScrollTop !== null && sourcePane) {
       clampPaneScrollTop(sourcePane, restoreScrollTop);
       options.setPendingSourceScrollTop(null);
     } else {
-      clampPaneScrollTop(sourcePane);
+      clampPaneScrollTop(sourcePane, scrollTopBeforeMeasure);
     }
-    clampPaneScrollTop(options.getSemanticPane());
   }
 
   function scheduleViewportMeasure(callback: () => void, frameCount = 1) {
@@ -173,8 +216,39 @@ export function createEditorInteractionController(options: EditorInteractionOpti
       Math.max(0, preferredScrollTop ?? pane.scrollTop),
     );
     if (pane.scrollTop !== nextScrollTop) {
-      pane.scrollTop = nextScrollTop;
+      setScrollTop(pane, nextScrollTop);
     }
+  }
+
+  function isPaneLayoutVisible(pane: HTMLElement | undefined) {
+    return Boolean(pane && pane.getClientRects().length > 0);
+  }
+
+  function estimateSourceTextareaContentHeight(sourceTextarea: HTMLTextAreaElement) {
+    const lineCount = Math.max(1, sourceTextarea.value.split(/\r?\n/).length);
+    return Math.ceil(lineCount * options.getSourceLineHeight());
+  }
+
+  function getDocumentScrollAnchor(
+    pane: HTMLElement | undefined,
+    scrollTop: number,
+  ): OutlineScrollAnchor | null {
+    if (!pane) {
+      return null;
+    }
+    const maxScrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight);
+    const documentProgress =
+      maxScrollTop > 0 ? Math.min(1, Math.max(0, scrollTop / maxScrollTop)) : 0;
+    return {
+      kind: 'document',
+      sectionProgress: documentProgress,
+      documentProgress,
+      sourceLine: 1,
+    };
+  }
+
+  function getAnchorDocumentProgress(scrollAnchor: OutlineScrollAnchor | null) {
+    return scrollAnchor?.documentProgress ?? 0;
   }
 
   function getRequestAnimationFrame() {

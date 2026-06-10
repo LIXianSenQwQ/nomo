@@ -31,6 +31,8 @@ interface SemanticHeadingCache {
   editor: Element | null;
   signature: string;
   anchors: SemanticHeadingAnchor[];
+  scrollHeight: number;
+  clientHeight: number;
 }
 
 const semanticHeadingCache = new WeakMap<HTMLElement, SemanticHeadingCache>();
@@ -117,13 +119,13 @@ export function scrollSourceToAnchor(
   }
 
   if (isDocumentAnchor(anchor)) {
-    sourcePane.scrollTop = getScrollTopByProgress(sourcePane, anchor.documentProgress);
+    setScrollTop(sourcePane, getScrollTopByProgress(sourcePane, anchor.documentProgress));
     return;
   }
 
   const currentIndex = outline.findIndex((item) => item.id === anchor.outlineId);
   if (currentIndex === -1) {
-    sourcePane.scrollTop = getScrollTopByProgress(sourcePane, getAnchorDocumentProgress(anchor));
+    setScrollTop(sourcePane, getScrollTopByProgress(sourcePane, getAnchorDocumentProgress(anchor)));
     return;
   }
 
@@ -133,9 +135,9 @@ export function scrollSourceToAnchor(
   const sectionEndLine = nextItem?.line ?? totalLineCount + 1;
   const sectionLineCount = Math.max(1, sectionEndLine - currentItem.line);
   const targetLine = currentItem.line + Math.round(sectionLineCount * anchor.sectionProgress);
-  sourcePane.scrollTop = clampScrollTop(
+  setScrollTop(
     sourcePane,
-    Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea)),
+    clampScrollTop(sourcePane, Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea))),
   );
 }
 
@@ -166,13 +168,25 @@ export function getActiveOutlineIdFromSemantic(
 export function getSemanticScrollAnchor(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
+  savedScrollTop?: number,
 ): OutlineScrollAnchor | null {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
-  if (!outline.length || !semanticPane || headingAnchors.length === 0) {
+  // 面板处于 display:none 时 getBoundingClientRect().height 为 0，
+  // 且浏览器会将 scrollHeight/clientHeight 也重置为 0，
+  // 此时标题元素的位置测量全部失效，必须回退到 documentProgress 模式，
+  // 并使用切换前保存的 scrollTop 和缓存的面板尺寸来计算进度。
+  const paneHidden = semanticPane && semanticPane.getBoundingClientRect().height === 0;
+  if (!outline.length || !semanticPane || headingAnchors.length === 0 || paneHidden) {
     if (!semanticPane) {
       return null;
     }
-    const documentProgress = getScrollProgress(semanticPane, semanticPane.scrollTop);
+    const scrollTop = savedScrollTop ?? semanticPane.scrollTop;
+    // 面板隐藏时 scrollHeight 为 0，需要从缓存中获取真实的面板尺寸
+    const cached = semanticHeadingCache.get(semanticPane);
+    const maxScrollTop = cached && cached.scrollHeight > 0
+      ? Math.max(0, cached.scrollHeight - cached.clientHeight)
+      : getMaxScrollTop(semanticPane);
+    const documentProgress = maxScrollTop > 0 ? clamp(scrollTop / maxScrollTop, 0, 1) : 0;
     return {
       kind: 'document',
       sectionProgress: documentProgress,
@@ -265,7 +279,7 @@ export function smoothScrollElementTo(scrollContainer: HTMLElement, top: number)
   }
 
   if (!raf || Math.abs(delta) < 1 || duration <= 0) {
-    scrollContainer.scrollTop = targetTop;
+    setScrollTop(scrollContainer, targetTop);
     outlineScrollAnimations.delete(scrollContainer);
     return;
   }
@@ -274,12 +288,12 @@ export function smoothScrollElementTo(scrollContainer: HTMLElement, top: number)
   const tick = () => {
     const elapsed = Date.now() - startedAt;
     const progress = clamp(elapsed / duration, 0, 1);
-    scrollContainer.scrollTop = startTop + delta * easeOutCubic(progress);
+    setScrollTop(scrollContainer, startTop + delta * easeOutCubic(progress));
 
     if (progress < 1) {
       outlineScrollAnimations.set(scrollContainer, raf(tick));
     } else {
-      scrollContainer.scrollTop = targetTop;
+      setScrollTop(scrollContainer, targetTop);
       outlineScrollAnimations.delete(scrollContainer);
     }
   };
@@ -310,7 +324,12 @@ function getSemanticHeadingAnchors(
   const signature = outline.map((item) => item.id).join('\u001f');
   const cached = semanticHeadingCache.get(semanticPane);
   if (cached && cached.editor === editor && cached.signature === signature) {
-    return cached.anchors;
+    // replaceViewState 重建 ProseMirror DOM 后，缓存中的旧元素引用
+    // 可能已被移出 DOM 树，必须验证仍在文档中才能复用。
+    const allStillInDom = cached.anchors.every((a) => editor?.contains(a.element));
+    if (allStillInDom) {
+      return cached.anchors;
+    }
   }
 
   const headings = getSemanticHeadings(semanticPane);
@@ -325,7 +344,13 @@ function getSemanticHeadingAnchors(
       element,
     };
   });
-  semanticHeadingCache.set(semanticPane, { editor, signature, anchors });
+  semanticHeadingCache.set(semanticPane, {
+    editor,
+    signature,
+    anchors,
+    scrollHeight: semanticPane.scrollHeight,
+    clientHeight: semanticPane.clientHeight,
+  });
   return anchors;
 }
 
@@ -367,6 +392,15 @@ function getScrollTopByProgress(scrollContainer: HTMLElement, progress: number) 
 
 function clampScrollTop(scrollContainer: HTMLElement, scrollTop: number) {
   return clamp(scrollTop, 0, getMaxScrollTop(scrollContainer));
+}
+
+export function setScrollTop(scrollContainer: HTMLElement, scrollTop: number) {
+  const top = clampScrollTop(scrollContainer, scrollTop);
+  if (typeof scrollContainer.scrollTo === 'function') {
+    scrollContainer.scrollTo({ top, behavior: 'instant' });
+    return;
+  }
+  scrollContainer.scrollTop = top;
 }
 
 function getMaxScrollTop(scrollContainer: HTMLElement) {

@@ -781,8 +781,10 @@
 .editor-grid {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+  height: 100%;
 }
 
 .desktop-alert {

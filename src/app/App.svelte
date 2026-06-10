@@ -129,6 +129,7 @@
   } from './services/firstRunSample';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
+  import { setScrollTop } from './services/outlineNavigation';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
   import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
@@ -1715,7 +1716,7 @@
 
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
-    window.addEventListener('wheel', handleGlobalWheel, { passive: false });
+    window.addEventListener('wheel', handleGlobalWheel, { capture: true, passive: false });
     setupSystemThemeListener();
     let persistedEditorMode: EditorMode | null = null;
     let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
@@ -1827,7 +1828,7 @@
     if (toastTimer !== null) window.clearTimeout(toastTimer);
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
     window.removeEventListener('keydown', handleGlobalShortcut);
-    window.removeEventListener('wheel', handleGlobalWheel);
+    window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
     detachMountedEditorHostEvents();
     if (systemThemeMediaQuery && systemThemeChangeHandler) {
       systemThemeMediaQuery.removeEventListener('change', systemThemeChangeHandler);
@@ -2185,6 +2186,8 @@
     handleGlobalAppShortcut(event, commandHandlers, shortcutPreferences);
   }
 
+  // 使用 capture 阶段在事件到达可滚动元素之前拦截，
+  // 避免浏览器对可滚动元素的 wheel 事件强制 passive 导致 preventDefault 失效。
   function handleGlobalWheel(event: WheelEvent) {
     if (!ctrlWheelZoomEnabled || !event.ctrlKey) {
       return;
@@ -2202,9 +2205,35 @@
       return;
     }
     zoomPercent = nextZoom;
-    applyZoomSetting(zoomPercent, { transition: true, onFrame: refreshEditorViewportLayout });
+    const anchor = saveScrollAnchor();
+    applyZoomSetting(zoomPercent, {
+      transition: true,
+      onFrame: () => {
+        refreshEditorViewportLayout();
+        restoreScrollAnchor(anchor);
+      },
+    });
     updateAppSetting('zoomPercent', zoomPercent).catch(() => undefined);
     statusMessage = t.zoomStatus({ percent: zoomPercent });
+  }
+
+  // 记录当前可见面板中视口中心内容的相对位置（0~1），
+  // 缩放后按相同比例恢复 scrollTop，保持阅读位置不变。
+  function saveScrollAnchor(): { pane: HTMLElement; ratio: number } | null {
+    const pane = mode === 'source' ? sourcePane : semanticPane;
+    if (!pane) return null;
+    const maxScroll = pane.scrollHeight - pane.clientHeight;
+    if (maxScroll <= 0) return null;
+    const ratio = (pane.scrollTop + pane.clientHeight / 2) / pane.scrollHeight;
+    return { pane, ratio };
+  }
+
+  function restoreScrollAnchor(anchor: { pane: HTMLElement; ratio: number } | null) {
+    if (!anchor) return;
+    const { pane, ratio } = anchor;
+    const maxScroll = pane.scrollHeight - pane.clientHeight;
+    if (maxScroll <= 0) return;
+    setScrollTop(pane, ratio * pane.scrollHeight - pane.clientHeight / 2);
   }
 
   function setupSystemThemeListener() {

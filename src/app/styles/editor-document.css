@@ -2,6 +2,7 @@
 .semantic-pane {
   min-width: 0;
   min-height: 0;
+  grid-area: 1 / 1;
 }
 
 .editor-pane {
@@ -18,12 +19,15 @@
 }
 
 .semantic-pane {
+  display: block;
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--md-editor-document-bg);
 }
 
 .source-pane {
+  align-self: stretch;
+  justify-self: stretch;
   overflow-x: hidden;
   overflow-y: auto;
 }
