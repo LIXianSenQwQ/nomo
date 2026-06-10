@@ -137,7 +137,11 @@
   }
 
   function sameExplorerPath(left: string, right: string) {
-    return left.replace(/\\/g, '/').toLowerCase() === right.replace(/\\/g, '/').toLowerCase();
+    // 统一 Unicode 规范化为 NFC，解决 Mac 文件系统 NFD 与 JS 字符串 NFC 不一致的问题
+    return (
+      left.replace(/\\/g, '/').toLowerCase().normalize('NFC') ===
+      right.replace(/\\/g, '/').toLowerCase().normalize('NFC')
+    );
   }
 
   function isActiveFilePath(path: string) {

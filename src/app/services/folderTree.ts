@@ -7,8 +7,10 @@ export function expandAncestors(expandedFolders: Set<string>, filePath: string, 
     return nextExpandedFolders;
   }
 
-  const normalizedFile = filePath.replace(/\\/g, '/');
-  const normalizedRoot = rootPath.replace(/\\/g, '/');
+  // Mac 文件系统(APFS/HFS+)使用 NFD 存储文件名，JS 字符串默认是 NFC，
+  // 统一规范化为 NFC 防止路径比较失败导致展开状态丢失
+  const normalizedFile = normalizePath(filePath);
+  const normalizedRoot = normalizePath(rootPath);
   if (!normalizedFile.startsWith(normalizedRoot)) {
     return nextExpandedFolders;
   }
@@ -18,7 +20,7 @@ export function expandAncestors(expandedFolders: Set<string>, filePath: string, 
   let currentPath = normalizedRoot;
   for (let i = 0; i < parts.length - 1; i++) {
     currentPath = currentPath + '/' + parts[i];
-    nextExpandedFolders.add(currentPath.replace(/\//g, '\\'));
+    nextExpandedFolders.add(toPlatformPath(currentPath, rootPath));
   }
 
   return nextExpandedFolders;
@@ -47,7 +49,10 @@ export function getDefaultExpandedFolders(folderTree: FileTreeNode[]) {
 export function normalizeFolderEntries(entries: FileTreeNode[]): FileTreeNode[] {
   return entries.map((entry) => ({
     ...entry,
-    children: entry.children ?? [],
+    // Mac 文件系统使用 NFD 存储文件名，统一规范化为 NFC 防止路径比较失败
+    path: normalizePath(entry.path),
+    name: entry.name.normalize('NFC'),
+    children: entry.children?.length ? normalizeFolderEntries(entry.children) : [],
     children_loaded: entry.is_dir ? (entry.children_loaded ?? false) : true,
     has_children: entry.is_dir ? (entry.has_children ?? entry.children?.length > 0) : false,
     loading: false,
@@ -66,7 +71,7 @@ export function canExpandFolderNode(node: FileTreeNode, hasPendingCreate = false
 
 export function findTreeNode(nodes: FileTreeNode[], path: string): FileTreeNode | null {
   for (const node of nodes) {
-    if (node.path === path) {
+    if (normalizeComparablePath(node.path) === normalizeComparablePath(path)) {
       return node;
     }
     if (node.children?.length) {
@@ -170,13 +175,16 @@ export function applyIndexedDirectories(
   nodes: FileTreeNode[],
   directories: FileTreeNode[],
 ): FileTreeNode[] {
-  const directoryMap = new Map(directories.map((entry) => [entry.path, entry]));
+  // Mac 文件系统使用 NFD 存储文件名，统一规范化为 NFC 作为 Map key
+  const directoryMap = new Map(
+    directories.map((entry) => [normalizeComparablePath(entry.path), entry]),
+  );
   if (directoryMap.size === 0) {
     return nodes;
   }
 
   return updateTreeNodes(nodes, (node) => {
-    const indexed = directoryMap.get(node.path);
+    const indexed = directoryMap.get(normalizeComparablePath(node.path));
     if (!indexed) {
       return node;
     }
@@ -192,7 +200,9 @@ function updateTreeNode(
   path: string,
   updater: (node: FileTreeNode) => FileTreeNode,
 ): FileTreeNode[] {
-  return updateTreeNodes(nodes, (node) => (node.path === path ? updater(node) : node));
+  return updateTreeNodes(nodes, (node) =>
+    normalizeComparablePath(node.path) === normalizeComparablePath(path) ? updater(node) : node,
+  );
 }
 
 function updateTreeNodes(
@@ -225,5 +235,14 @@ function pathMatchesOrDescendsFrom(path: string, ancestorPath: string) {
 }
 
 function normalizeComparablePath(path: string) {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  // 统一 Unicode 规范化为 NFC，解决 Mac 文件系统 NFD 与 JS 字符串 NFC 不一致的问题
+  return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase().normalize('NFC');
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/\/$/, '').normalize('NFC');
+}
+
+function toPlatformPath(path: string, referencePath: string) {
+  return referencePath.includes('\\') ? path.replace(/\//g, '\\').normalize('NFC') : path.normalize('NFC');
 }

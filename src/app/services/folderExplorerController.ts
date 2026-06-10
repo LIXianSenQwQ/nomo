@@ -277,11 +277,14 @@ function getAncestorFolderPaths(filePath: string, rootPath: string) {
 }
 
 function normalizePath(path: string) {
-  return path.replace(/\\/g, '/').replace(/\/$/, '');
+  // 统一 Unicode 规范化为 NFC，解决 Mac 文件系统 NFD 与 JS 字符串 NFC 不一致的问题
+  return path.replace(/\\/g, '/').replace(/\/$/, '').normalize('NFC');
 }
 
 function toPlatformPath(path: string, referencePath: string) {
-  return referencePath.includes('\\') ? path.replace(/\//g, '\\') : path;
+  return referencePath.includes('\\')
+    ? path.replace(/\//g, '\\').normalize('NFC')
+    : path.normalize('NFC');
 }
 
 function samePath(left: string, right: string) {
