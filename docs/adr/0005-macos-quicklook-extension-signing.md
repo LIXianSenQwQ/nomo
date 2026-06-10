@@ -30,13 +30,37 @@ Extension is not entitled to run in the App Sandbox
 
 ### 1. 申请免费 Apple Development 证书
 
+#### 方式一：Xcode GUI（最简单）
+
 1. 打开 **Xcode** → **Settings** → **Accounts**
 2. 使用 Apple ID 登录
 3. 点击 **Manage Certificates…**
 4. 点击左下角 **+** → 选择 **Apple Development**
 5. 等待证书下载完成
 
-验证证书已安装：
+#### 方式二：纯命令行（无需 Xcode）
+
+```bash
+# 1. 生成私钥和 CSR
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout ~/Desktop/apple-dev.key \
+  -out ~/Desktop/apple-dev.csr \
+  -subj "/emailAddress=你的邮箱, CN=你的姓名, C=CN"
+
+# 2. 去 Apple Developer Portal 上传 CSR、下载证书
+#    https://developer.apple.com/account/resources/certificates/add
+#    选择 Apple Development → 上传 apple-dev.csr → 下载 AppleDevelopment.cer
+
+# 3. 导入证书到登录钥匙串
+security import ~/Desktop/AppleDevelopment.cer \
+  -k ~/Library/Keychains/login.keychain-db
+
+# 4. 导入私钥（绑定证书与私钥，形成可用身份）
+security import ~/Desktop/apple-dev.key \
+  -k ~/Library/Keychains/login.keychain-db
+```
+
+### 2. 验证证书已安装
 
 ```bash
 security find-identity -v -p codesigning
@@ -49,7 +73,9 @@ security find-identity -v -p codesigning
      1 valid identity found
 ```
 
-### 2. 配置构建环境
+记下完整的证书名称（含 TEAM_ID），下一步要用。
+
+### 3. 配置构建环境
 
 设置环境变量，让构建脚本自动使用该证书：
 
@@ -57,15 +83,15 @@ security find-identity -v -p codesigning
 export APPLE_CODESIGN_IDENTITY="Apple Development: your@email.com (TEAM_ID)"
 ```
 
-或在 `~/.zshrc` / `~/.bash_profile` 中永久添加。
+或在 `~/.zshrc` / `~/.bash_profile` 中永久添加，避免每次手动输入。
 
-### 3. 重新构建
+### 4. 重新构建
 
 ```bash
 pnpm run build:macos
 ```
 
-构建脚本（`scripts/build-macos-quicklook.sh`）会自动检测 `APPLE_CODESIGN_IDENTITY`，并用该证书对 appex 签名。
+构建脚本（`scripts/build-macos-quicklook.sh`）会自动检测 `APPLE_CODESIGN_IDENTITY`，并用该证书对 appex 签名并嵌入 entitlements。
 
 ### 4. 首次运行与信任
 
