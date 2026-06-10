@@ -18,6 +18,7 @@ export interface AppCommandHandlers {
   runCommand: (command: EditorCommand) => void;
   openTablePicker: () => void;
   openLinkPicker: () => void;
+  openSearchPanel: (replaceVisible?: boolean) => void;
   openSettings: () => void;
   editFrontMatter: () => void;
   showUnavailableFeature: (featureName: string) => void;
@@ -213,6 +214,12 @@ export function handleGlobalShortcut(
   } else if (key === 'k' && !event.shiftKey) {
     event.preventDefault();
     handlers.openLinkPicker();
+  } else if (key === 'f' && !event.shiftKey) {
+    event.preventDefault();
+    handlers.openSearchPanel(false);
+  } else if (key === 'h' && !event.shiftKey) {
+    event.preventDefault();
+    handlers.openSearchPanel(true);
   } else if (key === 'e') {
     event.preventDefault();
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');

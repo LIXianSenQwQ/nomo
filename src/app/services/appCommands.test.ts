@@ -23,6 +23,7 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     }),
     openTablePicker: vi.fn(),
     openLinkPicker: vi.fn(),
+    openSearchPanel: vi.fn(),
     openSettings: vi.fn(),
     editFrontMatter: vi.fn(),
     showUnavailableFeature: vi.fn(),
@@ -177,6 +178,38 @@ describe('appCommands', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(handlers.openLinkPicker).toHaveBeenCalledTimes(1);
     expect(handlers.commands).toEqual([]);
+  });
+
+  it('通过 Ctrl + F 打开搜索面板', () => {
+    const handlers = createHandlers();
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'f',
+      code: 'KeyF',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.openSearchPanel).toHaveBeenCalledWith(false);
+  });
+
+  it('通过 Ctrl + H 打开替换面板', () => {
+    const handlers = createHandlers();
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'h',
+      code: 'KeyH',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.openSearchPanel).toHaveBeenCalledWith(true);
   });
 
   it('通过 Ctrl + \\ 触发清除样式快捷键', () => {

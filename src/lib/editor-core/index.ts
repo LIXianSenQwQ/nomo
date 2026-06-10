@@ -22,6 +22,8 @@ export type {
   EditorListener,
   EditorMode,
   EditorRuntimeOptions,
+  EditorSearchMatch,
+  EditorSearchOptions,
   EditorSelectionEvent,
   EditorSelectionSnapshot,
   EditorSnapshot,

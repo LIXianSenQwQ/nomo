@@ -69,6 +69,8 @@ import type {
   EditorCoreOptions,
   EditorLinkSnapshot,
   EditorListener,
+  EditorSearchMatch,
+  EditorSearchOptions,
   InlinePendingMarkName,
   InlinePendingMarks,
   EditorRuntimeOptions,
@@ -242,24 +244,87 @@ export class ProseMirrorEditorCore implements EditorCore {
       const bottom = Math.max(fromRect.bottom, toRect.bottom);
 
       return {
+        x: left,
+        y: top,
         left,
         top,
         right,
         bottom,
         width: Math.max(1, right - left),
         height: Math.max(1, bottom - top),
+        toJSON: () => ({ x: left, y: top, left, top, right, bottom }),
       };
     } catch {
       const rect = this.view.dom.getBoundingClientRect();
       return {
+        x: rect.x,
+        y: rect.y,
         left: rect.left,
         top: rect.top,
         right: rect.right,
         bottom: rect.bottom,
         width: rect.width,
         height: rect.height,
+        toJSON: () => rect.toJSON(),
       };
     }
+  }
+
+  findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[] {
+    this.assertActive();
+    if (!this.view || !query) {
+      return [];
+    }
+
+    return findEditorTextMatches(this.view.state.doc, query, options);
+  }
+
+  selectSearchMatch(match: EditorSearchMatch): boolean {
+    this.assertActive();
+    if (!this.view) {
+      return false;
+    }
+
+    return selectEditorTextRange(this.view, match.from, match.to);
+  }
+
+  replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean {
+    this.assertActive();
+    if (!this.view || this.runtime.readonly) {
+      return false;
+    }
+
+    const selected = selectEditorTextRange(this.view, match.from, match.to);
+    if (!selected) {
+      return false;
+    }
+
+    const tr = this.view.state.tr.insertText(replacement, match.from, match.to).scrollIntoView();
+    this.view.dispatch(tr);
+    return true;
+  }
+
+  replaceAllSearchMatches(
+    query: string,
+    replacement: string,
+    options: EditorSearchOptions,
+  ): number {
+    this.assertActive();
+    if (!this.view || this.runtime.readonly || !query) {
+      return 0;
+    }
+
+    const matches = findEditorTextMatches(this.view.state.doc, query, options);
+    if (matches.length === 0) {
+      return 0;
+    }
+
+    let tr = this.view.state.tr;
+    for (const match of [...matches].reverse()) {
+      tr = tr.insertText(replacement, match.from, match.to);
+    }
+    this.view.dispatch(tr.scrollIntoView());
+    return matches.length;
   }
 
   execute(command: EditorCommand): boolean {
@@ -725,6 +790,60 @@ function removeTabBeforeCursorInTextblock(
 
 function clampDocPosition(doc: ProseMirrorNode, position: number): number {
   return Math.max(0, Math.min(position, doc.content.size));
+}
+
+function findEditorTextMatches(
+  doc: ProseMirrorNode,
+  query: string,
+  options: EditorSearchOptions,
+): EditorSearchMatch[] {
+  const needle = options.caseSensitive ? query : query.toLocaleLowerCase();
+  const matches: EditorSearchMatch[] = [];
+
+  doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) {
+      return true;
+    }
+
+    const source = options.caseSensitive ? node.text : node.text.toLocaleLowerCase();
+    let offset = 0;
+    while (offset <= source.length) {
+      const found = source.indexOf(needle, offset);
+      if (found < 0) {
+        break;
+      }
+
+      const from = pos + found;
+      const to = from + query.length;
+      matches.push({
+        id: `${from}:${to}:${matches.length}`,
+        index: matches.length,
+        from,
+        to,
+        text: node.text.slice(found, found + query.length),
+      });
+      offset = found + Math.max(needle.length, 1);
+    }
+
+    return true;
+  });
+
+  return matches;
+}
+
+function selectEditorTextRange(view: EditorView, from: number, to: number): boolean {
+  const safeFrom = clampDocPosition(view.state.doc, from);
+  const safeTo = clampDocPosition(view.state.doc, to);
+
+  try {
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, safeFrom, safeTo)).scrollIntoView(),
+    );
+    view.focus();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function shouldReportImageDeletion(options: SetMarkdownOptions | undefined): boolean {

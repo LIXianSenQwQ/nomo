@@ -11,6 +11,7 @@
   import EditorWorkspace from './EditorWorkspace.svelte';
   import ExplorerSidebar from './ExplorerSidebar.svelte';
   import LinkQuickEditor from './LinkQuickEditor.svelte';
+  import SearchReplacePanel from './SearchReplacePanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
   import { t } from '../i18n';
@@ -69,6 +70,13 @@
   export let linkError: string;
   export let linkCanRemove: boolean;
   export let linkPickerPositionStyle: string;
+  export let searchPanelOpen: boolean;
+  export let searchReplaceVisible: boolean;
+  export let searchQuery: string;
+  export let searchReplacement: string;
+  export let searchCaseSensitive: boolean;
+  export let searchActiveIndex: number;
+  export let searchMatchCount: number;
 
   export let getCompactPath: (path: string) => string;
   export let getFolderName: (path: string) => string;
@@ -98,6 +106,16 @@
   export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
   export let openLinkPicker: () => void;
+  export let openSearchPanel: (replaceVisible?: boolean) => void;
+  export let closeSearchPanel: () => void;
+  export let updateSearchQuery: (event: Event) => void;
+  export let updateSearchReplacement: (event: Event) => void;
+  export let toggleSearchCaseSensitive: () => void;
+  export let toggleSearchReplaceVisible: () => void;
+  export let findPreviousSearchMatch: () => void;
+  export let findNextSearchMatch: () => void;
+  export let replaceCurrentSearchMatch: () => void;
+  export let replaceAllSearchMatches: () => void;
   export let editFrontMatter: () => void;
   export let showUnavailableFeature: (featureName: string) => void;
   export let closeTablePicker: () => void;
@@ -261,6 +279,28 @@
           {updateContentWidth}
           {setMode}
           {toggleOutlineVisible}
+          {openSearchPanel}
+        />
+
+        <SearchReplacePanel
+          {interfaceLocale}
+          open={searchPanelOpen}
+          replaceVisible={searchReplaceVisible}
+          query={searchQuery}
+          replacement={searchReplacement}
+          caseSensitive={searchCaseSensitive}
+          activeIndex={searchActiveIndex}
+          matchCount={searchMatchCount}
+          readonly={readonlyDocumentMode}
+          updateQuery={updateSearchQuery}
+          updateReplacement={updateSearchReplacement}
+          toggleCaseSensitive={toggleSearchCaseSensitive}
+          toggleReplaceVisible={toggleSearchReplaceVisible}
+          findPrevious={findPreviousSearchMatch}
+          findNext={findNextSearchMatch}
+          replaceCurrent={replaceCurrentSearchMatch}
+          replaceAll={replaceAllSearchMatches}
+          close={closeSearchPanel}
         />
 
         <EditorWorkspace

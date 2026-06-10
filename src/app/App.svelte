@@ -31,6 +31,7 @@
     type EditorImageDeletionEvent,
     type InlinePendingMarks,
     type EditorMode,
+    type EditorSearchMatch,
   } from '../lib/editor-core';
   import {
     analyzeMarkdown,
@@ -130,6 +131,7 @@
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
   import { setScrollTop } from './services/outlineNavigation';
+  import { findTextMatches, replaceAllTextMatches, replaceTextRange } from './services/searchReplace';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
   import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
@@ -236,6 +238,15 @@
   let frontMatterFocusRequest = 0;
   let frontMatterFocusTarget: 'default' | 'title-value' = 'default';
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
+  let searchPanelOpen = false;
+  let searchReplaceVisible = false;
+  let searchQuery = '';
+  let searchReplacement = '';
+  let searchCaseSensitive = false;
+  let searchMatches: EditorSearchMatch[] = [];
+  let searchActiveIndex = 0;
+  let searchMatchCount = 0;
+  let lastSearchSignature = '';
 
   // 上下文菜单状态
   let contextMenuX = 0;
@@ -714,6 +725,7 @@
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
     openLinkPicker: () => openLinkPicker(),
+    openSearchPanel: () => openSearchPanel(false),
     openSettings: () => openSettings(),
     editFrontMatter: () => editFrontMatter(),
     showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
@@ -844,6 +856,152 @@
     onImagesDeleted: (event) => handleDeletedImageResources(event),
     onContextMenuOpen: handleContextMenuOpen,
   });
+
+  function openSearchPanel(replaceVisible = false) {
+    if (!hasOpenDocument()) return;
+    searchPanelOpen = true;
+    searchReplaceVisible = replaceVisible || searchReplaceVisible;
+    linkPickerOpen = false;
+    tablePickerOpen = false;
+    refreshSearchMatches({ preserveActive: true, selectActive: true });
+  }
+
+  function closeSearchPanel() {
+    searchPanelOpen = false;
+    editor.focus();
+  }
+
+  function updateSearchQuery(event: Event) {
+    searchQuery = (event.currentTarget as HTMLInputElement).value;
+    searchActiveIndex = 0;
+    refreshSearchMatches({ preserveActive: false, selectActive: true });
+  }
+
+  function updateSearchReplacement(event: Event) {
+    searchReplacement = (event.currentTarget as HTMLInputElement).value;
+  }
+
+  function toggleSearchCaseSensitive() {
+    searchCaseSensitive = !searchCaseSensitive;
+    searchActiveIndex = 0;
+    refreshSearchMatches({ preserveActive: false, selectActive: true });
+  }
+
+  function toggleSearchReplaceVisible() {
+    searchReplaceVisible = !searchReplaceVisible;
+  }
+
+  function findPreviousSearchMatch() {
+    if (searchMatches.length === 0) return;
+    searchActiveIndex = (searchActiveIndex - 1 + searchMatches.length) % searchMatches.length;
+    selectActiveSearchMatch();
+  }
+
+  function findNextSearchMatch() {
+    if (searchMatches.length === 0) return;
+    searchActiveIndex = (searchActiveIndex + 1) % searchMatches.length;
+    selectActiveSearchMatch();
+  }
+
+  function replaceCurrentSearchMatch() {
+    if (readonlyDocumentMode || searchMatches.length === 0) return;
+    const match = searchMatches[searchActiveIndex];
+    if (!match) return;
+
+    if (mode === 'source') {
+      const nextMarkdown = replaceTextRange(markdown, match, searchReplacement);
+      editor.setMarkdown(nextMarkdown, { reason: 'programmatic-update' });
+    } else {
+      editor.replaceSearchMatch(match, searchReplacement);
+    }
+
+    tick().then(() => {
+      refreshSearchMatches({ preserveActive: true, selectActive: true });
+      statusMessage = t.replacedOneMatch();
+    });
+  }
+
+  function replaceAllSearchMatches() {
+    if (readonlyDocumentMode || !searchQuery) return;
+    let replaced = 0;
+
+    if (mode === 'source') {
+      const result = replaceAllTextMatches(markdown, searchQuery, searchReplacement, {
+        caseSensitive: searchCaseSensitive,
+      });
+      replaced = result.count;
+      if (replaced > 0) {
+        editor.setMarkdown(result.text, { reason: 'programmatic-update' });
+      }
+    } else {
+      replaced = editor.replaceAllSearchMatches(searchQuery, searchReplacement, {
+        caseSensitive: searchCaseSensitive,
+      });
+    }
+
+    tick().then(() => {
+      searchActiveIndex = 0;
+      refreshSearchMatches({ preserveActive: false, selectActive: true });
+      statusMessage = t.replacedMatchCount({ count: replaced });
+    });
+  }
+
+  function refreshSearchMatches(options?: { preserveActive?: boolean; selectActive?: boolean }) {
+    if (!searchPanelOpen) {
+      searchMatches = [];
+      searchMatchCount = 0;
+      lastSearchSignature = '';
+      return;
+    }
+
+    const previousMatch = searchMatches[searchActiveIndex];
+    searchMatches =
+      mode === 'source'
+        ? findTextMatches(markdown, searchQuery, { caseSensitive: searchCaseSensitive })
+        : editor.findSearchMatches(searchQuery, { caseSensitive: searchCaseSensitive });
+    searchMatchCount = searchMatches.length;
+
+    if (searchMatches.length === 0) {
+      searchActiveIndex = 0;
+      return;
+    }
+
+    if (options?.preserveActive && previousMatch) {
+      const nextIndex = searchMatches.findIndex(
+        (match) => match.from >= previousMatch.from && match.text === previousMatch.text,
+      );
+      searchActiveIndex =
+        nextIndex >= 0 ? nextIndex : Math.min(searchActiveIndex, searchMatches.length - 1);
+    } else {
+      searchActiveIndex = Math.min(searchActiveIndex, searchMatches.length - 1);
+    }
+
+    if (options?.selectActive) {
+      selectActiveSearchMatch();
+    }
+  }
+
+  function selectActiveSearchMatch() {
+    const match = searchMatches[searchActiveIndex];
+    if (!match) return;
+
+    if (mode === 'source') {
+      selectSourceSearchMatch(match);
+    } else {
+      editor.selectSearchMatch(match);
+    }
+  }
+
+  function selectSourceSearchMatch(match: EditorSearchMatch) {
+    tick().then(() => {
+      if (!sourceTextarea) return;
+      sourceTextarea.focus();
+      sourceTextarea.setSelectionRange(match.from, match.to);
+      const lineHeight = getSourceLineHeight();
+      const line = markdown.slice(0, match.from).split('\n').length - 1;
+      setScrollTop(sourcePane, Math.max(0, line * lineHeight - sourcePane.clientHeight / 2));
+    });
+  }
 
   function hasOpenDocument() {
     return tabs.length > 0 && Boolean(activeTabId);
@@ -2094,6 +2252,13 @@
     frontMatterEditing = false;
     frontMatterFocusTarget = 'default';
   }
+  $: {
+    const signature = `${searchPanelOpen}|${mode}|${searchQuery}|${searchCaseSensitive}|${markdown}|${version}`;
+    if (signature !== lastSearchSignature) {
+      lastSearchSignature = signature;
+      refreshSearchMatches({ preserveActive: true, selectActive: false });
+    }
+  }
 
   async function setupCriticalDesktopEvents() {
     if (!desktopEnabled || criticalDesktopEventsReady) {
@@ -2105,9 +2270,9 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
-      listen('nomo://request-close-window', (event) => {
+      listen<{ windowLabel?: string }>('nomo://request-close-window', (event) => {
         // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
-        if (event.windowLabel !== windowLabel) return;
+        if (event.payload?.windowLabel !== windowLabel) return;
         closeCurrentWindow().catch(() => undefined);
       }).catch(() => null),
     ]);
@@ -2364,6 +2529,7 @@
     return {
       strong: false,
       em: false,
+      code: false,
       strikethrough: false,
       underline: false,
       highlight: false,
@@ -2428,6 +2594,13 @@
   {linkError}
   {linkCanRemove}
   {linkPickerPositionStyle}
+  {searchPanelOpen}
+  {searchReplaceVisible}
+  {searchQuery}
+  {searchReplacement}
+  {searchCaseSensitive}
+  {searchActiveIndex}
+  {searchMatchCount}
   {getCompactPath}
   {getFolderName}
   {getDirectoryLabel}
@@ -2456,6 +2629,16 @@
   {pendingInlineMarks}
   {openTablePicker}
   {openLinkPicker}
+  {openSearchPanel}
+  {closeSearchPanel}
+  {updateSearchQuery}
+  {updateSearchReplacement}
+  {toggleSearchCaseSensitive}
+  {toggleSearchReplaceVisible}
+  {findPreviousSearchMatch}
+  {findNextSearchMatch}
+  {replaceCurrentSearchMatch}
+  {replaceAllSearchMatches}
   {editFrontMatter}
   {showUnavailableFeature}
   {closeTablePicker}

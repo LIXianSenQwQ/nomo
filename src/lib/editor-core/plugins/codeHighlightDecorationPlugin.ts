@@ -1,4 +1,5 @@
 import { Plugin } from 'prosemirror-state';
+import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 
 /**
@@ -35,13 +36,13 @@ export function codeHighlightDecorationPlugin(): Plugin {
   });
 }
 
-function buildDecorations(doc: Parameters<typeof buildDecorations>[0]): DecorationSet {
+function buildDecorations(doc: ProseMirrorNode): DecorationSet {
   const decorations: Decoration[] = [];
 
   doc.descendants((node, pos) => {
     if (!node.isText) return true;
 
-    const hasCodeMark = node.marks.some((mark) => mark.type.name === 'code');
+    const hasCodeMark = node.marks.some((mark: Mark) => mark.type.name === 'code');
     if (!hasCodeMark || !node.text) return true;
 
     const tokens = tokenizeInlineCode(node.text);

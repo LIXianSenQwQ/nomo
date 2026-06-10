@@ -16,6 +16,7 @@
     MessageSquare,
     Info,
     Quote,
+    Search,
     Sigma,
     Strikethrough,
     Superscript,
@@ -48,6 +49,7 @@
   export let updateContentWidth: (event: Event) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
+  export let openSearchPanel: () => void;
 
   const tableRows = [1, 2, 3, 4, 5];
   const tableColumns = [1, 2, 3, 4, 5, 6];
@@ -312,6 +314,14 @@
   </button>
   <span class="divider"></span>
   <span class="toolbar-spacer"></span>
+  <button
+    class="icon-button"
+    title={t.searchReplace()}
+    aria-label={t.searchReplace()}
+    on:click={openSearchPanel}
+  >
+    <Search size={18} />
+  </button>
   <label class="range-control width-control" title={t.contentWidth()}>
     <AlignHorizontalSpaceAround size={16} aria-hidden="true" />
     <span>{contentWidthPercent}%</span>

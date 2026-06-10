@@ -13,6 +13,7 @@ export interface EditorThemeOptions {
 export interface EditorRuntimeOptions {
   readonly: boolean;
   mode: EditorMode;
+  inlineCodeRenderingEnabled?: boolean;
 }
 
 export interface SetMarkdownOptions {
@@ -37,12 +38,27 @@ export interface EditorLinkSnapshot {
 }
 
 export interface EditorAnchorRect {
+  x: number;
+  y: number;
   left: number;
   top: number;
   right: number;
   bottom: number;
   width: number;
   height: number;
+  toJSON(): Record<string, number>;
+}
+
+export interface EditorSearchOptions {
+  caseSensitive: boolean;
+}
+
+export interface EditorSearchMatch {
+  id: string;
+  index: number;
+  from: number;
+  to: number;
+  text: string;
 }
 
 export interface EditorSnapshot {
@@ -143,6 +159,7 @@ export interface EditorCoreOptions {
   markdown: string;
   readonly?: boolean;
   mode?: EditorMode;
+  inlineCodeRenderingEnabled?: boolean;
   theme?: EditorThemeOptions;
   onChange?: (event: EditorChangeEvent) => void;
   onSelectionChange?: (event: EditorSelectionEvent) => void;
@@ -166,6 +183,10 @@ export interface EditorCore {
   blur(): void;
   getActiveLink(): EditorLinkSnapshot | null;
   getSelectionAnchorRect(): EditorAnchorRect | null;
+  findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[];
+  selectSearchMatch(match: EditorSearchMatch): boolean;
+  replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean;
+  replaceAllSearchMatches(query: string, replacement: string, options: EditorSearchOptions): number;
   execute(command: EditorCommand): boolean;
   canExecute(command: EditorCommand): boolean;
   updateTheme(theme: EditorThemeOptions): void;

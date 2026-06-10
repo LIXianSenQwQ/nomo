@@ -3,7 +3,7 @@ import { EditorState } from 'prosemirror-state';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { schema } from './schema';
 import { inlineMarkdownMarkInputPlugin } from './plugins/inlineMarkdownMarkInput';
-import { pendingInlineMarkPlugin } from './plugins/pendingInlineMark';
+import { pendingInlineMarkKey, pendingInlineMarkPlugin } from './plugins/pendingInlineMark';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
 
 function hasCodeMark(node: ReturnType<typeof schema.node>): boolean {
@@ -199,7 +199,7 @@ describe('code mark pending state', () => {
       plugins: [pendingInlineMarkPlugin()],
     });
 
-    const tr = state.tr.setMeta(pendingInlineMarkPlugin().spec.state!.apply, {
+    const tr = state.tr.setMeta(pendingInlineMarkKey, {
       action: 'set',
       markTypeNames: ['code'],
     });
