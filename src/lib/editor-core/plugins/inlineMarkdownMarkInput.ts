@@ -166,6 +166,18 @@ function scanTextForInlineMarks(text: string, absoluteTextPos: number): InlineMa
       markerLength: 1,
       markType: schema.marks.em,
     });
+    return matches;
+  }
+
+  const codeMatch = findBacktickMatch(text);
+  if (codeMatch) {
+    matches.push({
+      ...codeMatch,
+      from: absoluteTextPos + codeMatch.from,
+      to: absoluteTextPos + codeMatch.to,
+      markerLength: codeMatch.markerLength,
+      markType: schema.marks.code,
+    });
   }
 
   return matches;
@@ -270,4 +282,62 @@ function isSingleStarInsideStrongDelimiter(
 
 function hasCodeMark(node: ProseMirrorNode): boolean {
   return node.marks.some((mark) => mark.type === schema.marks.code);
+}
+
+/**
+ * 查找反引号包裹的代码片段（遵循 CommonMark 规则）。
+ * 开标签和闭标签的反引号数量必须相同，内容不能全空白。
+ * 返回的 markerLength 表示开标签反引号数量（1 或 2+）。
+ */
+function findBacktickMatch(
+  text: string,
+): { from: number; to: number; content: string; markerLength: number } | null {
+  let index = 0;
+
+  while (index < text.length) {
+    // 找到连续反引号序列作为开标签
+    const openStart = text.indexOf('`', index);
+    if (openStart === -1) return null;
+
+    let openEnd = openStart + 1;
+    while (openEnd < text.length && text[openEnd] === '`') openEnd++;
+    const markerLength = openEnd - openStart;
+
+    // 跳过代码块围栏（3 个及以上反引号）
+    if (markerLength >= 3) {
+      index = openEnd;
+      continue;
+    }
+
+    // 查找相同数量的连续反引号作为闭标签
+    const contentStart = openEnd;
+    let closeStart = contentStart;
+
+    while (closeStart < text.length) {
+      const nextTick = text.indexOf('`', closeStart);
+      if (nextTick === -1) return null;
+
+      // 检查是否是相同长度的反引号序列
+      let tickEnd = nextTick + 1;
+      while (tickEnd < text.length && text[tickEnd] === '`') tickEnd++;
+      const tickLength = tickEnd - nextTick;
+
+      if (tickLength === markerLength) {
+        let content = text.slice(contentStart, nextTick);
+        // CommonMark: 行内代码内容的前后空格被 strip
+        content = content.trim();
+        if (isValidInlineMarkContent(content)) {
+          return { from: openStart, to: tickEnd, content, markerLength };
+        }
+        index = tickEnd;
+        break;
+      }
+
+      closeStart = tickEnd;
+    }
+
+    if (closeStart >= text.length) return null;
+  }
+
+  return null;
 }

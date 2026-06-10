@@ -24,7 +24,6 @@ import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
 import { FootnoteRefNodeView } from './nodeViews/FootnoteRefNodeView';
 import { HtmlBlockNodeView } from './nodeViews/HtmlBlockNodeView';
 import { ImageNodeView } from './nodeViews/ImageNodeView';
-import { InlineCodeNodeView } from './nodeViews/InlineCodeNodeView';
 import { MathBlockNodeView } from './nodeViews/MathBlockNodeView';
 import { MathInlineNodeView } from './nodeViews/MathInlineNodeView';
 import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
@@ -34,9 +33,9 @@ import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
 import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { findActiveLinkRange } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
+import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
-import { inlineCodeInputPlugin } from './plugins/inlineCodeInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
 import { inlineMarkdownMarkInputPlugin } from './plugins/inlineMarkdownMarkInput';
 import { linkInteractionPlugin } from './plugins/linkInteraction';
@@ -100,9 +99,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
-      inlineCodeRenderingEnabled: options.inlineCodeRenderingEnabled ?? true,
     };
-    InlineCodeNodeView.setRenderingEnabled(this.runtime.inlineCodeRenderingEnabled);
 
     if (this.target) {
       this.mount(this.target);
@@ -126,8 +123,6 @@ export class ProseMirrorEditorCore implements EditorCore {
           new HtmlBlockNodeView(node, view, getPos as () => number),
         comment_block: (node, view, getPos) =>
           new CommentBlockNodeView(node, view, getPos as () => number),
-        inline_code: (node, view, getPos) =>
-          new InlineCodeNodeView(node, view, getPos as () => number),
         comment_inline: (node, view, getPos) =>
           new CommentInlineNodeView(node, view, getPos as () => number),
         footnote_ref: (node, view) => new FootnoteRefNodeView(node, view),
@@ -311,13 +306,10 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   updateOptions(options: Partial<EditorRuntimeOptions>): void {
     this.assertActive();
-    const nextInlineCodeRenderingEnabled =
-      options.inlineCodeRenderingEnabled ?? this.runtime.inlineCodeRenderingEnabled;
     this.runtime = {
       ...this.runtime,
       ...options,
     };
-    InlineCodeNodeView.setRenderingEnabled(nextInlineCodeRenderingEnabled);
     if (this.semanticViewDirty && this.runtime.mode === 'semantic' && options.mode === 'semantic') {
       this.replaceViewState(this.markdown);
     }
@@ -361,6 +353,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     return {
       strong: this.isPendingMarkActive('strong'),
       em: this.isPendingMarkActive('em'),
+      code: this.isPendingMarkActive('code'),
       strikethrough: this.isPendingMarkActive('strikethrough'),
       underline: this.isPendingMarkActive('underline'),
       highlight: this.isPendingMarkActive('highlight'),
@@ -376,11 +369,11 @@ export class ProseMirrorEditorCore implements EditorCore {
         }),
         history(),
         taskListPlugin(),
-        inlineCodeInputPlugin(),
         mathInlineInputPlugin(),
         inlineMarkdownMarkInputPlugin(),
         linkInteractionPlugin({ openLink: this.options.onOpenLink }),
         codeHighlightPlugin(),
+        codeHighlightDecorationPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
         trailingParagraphPlugin(),
@@ -395,7 +388,7 @@ export class ProseMirrorEditorCore implements EditorCore {
           'Shift-Mod-z': redo,
           'Mod-b': toggleMarkPending(schema.marks.strong),
           'Mod-i': toggleMarkPending(schema.marks.em),
-          'Ctrl-`': toggleMark(schema.marks.code),
+          'Ctrl-`': toggleMarkPending(schema.marks.code),
           'Mod-k': (_state, _dispatch, _view) => {
             this.options.onLinkShortcut?.();
             return Boolean(this.options.onLinkShortcut);
@@ -508,13 +501,6 @@ export class ProseMirrorEditorCore implements EditorCore {
               }
               return true;
             }
-            if (nodeAfter?.type.name === 'inline_code') {
-              if (dispatch) {
-                InlineCodeNodeView.requestKeyboardEntry('start');
-                dispatch(state.tr.setSelection(NodeSelection.create(state.doc, $from.pos)));
-              }
-              return true;
-            }
             if (nodeAfter?.type.name === 'comment_inline') {
               if (dispatch) {
                 CommentInlineNodeView.requestKeyboardEntry('start');
@@ -531,17 +517,6 @@ export class ProseMirrorEditorCore implements EditorCore {
             if (nodeBefore?.type.name === 'math_inline') {
               if (dispatch) {
                 MathInlineNodeView.requestKeyboardEntry('end');
-                dispatch(
-                  state.tr.setSelection(
-                    NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),
-                  ),
-                );
-              }
-              return true;
-            }
-            if (nodeBefore?.type.name === 'inline_code') {
-              if (dispatch) {
-                InlineCodeNodeView.requestKeyboardEntry('end');
                 dispatch(
                   state.tr.setSelection(
                     NodeSelection.create(state.doc, $from.pos - nodeBefore.nodeSize),
@@ -699,6 +674,7 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
   return (
     command.type === 'toggleBold' ||
     command.type === 'toggleItalic' ||
+    command.type === 'toggleCode' ||
     command.type === 'toggleStrikethrough' ||
     command.type === 'toggleUnderline' ||
     command.type === 'toggleHighlight'

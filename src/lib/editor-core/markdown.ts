@@ -248,7 +248,7 @@ const tableMarkdownParser = new MarkdownParser(schema, markdownIt, {
   footnote_def: { block: 'footnote_def', getAttrs: (tok: Token) => ({ id: tok.meta?.id ?? '' }) },
   math_inline: { node: 'math_inline', getAttrs: (tok: Token) => ({ tex: tok.content }) },
   math_display: { node: 'math_block', getAttrs: (tok: Token) => ({ tex: tok.content }) },
-  code_inline: { node: 'inline_code', getAttrs: (tok: Token) => ({ code: tok.content }) },
+  code_inline: { mark: 'code' },
   image: {
     node: 'image',
     getAttrs: (tok: Token) => ({
@@ -282,7 +282,6 @@ type MarkdownParserWithTokenHandlers = MarkdownParser & {
 const tableMarkdownParserWithHandlers =
   tableMarkdownParser as unknown as MarkdownParserWithTokenHandlers;
 
-const ADJACENT_INLINE_CODE_SENTINEL = '<!-- md-adjacent-inline-code -->';
 const COMMENT_RE = /^<!--([\s\S]*?)-->$/;
 const defaultFenceTokenHandler = tableMarkdownParserWithHandlers.tokenHandlers.fence;
 
@@ -357,9 +356,6 @@ tableMarkdownParserWithHandlers.tokenHandlers.html_inline = (
   tok: Token,
 ) => {
   const content = tok.content;
-  if (content === ADJACENT_INLINE_CODE_SENTINEL) {
-    return;
-  }
 
   if (isMarkdownComment(content) && !isReservedTocComment(content)) {
     state.openNode(schema.nodes.comment_inline, {
@@ -516,15 +512,6 @@ const tableMarkdownSerializer = new MarkdownSerializer(
     math_inline(state, node) {
       state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);
     },
-    inline_code(state, node) {
-      const code = node.attrs.code as string;
-      // 如果代码内容包含反引号，使用双反引号包裹
-      if (code.includes('`')) {
-        state.write(`\`\` ${code} \`\``);
-      } else {
-        state.write(`\`${code}\``);
-      }
-    },
     comment_inline(state, node) {
       state.write(serializeMarkdownComment(String(node.attrs.content ?? ''), false));
     },
@@ -595,9 +582,8 @@ const tableMarkdownSerializer = new MarkdownSerializer(
 export function parseMarkdown(markdown: string): ProseMirrorNode {
   resetHtmlInlineStack();
   const rawBody = splitFrontMatter(markdown).body;
-  const body = normalizeAdjacentInlineCode(rawBody);
   try {
-    return tableMarkdownParser.parse(body);
+    return tableMarkdownParser.parse(rawBody);
   } catch {
     resetHtmlInlineStack();
     return schema.node('doc', null, [schema.node('paragraph', null, [schema.text(rawBody)])]);
@@ -610,69 +596,6 @@ export function serializeMarkdown(doc: ProseMirrorNode): string {
 
 export function splitFrontMatter(markdown: string): { frontMatter: string; body: string } {
   return splitFrontMatterBlock(markdown);
-}
-
-function normalizeAdjacentInlineCode(markdown: string): string {
-  let normalized = '';
-  let inFence = false;
-
-  for (const line of markdown.split(/(\r?\n)/)) {
-    if (line === '\n' || line === '\r\n') {
-      normalized += line;
-      continue;
-    }
-
-    if (/^\s*`{3,}/.test(line)) {
-      inFence = !inFence;
-      normalized += line;
-      continue;
-    }
-
-    normalized += inFence ? line : normalizeAdjacentInlineCodeLine(line);
-  }
-
-  return normalized;
-}
-
-function normalizeAdjacentInlineCodeLine(line: string): string {
-  let result = '';
-  let index = 0;
-
-  while (index < line.length) {
-    const firstStart = findUnescapedBacktick(line, index);
-    if (firstStart === -1) {
-      result += line.slice(index);
-      break;
-    }
-
-    const firstEnd = findUnescapedBacktick(line, firstStart + 1);
-    if (firstEnd === -1 || line[firstEnd + 1] !== '`') {
-      result += line.slice(index, firstStart + 1);
-      index = firstStart + 1;
-      continue;
-    }
-
-    const secondEnd = findUnescapedBacktick(line, firstEnd + 2);
-    if (secondEnd === -1) {
-      result += line.slice(index, firstEnd + 1);
-      index = firstEnd + 1;
-      continue;
-    }
-
-    const firstCode = line.slice(firstStart + 1, firstEnd).trim();
-    const secondCode = line.slice(firstEnd + 2, secondEnd).trim();
-    if (!firstCode || !secondCode) {
-      result += line.slice(index, firstEnd + 1);
-      index = firstEnd + 1;
-      continue;
-    }
-
-    result += line.slice(index, firstEnd + 1);
-    result += ADJACENT_INLINE_CODE_SENTINEL;
-    index = firstEnd + 1;
-  }
-
-  return result;
 }
 
 function restoreBlankParagraphTokens(tokens: Token[]): Token[] {
@@ -810,22 +733,6 @@ function createEmptyParagraphClose(): Token {
   return new Token('paragraph_close', 'p', -1);
 }
 
-function findUnescapedBacktick(text: string, from: number): number {
-  for (let index = from; index < text.length; index++) {
-    if (text[index] === '`' && !isEscapedMarkdownChar(text, index)) {
-      return index;
-    }
-  }
-  return -1;
-}
-
-function isEscapedMarkdownChar(text: string, charIndex: number): boolean {
-  let slashCount = 0;
-  for (let index = charIndex - 1; index >= 0 && text[index] === '\\'; index--) {
-    slashCount += 1;
-  }
-  return slashCount % 2 === 1;
-}
 
 export function createTableMarkdown(rows: number, columns: number): string {
   const columnCount = Math.max(2, Math.min(columns, 6));

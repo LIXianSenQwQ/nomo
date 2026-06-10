@@ -89,7 +89,7 @@ const CLEAR_INLINE_MARK_NAMES = [
   'link',
   'code',
 ];
-const CLEAR_INLINE_NODE_NAMES = ['inline_code', 'math_inline'];
+const CLEAR_INLINE_NODE_NAMES = ['math_inline'];
 
 type InlineAtomReplacement = {
   from: number;
@@ -597,7 +597,6 @@ function isClearableInlineAtom(node: PmNode): boolean {
 }
 
 function getInlineAtomPlainText(node: PmNode): string {
-  if (node.type.name === 'inline_code') return String(node.attrs.code ?? '');
   if (node.type.name === 'math_inline') return String(node.attrs.tex ?? '');
   return node.textContent;
 }
@@ -640,7 +639,7 @@ export function executeEditorCommand(
     case 'toggleItalic':
       return run(toggleMarkPending(schema.marks.em));
     case 'toggleCode':
-      return run(toggleMark(schema.marks.code));
+      return run(toggleMarkPending(schema.marks.code));
     case 'toggleStrikethrough':
       return run(toggleMarkPending(schema.marks.strikethrough));
     case 'toggleUnderline':

@@ -49,6 +49,7 @@ const INACTIVE_STATE: PendingMarkState = {
 const MARK_SYNTAX: Record<string, { open: string; close: string }> = {
   strong: { open: '**', close: '**' },
   em: { open: '*', close: '*' },
+  code: { open: '`', close: '`' },
   strikethrough: { open: '~~', close: '~~' },
   underline: { open: '<u>', close: '</u>' },
   highlight: { open: '<mark>', close: '</mark>' },

@@ -3,7 +3,7 @@ import type { ImageContext } from '../services/render';
 import type { ContextMenuOpenEvent } from './plugins/contextMenu';
 
 export type EditorMode = 'semantic' | 'source';
-export type InlinePendingMarkName = 'strong' | 'em' | 'strikethrough' | 'underline' | 'highlight';
+export type InlinePendingMarkName = 'strong' | 'em' | 'code' | 'strikethrough' | 'underline' | 'highlight';
 export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
 
 export interface EditorThemeOptions {
@@ -13,7 +13,6 @@ export interface EditorThemeOptions {
 export interface EditorRuntimeOptions {
   readonly: boolean;
   mode: EditorMode;
-  inlineCodeRenderingEnabled: boolean;
 }
 
 export interface SetMarkdownOptions {
@@ -144,7 +143,6 @@ export interface EditorCoreOptions {
   markdown: string;
   readonly?: boolean;
   mode?: EditorMode;
-  inlineCodeRenderingEnabled?: boolean;
   theme?: EditorThemeOptions;
   onChange?: (event: EditorChangeEvent) => void;
   onSelectionChange?: (event: EditorSelectionEvent) => void;

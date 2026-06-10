@@ -115,33 +115,6 @@ export const schema = new Schema({
           },
         ],
       },
-      // 行内代码（inline code）：`code` 语法
-      inline_code: {
-        inline: true,
-        group: 'inline',
-        atom: true,
-        selectable: true,
-        draggable: false,
-        attrs: {
-          code: { default: '' },
-        },
-        toDOM(node) {
-          const code = node.attrs.code as string;
-          return ['span', { class: 'inline-code', 'data-code': code }, `\`${code}\``];
-        },
-        parseDOM: [
-          {
-            tag: 'span.inline-code',
-            getAttrs(dom) {
-              const el = dom as HTMLElement;
-              const code = el.getAttribute('data-code') ?? el.textContent ?? '';
-              return {
-                code: code.startsWith('`') && code.endsWith('`') ? code.slice(1, -1) : code,
-              };
-            },
-          },
-        ],
-      },
       comment_inline: {
         inline: true,
         group: 'inline',
@@ -278,6 +251,12 @@ export const schema = new Schema({
       },
     }),
   marks: markdownSchema.spec.marks
+    .update('code', {
+      parseDOM: [{ tag: 'code' }],
+      toDOM() {
+        return ['code', { class: 'inline-code' }, 0];
+      },
+    })
     .update('link', {
       attrs: {
         href: {},

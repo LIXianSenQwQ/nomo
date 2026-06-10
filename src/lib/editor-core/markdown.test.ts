@@ -229,7 +229,9 @@ describe('markdown serialization', () => {
     const paragraph = doc.child(0);
 
     expect(paragraph.type.name).toBe('paragraph');
-    expect(paragraph.child(0).type.name).toBe('inline_code');
+    const firstChild = paragraph.child(0);
+    expect(firstChild.isText).toBe(true);
+    expect(firstChild.marks.some((m) => m.type === schema.marks.code)).toBe(true);
     expect(serializeMarkdown(doc).trim()).toBe(input);
   });
 
