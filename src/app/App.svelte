@@ -990,41 +990,55 @@
     }
   }
 
-  function selectActiveSearchMatch() {
+  async function selectActiveSearchMatch() {
     const match = searchMatches[searchActiveIndex];
     if (!match) return;
 
     const isSearchFocused = document.activeElement?.closest('.search-replace-panel') !== null;
-    const searchInput = document.querySelector<HTMLInputElement>('.search-replace-panel input');
-    const searchCursorStart = searchInput?.selectionStart ?? null;
-    const searchCursorEnd = searchInput?.selectionEnd ?? null;
+    const activeSearchInput =
+      document.activeElement instanceof HTMLInputElement &&
+      document.activeElement.closest('.search-replace-panel')
+        ? document.activeElement
+        : null;
+    const searchInput =
+      activeSearchInput ?? document.querySelector<HTMLInputElement>('.search-replace-panel input');
+    const searchCursorStart = activeSearchInput?.selectionStart ?? null;
+    const searchCursorEnd = activeSearchInput?.selectionEnd ?? null;
 
     // 总是 focus 编辑器，让 scrollIntoView 和 selection 高亮生效
     if (mode === 'source') {
-      selectSourceSearchMatch(match, true);
+      await selectSourceSearchMatch(match, true);
     } else {
       editor.selectSearchMatch(match, true);
+      await tick();
+      await waitForAnimationFrame();
     }
 
-    // 如果搜索框之前有焦点，focus 回去并保持光标位置
+    // 如果搜索面板之前有焦点，focus 回去并保持光标位置；preventScroll 避免覆盖编辑区跳转。
     if (isSearchFocused && searchInput) {
-      searchInput.focus();
+      searchInput.focus({ preventScroll: true });
       if (searchCursorStart !== null && searchCursorEnd !== null) {
         searchInput.setSelectionRange(searchCursorStart, searchCursorEnd);
       }
     }
   }
 
-  function selectSourceSearchMatch(match: EditorSearchMatch, focusEditor = true) {
-    tick().then(() => {
-      if (!sourceTextarea) return;
-      if (focusEditor) {
-        sourceTextarea.focus();
-      }
-      sourceTextarea.setSelectionRange(match.from, match.to);
-      const lineHeight = getSourceLineHeight();
-      const line = markdown.slice(0, match.from).split('\n').length - 1;
-      setScrollTop(sourcePane, Math.max(0, line * lineHeight - sourcePane.clientHeight / 2));
+  async function selectSourceSearchMatch(match: EditorSearchMatch, focusEditor = true) {
+    await tick();
+    if (!sourceTextarea) return;
+    if (focusEditor) {
+      sourceTextarea.focus();
+    }
+    sourceTextarea.setSelectionRange(match.from, match.to);
+    const lineHeight = getSourceLineHeight();
+    const line = markdown.slice(0, match.from).split('\n').length - 1;
+    setScrollTop(sourcePane, Math.max(0, line * lineHeight - sourcePane.clientHeight / 2));
+    await waitForAnimationFrame();
+  }
+
+  function waitForAnimationFrame() {
+    return new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
     });
   }
 

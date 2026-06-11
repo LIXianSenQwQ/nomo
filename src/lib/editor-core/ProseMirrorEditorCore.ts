@@ -854,9 +854,38 @@ function selectEditorTextRange(view: EditorView, from: number, to: number, focus
     if (focus) {
       view.focus();
     }
+    scrollSearchSelectionIntoView(view, safeFrom);
     return true;
   } catch {
     return false;
+  }
+}
+
+function scrollSearchSelectionIntoView(view: EditorView, pos: number) {
+  const scrollContainer = view.dom.closest<HTMLElement>('.semantic-pane');
+  if (!scrollContainer) {
+    return;
+  }
+
+  try {
+    const selectionRect = view.coordsAtPos(pos);
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetTop =
+      scrollContainer.scrollTop +
+      selectionRect.top -
+      containerRect.top -
+      scrollContainer.clientHeight / 2 +
+      Math.max(1, selectionRect.bottom - selectionRect.top) / 2;
+    const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+    const top = Math.min(Math.max(0, targetTop), maxScrollTop);
+
+    if (typeof scrollContainer.scrollTo === 'function') {
+      scrollContainer.scrollTo({ top, behavior: 'instant' });
+    } else {
+      scrollContainer.scrollTop = top;
+    }
+  } catch {
+    // 搜索跳转不能因为个别 NodeView 坐标不可取而中断选区更新。
   }
 }
 
