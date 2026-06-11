@@ -24,6 +24,8 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     openTablePicker: vi.fn(),
     openLinkPicker: vi.fn(),
     openSearchPanel: vi.fn(),
+    closeSearchPanel: vi.fn(),
+    getSearchState: vi.fn(() => ({ open: false, replaceVisible: false })),
     openSettings: vi.fn(),
     editFrontMatter: vi.fn(),
     showUnavailableFeature: vi.fn(),
@@ -180,7 +182,7 @@ describe('appCommands', () => {
     expect(handlers.commands).toEqual([]);
   });
 
-  it('通过 Ctrl + F 打开搜索面板', () => {
+  it('通过 Ctrl + F 打开搜索面板（面板关闭时）', () => {
     const handlers = createHandlers();
     const event = new KeyboardEvent('keydown', {
       ctrlKey: true,
@@ -194,9 +196,46 @@ describe('appCommands', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(handlers.openSearchPanel).toHaveBeenCalledWith(false);
+    expect(handlers.closeSearchPanel).not.toHaveBeenCalled();
   });
 
-  it('通过 Ctrl + H 打开替换面板', () => {
+  it('通过 Ctrl + F 关闭搜索面板（纯搜索已打开时）', () => {
+    const handlers = createHandlers();
+    handlers.getSearchState = vi.fn(() => ({ open: true, replaceVisible: false }));
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'f',
+      code: 'KeyF',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.closeSearchPanel).toHaveBeenCalledTimes(1);
+    expect(handlers.openSearchPanel).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + F 从替换切回纯搜索（替换可见时）', () => {
+    const handlers = createHandlers();
+    handlers.getSearchState = vi.fn(() => ({ open: true, replaceVisible: true }));
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'f',
+      code: 'KeyF',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.openSearchPanel).toHaveBeenCalledWith(false);
+    expect(handlers.closeSearchPanel).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + H 打开替换面板（面板关闭时）', () => {
     const handlers = createHandlers();
     const event = new KeyboardEvent('keydown', {
       ctrlKey: true,
@@ -210,6 +249,43 @@ describe('appCommands', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(handlers.openSearchPanel).toHaveBeenCalledWith(true);
+    expect(handlers.closeSearchPanel).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + H 切换到替换模式（搜索已打开但替换不可见时）', () => {
+    const handlers = createHandlers();
+    handlers.getSearchState = vi.fn(() => ({ open: true, replaceVisible: false }));
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'h',
+      code: 'KeyH',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.openSearchPanel).toHaveBeenCalledWith(true);
+    expect(handlers.closeSearchPanel).not.toHaveBeenCalled();
+  });
+
+  it('通过 Ctrl + H 关闭替换面板（替换已可见时）', () => {
+    const handlers = createHandlers();
+    handlers.getSearchState = vi.fn(() => ({ open: true, replaceVisible: true }));
+    const event = new KeyboardEvent('keydown', {
+      ctrlKey: true,
+      key: 'h',
+      code: 'KeyH',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    handleGlobalShortcut(event, handlers);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.closeSearchPanel).toHaveBeenCalledTimes(1);
+    expect(handlers.openSearchPanel).not.toHaveBeenCalled();
   });
 
   it('通过 Ctrl + \\ 触发清除样式快捷键', () => {

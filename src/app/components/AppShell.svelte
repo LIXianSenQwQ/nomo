@@ -279,29 +279,31 @@
           {updateContentWidth}
           {setMode}
           {toggleOutlineVisible}
-          {openSearchPanel}
+          openSearchPanel={() => openSearchPanel(false)}
         />
 
-        <SearchReplacePanel
-          {interfaceLocale}
-          open={searchPanelOpen}
-          replaceVisible={searchReplaceVisible}
-          query={searchQuery}
-          replacement={searchReplacement}
-          caseSensitive={searchCaseSensitive}
-          activeIndex={searchActiveIndex}
-          matchCount={searchMatchCount}
-          readonly={readonlyDocumentMode}
-          updateQuery={updateSearchQuery}
-          updateReplacement={updateSearchReplacement}
-          toggleCaseSensitive={toggleSearchCaseSensitive}
-          toggleReplaceVisible={toggleSearchReplaceVisible}
-          findPrevious={findPreviousSearchMatch}
-          findNext={findNextSearchMatch}
-          replaceCurrent={replaceCurrentSearchMatch}
-          replaceAll={replaceAllSearchMatches}
-          close={closeSearchPanel}
-        />
+        <div data-search-panel>
+          <SearchReplacePanel
+            {interfaceLocale}
+            open={searchPanelOpen}
+            replaceVisible={searchReplaceVisible}
+            query={searchQuery}
+            replacement={searchReplacement}
+            caseSensitive={searchCaseSensitive}
+            activeIndex={searchActiveIndex}
+            matchCount={searchMatchCount}
+            readonly={readonlyDocumentMode}
+            updateQuery={updateSearchQuery}
+            updateReplacement={updateSearchReplacement}
+            toggleCaseSensitive={toggleSearchCaseSensitive}
+            toggleReplaceVisible={toggleSearchReplaceVisible}
+            findPrevious={findPreviousSearchMatch}
+            findNext={findNextSearchMatch}
+            replaceCurrent={replaceCurrentSearchMatch}
+            replaceAll={replaceAllSearchMatches}
+            close={closeSearchPanel}
+          />
+        </div>
 
         <EditorWorkspace
           {interfaceLocale}

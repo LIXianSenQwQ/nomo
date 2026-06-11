@@ -12,6 +12,23 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* 搜索面板悬浮在编辑器工作区上方（不占独立布局行） */
+.editor-shell [data-search-panel] {
+  position: absolute;
+  top: 84px;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px 0;
+  pointer-events: none;
+}
+
+.editor-shell [data-search-panel] > * {
+  pointer-events: auto;
+}
+
 .empty-workspace {
   grid-row: 2;
   align-self: stretch;

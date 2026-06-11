@@ -725,7 +725,9 @@
     runCommand: (command) => runCommand(command),
     openTablePicker: () => openTablePicker(),
     openLinkPicker: () => openLinkPicker(),
-    openSearchPanel: () => openSearchPanel(false),
+    openSearchPanel: (replaceVisible) => openSearchPanel(replaceVisible),
+    closeSearchPanel: () => closeSearchPanel(),
+    getSearchState: () => ({ open: searchPanelOpen, replaceVisible: searchReplaceVisible }),
     openSettings: () => openSettings(),
     editFrontMatter: () => editFrontMatter(),
     showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
@@ -860,7 +862,7 @@
   function openSearchPanel(replaceVisible = false) {
     if (!hasOpenDocument()) return;
     searchPanelOpen = true;
-    searchReplaceVisible = replaceVisible || searchReplaceVisible;
+    searchReplaceVisible = replaceVisible;
     linkPickerOpen = false;
     tablePickerOpen = false;
     refreshSearchMatches({ preserveActive: true, selectActive: true });

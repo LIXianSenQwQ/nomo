@@ -154,13 +154,15 @@
 <style>
   .search-replace-panel {
     position: relative;
-    z-index: 20;
+    z-index: 50;
     display: grid;
     gap: 6px;
+    width: min(640px, 100%);
     padding: 8px 10px;
-    border-bottom: 1px solid var(--md-editor-border);
-    background: var(--md-editor-chrome);
-    box-shadow: 0 1px 0 color-mix(in srgb, var(--md-editor-border) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--md-editor-accent) 18%, var(--md-editor-border));
+    border-radius: var(--md-editor-radius-md);
+    background: color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-accent) 4%);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
   }
 
   .search-row,
@@ -222,16 +224,16 @@
     min-width: 30px;
     height: 30px;
     padding: 0 8px;
-    border: 1px solid transparent;
+    border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-sm);
-    background: transparent;
+    background: var(--md-editor-bg);
     color: var(--md-editor-muted-fg);
     cursor: pointer;
   }
 
   button:hover:not(:disabled),
   button.active {
-    border-color: var(--md-editor-border);
+    border-color: color-mix(in srgb, var(--md-editor-accent) 35%, var(--md-editor-border));
     background: var(--md-editor-surface);
     color: var(--md-editor-accent-strong);
   }
@@ -261,6 +263,10 @@
   }
 
   @media (max-width: 720px) {
+    .search-replace-panel {
+      width: 100%;
+    }
+
     .search-row,
     .replace-row {
       flex-wrap: wrap;

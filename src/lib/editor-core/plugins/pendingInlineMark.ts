@@ -221,8 +221,9 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
     appendTransaction(transactions, oldState, newState) {
       const hasDocChanged = transactions.some((tr) => tr.docChanged);
       const hasSelectionMoved = transactions.some((tr) => tr.selectionSet);
+      const isPointerSelection = transactions.some((tr) => tr.getMeta('pointer'));
 
-      if (!hasDocChanged && hasSelectionMoved) {
+      if (!hasDocChanged && hasSelectionMoved && !isPointerSelection) {
         const tr = restoreMarkedSideAfterSelectionMove(oldState, newState);
         if (tr) return tr;
       }

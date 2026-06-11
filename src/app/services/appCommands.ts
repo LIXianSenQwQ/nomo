@@ -19,6 +19,8 @@ export interface AppCommandHandlers {
   openTablePicker: () => void;
   openLinkPicker: () => void;
   openSearchPanel: (replaceVisible?: boolean) => void;
+  closeSearchPanel: () => void;
+  getSearchState: () => { open: boolean; replaceVisible: boolean };
   openSettings: () => void;
   editFrontMatter: () => void;
   showUnavailableFeature: (featureName: string) => void;
@@ -216,10 +218,23 @@ export function handleGlobalShortcut(
     handlers.openLinkPicker();
   } else if (key === 'f' && !event.shiftKey) {
     event.preventDefault();
-    handlers.openSearchPanel(false);
+    const state = handlers.getSearchState();
+    if (state.open && state.replaceVisible) {
+      // 替换可见时切回纯搜索
+      handlers.openSearchPanel(false);
+    } else if (state.open && !state.replaceVisible) {
+      handlers.closeSearchPanel();
+    } else {
+      handlers.openSearchPanel(false);
+    }
   } else if (key === 'h' && !event.shiftKey) {
     event.preventDefault();
-    handlers.openSearchPanel(true);
+    const state = handlers.getSearchState();
+    if (state.open && state.replaceVisible) {
+      handlers.closeSearchPanel();
+    } else {
+      handlers.openSearchPanel(true);
+    }
   } else if (key === 'e') {
     event.preventDefault();
     handlers.setMode(handlers.getMode() === 'source' ? 'semantic' : 'source');
