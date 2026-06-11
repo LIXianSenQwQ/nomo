@@ -2611,3 +2611,16 @@
 .image-size-editor-confirm:hover {
   opacity: 0.9;
 }
+
+/* 搜索高亮样式 */
+.search-match {
+  background-color: color-mix(in srgb, var(--md-editor-accent) 45%, transparent);
+  border-radius: 2px;
+}
+
+.search-match-active {
+  background-color: color-mix(in srgb, var(--md-editor-accent) 80%, var(--md-editor-accent-strong) 20%);
+  border-radius: 2px;
+  outline: 2.0px solid var(--md-editor-accent);
+  /* outline-offset: 1px; */
+}

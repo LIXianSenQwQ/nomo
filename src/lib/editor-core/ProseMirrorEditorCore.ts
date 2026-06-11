@@ -52,6 +52,7 @@ import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import { contextMenuPlugin } from './plugins/contextMenu';
+import { searchHighlightPlugin } from './plugins/searchHighlight';
 import {
   createMarkdownInputRules,
   parseMarkdown,
@@ -279,13 +280,23 @@ export class ProseMirrorEditorCore implements EditorCore {
     return findEditorTextMatches(this.view.state.doc, query, options);
   }
 
-  selectSearchMatch(match: EditorSearchMatch): boolean {
+  setSearchHighlights(matches: EditorSearchMatch[], activeIndex: number): void {
+    this.assertActive();
+    if (!this.view) {
+      return;
+    }
+
+    const tr = this.view.state.tr.setMeta('searchHighlight', { matches, activeIndex });
+    this.view.dispatch(tr);
+  }
+
+  selectSearchMatch(match: EditorSearchMatch, focus = true): boolean {
     this.assertActive();
     if (!this.view) {
       return false;
     }
 
-    return selectEditorTextRange(this.view, match.from, match.to);
+    return selectEditorTextRange(this.view, match.from, match.to, focus);
   }
 
   replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean {
@@ -439,6 +450,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         linkInteractionPlugin({ openLink: this.options.onOpenLink }),
         codeHighlightPlugin(),
         codeHighlightDecorationPlugin(),
+        searchHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
         trailingParagraphPlugin(),
@@ -831,7 +843,7 @@ function findEditorTextMatches(
   return matches;
 }
 
-function selectEditorTextRange(view: EditorView, from: number, to: number): boolean {
+function selectEditorTextRange(view: EditorView, from: number, to: number, focus = true): boolean {
   const safeFrom = clampDocPosition(view.state.doc, from);
   const safeTo = clampDocPosition(view.state.doc, to);
 
@@ -839,7 +851,9 @@ function selectEditorTextRange(view: EditorView, from: number, to: number): bool
     view.dispatch(
       view.state.tr.setSelection(TextSelection.create(view.state.doc, safeFrom, safeTo)).scrollIntoView(),
     );
-    view.focus();
+    if (focus) {
+      view.focus();
+    }
     return true;
   } catch {
     return false;

@@ -865,7 +865,7 @@
     searchReplaceVisible = replaceVisible;
     linkPickerOpen = false;
     tablePickerOpen = false;
-    refreshSearchMatches({ preserveActive: true, selectActive: true });
+    refreshSearchMatches({ preserveActive: true, selectActive: false });
   }
 
   function closeSearchPanel() {
@@ -876,7 +876,7 @@
   function updateSearchQuery(event: Event) {
     searchQuery = (event.currentTarget as HTMLInputElement).value;
     searchActiveIndex = 0;
-    refreshSearchMatches({ preserveActive: false, selectActive: true });
+    refreshSearchMatches({ preserveActive: false, selectActive: false });
   }
 
   function updateSearchReplacement(event: Event) {
@@ -886,7 +886,7 @@
   function toggleSearchCaseSensitive() {
     searchCaseSensitive = !searchCaseSensitive;
     searchActiveIndex = 0;
-    refreshSearchMatches({ preserveActive: false, selectActive: true });
+    refreshSearchMatches({ preserveActive: false, selectActive: false });
   }
 
   function toggleSearchReplaceVisible() {
@@ -978,6 +978,13 @@
       searchActiveIndex = Math.min(searchActiveIndex, searchMatches.length - 1);
     }
 
+    // 更新编辑器搜索高亮 decorations（不依赖 focus 即可显示）
+    if (mode !== 'source') {
+      editor.setSearchHighlights(searchMatches, searchActiveIndex);
+    } else {
+      editor.setSearchHighlights([], 0);
+    }
+
     if (options?.selectActive) {
       selectActiveSearchMatch();
     }
@@ -987,17 +994,33 @@
     const match = searchMatches[searchActiveIndex];
     if (!match) return;
 
+    const isSearchFocused = document.activeElement?.closest('.search-replace-panel') !== null;
+    const searchInput = document.querySelector<HTMLInputElement>('.search-replace-panel input');
+    const searchCursorStart = searchInput?.selectionStart ?? null;
+    const searchCursorEnd = searchInput?.selectionEnd ?? null;
+
+    // 总是 focus 编辑器，让 scrollIntoView 和 selection 高亮生效
     if (mode === 'source') {
-      selectSourceSearchMatch(match);
+      selectSourceSearchMatch(match, true);
     } else {
-      editor.selectSearchMatch(match);
+      editor.selectSearchMatch(match, true);
+    }
+
+    // 如果搜索框之前有焦点，focus 回去并保持光标位置
+    if (isSearchFocused && searchInput) {
+      searchInput.focus();
+      if (searchCursorStart !== null && searchCursorEnd !== null) {
+        searchInput.setSelectionRange(searchCursorStart, searchCursorEnd);
+      }
     }
   }
 
-  function selectSourceSearchMatch(match: EditorSearchMatch) {
+  function selectSourceSearchMatch(match: EditorSearchMatch, focusEditor = true) {
     tick().then(() => {
       if (!sourceTextarea) return;
-      sourceTextarea.focus();
+      if (focusEditor) {
+        sourceTextarea.focus();
+      }
       sourceTextarea.setSelectionRange(match.from, match.to);
       const lineHeight = getSourceLineHeight();
       const line = markdown.slice(0, match.from).split('\n').length - 1;

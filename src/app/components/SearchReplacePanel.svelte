@@ -22,12 +22,18 @@
   export let close: () => void;
 
   let searchInput: HTMLInputElement;
+  let hasOpened = false;
 
-  $: if (open && searchInput) {
+  $: if (open && !hasOpened && searchInput) {
+    hasOpened = true;
     queueMicrotask(() => {
       searchInput?.focus();
       searchInput?.select();
     });
+  }
+
+  $: if (!open) {
+    hasOpened = false;
   }
 
   function handleKeydown(event: KeyboardEvent) {

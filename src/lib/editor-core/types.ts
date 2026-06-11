@@ -184,7 +184,8 @@ export interface EditorCore {
   getActiveLink(): EditorLinkSnapshot | null;
   getSelectionAnchorRect(): EditorAnchorRect | null;
   findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[];
-  selectSearchMatch(match: EditorSearchMatch): boolean;
+  setSearchHighlights(matches: EditorSearchMatch[], activeIndex: number): void;
+  selectSearchMatch(match: EditorSearchMatch, focus?: boolean): boolean;
   replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean;
   replaceAllSearchMatches(query: string, replacement: string, options: EditorSearchOptions): number;
   execute(command: EditorCommand): boolean;
