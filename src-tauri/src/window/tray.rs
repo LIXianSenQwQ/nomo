@@ -206,11 +206,11 @@ pub(crate) fn set_desktop_icon_theme<R: Runtime>(
 }
 
 pub(crate) fn close_to_tray_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
-    if let Some(behavior) = database_string_setting(app, "closeWindowBehavior") {
+    if let Some(behavior) = config_string_setting(app, "closeWindowBehavior") {
         return behavior == "close-to-tray";
     }
 
-    database_bool_setting(app, "closeToTrayEnabled").unwrap_or(false)
+    config_bool_setting(app, "closeToTrayEnabled").unwrap_or(false)
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
@@ -294,13 +294,13 @@ fn window_display_title<R: Runtime>(label: &str, window: &WebviewWindow<R>) -> S
         .unwrap_or_else(|| label.to_string())
 }
 
-fn database_bool_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<bool> {
-    let value_json = crate::database::get_setting_value(app, key).ok()??;
+fn config_bool_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<bool> {
+    let value_json = crate::config::commands::get_setting_value(app, key).ok()??;
     serde_json::from_str::<bool>(&value_json).ok()
 }
 
-fn database_string_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<String> {
-    let value_json = crate::database::get_setting_value(app, key).ok()??;
+fn config_string_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<String> {
+    let value_json = crate::config::commands::get_setting_value(app, key).ok()??;
     serde_json::from_str::<String>(&value_json).ok()
 }
 

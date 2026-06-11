@@ -1,4 +1,4 @@
-use crate::{database, models::SettingInput};
+use crate::models::SettingInput;
 use serde::Serialize;
 use std::{
     collections::HashSet,
@@ -231,7 +231,7 @@ pub(crate) fn persist_pending_external_open(
     }
 
     let key = pending_external_open_key(label);
-    database::update_app_setting(
+    crate::config::commands::update_app_setting(
         app.clone(),
         SettingInput {
             key,
@@ -251,7 +251,7 @@ pub(crate) fn persist_pending_external_folder_open(
     }
 
     let key = pending_external_folder_key(label);
-    database::update_app_setting(
+    crate::config::commands::update_app_setting(
         app.clone(),
         SettingInput {
             key,
@@ -324,9 +324,7 @@ fn same_path(left: &Path, right: &Path) -> bool {
 }
 
 fn normalize_path(path: &Path) -> String {
-    let canonical = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf());
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     let path_str = canonical.to_string_lossy();
     // Windows 上 canonicalize() 会产生 \\?\ 前缀的扩展长度路径，需要去除以友好显示
@@ -350,7 +348,7 @@ mod tests {
 
     #[test]
     fn collects_existing_markdown_paths_from_args() {
-        let dir = env::temp_dir().join(format!("nomo-external-open-{}", database::now_ts()));
+        let dir = env::temp_dir().join(format!("nomo-external-open-{}", crate::config::now_ts()));
         fs::create_dir_all(&dir).unwrap();
         let md = dir.join("测试 文件.md");
         let ignored = dir.join("ignored.exe");
@@ -374,7 +372,7 @@ mod tests {
     fn resolves_relative_args_with_cwd() {
         let dir = env::temp_dir().join(format!(
             "nomo-external-open-relative-{}",
-            database::now_ts()
+            crate::config::now_ts()
         ));
         fs::create_dir_all(&dir).unwrap();
         let md = dir.join("demo.markdown");
@@ -391,7 +389,10 @@ mod tests {
 
     #[test]
     fn collects_existing_folder_paths_from_args() {
-        let dir = env::temp_dir().join(format!("nomo-external-open-folder-{}", database::now_ts()));
+        let dir = env::temp_dir().join(format!(
+            "nomo-external-open-folder-{}",
+            crate::config::now_ts()
+        ));
         fs::create_dir_all(&dir).unwrap();
         let md = dir.join("demo.md");
         fs::write(&md, "# ok").unwrap();
@@ -412,7 +413,10 @@ mod tests {
 
     #[test]
     fn collects_file_urls() {
-        let dir = env::temp_dir().join(format!("nomo-external-open-url-{}", database::now_ts()));
+        let dir = env::temp_dir().join(format!(
+            "nomo-external-open-url-{}",
+            crate::config::now_ts()
+        ));
         fs::create_dir_all(&dir).unwrap();
         let md = dir.join("demo.md");
         fs::write(&md, "# ok").unwrap();

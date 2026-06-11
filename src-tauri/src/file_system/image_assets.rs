@@ -564,13 +564,13 @@ fn write_temp_image_file(file_name: &str, bytes: &[u8]) -> Result<PathBuf, Strin
     let safe_file_name = sanitize_image_file_name(file_name);
     let mut target = std::env::temp_dir().join(format!(
         "nomo-image-{}-{safe_file_name}",
-        crate::database::now_ts()
+        crate::config::now_ts()
     ));
     let mut index = 1;
     while target.exists() {
         target = std::env::temp_dir().join(format!(
             "nomo-image-{}-{index}-{safe_file_name}",
-            crate::database::now_ts()
+            crate::config::now_ts()
         ));
         index += 1;
     }
@@ -792,7 +792,7 @@ mod tests {
     fn create_test_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "nomo-image-assets-{name}-{}",
-            crate::database::now_ts()
+            crate::config::now_ts()
         ));
         fs::create_dir_all(&dir).expect("test dir");
         dir

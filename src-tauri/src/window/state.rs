@@ -1,5 +1,5 @@
+use crate::models::WindowStateInput;
 use crate::window::commands::update_window_state;
-use crate::{database, models::WindowStateInput};
 use tauri::{AppHandle, Manager, Runtime};
 
 const MIN_WINDOW_WIDTH: u32 = 920;
@@ -36,7 +36,7 @@ pub(crate) fn restore_window_state<R: Runtime>(app: &AppHandle<R>, label: &str) 
         return;
     };
     let key = format!("windowState:{}", label);
-    let Ok(Some(value_json)) = database::get_setting_value(app, &key) else {
+    let Ok(Some(value_json)) = crate::config::commands::get_setting_value(app, &key) else {
         return;
     };
     let Ok(state) = serde_json::from_str::<WindowStateInput>(&value_json) else {

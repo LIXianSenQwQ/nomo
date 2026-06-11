@@ -9,7 +9,7 @@ pub(crate) enum InterfaceLocale {
 }
 
 pub(crate) fn effective_locale<R: Runtime>(app: &AppHandle<R>) -> InterfaceLocale {
-    let preference = crate::database::get_setting_value(app, "interfaceLanguage")
+    let preference = crate::config::commands::get_setting_value(app, "interfaceLanguage")
         .ok()
         .flatten()
         .and_then(|value| serde_json::from_str::<String>(&value).ok())

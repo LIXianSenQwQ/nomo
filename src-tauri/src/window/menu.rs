@@ -1,4 +1,3 @@
-use crate::database;
 use std::path::Path;
 
 #[cfg(target_os = "macos")]
@@ -121,7 +120,7 @@ pub(crate) fn build_window_menu<R: Runtime>(
 }
 
 fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
-    let recent_entries = database::query_recent_entries(app).unwrap_or_default();
+    let recent_entries = crate::config::commands::query_recent_entries(app).unwrap_or_default();
     let locale = i18n::effective_locale(app);
 
     let mut file_menu_builder = SubmenuBuilder::new(app, tr(locale, "menu_file"))

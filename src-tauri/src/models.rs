@@ -27,7 +27,7 @@ impl RecentEntryType {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RecentEntry {
     pub(crate) path: String,
     pub(crate) entry_type: String,
@@ -52,7 +52,7 @@ pub(crate) struct SnapshotInput {
     pub(crate) reason: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SnapshotRecord {
     pub(crate) id: String,
     pub(crate) document_path: String,
@@ -68,7 +68,7 @@ pub(crate) struct SettingInput {
     pub(crate) value_json: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SettingRecord {
     pub(crate) key: String,
     pub(crate) value_json: String,
@@ -85,7 +85,7 @@ pub(crate) struct FileStatus {
     pub(crate) readonly: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct WindowStateInput {
     pub(crate) x: Option<i32>,
     pub(crate) y: Option<i32>,

@@ -1,5 +1,5 @@
 mod app_logger;
-mod database;
+mod config;
 mod external_link;
 mod file_system;
 mod i18n;
@@ -85,10 +85,9 @@ pub fn run() {
             use tauri::Manager;
             let setup_timer = std::time::Instant::now();
             crate::app_logger::info("App", "开始 Tauri setup");
-            let database = crate::database::AppDatabase::from_app(app.handle())
+            let config = crate::config::ConfigManager::load_or_default(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
-            app.manage(database.clone());
-            database.warm_up_async();
+            app.manage(config);
 
             if let Some(window) = app.get_webview_window("main") {
                 crate::app_logger::info("Window", "初始化主窗口系统适配和菜单");
@@ -145,14 +144,14 @@ pub fn run() {
             crate::file_system::write_markdown_file,
             crate::file_system::install_sample_document,
             crate::file_system::stat_markdown_file,
-            crate::database::remember_recent_entry,
-            crate::database::list_recent_entries,
-            crate::database::clear_recent_entries,
-            crate::database::create_document_snapshot,
-            crate::database::list_document_snapshots,
-            crate::database::update_app_setting,
-            crate::database::update_app_settings,
-            crate::database::list_app_settings,
+            crate::config::commands::remember_recent_entry,
+            crate::config::commands::list_recent_entries,
+            crate::config::commands::clear_recent_entries,
+            crate::config::commands::create_document_snapshot,
+            crate::config::commands::list_document_snapshots,
+            crate::config::commands::update_app_setting,
+            crate::config::commands::update_app_settings,
+            crate::config::commands::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
             crate::window::commands::report_window_title,

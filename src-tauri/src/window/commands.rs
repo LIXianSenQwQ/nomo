@@ -1,5 +1,5 @@
+use crate::models::WindowStateInput;
 use crate::window::menu::install_window_menu;
-use crate::{database, models::WindowStateInput};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -18,7 +18,7 @@ pub(crate) fn update_window_state(
     input: WindowStateInput,
 ) -> Result<(), String> {
     crate::app_logger::debug("Window", &format!("更新窗口状态：key={key}"));
-    database::update_app_setting(
+    crate::config::commands::update_app_setting(
         app,
         crate::models::SettingInput {
             key,
@@ -89,7 +89,7 @@ pub(crate) fn create_new_window(
     pending_folder: Option<String>,
 ) -> Result<String, String> {
     let timer = std::time::Instant::now();
-    let id = format!("window-{}", database::now_ts());
+    let id = format!("window-{}", crate::config::now_ts());
     crate::app_logger::info(
         "Window",
         &format!(
@@ -100,7 +100,7 @@ pub(crate) fn create_new_window(
 
     // 新窗口加载前先写入待打开目录，避免前端初始化读取设置时发生竞态。
     if let Some(folder) = pending_folder {
-        database::update_app_setting(
+        crate::config::commands::update_app_setting(
             app.clone(),
             crate::models::SettingInput {
                 key: format!("pendingFolder:{}", id),

@@ -105,8 +105,8 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/src/file_system.rs'),
     'utf-8',
   );
-  const tauriDatabaseSource = readFileSync(
-    resolve(__dirname, '../../src-tauri/src/database.rs'),
+  const tauriConfigCommandsSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/config/commands.rs'),
     'utf-8',
   );
   const tauriStorageSource = readFileSync(
@@ -1085,7 +1085,7 @@ describe('App outline layout', () => {
     expect(tauriStorageSource).not.toContain('get_default_workspace_dir');
     expect(tauriLibSource).not.toContain('get_default_workspace_dir');
     expect(tauriFileSystemSource).not.toContain('get_default_workspace_dir');
-    expect(tauriDatabaseSource).toContain("DELETE FROM app_settings WHERE key = 'workspaceDir'");
+    expect(tauriConfigCommandsSource).not.toContain('workspaceDir');
   });
 
   it('keeps automatic local image cleanup behind an image setting toggle', () => {
