@@ -17,6 +17,17 @@ import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
 import { t } from '../i18n';
 
+// 从 Markdown 中提取第一个 H1 标题，生成建议文件名（清理非法字符）
+function suggestFileNameFromH1(markdown: string, fallbackName: string): string {
+  const match = markdown.match(/^#\s+(.+)$/m);
+  if (!match) return fallbackName;
+
+  let name = match[1].trim().replace(/[<>:"\/\\|?*]/g, '');
+  if (!name) return fallbackName;
+
+  return name.endsWith('.md') ? name : `${name}.md`;
+}
+
 interface DocumentActionsOptions {
   recoveryKey: string;
   getLargeDocumentLimit(): number;
@@ -138,6 +149,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       return;
     }
 
+    const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
+
     if (options.getDesktopEnabled()) {
       if (!saveAs && hasExternalFileChange()) {
         options.setStatusMessage(t.externalChangeChooseAction());
@@ -145,12 +158,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       }
 
       const path = saveAs ? null : options.getNativePath();
-      const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
+      // 步骤1：新文件保存时，尝试用文档第一个 H1 标题作为建议文件名
+      const fileName = path ? options.getFileName() : suggestFileNameFromH1(markdownToSave, options.getFileName());
       options.writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
       const { document, error } = await saveNativeMarkdownFile(
         path,
         markdownToSave,
-        options.getFileName(),
+        fileName,
         options.getCreateSnapshotBeforeSave() ? options.getNativePath() : null,
       );
       if (error) {
@@ -163,8 +177,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       return;
     }
 
-    const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
-    exportMarkdownInBrowser(markdownToSave, options.getFileName());
+    // 浏览器模式下同样用 H1 作为建议文件名
+    const fileName = suggestFileNameFromH1(markdownToSave, options.getFileName());
+    exportMarkdownInBrowser(markdownToSave, fileName);
     options.setStatusMessage(t.markdownExported());
     options.setMarkdown(markdownToSave);
     options.setDirty(false);

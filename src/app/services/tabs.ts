@@ -53,6 +53,10 @@ export function getNativeDocumentTargetTab(
   if (existingTab && saved) {
     return { tabs, activeTabId, targetTab: existingTab };
   }
+  // 保存未命名文件时，当前标签页即目标标签页，避免重复创建
+  if (saved && activeTab && !activeTab.nativePath) {
+    return { tabs, activeTabId, targetTab: activeTab };
+  }
 
   const newTab = createBlankTab('', '');
   return { tabs: [...tabs, newTab], activeTabId: newTab.id, targetTab: newTab };
