@@ -134,10 +134,10 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
         const pending = getPendingState(state);
         const ranges = pending.active
           ? pending.markTypeNames.map((markTypeName) => ({
-              markTypeName,
-              from: pending.anchorPos,
-              to: pending.headPos,
-            }))
+            markTypeName,
+            from: pending.anchorPos,
+            to: pending.headPos,
+          }))
           : findMarkEditRangesAtCursor(state);
 
         if (ranges.length === 0) return DecorationSet.empty;
@@ -188,18 +188,46 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       handleTextInput(view, from, to, text) {
         if (from !== to || !view.state.selection.empty) return false;
 
-        const markTypeNames = getMarkTypeNamesEndingAtCursor(view.state);
-        if (!markTypeNames || isCursorOnMarkedSide(view.state, from, markTypeNames)) return false;
+        const starting = getMarkTypeNamesStartingAtCursor(view.state);
+        const ending = getMarkTypeNamesEndingAtCursor(view.state);
 
+        const markTypeNames =
+          starting?.length
+            ? starting
+            : ending?.length
+              ? ending
+              : null;
+
+        if (!markTypeNames || markTypeNames.length === 0) {
+          return false;
+        }
+
+        // 如果当前是在 mark 内侧，说明用户就是想继续输入 code / strong / em
+        if (isCursorOnMarkedSide(view.state, from, markTypeNames)) {
+          return false;
+        }
+
+        // 如果当前是在 mark 外侧，则强制插入无 mark 文本
         view.dispatch(
-          view.state.tr.setStoredMarks([]).insertText(text, from, to).setStoredMarks([]),
+          view.state.tr
+            .insertText(text, from, to)
+            .setStoredMarks([]),
         );
+
         return true;
       },
     },
 
-    appendTransaction(transactions, _oldState, newState) {
-      if (!transactions.some((tr) => tr.docChanged)) return null;
+    appendTransaction(transactions, oldState, newState) {
+      const hasDocChanged = transactions.some((tr) => tr.docChanged);
+      const hasSelectionMoved = transactions.some((tr) => tr.selectionSet);
+
+      if (!hasDocChanged && hasSelectionMoved) {
+        const tr = restoreMarkedSideAfterSelectionMove(oldState, newState);
+        if (tr) return tr;
+      }
+
+      if (!hasDocChanged) return null;
       if (!newState.selection.empty || newState.storedMarks) return null;
 
       const markTypeNames = getMarkTypeNamesEndingAtCursor(newState);
@@ -231,34 +259,45 @@ function handleMarkBoundaryArrowKey(
 ): boolean {
   if (!state.selection.empty) return false;
 
+  const starting = getMarkTypeNamesStartingAtCursor(state);
+  const ending = getMarkTypeNamesEndingAtCursor(state);
+
   const markTypeNames =
     key === 'ArrowRight'
-      ? getMarkTypeNamesStartingAtCursor(state) || getMarkTypeNamesEndingAtCursor(state)
-      : getMarkTypeNamesEndingAtCursor(state) || getMarkTypeNamesStartingAtCursor(state);
+      ? starting?.length
+        ? starting
+        : ending
+      : ending?.length
+        ? ending
+        : starting;
+
   if (!markTypeNames || markTypeNames.length === 0) return false;
 
   const pos = state.selection.from;
-  const atOpeningBoundary = Boolean(getMarkTypeNamesStartingAtCursor(state));
+
+  const atOpeningBoundary = Boolean(
+    starting?.some((name) => markTypeNames.includes(name)),
+  );
   const currentlyInside = isCursorOnMarkedSide(state, pos, markTypeNames);
 
   if (key === 'ArrowRight' && atOpeningBoundary && !currentlyInside) {
     dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
-    return false;
+    return true;
   }
 
   if (key === 'ArrowLeft' && atOpeningBoundary && currentlyInside) {
     dispatch(state.tr.setStoredMarks([]));
-    return false;
+    return true;
   }
 
   if (key === 'ArrowRight' && !atOpeningBoundary && currentlyInside) {
     dispatch(state.tr.setStoredMarks([]));
-    return false;
+    return true;
   }
 
   if (key === 'ArrowLeft' && !atOpeningBoundary && !currentlyInside) {
     dispatch(state.tr.setStoredMarks(createMarks(state, markTypeNames)));
-    return false;
+    return true;
   }
 
   return false;
@@ -457,29 +496,78 @@ function getMarkTypeNamesEndingAtCursor(state: EditorState): string[] | null {
   return getBoundaryMarkTypeNames(state, 'end');
 }
 
-function getBoundaryMarkTypeNames(state: EditorState, boundary: 'start' | 'end'): string[] | null {
+function getBoundaryMarkTypeNames(
+  state: EditorState,
+  boundary: 'start' | 'end',
+): string[] | null {
   if (!state.selection.empty) return null;
 
   const $cursor = state.selection.$from;
   if (!$cursor.parent.isTextblock) return null;
 
-  const cursorOffset = $cursor.parentOffset;
-  let markTypeNames: string[] | null = null;
+  const leftNames = getSupportedMarkTypeNames($cursor.nodeBefore?.marks ?? []);
+  const rightNames = getSupportedMarkTypeNames($cursor.nodeAfter?.marks ?? []);
 
-  $cursor.parent.forEach((child, childOffset) => {
-    if (markTypeNames || !child.isInline) return;
-    const childEnd = childOffset + child.nodeSize;
-    const isBoundary =
-      boundary === 'start' ? cursorOffset === childOffset : cursorOffset === childEnd;
-    if (!isBoundary) return;
+  const leftSet = new Set(leftNames);
+  const rightSet = new Set(rightNames);
 
-    const names = child.marks
-      .map((mark) => mark.type.name)
-      .filter((markTypeName) => MARK_SYNTAX[markTypeName]);
-    if (names.length > 0) markTypeNames = uniqueMarkTypeNames(names);
-  });
+  const names =
+    boundary === 'start'
+      ? rightNames.filter((name) => !leftSet.has(name))
+      : leftNames.filter((name) => !rightSet.has(name));
 
-  return markTypeNames;
+  return names.length > 0 ? uniqueMarkTypeNames(names) : null;
+}
+
+function getSupportedMarkTypeNames(marks: readonly Mark[]): string[] {
+  return marks
+    .map((mark) => mark.type.name)
+    .filter((markTypeName) => MARK_SYNTAX[markTypeName]);
+}
+
+function restoreMarkedSideAfterSelectionMove(
+  oldState: EditorState,
+  newState: EditorState,
+): Transaction | null {
+  if (!oldState.selection.empty || !newState.selection.empty) return null;
+
+  const oldPos = oldState.selection.from;
+  const newPos = newState.selection.from;
+
+  if (oldPos === newPos) return null;
+  if (newState.storedMarks !== null) return null;
+
+  const movedLeft = newPos < oldPos;
+  const movedRight = newPos > oldPos;
+
+  if (!movedLeft && !movedRight) return null;
+
+  const boundaryMarkTypeNames = movedLeft
+    ? getMarkTypeNamesStartingAtCursor(newState)
+    : getMarkTypeNamesEndingAtCursor(newState);
+
+  if (!boundaryMarkTypeNames || boundaryMarkTypeNames.length === 0) {
+    return null;
+  }
+
+  if (!wasCursorInsideMarks(oldState, boundaryMarkTypeNames)) {
+    return null;
+  }
+
+  return newState.tr.setStoredMarks(createMarks(newState, boundaryMarkTypeNames));
+}
+
+function wasCursorInsideMarks(
+  state: EditorState,
+  markTypeNames: readonly string[],
+): boolean {
+  if (!state.selection.empty) return false;
+
+  const marks = state.storedMarks ?? state.selection.$from.marks();
+
+  return markTypeNames.every((markTypeName) =>
+    marks.some((mark) => mark.type.name === markTypeName),
+  );
 }
 
 function createDelimiterWidget(
