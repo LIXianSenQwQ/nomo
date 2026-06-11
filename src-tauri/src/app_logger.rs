@@ -94,7 +94,7 @@ fn write_force(level: &str, tag: &str, message: &str) {
 }
 
 fn logger_state() -> &'static Mutex<LoggerState> {
-    LOGGER_STATE.get_or_init(|| Mutex::new(LoggerState { enabled: true }))
+    LOGGER_STATE.get_or_init(|| Mutex::new(LoggerState { enabled: false }))
 }
 
 fn format_log_line(level: &str, tag: &str, message: &str) -> String {

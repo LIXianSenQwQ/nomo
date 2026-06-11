@@ -28,9 +28,9 @@ function now(): string {
 
 function readInitialEnabled(): boolean {
   if (typeof localStorage === 'undefined') {
-    return true;
+    return false;
   }
-  return localStorage.getItem(LOGGER_ENABLED_KEY) !== 'false';
+  return localStorage.getItem(LOGGER_ENABLED_KEY) === 'true';
 }
 
 function persistEnabled(enabled: boolean): void {
