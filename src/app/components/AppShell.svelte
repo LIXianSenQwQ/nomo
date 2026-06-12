@@ -17,6 +17,7 @@
   import { t } from '../i18n';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
+  type AppBootState = 'booting' | 'restoring-workspace' | 'opening-file' | 'ready';
 
   export let interfaceLocale: string;
   export let focusMode: boolean;
@@ -151,8 +152,9 @@
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
   export let onZoomChange: (percent: number) => void;
+  export let appBootState: AppBootState;
 
-  $: hasOpenDocument = tabs.length > 0 && Boolean(activeTabId);
+  $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
 </script>
 
 <div
@@ -245,25 +247,29 @@
 
     <section
       class="editor-shell"
-      class:no-open-document={!hasOpenDocument}
+      class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
       aria-label={t.semanticEditorArea()}
     >
-      <DocumentTabs
-        {interfaceLocale}
-        {tabs}
-        {activeTabId}
-        {previewTabId}
-        {switchTab}
-        {closeTab}
-        {pinPreviewTab}
-        {createNewFile}
-        {currentFolderPath}
-        on:closeOtherTabs
-        on:closeTabsToRight
-        on:closeAllTabs
-      />
+      {#if appBootState !== 'ready'}
+        <div class="startup-loading" role="status" aria-live="polite">
+          <span>正在恢复工作区...</span>
+        </div>
+      {:else if hasOpenDocument}
+        <DocumentTabs
+          {interfaceLocale}
+          {tabs}
+          {activeTabId}
+          {previewTabId}
+          {switchTab}
+          {closeTab}
+          {pinPreviewTab}
+          {createNewFile}
+          {currentFolderPath}
+          on:closeOtherTabs
+          on:closeTabsToRight
+          on:closeAllTabs
+        />
 
-      {#if hasOpenDocument}
         <EditorToolbar
           {interfaceLocale}
           {mode}
@@ -379,3 +385,17 @@
     {/if}
   </main>
 </div>
+
+<style>
+  .startup-loading {
+    grid-row: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    color: var(--md-editor-muted-fg);
+    font-size: 14px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+</style>

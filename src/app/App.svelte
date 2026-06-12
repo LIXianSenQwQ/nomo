@@ -272,6 +272,9 @@
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
+
+  type AppBootState = 'booting' | 'restoring-workspace' | 'opening-file' | 'ready';
+  let appBootState: AppBootState = 'booting';
   let filePreviewEnabled = DEFAULT_APP_PREFERENCES.filePreviewEnabled;
   let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
   let closeWindowBehavior = DEFAULT_APP_PREFERENCES.closeWindowBehavior;
@@ -2000,113 +2003,119 @@
   }
 
   onMount(async () => {
-    desktopEnabled = isTauriRuntime();
-    window.addEventListener('wheel', handleGlobalWheel, { capture: true, passive: false });
-    setupSystemThemeListener();
-    let persistedEditorMode: EditorMode | null = null;
-    let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
-    let restoredWorkspaceTabs = false;
-    let hasPendingFolder = false;
+    appBootState = 'restoring-workspace';
+    try {
+      desktopEnabled = isTauriRuntime();
+      window.addEventListener('wheel', handleGlobalWheel, { capture: true, passive: false });
+      setupSystemThemeListener();
+      let persistedEditorMode: EditorMode | null = null;
+      let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
+      let restoredWorkspaceTabs = false;
+      let hasPendingFolder = false;
 
-    if (desktopEnabled) {
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      windowLabel = getCurrentWindow().label;
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('refresh_window_menu').catch(() => undefined);
-      await setupCriticalDesktopEvents();
+      if (desktopEnabled) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        windowLabel = getCurrentWindow().label;
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('refresh_window_menu').catch(() => undefined);
+        await setupCriticalDesktopEvents();
 
-      settings = await listAppSettings().catch(() => []);
+        settings = await listAppSettings().catch(() => []);
 
-      // 先读取待处理的外部打开路径和文件夹，再决定如何恢复工作区
-      const pendingExternalOpenSetting = settings.find(
-        (s) => s.key === `pendingExternalOpen:${windowLabel}`,
-      );
-      if (pendingExternalOpenSetting) {
-        try {
-          const paths = JSON.parse(pendingExternalOpenSetting.valueJson);
-          if (Array.isArray(paths)) {
-            pendingExternalOpenPaths = paths.filter(
-              (path): path is string => typeof path === 'string',
-            );
+        // 先读取待处理的外部打开路径和文件夹，再决定如何恢复工作区
+        const pendingExternalOpenSetting = settings.find(
+          (s) => s.key === `pendingExternalOpen:${windowLabel}`,
+        );
+        if (pendingExternalOpenSetting) {
+          try {
+            const paths = JSON.parse(pendingExternalOpenSetting.valueJson);
+            if (Array.isArray(paths)) {
+              pendingExternalOpenPaths = paths.filter(
+                (path): path is string => typeof path === 'string',
+              );
+            }
+            await updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
+          } catch {
+            // ignore
           }
-          await updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
-        } catch {
-          // ignore
         }
-      }
 
-      let pendingFolderPath = '';
-      const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
-      if (pendingFolderSetting) {
-        try {
-          const folderPath = JSON.parse(pendingFolderSetting.valueJson);
-          if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
-            pendingFolderPath = folderPath;
-            hasPendingFolder = true;
-            await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
+        let pendingFolderPath = '';
+        const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
+        if (pendingFolderSetting) {
+          try {
+            const folderPath = JSON.parse(pendingFolderSetting.valueJson);
+            if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
+              pendingFolderPath = folderPath;
+              hasPendingFolder = true;
+              await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
-      }
 
-      if (pendingExternalOpenPaths.length > 0) {
-        // 双击 md 文件启动：不恢复上次工作区，稍后单独加载文件所在目录并打开该文件
-        restoredWorkspaceTabs = false;
-      } else {
-        await restoreWindowWorkspaceState(settings);
-        restoredWorkspaceTabs = tabs.length > 0;
-
-        // 若待打开文件夹与恢复的工作区不同，先清除旧标签页
-        if (
-          pendingFolderPath &&
-          currentFolderPath &&
-          !sameFileSystemPath(currentFolderPath, pendingFolderPath)
-        ) {
-          clearAllTabsWithoutCreatingBlank();
+        if (pendingExternalOpenPaths.length > 0) {
+          // 双击 md 文件启动：不恢复上次工作区，稍后单独加载文件所在目录并打开该文件
           restoredWorkspaceTabs = false;
+        } else {
+          await restoreWindowWorkspaceState(settings);
+          restoredWorkspaceTabs = tabs.length > 0;
+
+          // 若待打开文件夹与恢复的工作区不同，先清除旧标签页
+          if (
+            pendingFolderPath &&
+            currentFolderPath &&
+            !sameFileSystemPath(currentFolderPath, pendingFolderPath)
+          ) {
+            clearAllTabsWithoutCreatingBlank();
+            restoredWorkspaceTabs = false;
+          }
+          if (pendingFolderPath) {
+            currentFolderPath = pendingFolderPath;
+            startupFolderPath = pendingFolderPath;
+          }
         }
-        if (pendingFolderPath) {
-          currentFolderPath = pendingFolderPath;
-          startupFolderPath = pendingFolderPath;
-        }
+
+        const appPreferences = await loadAppPreferences(desktopEnabled, settings);
+        await applyAppPreferences(appPreferences, { applyEditorMode: false });
+        persistedEditorMode = appPreferences.editorMode;
       }
 
-      const appPreferences = await loadAppPreferences(desktopEnabled, settings);
-      await applyAppPreferences(appPreferences, { applyEditorMode: false });
-      persistedEditorMode = appPreferences.editorMode;
+      if (persistedEditorMode && !largeDocumentMode) {
+        mode = persistedEditorMode;
+        editor.updateOptions({ mode: persistedEditorMode });
+      }
+      // 确保 blockStyle 默认值写入 DOM
+      applyBlockStyleSetting(blockStyle);
+      await setupDesktopEvents();
+      await refreshRecentFiles();
+      if (pendingExternalOpenPaths.length === 0) {
+        await maybeOpenFirstRunSample({
+          settings,
+          recentFilesCount: recentFiles.length,
+          restoredWorkspaceTabs,
+          hasPendingFolder,
+        });
+      }
+      if (pendingExternalOpenPaths.length > 0) {
+        appBootState = 'opening-file';
+        await openStartupExternalMarkdownPaths(pendingExternalOpenPaths);
+      } else {
+        scheduleStartupFolderLoad();
+      }
+      pendingExternalOpenPaths = [];
+      window.addEventListener('keydown', handleGlobalShortcut);
+      fileCheckTimer = window.setInterval(() => {
+        void checkExternalFileChange();
+        void syncExplorerWithFileSystem();
+      }, 5000);
+      await tick();
+      syncSourceTextareaHeight();
+      await updateWindowTitle().catch(() => undefined);
+    } finally {
+      appBootState = 'ready';
     }
-
-    if (persistedEditorMode && !largeDocumentMode) {
-      mode = persistedEditorMode;
-      editor.updateOptions({ mode: persistedEditorMode });
-    }
-    // 确保 blockStyle 默认值写入 DOM
-    applyBlockStyleSetting(blockStyle);
-    await setupDesktopEvents();
-    await refreshRecentFiles();
-    if (pendingExternalOpenPaths.length === 0) {
-      await maybeOpenFirstRunSample({
-        settings,
-        recentFilesCount: recentFiles.length,
-        restoredWorkspaceTabs,
-        hasPendingFolder,
-      });
-    }
-    if (pendingExternalOpenPaths.length > 0) {
-      await openStartupExternalMarkdownPaths(pendingExternalOpenPaths);
-    } else {
-      scheduleStartupFolderLoad();
-    }
-    pendingExternalOpenPaths = [];
-    window.addEventListener('keydown', handleGlobalShortcut);
-    fileCheckTimer = window.setInterval(() => {
-      void checkExternalFileChange();
-      void syncExplorerWithFileSystem();
-    }, 5000);
-    await tick();
-    syncSourceTextareaHeight();
-    await updateWindowTitle().catch(() => undefined);
   });
 
   onDestroy(() => {
@@ -2687,6 +2696,7 @@
 
 <AppShell
   {interfaceLocale}
+  {appBootState}
   bind:fileInput
   bind:sourcePane
   bind:semanticPane
