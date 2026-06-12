@@ -454,4 +454,20 @@ describe('createEditorCore', () => {
     });
     expect(result).toBe(false);
   });
+
+  it('setDirty resets internal dirty state so selection-only transactions stay clean', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    view.dispatch(view.state.tr.insertText('编辑'));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    editor.setDirty(false);
+
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
+    expect(dirtyEvents.at(-1)).toBe(false);
+  });
 });

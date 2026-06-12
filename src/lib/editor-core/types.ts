@@ -177,6 +177,7 @@ export interface EditorCore {
   destroy(): void;
   getMarkdown(): string;
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void;
+  setDirty(dirty: boolean): void;
   getSnapshot(): EditorSnapshot;
   restoreSnapshot(snapshot: EditorSnapshot): void;
   focus(): void;

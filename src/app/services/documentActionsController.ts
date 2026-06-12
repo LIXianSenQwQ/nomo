@@ -183,6 +183,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setStatusMessage(t.markdownExported());
     options.setMarkdown(markdownToSave);
     options.setDirty(false);
+    options.getEditor().setDirty(false);
   }
 
   async function openRecentFile(path: string) {
@@ -288,6 +289,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setNativePath(targetTab.nativePath);
     options.setMarkdown(markdownToSave);
     options.setDirty(false);
+    options.getEditor().setDirty(false);
     options.setLastKnownModifiedAt(targetTab.lastKnownModifiedAt);
     options.setLargeDocumentMode(targetTab.largeDocumentMode);
     options.setReadonlyDocumentMode(targetTab.readonlyDocumentMode);
@@ -463,6 +465,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
           if (options.getActiveTabId() === tabId) {
             options.setDirty(false);
+            options.getEditor().setDirty(false);
             options.setLastKnownModifiedAt(document.modifiedAt);
           }
           options.setTabs([...tabs]);

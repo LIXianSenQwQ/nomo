@@ -158,6 +158,11 @@ export class ProseMirrorEditorCore implements EditorCore {
     return this.markdown;
   }
 
+  setDirty(dirty: boolean): void {
+    this.assertActive();
+    this.dirty = dirty;
+  }
+
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
     this.assertActive();
     const previousMarkdown = this.markdown;
