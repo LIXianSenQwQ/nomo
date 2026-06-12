@@ -131,7 +131,11 @@
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
   import { setScrollTop } from './services/outlineNavigation';
-  import { findTextMatches, replaceAllTextMatches, replaceTextRange } from './services/searchReplace';
+  import {
+    findTextMatches,
+    replaceAllTextMatches,
+    replaceTextRange,
+  } from './services/searchReplace';
   import { createKatexMathRenderer } from '../lib/services/katexMathRenderer';
   import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
   import { createShikiCodeTokenizer } from '../lib/services/shikiCodeTokenizer';
@@ -276,11 +280,45 @@
 
   function persistWorkspaceState() {
     if (desktopEnabled && windowLabel) {
-      updateAppSetting(`workspaceTabs:${windowLabel}`, {
-        tabs,
-        activeTabId,
-        currentFolderPath,
-      }).catch(() => undefined);
+      const state = { tabs, activeTabId, currentFolderPath };
+      updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
+      if (currentFolderPath) {
+        updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(() => undefined);
+      }
+    }
+  }
+
+  async function persistFolderWorkspaceState(
+    folderPath: string,
+    folderTabs: Tab[],
+    folderActiveTabId: string,
+  ) {
+    if (!desktopEnabled || !folderPath || !windowLabel) return;
+    await updateAppSetting(`workspaceTabs:folder:${folderPath}`, {
+      tabs: folderTabs,
+      activeTabId: folderActiveTabId,
+      currentFolderPath: folderPath,
+    }).catch(() => undefined);
+  }
+
+  async function restoreFolderWorkspaceState(folderPath: string) {
+    if (!desktopEnabled || !folderPath) return;
+    const settings = await listAppSettings().catch(() => []);
+    const setting = settings.find((s) => s.key === `workspaceTabs:folder:${folderPath}`);
+    if (!setting) return;
+    try {
+      const state = JSON.parse(setting.valueJson) as WorkspaceState;
+      if (state.tabs && state.tabs.length > 0) {
+        tabs = state.tabs;
+        activeTabId = state.activeTabId;
+        const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+        if (activeTab) {
+          activeTabId = activeTab.id;
+          loadTabState(activeTab);
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -432,7 +470,7 @@
   }
 
   // 步骤：关闭全部标签页前统一确认未保存内容，确认后不自动创建空白标签。
-  function closeAllTabsWithConfirmation() {
+  function closeAllTabsWithConfirmation(options?: { skipPersist?: boolean }) {
     const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
@@ -440,11 +478,11 @@
       if (!ok) return false;
     }
 
-    clearAllTabsWithoutCreatingBlank();
+    clearAllTabsWithoutCreatingBlank(options);
     return true;
   }
 
-  function clearAllTabsWithoutCreatingBlank() {
+  function clearAllTabsWithoutCreatingBlank(options?: { skipPersist?: boolean }) {
     isSwitchingTab = true;
     try {
       tabs = [];
@@ -468,17 +506,26 @@
       isSwitchingTab = false;
     }
     updateWindowTitle();
-    persistWorkspaceState();
+    if (!options?.skipPersist) {
+      persistWorkspaceState();
+    }
   }
 
   async function openFolderInCurrentWindow(folderPath: string) {
     if (!currentFolderPath || !sameFileSystemPath(currentFolderPath, folderPath)) {
-      if (!closeAllTabsWithConfirmation()) {
+      // 切换文件夹前保存当前文件夹状态，避免清空标签后的空状态覆盖已有记录
+      if (currentFolderPath && tabs.length > 0) {
+        await persistFolderWorkspaceState(currentFolderPath, tabs, activeTabId).catch(
+          () => undefined,
+        );
+      }
+      if (!closeAllTabsWithConfirmation({ skipPersist: true })) {
         return;
       }
     }
     currentFolderPath = folderPath;
     await loadFolder(folderPath);
+    await restoreFolderWorkspaceState(folderPath);
     await rememberNativeFolder(folderPath);
     await refreshRecentFiles();
   }
@@ -1923,6 +1970,35 @@
     window.setTimeout(runStartupFolderLoad, 0);
   }
 
+  async function restoreWindowWorkspaceState(
+    settings: Awaited<ReturnType<typeof listAppSettings>>,
+  ) {
+    if (!desktopEnabled || !windowLabel) return;
+    const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
+    const workspaceTabsSetting =
+      settings.find((s) => s.key === workspaceTabsKey) ??
+      settings.find((s) => s.key === 'workspaceTabs');
+    if (!workspaceTabsSetting) return;
+    try {
+      const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
+      if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
+        currentFolderPath = state.currentFolderPath;
+        startupFolderPath = state.currentFolderPath;
+      }
+      if (state.tabs && state.tabs.length > 0) {
+        tabs = state.tabs;
+        activeTabId = state.activeTabId;
+        const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+        if (activeTab) {
+          activeTabId = activeTab.id;
+          loadTabState(activeTab);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   onMount(async () => {
     desktopEnabled = isTauriRuntime();
     window.addEventListener('wheel', handleGlobalWheel, { capture: true, passive: false });
@@ -1931,7 +2007,6 @@
     let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
     let restoredWorkspaceTabs = false;
     let hasPendingFolder = false;
-    let restoredFolderPath = '';
 
     if (desktopEnabled) {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -1941,62 +2016,8 @@
       await setupCriticalDesktopEvents();
 
       settings = await listAppSettings().catch(() => []);
-      // 优先读取窗口独立的状态，兼容旧的全局 key
-      const workspaceTabsKey = windowLabel ? `workspaceTabs:${windowLabel}` : 'workspaceTabs';
-      const workspaceTabsSetting =
-        settings.find((s) => s.key === workspaceTabsKey) ??
-        settings.find((s) => s.key === 'workspaceTabs');
-      if (workspaceTabsSetting) {
-        try {
-          const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
-          if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
-            currentFolderPath = state.currentFolderPath;
-            startupFolderPath = state.currentFolderPath;
-            restoredFolderPath = state.currentFolderPath;
-          }
-          if (state.tabs && state.tabs.length > 0) {
-            tabs = state.tabs;
-            activeTabId = state.activeTabId;
-            const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-            activeTabId = activeTab.id;
-            loadTabState(activeTab);
-            restoredWorkspaceTabs = true;
-          }
-        } catch {
-          // ignore
-        }
-      }
 
-      const appPreferences = await loadAppPreferences(desktopEnabled, settings);
-      await applyAppPreferences(appPreferences, { applyEditorMode: false });
-      persistedEditorMode = appPreferences.editorMode;
-
-      // 步骤2：检查是否由后端携带了待打开路径（新窗口打开文件夹）
-      const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
-      if (pendingFolderSetting) {
-        try {
-          const folderPath = JSON.parse(pendingFolderSetting.valueJson);
-          if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
-            hasPendingFolder = true;
-            // 若恢复的标签页属于不同文件夹，先清除旧标签页
-            if (
-              restoredWorkspaceTabs &&
-              restoredFolderPath &&
-              !sameFileSystemPath(restoredFolderPath, folderPath)
-            ) {
-              clearAllTabsWithoutCreatingBlank();
-              restoredWorkspaceTabs = false;
-            }
-            currentFolderPath = folderPath;
-            startupFolderPath = folderPath;
-            // 标记为已消费，避免刷新时重复处理
-            await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
+      // 先读取待处理的外部打开路径和文件夹，再决定如何恢复工作区
       const pendingExternalOpenSetting = settings.find(
         (s) => s.key === `pendingExternalOpen:${windowLabel}`,
       );
@@ -2013,6 +2034,47 @@
           // ignore
         }
       }
+
+      let pendingFolderPath = '';
+      const pendingFolderSetting = settings.find((s) => s.key === `pendingFolder:${windowLabel}`);
+      if (pendingFolderSetting) {
+        try {
+          const folderPath = JSON.parse(pendingFolderSetting.valueJson);
+          if (folderPath && typeof folderPath === 'string' && folderPath.length > 0) {
+            pendingFolderPath = folderPath;
+            hasPendingFolder = true;
+            await updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (pendingExternalOpenPaths.length > 0) {
+        // 双击 md 文件启动：不恢复上次工作区，稍后单独加载文件所在目录并打开该文件
+        restoredWorkspaceTabs = false;
+      } else {
+        await restoreWindowWorkspaceState(settings);
+        restoredWorkspaceTabs = tabs.length > 0;
+
+        // 若待打开文件夹与恢复的工作区不同，先清除旧标签页
+        if (
+          pendingFolderPath &&
+          currentFolderPath &&
+          !sameFileSystemPath(currentFolderPath, pendingFolderPath)
+        ) {
+          clearAllTabsWithoutCreatingBlank();
+          restoredWorkspaceTabs = false;
+        }
+        if (pendingFolderPath) {
+          currentFolderPath = pendingFolderPath;
+          startupFolderPath = pendingFolderPath;
+        }
+      }
+
+      const appPreferences = await loadAppPreferences(desktopEnabled, settings);
+      await applyAppPreferences(appPreferences, { applyEditorMode: false });
+      persistedEditorMode = appPreferences.editorMode;
     }
 
     if (persistedEditorMode && !largeDocumentMode) {
@@ -2023,14 +2085,19 @@
     applyBlockStyleSetting(blockStyle);
     await setupDesktopEvents();
     await refreshRecentFiles();
-    await maybeOpenFirstRunSample({
-      settings,
-      recentFilesCount: recentFiles.length,
-      restoredWorkspaceTabs,
-      hasPendingFolder,
-    });
-    scheduleStartupFolderLoad();
-    await openExternalMarkdownPaths(pendingExternalOpenPaths);
+    if (pendingExternalOpenPaths.length === 0) {
+      await maybeOpenFirstRunSample({
+        settings,
+        recentFilesCount: recentFiles.length,
+        restoredWorkspaceTabs,
+        hasPendingFolder,
+      });
+    }
+    if (pendingExternalOpenPaths.length > 0) {
+      await openStartupExternalMarkdownPaths(pendingExternalOpenPaths);
+    } else {
+      scheduleStartupFolderLoad();
+    }
     pendingExternalOpenPaths = [];
     window.addEventListener('keydown', handleGlobalShortcut);
     fileCheckTimer = window.setInterval(() => {
@@ -2404,6 +2471,34 @@
     const supportedPaths = paths.filter((path) => /\.(md|markdown|txt)$/i.test(path));
     for (const path of supportedPaths) {
       await openRecentEntry(path, 'file');
+    }
+  }
+
+  // 双击 md 文件启动：不恢复上次工作区，只打开文件所在目录并打开该文件
+  async function openStartupExternalMarkdownPaths(paths: string[]) {
+    if (!desktopEnabled || paths.length === 0) {
+      return;
+    }
+
+    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt)$/i.test(path));
+    if (supportedPaths.length === 0) {
+      return;
+    }
+
+    // 丢弃恢复的标签，避免上次工作区干扰
+    clearAllTabsWithoutCreatingBlank({ skipPersist: true });
+
+    const firstPath = supportedPaths[0];
+    const parentDir = getDirectoryLabel(firstPath);
+
+    if (parentDir && parentDir !== t.currentFolder()) {
+      currentFolderPath = parentDir;
+      await loadFolder(parentDir).catch(() => undefined);
+      await rememberNativeFolder(parentDir).catch(() => undefined);
+    }
+
+    for (const path of supportedPaths) {
+      await openRecentFile(path);
     }
   }
 

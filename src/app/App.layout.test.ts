@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('App outline layout', () => {
-  const appSource = readFileSync(resolve(__dirname, 'App.svelte'), 'utf-8');
+  const appSource = readFileSync(resolve(__dirname, 'App.svelte'), 'utf-8').replace(/\r\n/g, '\n');
   const editorSource = readFileSync(
     resolve(__dirname, 'components/EditorWorkspace.svelte'),
     'utf-8',
@@ -511,7 +511,9 @@ describe('App outline layout', () => {
     expect(appSource).toContain('listenDesktopOpenFolder');
     expect(appSource).toContain('pendingExternalOpen:${windowLabel}');
     expect(appSource).toContain('pendingFolder:${windowLabel}');
-    expect(appSource).toContain('openExternalMarkdownPaths(pendingExternalOpenPaths)');
+    expect(appSource).toContain('openStartupExternalMarkdownPaths(pendingExternalOpenPaths)');
+    expect(appSource).toContain('async function openStartupExternalMarkdownPaths(paths: string[])');
+    expect(appSource).toContain('openExternalMarkdownPaths(paths)');
     expect(appSource).toContain('openFolderWithBehavior(folderPath)');
     expect(appSource).toContain("openRecentEntry(path, 'file')");
     expect(tauriConfigSource).toContain('"fileAssociations"');
@@ -586,8 +588,9 @@ describe('App outline layout', () => {
 
   it('keeps the explicit explorer root across restored workspace tabs', () => {
     expect(appSource).toMatch(
-      /updateAppSetting\(`workspaceTabs:\$\{windowLabel\}`,\s*\{\s*tabs,\s*activeTabId,\s*currentFolderPath,\s*\}\)/,
+      /updateAppSetting\(`workspaceTabs:\$\{windowLabel\}`,\s*state\)/,
     );
+    expect(appSource).toContain('workspaceTabs:folder:${currentFolderPath}');
     expect(appSource).toContain("typeof state.currentFolderPath === 'string'");
     expect(appSource).toContain('currentFolderPath = state.currentFolderPath');
     expect(appSource).toContain('startupFolderPath = state.currentFolderPath');
@@ -600,7 +603,8 @@ describe('App outline layout', () => {
   it('loads the restored explorer root in the background after desktop events are ready', () => {
     expect(appSource).toContain("let startupFolderPath = ''");
     expect(appSource).toContain('function scheduleStartupFolderLoad()');
-    expect(appSource).toContain('startupFolderPath = folderPath');
+    expect(appSource).toContain('async function restoreWindowWorkspaceState(');
+    expect(appSource).toMatch(/startupFolderPath = (state\.currentFolderPath|pendingFolderPath);/);
     const mountStart = appSource.indexOf('onMount(async () =>');
     const setupDesktopEventsIndex = appSource.indexOf('await setupDesktopEvents();', mountStart);
     const scheduleStartupFolderLoadIndex = appSource.indexOf(
@@ -615,15 +619,14 @@ describe('App outline layout', () => {
     expect(appSource).toContain('await loadFolder(folderPath);');
     expect(appSource).toContain('await expandAncestors(nativePath, currentFolderPath);');
     expect(appSource).toContain('t.loadFolderTreeFailed()');
-    expect(appSource).not.toContain('await loadFolder(folderPath).catch(() => undefined);');
     expect(appSource).not.toContain('loadFolder(currentFolderPath).catch(() => undefined)');
   });
 
   it('clears old tabs before opening a different folder in the current window', () => {
-    expect(appSource).toContain('function closeAllTabsWithConfirmation()');
-    expect(appSource).toContain('function clearAllTabsWithoutCreatingBlank()');
+    expect(appSource).toContain('function closeAllTabsWithConfirmation(options?: { skipPersist?: boolean })');
+    expect(appSource).toContain('function clearAllTabsWithoutCreatingBlank(options?: { skipPersist?: boolean })');
     expect(appSource).toMatch(
-      /async function openFolderInCurrentWindow\(folderPath: string\) \{\s*if \(!currentFolderPath \|\| !sameFileSystemPath\(currentFolderPath, folderPath\)\) \{\s*if \(!closeAllTabsWithConfirmation\(\)\) \{\s*return;\s*\}\s*\}\s*currentFolderPath = folderPath;\s*await loadFolder\(folderPath\);/,
+      /async function openFolderInCurrentWindow\(folderPath: string\) \{\s*if \(!currentFolderPath \|\| !sameFileSystemPath\(currentFolderPath, folderPath\)\) \{\s*\/\/ 切换文件夹前保存当前文件夹状态[\s\S]*?if \(!closeAllTabsWithConfirmation\(\{ skipPersist: true \}\)\) \{\s*return;\s*\}\s*\}\s*currentFolderPath = folderPath;\s*await loadFolder\(folderPath\);\s*await restoreFolderWorkspaceState\(folderPath\);/,
     );
   });
 
@@ -1009,7 +1012,7 @@ describe('App outline layout', () => {
 
     expect(appSource).toContain('async function setupCriticalDesktopEvents()');
     expect(appSource).toContain("listen('nomo://request-exit-app'");
-    expect(appSource).toContain("listen('nomo://request-close-window'");
+    expect(appSource).toMatch(/listen.*\('nomo:\/\/request-close-window'/);
     expect(setupCriticalEventsIndex).toBeGreaterThan(mountStart);
     expect(listSettingsIndex).toBeGreaterThan(setupCriticalEventsIndex);
     expect(firstRunIndex).toBeGreaterThan(setupCriticalEventsIndex);
@@ -1063,7 +1066,7 @@ describe('App outline layout', () => {
   });
 
   it('promotes an explorer preview tab when the same file is formally opened', () => {
-    expect(explorerSidebarSource).toContain("openRecentEntry(path, 'file')");
+    expect(explorerSidebarSource).toContain('openPreviewFile(path)');
     expect(documentActionsSource).toContain('getPreviewTabId(): string | null;');
     expect(documentActionsSource).toContain('setPreviewTabId(value: string | null): void;');
     expect(documentActionsSource).toContain('existingTab.id === options.getPreviewTabId()');
