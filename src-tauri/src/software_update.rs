@@ -72,7 +72,7 @@ struct GitHubReleaseAsset {
 }
 
 #[tauri::command]
-pub(crate) fn is_windows_installer_installation() -> Result<bool, String> {
+pub(crate) async fn is_windows_installer_installation() -> Result<bool, String> {
     is_current_windows_installer_installation()
 }
 
@@ -309,8 +309,13 @@ fn normalize_path(path: &Path) -> String {
 
 #[cfg(target_os = "windows")]
 fn query_reg_value(root: &str, key: &str, value: &str) -> Result<Option<String>, String> {
+    use std::os::windows::process::CommandExt;
+    // 禁止为 reg.exe 创建可见控制台窗口，避免执行时弹出黑框
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
     let output = std::process::Command::new("reg.exe")
         .args(["query", &format!("{root}\\{key}"), "/v", value])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|error| format!("调用 reg.exe 失败：{error}"))?;
 

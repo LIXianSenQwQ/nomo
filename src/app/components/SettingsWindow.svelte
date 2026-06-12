@@ -168,15 +168,6 @@
     logToTerminal('info', 'SettingsWindow', '设置窗口打开');
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
-    if (!isSoftwareUpdateSupported()) {
-      logToTerminal('warn', 'SettingsWindow', '当前运行环境不支持软件更新');
-      updateState = {
-        status: 'unsupported',
-        message: t.softwareUpdateUnsupported(),
-      };
-    } else {
-      void refreshSoftwareUpdateSupport();
-    }
     void loadPreferences();
     window.addEventListener('focus', handleWindowFocus);
 
@@ -219,6 +210,9 @@
     activeCategory = categoryId;
     if (categoryId === 'files') {
       void ensureFilesIntegrationStatus();
+    }
+    if (categoryId === 'about') {
+      void ensureSoftwareUpdateSupportChecked();
     }
   }
 
@@ -456,27 +450,75 @@
     }
   }
 
+  async function ensureSoftwareUpdateSupportChecked() {
+    // 只在首次进入关于页且状态为 idle 时检查，避免反复切换分类重复执行
+    if (updateState.status !== 'idle') {
+      return;
+    }
+    if (!isSoftwareUpdateSupported()) {
+      updateState = {
+        status: 'unsupported',
+        message: t.softwareUpdateUnsupported(),
+      };
+      return;
+    }
+    await refreshSoftwareUpdateSupport();
+  }
+
   async function refreshSoftwareUpdateSupport() {
-    // const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
-    // try {
-    //   if (!(await isSoftwareUpdateInstallerSupported())) {
-    //     logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
-    //     updateState = {
-    //       status: 'unsupported',
-    //       message: t.softwareUpdateUnsupported(),
-    //     };
-    //   }
-    // } catch (error) {
-    //   logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
-    //     error: error instanceof Error ? error.message : String(error),
-    //   });
-    //   updateState = {
-    //     status: 'unsupported',
-    //     message: t.softwareUpdateUnsupported(),
-    //   };
-    // } finally {
-    //   timer.end();
-    // }
+    const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
+    updateState = {
+      ...updateState,
+      status: 'checking',
+      message: t.softwareUpdateChecking(),
+    };
+
+    // 步骤1：调用后端检查安装方式，设置超时防止子进程异常导致 UI 永久转圈
+    const SUPPORT_CHECK_TIMEOUT_MS = 8000;
+    let timeoutId: number | null = null;
+    try {
+      const supported = await Promise.race([
+        isSoftwareUpdateInstallerSupported().finally(() => {
+          if (timeoutId !== null) {
+            window.clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        }),
+        new Promise<boolean>((_, reject) => {
+          timeoutId = window.setTimeout(
+            () => reject(new Error('检查更新支持状态超时')),
+            SUPPORT_CHECK_TIMEOUT_MS,
+          );
+        }),
+      ]);
+
+      // 步骤2：根据检查结果更新 UI 状态
+      if (!supported) {
+        logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
+        updateState = {
+          status: 'unsupported',
+          message: t.softwareUpdateUnsupported(),
+        };
+        return;
+      }
+      updateState = {
+        status: 'idle',
+        message: '',
+      };
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      updateState = {
+        status: 'unsupported',
+        message: t.softwareUpdateUnsupported(),
+      };
+    } finally {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      timer.end();
+    }
   }
 
   async function installDownloadedSoftwareUpdate() {
@@ -594,6 +636,9 @@
   }
 
   function getSoftwareUpdatePillLabel() {
+    if (updateState.status === 'checking') {
+      return t.checking();
+    }
     if (updateState.status === 'upToDate') {
       return t.softwareUpdateLatest();
     }
@@ -613,6 +658,9 @@
   }
 
   function getSoftwareUpdatePillClass() {
+    if (updateState.status === 'checking') {
+      return 'pending';
+    }
     if (updateState.status === 'upToDate' || updateState.status === 'downloaded') {
       return 'bound';
     }
@@ -631,6 +679,14 @@
       updateState.status === 'downloading' ||
       updateState.status === 'installing' ||
       updateState.status === 'unsupported'
+    );
+  }
+
+  function isSoftwareUpdateBusy() {
+    return (
+      updateState.status === 'checking' ||
+      updateState.status === 'downloading' ||
+      updateState.status === 'installing'
     );
   }
 
@@ -2189,6 +2245,9 @@
                     disabled={isSoftwareUpdateButtonDisabled()}
                     on:click={handleSoftwareUpdateButton}
                   >
+                    {#if isSoftwareUpdateBusy()}
+                      <span class="update-busy-spinner" aria-hidden="true"></span>
+                    {/if}
                     {getSoftwareUpdateButtonLabel()}
                   </button>
                 </div>
@@ -2588,6 +2647,10 @@
 
   .action-button {
     justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     min-width: 116px;
     height: 34px;
     padding: 0 12px;
@@ -2616,6 +2679,24 @@
   .action-button:disabled {
     cursor: not-allowed;
     opacity: 0.55;
+  }
+
+  .update-busy-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: update-busy-spin 700ms linear infinite;
+  }
+
+  @keyframes update-busy-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .association-action {
