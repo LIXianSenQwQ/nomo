@@ -229,6 +229,13 @@ describe('settings', () => {
     ).toBe('close-to-tray');
   });
 
+  it('defaults developer mode to false and preserves explicit value', () => {
+    expect(DEFAULT_APP_PREFERENCES.developerMode).toBe(false);
+    expect(normalizeAppPreferences({}).developerMode).toBe(false);
+    expect(normalizeAppPreferences({ developerMode: true }).developerMode).toBe(true);
+    expect(normalizeAppPreferences({ developerMode: false }).developerMode).toBe(false);
+  });
+
   it('migrates legacy close-to-tray choices into close window behavior', async () => {
     await expect(
       loadAppPreferences(true, [

@@ -140,6 +140,7 @@
     type ImageContext,
     type ImageHandlingSettings,
   } from '../lib/services/render';
+  import { disableLogger, enableLogger } from '../lib/services/logger';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
@@ -271,6 +272,7 @@
   let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
   let closeWindowBehavior = DEFAULT_APP_PREFERENCES.closeWindowBehavior;
   let windowLabel = '';
+  let developerMode = DEFAULT_APP_PREFERENCES.developerMode;
 
   function persistWorkspaceState() {
     if (desktopEnabled && windowLabel) {
@@ -1712,6 +1714,7 @@
     codeBlockIndent = preferences.codeBlockIndent;
     inlineCodeRenderingEnabled = preferences.inlineCodeRenderingEnabled;
     shortcutPreferences = preferences.shortcutPreferences;
+    developerMode = preferences.developerMode;
 
     if (!filePreviewEnabled) {
       previewTabId = null;
@@ -1749,6 +1752,12 @@
       editor.updateOptions({ mode: preferences.editorMode });
     }
 
+    if (preferences.developerMode) {
+      enableLogger();
+    } else {
+      disableLogger();
+    }
+
     persistWorkspaceState();
   }
 
@@ -1783,6 +1792,7 @@
       inlineCodeRenderingEnabled,
       shortcutPreferences,
       imageHandlingSettings: imageSettings,
+      developerMode,
     });
   }
 

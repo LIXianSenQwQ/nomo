@@ -83,6 +83,7 @@ export interface AppPreferences {
   inlineCodeRenderingEnabled: boolean;
   shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
+  developerMode: boolean;
 }
 
 export type AppPreferenceKey = keyof AppPreferences;
@@ -137,6 +138,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   inlineCodeRenderingEnabled: true,
   shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
+  developerMode: false,
 };
 
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
@@ -271,6 +273,7 @@ export async function loadAppPreferences(
     imageHandlingSettings:
       parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
       parseLocalImageSettings(),
+    developerMode: parseSetting<unknown>(settings, 'developerMode'),
   });
 }
 
@@ -410,6 +413,10 @@ export function normalizeAppPreferences(
     imageHandlingSettings: normalizeImageSettings(
       value.imageHandlingSettings as Partial<ImageHandlingSettings> | null | undefined,
     ),
+    developerMode:
+      typeof value.developerMode === 'boolean'
+        ? value.developerMode
+        : DEFAULT_APP_PREFERENCES.developerMode,
   };
 }
 
@@ -553,6 +560,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     inlineCodeRenderingEnabled: preferences.inlineCodeRenderingEnabled,
     shortcutPreferences: preferences.shortcutPreferences,
     imageHandlingSettings: preferences.imageHandlingSettings,
+    developerMode: preferences.developerMode,
   };
 }
 

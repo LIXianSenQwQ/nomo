@@ -457,26 +457,26 @@
   }
 
   async function refreshSoftwareUpdateSupport() {
-    const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
-    try {
-      if (!(await isSoftwareUpdateInstallerSupported())) {
-        logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
-        updateState = {
-          status: 'unsupported',
-          message: t.softwareUpdateUnsupported(),
-        };
-      }
-    } catch (error) {
-      logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      updateState = {
-        status: 'unsupported',
-        message: t.softwareUpdateUnsupported(),
-      };
-    } finally {
-      timer.end();
-    }
+    // const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
+    // try {
+    //   if (!(await isSoftwareUpdateInstallerSupported())) {
+    //     logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
+    //     updateState = {
+    //       status: 'unsupported',
+    //       message: t.softwareUpdateUnsupported(),
+    //     };
+    //   }
+    // } catch (error) {
+    //   logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
+    //     error: error instanceof Error ? error.message : String(error),
+    //   });
+    //   updateState = {
+    //     status: 'unsupported',
+    //     message: t.softwareUpdateUnsupported(),
+    //   };
+    // } finally {
+    //   timer.end();
+    // }
   }
 
   async function installDownloadedSoftwareUpdate() {
@@ -2128,6 +2128,22 @@
                   </div>
                 {/each}
               </div>
+
+              <h2>{t.developerOptions()}</h2>
+              <label class="toggle-row" for="developerMode">
+                <span>
+                  <span class="toggle-title">{t.developerMode()}</span>
+                  <span class="toggle-desc">{t.developerModeDescription()}</span>
+                </span>
+                <input
+                  id="developerMode"
+                  type="checkbox"
+                  checked={draftSettings.developerMode}
+                  on:change={(event) => toggleSetting('developerMode', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
               <div class="disabled-row" aria-disabled="true">
                 <div>
                   <span class="setting-label">{t.exportSettings()}</span>

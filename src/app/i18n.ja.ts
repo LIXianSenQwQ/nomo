@@ -179,6 +179,9 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   exportSettings: '設定のエクスポート',
   exportSettingsDescription:
     '完全なエクスポート パイプラインは現在のフェーズの一部ではありません。',
+  developerOptions: '開発者向けオプション',
+  developerMode: '開発者モード',
+  developerModeDescription: '有効にすると、実行時ログが出力され、問題の調査に役立ちます。',
   version: 'バージョン',
   positioning: '位置決め',
   positioningDescription:
