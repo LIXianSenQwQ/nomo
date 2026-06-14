@@ -173,7 +173,7 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
         file_menu_builder = file_menu_builder.item(&placeholder);
     }
 
-    file_menu_builder
+    file_menu_builder = file_menu_builder
         .separator()
         .item(&menu_item(
             app,
@@ -187,6 +187,26 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
             tr(locale, "menu_save_as"),
             Some("CmdOrCtrl+Shift+S"),
         )?)
+        .separator();
+
+    let export_submenu = SubmenuBuilder::new(app, tr(locale, "menu_export"))
+        .item(&menu_item(
+            app,
+            "export-html",
+            tr(locale, "menu_export_html"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "export-pdf",
+            tr(locale, "menu_export_pdf"),
+            None,
+        )?)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    file_menu_builder
+        .item(&export_submenu)
         .separator()
         .item(&menu_item(
             app,

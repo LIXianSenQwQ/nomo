@@ -23,6 +23,7 @@
 | 应用装配中心 | `src/app/App.svelte` | 所有 service、editor-core、组件 | 标签页/文件系统/编辑器之间的协调逻辑变更 |
 | 桌面窗口生命周期 | `src/app/services/desktopWindow.ts` | `src-tauri/src/window/` | 窗口事件、关闭行为、托盘交互变更 |
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
+| 自定义标题栏菜单 | `src/app/components/AppTitleBar.svelte` | `src/app/App.svelte`, `src/app/services/appCommands.ts` | 添加/移除菜单项、修改菜单文案 |
 | 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
 
 ### 编辑器核心（ProseMirror）
@@ -306,6 +307,37 @@
 **Do not change this when：**
 - 修改目录扫描后端逻辑
 - 修改文件树数据结构定义
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
+---
+
+### `src/app/components/AppTitleBar.svelte`
+
+**Kind:** component
+
+**Owns:**
+- Windows / Linux 自定义标题栏：窗口控制按钮、应用菜单（文件、编辑、段落、格式、查看、设置）。
+- 将菜单点击转换为应用命令或调用传入的业务处理函数。
+
+**Does not own：**
+- 不拥有具体业务逻辑（由 App.svelte 通过 props 注入）。
+- 不拥有 macOS 原生菜单（在 Rust `window/menu.rs` 中）。
+
+**Called by:** `src/app/components/AppShell.svelte`
+
+**Depends on:** `src/app/i18n.ts`, `src/app/services/platform.ts`, `@lucide/svelte`
+
+**Change this when：**
+- 添加/移除自定义标题栏菜单项。
+- 修改菜单快捷键展示文案。
+
+**Do not change this when：**
+- 修改菜单命令后端处理逻辑。
 
 **Related tests:** —
 

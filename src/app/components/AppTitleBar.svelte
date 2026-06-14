@@ -48,6 +48,8 @@
   export let outlineVisible: boolean;
   export let toggleFocusMode: () => void;
   export let openSettings: () => void;
+  export let exportHtml: () => void;
+  export let exportPdf: () => void;
 
   let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
@@ -302,6 +304,9 @@
                 <button on:click={() => finish(() => saveMarkdownFile(true), 'file')}
                   >{t.saveAs()} <span class="shortcut">Ctrl + Shift + S</span></button
                 >
+                <div class="divider"></div>
+                <button on:click={() => finish(exportHtml, 'file')}>{t.exportHtml()}</button>
+                <button on:click={() => finish(exportPdf, 'file')}>{t.exportPdf()}</button>
                 <div class="divider"></div>
                 <button on:click={() => finish(closeCurrentFile, 'file')}
                   >{t.closeCurrentFile()} <span class="shortcut">Ctrl + W</span></button

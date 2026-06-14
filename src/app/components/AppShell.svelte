@@ -133,6 +133,8 @@
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (folderPath: string) => void;
   export let startResize: (event: MouseEvent) => void;
+  export let exportHtml: () => void;
+  export let exportPdf: () => void;
   export let switchTab: (tabId: string) => void;
   export let closeTab: (tabId: string, event?: Event) => void;
   export let pinPreviewTab: () => void;
@@ -209,6 +211,8 @@
       {toggleOutlineVisible}
       {toggleFocusMode}
       {openSettings}
+      {exportHtml}
+      {exportPdf}
     />
   {/if}
 

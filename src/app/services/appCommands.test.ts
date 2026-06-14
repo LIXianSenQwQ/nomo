@@ -38,6 +38,8 @@ function createHandlers(): AppCommandHandlers & { commands: EditorCommand[] } {
     switchToPrevTab: vi.fn(),
     getDefaultCodeBlockLanguage: vi.fn(() => 'ts'),
     getDefaultDiagramType: vi.fn(() => 'flowchart'),
+    exportHtml: vi.fn(),
+    exportPdf: vi.fn(),
   };
 }
 
@@ -319,6 +321,8 @@ describe('appCommands', () => {
       'new-file': 'Ctrl+N',
       'open-file': 'Ctrl+O',
       'save-file': 'Ctrl+S',
+      'export-html': 'Ctrl+Shift+E',
+      'export-pdf': 'Ctrl+Shift+P',
       'toggle-source': 'Ctrl+Alt+E',
       'toggle-theme': 'Ctrl+Shift+L',
       'toggle-focus': 'Ctrl+Shift+F',

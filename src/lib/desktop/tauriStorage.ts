@@ -123,6 +123,30 @@ interface ExternalOpenFolderPayload {
   folder_path?: unknown;
 }
 
+interface ExportHtmlInput {
+  html_content: string;
+  file_path: string;
+}
+
+interface ExportPdfInput {
+  html_content: string;
+  file_path: string;
+  paper_size?: string;
+  orientation?: string;
+  margins?: { top: number; right: number; bottom: number; left: number };
+  print_background?: boolean;
+}
+
+interface ExportResultPayload {
+  file_path: string;
+  bytes_written: number;
+}
+
+interface Base64FileResultPayload {
+  data_url: string;
+  mime_type: string;
+}
+
 export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -414,6 +438,24 @@ export async function revealInExplorer(path: string): Promise<void> {
   logInfo('tauriStorage', '在资源管理器中显示', { path });
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('reveal_in_explorer', { path });
+}
+
+export async function exportHtmlFile(input: ExportHtmlInput): Promise<ExportResultPayload> {
+  logInfo('tauriStorage', '导出 HTML 文件', { filePath: input.file_path });
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<ExportResultPayload>('export_html', { input });
+}
+
+export async function exportPdfFromHtml(input: ExportPdfInput): Promise<ExportResultPayload> {
+  logInfo('tauriStorage', '导出 PDF 文件', { filePath: input.file_path });
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<ExportResultPayload>('export_pdf_from_html', { input });
+}
+
+export async function readFileAsBase64(path: string): Promise<Base64FileResultPayload> {
+  logInfo('tauriStorage', '读取文件为 base64', { path });
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<Base64FileResultPayload>('read_file_as_base64', { input: { path } });
 }
 
 export async function readCurrentWindowState(): Promise<WindowState> {

@@ -99,6 +99,47 @@ pub(crate) struct FolderFileInfo {
     pub(crate) path: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub(crate) struct ExportHtmlInput {
+    pub(crate) html_content: String,
+    pub(crate) file_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PdfMarginsInput {
+    pub(crate) top: f64,
+    pub(crate) right: f64,
+    pub(crate) bottom: f64,
+    pub(crate) left: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ExportPdfInput {
+    pub(crate) html_content: String,
+    pub(crate) file_path: String,
+    pub(crate) paper_size: Option<String>,
+    pub(crate) orientation: Option<String>,
+    pub(crate) margins: Option<PdfMarginsInput>,
+    pub(crate) print_background: Option<bool>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ExportResult {
+    pub(crate) file_path: String,
+    pub(crate) bytes_written: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct ReadFileInput {
+    pub(crate) path: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct Base64FileResult {
+    pub(crate) data_url: String,
+    pub(crate) mime_type: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct FileTreeEntry {
     pub(crate) name: String,

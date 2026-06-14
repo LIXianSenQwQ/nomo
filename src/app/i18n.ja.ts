@@ -176,6 +176,13 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   defaultDiagramTypeDescription: 'メニューから図を挿入するときに使用します。',
   customShortcuts: 'カスタムショートカット',
   shortcutDescription: 'Ctrl、Shift、Alt と 1 つのキーを組み合わせて使用します。',
+  export: 'エクスポート',
+  exportHtml: 'HTML をエクスポート',
+  exportPdf: 'PDF をエクスポート',
+  exportHtmlSuccess: 'HTML をエクスポートしました：{path}',
+  exportPdfSuccess: 'PDF をエクスポートしました：{path}',
+  exportFailed: 'エクスポートに失敗しました',
+  noOpenDocumentForExport: 'ドキュメントが開かれていません。まずドキュメントを開くか作成してください。',
   exportSettings: '設定のエクスポート',
   exportSettingsDescription:
     '完全なエクスポート パイプラインは現在のフェーズの一部ではありません。',

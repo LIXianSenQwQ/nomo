@@ -33,6 +33,8 @@ export interface AppCommandHandlers {
   switchToPrevTab: () => void;
   getDefaultCodeBlockLanguage: () => string;
   getDefaultDiagramType: () => Parameters<typeof isDiagramType>[0];
+  exportHtml: () => void;
+  exportPdf: () => void;
 }
 
 type ShortcutParts = {
@@ -172,6 +174,10 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.toggleTheme();
   } else if (command === 'toggle-focus') {
     handlers.toggleFocusMode();
+  } else if (command === 'export-html') {
+    handlers.exportHtml();
+  } else if (command === 'export-pdf') {
+    handlers.exportPdf();
   } else if (command === 'open-settings') {
     handlers.openSettings();
   }

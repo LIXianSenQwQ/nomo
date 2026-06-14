@@ -800,6 +800,8 @@
       const prevIdx = idx >= 0 ? (idx - 1 + tabs.length) % tabs.length : tabs.length - 1;
       if (tabs[prevIdx]) switchTab(tabs[prevIdx].id);
     },
+    exportHtml: () => handleExport('html'),
+    exportPdf: () => handleExport('pdf'),
   };
 
   async function updateWindowTitle() {
@@ -2366,6 +2368,48 @@
     showToast(t.featureComingSoon({ featureName }));
   }
 
+  async function handleExport(format: 'html' | 'pdf') {
+    if (!nativePath && !markdown.trim()) {
+      showToast(t.noOpenDocumentForExport(), 2000);
+      return;
+    }
+
+    const { exportHtml, exportPdf } = await import('./services/exportService');
+    const renderedHtml = editorHost?.innerHTML ?? '';
+    const suggestedFileName = fileName.replace(/\.(md|markdown|txt)$/i, '') || 'Untitled';
+
+    const result =
+      format === 'html'
+        ? await exportHtml({
+            markdown,
+            renderedHtml,
+            documentPath: nativePath,
+            suggestedFileName,
+            title: fileName || 'Untitled',
+          })
+        : await exportPdf({
+            markdown,
+            renderedHtml,
+            documentPath: nativePath,
+            suggestedFileName,
+            title: fileName || 'Untitled',
+          });
+
+    if (result.cancelled) {
+      return;
+    }
+
+    if (result.success) {
+      const message =
+        format === 'html'
+          ? t.exportHtmlSuccess({ path: result.filePath! })
+          : t.exportPdfSuccess({ path: result.filePath! });
+      showToast(message, 2500);
+    } else {
+      showToast(result.error ?? t.exportFailed(), 3500);
+    }
+  }
+
   $: visibleOutlineIds = new Set(
     outline
       .filter((_item, index) => getOutlineItemVisible(outline, collapsedOutlineIds, index))
@@ -2828,6 +2872,8 @@
   {openSettings}
   {setWritingStatsMetric}
   onZoomChange={handleZoomChange}
+  exportHtml={() => handleExport('html')}
+  exportPdf={() => handleExport('pdf')}
   on:createNode={handleCreateNode}
   on:renameNode={handleRenameNode}
   on:refreshFolder={handleRefreshFolder}

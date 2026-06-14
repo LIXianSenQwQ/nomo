@@ -34,6 +34,8 @@ export type ShortcutCommandId =
   | 'new-file'
   | 'open-file'
   | 'save-file'
+  | 'export-html'
+  | 'export-pdf'
   | 'toggle-source'
   | 'toggle-theme'
   | 'toggle-focus'
@@ -98,6 +100,8 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
   'new-file': 'Ctrl+N',
   'open-file': 'Ctrl+O',
   'save-file': 'Ctrl+S',
+  'export-html': 'Ctrl+Shift+E',
+  'export-pdf': 'Ctrl+Shift+P',
   'toggle-source': 'Ctrl+E',
   'toggle-theme': 'Ctrl+Shift+L',
   'toggle-focus': 'Ctrl+Shift+F',

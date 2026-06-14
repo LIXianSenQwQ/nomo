@@ -1,11 +1,15 @@
 mod app_logger;
 mod config;
 mod external_link;
+mod export;
 mod file_system;
 mod i18n;
 mod models;
 mod software_update;
 mod window;
+
+#[cfg(target_os = "windows")]
+mod export_windows;
 
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -140,6 +144,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            crate::export::export_html,
+            crate::export::export_pdf_from_html,
+            crate::export::read_file_as_base64,
             crate::file_system::read_markdown_file,
             crate::file_system::write_markdown_file,
             crate::file_system::install_sample_document,
