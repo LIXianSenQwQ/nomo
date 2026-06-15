@@ -42,7 +42,7 @@ pub(crate) fn set_enabled(enabled: bool) {
     if enabled {
         write_force("INFO", "Logger", "日志输出已开启");
     } else {
-        write_force("INFO", "Logger", "日志输出已关闭");
+        // write_force("INFO", "Logger", "日志输出已关闭");
     }
 }
 

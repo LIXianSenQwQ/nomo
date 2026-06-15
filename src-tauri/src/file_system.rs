@@ -88,15 +88,12 @@ pub(crate) fn write_markdown_file(
 #[tauri::command]
 pub(crate) fn install_sample_document(app: AppHandle) -> Result<DocumentPayload, String> {
     let timer = std::time::Instant::now();
-    crate::app_logger::info("FileSystem", "安装或打开实例文档");
+    crate::app_logger::info("FileSystem", "打开实例文档");
+    // 直接读取安装目录下的实例文档资源，不再复制到用户应用数据目录。
+    // 因此用户在编辑器中保存时，若安装目录不可写，会触发写失败的错误兜底。
     let resource_path = resolve_sample_document_resource(&app)?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("定位应用数据目录失败：{error}"))?;
-
-    let payload = install_sample_document_from_paths(&resource_path, &app_data_dir)?;
-    crate::app_logger::perf("FileSystem", "安装或打开实例文档", timer.elapsed());
+    let payload = read_sample_document(&resource_path)?;
+    crate::app_logger::perf("FileSystem", "打开实例文档", timer.elapsed());
     Ok(payload)
 }
 
@@ -207,23 +204,11 @@ fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, S
     })
 }
 
-fn install_sample_document_from_paths(
-    resource_path: &Path,
-    app_data_dir: &Path,
-) -> Result<DocumentPayload, String> {
-    let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
-    let should_install = !target_path.exists() || file_size(&target_path.to_string_lossy()) == 0;
-    if should_install {
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| format!("创建实例文档目录失败：{error}"))?;
-        }
-        fs::copy(resource_path, &target_path)
-            .map_err(|error| format!("复制实例文档失败：{error}"))?;
-    }
-
-    let markdown =
-        fs::read_to_string(&target_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
-    document_payload(target_path.to_string_lossy().to_string(), markdown)
+fn read_sample_document(resource_path: &Path) -> Result<DocumentPayload, String> {
+    // 直接读取安装目录下的实例文档资源，不再复制到用户应用数据目录。
+    let markdown = fs::read_to_string(resource_path)
+        .map_err(|error| format!("读取实例文档失败：{error}"))?;
+    document_payload(resource_path.to_string_lossy().to_string(), markdown)
 }
 
 fn resolve_sample_document_resource(app: &AppHandle) -> Result<PathBuf, String> {
@@ -625,7 +610,7 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{install_sample_document_from_paths, SAMPLE_DOCUMENT_RESOURCE_PATH};
+    use super::read_sample_document;
     use std::{
         fs,
         path::PathBuf,
@@ -633,72 +618,31 @@ mod tests {
     };
 
     #[test]
-    fn installs_sample_document_into_samples_directory() {
-        let root = unique_test_dir("install-sample");
+    fn reads_sample_document_from_resource_path() {
+        let root = unique_test_dir("read-sample");
         let resource_path = root.join("resource.md");
-        let app_data_dir = root.join("app-data");
         let sample_markdown = "# Nomo Markdown 全元素实例\n\n示例内容";
         fs::create_dir_all(&root).expect("create root");
         fs::write(&resource_path, sample_markdown).expect("write resource");
 
-        let document =
-            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
-        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+        let document = read_sample_document(&resource_path).expect("read");
 
-        assert!(target_path.exists());
-        assert_eq!(
-            fs::read_to_string(&target_path).expect("read target"),
-            sample_markdown
-        );
-        assert_eq!(document.file_name, "sample.md");
+        // 直接读取资源路径，不再复制到任何其他目录
+        assert_eq!(document.path, resource_path.to_string_lossy().to_string());
+        assert_eq!(document.file_name, "resource.md");
         assert_eq!(document.markdown, sample_markdown);
-        assert!(!document.readonly);
 
         cleanup(root);
     }
 
     #[test]
-    fn keeps_existing_user_sample_document() {
-        let root = unique_test_dir("keep-existing-sample");
-        let resource_path = root.join("resource.md");
-        let app_data_dir = root.join("app-data");
-        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
+    fn fails_when_sample_resource_missing() {
+        let root = unique_test_dir("read-sample-missing");
+        let resource_path = root.join("missing.md");
         fs::create_dir_all(&root).expect("create root");
-        fs::write(&resource_path, "# 原始实例").expect("write resource");
-        fs::create_dir_all(target_path.parent().expect("target parent")).expect("create samples");
-        fs::write(&target_path, "# 用户已修改实例").expect("write target");
 
-        let document =
-            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
-
-        assert_eq!(
-            fs::read_to_string(&target_path).expect("read target"),
-            "# 用户已修改实例"
-        );
-        assert_eq!(document.markdown, "# 用户已修改实例");
-
-        cleanup(root);
-    }
-
-    #[test]
-    fn repairs_empty_sample_document() {
-        let root = unique_test_dir("repair-empty-sample");
-        let resource_path = root.join("resource.md");
-        let app_data_dir = root.join("app-data");
-        let target_path = app_data_dir.join(SAMPLE_DOCUMENT_RESOURCE_PATH);
-        fs::create_dir_all(&root).expect("create root");
-        fs::write(&resource_path, "# 原始实例").expect("write resource");
-        fs::create_dir_all(target_path.parent().expect("target parent")).expect("create samples");
-        fs::write(&target_path, "").expect("write empty target");
-
-        let document =
-            install_sample_document_from_paths(&resource_path, &app_data_dir).expect("install");
-
-        assert_eq!(
-            fs::read_to_string(&target_path).expect("read target"),
-            "# 原始实例"
-        );
-        assert_eq!(document.markdown, "# 原始实例");
+        let result = read_sample_document(&resource_path);
+        assert!(result.is_err());
 
         cleanup(root);
     }

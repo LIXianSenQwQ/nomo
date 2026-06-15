@@ -155,7 +155,7 @@ export function enableLogger(): void {
 }
 
 export function disableLogger(): void {
-  logInfo('Logger', '日志输出已关闭');
+  // logInfo('Logger', '日志输出已关闭');
   persistEnabled(false);
 }
 
