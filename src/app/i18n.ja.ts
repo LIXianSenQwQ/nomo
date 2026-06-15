@@ -45,6 +45,11 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   inlineCodeRendering: 'インラインコードをレンダリングする',
   inlineCodeRenderingDescription:
     '有効にすると、インライン コードにスタイルが設定されます。無効にすると、生の Markdown バッククォートは表示されたままになります。',
+  renderingMode: 'レンダリング',
+  renderMode: 'レンダリングモード',
+  renderModeDescription: 'WebView2 がハードウェア GPU アクセラレーションを使用するか、ソフトウェア レンダリングを使用するかを選択します。変更を適用するにはアプリを再起動してください。',
+  renderModeHardware: 'ハードウェア',
+  renderModeSoftware: 'ソフトウェア',
   visualZoom: 'ビジュアルズーム',
   zoomLevel: 'ズームレベル',
   zoomLevelDescription: 'ドキュメントエディターとソースモードの全体的なスケールを調整します。',

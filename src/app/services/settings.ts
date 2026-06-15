@@ -28,6 +28,7 @@ export type CloseWindowBehavior = 'ask-every-time' | 'close-window' | 'close-to-
 export type WritingStatsMetric = 'lines' | 'words' | 'chars';
 export type ImageDefaultAlignPreference = ImageDefaultAlign;
 export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
+export type RenderModePreference = 'hardware' | 'software';
 export type { InterfaceLanguagePreference };
 
 export type ShortcutCommandId =
@@ -83,6 +84,7 @@ export interface AppPreferences {
   codeBlockLineNumbersVisible: boolean;
   codeBlockIndent: CodeBlockIndentPreference;
   inlineCodeRenderingEnabled: boolean;
+  renderMode: RenderModePreference;
   shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
   developerMode: boolean;
@@ -140,6 +142,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   codeBlockLineNumbersVisible: true,
   codeBlockIndent: 'spaces-2',
   inlineCodeRenderingEnabled: true,
+  renderMode: 'hardware',
   shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
   developerMode: false,
@@ -273,6 +276,7 @@ export async function loadAppPreferences(
     codeBlockLineNumbersVisible: parseSetting<unknown>(settings, 'codeBlockLineNumbersVisible'),
     codeBlockIndent: parseSetting<unknown>(settings, 'codeBlockIndent'),
     inlineCodeRenderingEnabled: parseSetting<unknown>(settings, 'inlineCodeRenderingEnabled'),
+    renderMode: parseSetting<unknown>(settings, 'renderMode'),
     shortcutPreferences: parseSetting<unknown>(settings, 'shortcutPreferences'),
     imageHandlingSettings:
       parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
@@ -413,6 +417,9 @@ export function normalizeAppPreferences(
       typeof value.inlineCodeRenderingEnabled === 'boolean'
         ? value.inlineCodeRenderingEnabled
         : DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled,
+    renderMode: isRenderModePreference(value.renderMode)
+      ? value.renderMode
+      : DEFAULT_APP_PREFERENCES.renderMode,
     shortcutPreferences: normalizeShortcutPreferences(value.shortcutPreferences),
     imageHandlingSettings: normalizeImageSettings(
       value.imageHandlingSettings as Partial<ImageHandlingSettings> | null | undefined,
@@ -562,6 +569,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     codeBlockLineNumbersVisible: preferences.codeBlockLineNumbersVisible,
     codeBlockIndent: preferences.codeBlockIndent,
     inlineCodeRenderingEnabled: preferences.inlineCodeRenderingEnabled,
+    renderMode: preferences.renderMode,
     shortcutPreferences: preferences.shortcutPreferences,
     imageHandlingSettings: preferences.imageHandlingSettings,
     developerMode: preferences.developerMode,
@@ -772,6 +780,10 @@ function normalizeImageDefaultWidth(value: unknown): string {
 
 function isCodeBlockIndentPreference(value: unknown): value is CodeBlockIndentPreference {
   return value === 'spaces-2' || value === 'spaces-4' || value === 'tab';
+}
+
+function isRenderModePreference(value: unknown): value is RenderModePreference {
+  return value === 'hardware' || value === 'software';
 }
 
 function normalizeShortcutPreferences(value: unknown): ShortcutPreferences {

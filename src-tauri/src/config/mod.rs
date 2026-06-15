@@ -86,7 +86,7 @@ impl ConfigManager {
         Self::load_or_default_from_path(config_path)
     }
 
-    fn load_or_default_from_path(config_path: PathBuf) -> Result<Self, String> {
+    pub(crate) fn load_or_default_from_path(config_path: PathBuf) -> Result<Self, String> {
         let config = match fs::read_to_string(&config_path) {
             Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
                 Ok(config) => config,
@@ -204,6 +204,59 @@ fn backup_broken_config(config_path: &Path) -> Result<(), String> {
     fs::rename(config_path, backup_path).map_err(|error| format!("备份损坏配置失败：{error}"))
 }
 
+/// 步骤1：根据应用标识符构造各平台的应用数据目录路径
+fn resolve_app_data_dir(identifier: &str) -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        // 与 Tauri 的 app_data_dir() 保持一致：Windows 使用 Roaming 目录（APPDATA）
+        let app_data = std::env::var("APPDATA").ok()?;
+        Some(PathBuf::from(app_data).join(identifier))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").ok()?;
+        Some(
+            PathBuf::from(home)
+                .join("Library/Application Support")
+                .join(identifier),
+        )
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        let home = std::env::var("HOME").ok()?;
+        Some(PathBuf::from(home).join(".local/share").join(identifier))
+    }
+}
+
+/// 步骤2：从磁盘配置文件读取指定 key 的 JSON 字符串（启动前使用，无需 AppHandle）
+pub(crate) fn read_app_setting_json(identifier: &str, key: &str) -> Option<String> {
+    let app_data_dir = resolve_app_data_dir(identifier)?;
+    let config_path = app_data_dir.join(CONFIG_FILE_NAME);
+    let content = fs::read_to_string(&config_path).ok()?;
+    let config: AppConfig = serde_json::from_str(&content).ok()?;
+    config
+        .app
+        .settings
+        .get(key)
+        .map(|record| record.value_json.clone())
+}
+
+/// 步骤3：读取渲染模式设置，仅在显式设置为 software 时返回 true
+pub(crate) fn is_software_render_mode(identifier: &str) -> bool {
+    matches!(
+        read_app_setting_json(identifier, "renderMode").as_deref(),
+        Some("\"software\"")
+    )
+}
+
+/// 步骤4：读取开发者模式设置，决定启动阶段是否启用日志
+pub(crate) fn is_developer_mode(identifier: &str) -> bool {
+    matches!(
+        read_app_setting_json(identifier, "developerMode").as_deref(),
+        Some("true")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AppConfig, ConfigManager};
@@ -260,6 +313,35 @@ mod tests {
                 .to_string_lossy()
                 .starts_with("config.broken.")));
         cleanup(root);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn reads_software_render_mode_from_disk_before_app_handle_available() {
+        use super::{is_software_render_mode, CONFIG_FILE_NAME};
+
+        let root = unique_test_dir("render-mode");
+        fs::create_dir_all(&root).expect("test dir");
+        let identifier = "com.nomo.test-render-mode";
+        let app_dir = root.join(identifier);
+        fs::create_dir_all(&app_dir).expect("app dir");
+        let config_path = app_dir.join(CONFIG_FILE_NAME);
+        fs::write(
+            &config_path,
+            r#"{"app":{"settings":{"renderMode":{"key":"renderMode","value_json":"\"software\"","updated_at":1}}}}"#,
+        )
+        .expect("write config");
+
+        let original_local_app_data = std::env::var("LOCALAPPDATA").ok();
+        std::env::set_var("LOCALAPPDATA", &root);
+        let result = is_software_render_mode(identifier);
+        match original_local_app_data {
+            Some(value) => std::env::set_var("LOCALAPPDATA", value),
+            None => std::env::remove_var("LOCALAPPDATA"),
+        }
+
+        cleanup(root);
+        assert!(result);
     }
 
     fn unique_test_dir(name: &str) -> PathBuf {

@@ -616,7 +616,9 @@
   --code-content-padding-left: 12px;
   --code-content-padding-right: 16px;
   --code-content-padding-block: 12px;
+  --code-font-size: 13px;
   --code-line-height: 18px;
+  --code-font: var(--code-font-size) / var(--code-line-height) var(--md-editor-font-mono);
   position: relative;
   margin: 18px 0;
   border: 1px solid var(--md-editor-code-border);
@@ -721,10 +723,10 @@
     var(--code-content-padding-block) var(--code-content-padding-left);
   background: transparent;
   color: inherit;
-  font-family: var(--md-editor-font-mono);
-  font-size: 13px;
-  line-height: var(--code-line-height);
+  font: var(--code-font);
+  letter-spacing: 0;
   white-space: pre;
+  tab-size: 2;
 }
 
 .code-card.wrapped pre {
@@ -793,9 +795,8 @@
   padding: 0 8px 0 6px;
   color: color-mix(in srgb, var(--md-editor-code-fg) 42%, transparent);
   text-align: right;
-  font-family: var(--md-editor-font-mono);
-  font-size: 13px;
-  line-height: var(--code-line-height);
+  font: var(--code-font);
+  letter-spacing: 0;
   white-space: nowrap; /* 防止行号换行，确保宽度由最宽行号决定 */
 }
 
@@ -819,11 +820,12 @@
 
 /* ---- code_block 编辑态 ---- */
 
-.prosemirror-host .ProseMirror .code-card.ProseMirror-selectednode,
 .code-card.is-editing {
-  border-color: transparent;
-  outline: 2px solid var(--md-editor-accent, #5a8cdc);
-  outline-offset: 0;
+  outline: none;
+}
+
+.prosemirror-host .ProseMirror .code-card.ProseMirror-selectednode {
+  outline: none;
 }
 
 .code-card.is-editing .code-body {
@@ -847,7 +849,7 @@
   left: 0;
   right: 0;
   margin: 0;
-  padding: var(--code-content-padding-block) 0;
+  padding: 0;
   pointer-events: none;
   white-space: pre;
   overflow: visible; /* 允许内容自然撑高，由 .code-edit-area overflow:hidden 裁剪 */
@@ -860,10 +862,8 @@
 .prosemirror-host .ProseMirror .code-card .code-highlight-layer code {
   display: block;
   min-width: max-content;
-  font-family: var(--md-editor-font-mono);
-  font-size: 13px;
-  line-height: var(--code-line-height);
-  padding: 0 var(--code-content-padding-right) 0 var(--code-content-padding-left);
+  padding: var(--code-content-padding-block) var(--code-content-padding-right)
+    var(--code-content-padding-block) var(--code-content-padding-left);
   background: transparent;
   border-radius: 0;
   color: inherit;
@@ -878,8 +878,8 @@
   max-height: inherit;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--code-content-padding-block) 0 var(--code-content-padding-block)
-    var(--code-content-padding-left);
+  padding: var(--code-content-padding-block) var(--code-content-padding-right)
+    var(--code-content-padding-block) var(--code-content-padding-left);
   border: none;
   border-radius: 0;
   outline: none;
@@ -888,21 +888,12 @@
   background: transparent;
   color: transparent;
   caret-color: var(--md-editor-fg);
-  font-family: var(--md-editor-font-mono);
-  font-size: 13px;
-  line-height: var(--code-line-height);
+  font: var(--code-font);
+  letter-spacing: 0;
   white-space: pre;
   tab-size: 2;
   position: relative; /* 创建层叠上下文 */
   z-index: 1; /* 确保在高亮层之上，光标可见 */
-}
-
-.prosemirror-host .ProseMirror .code-card.is-highlight-pending .code-highlight-layer {
-  visibility: hidden;
-}
-
-.prosemirror-host .ProseMirror .code-card.is-highlight-pending .code-input {
-  color: var(--md-editor-fg);
 }
 
 .code-card.is-editing .line-numbers-gutter {
@@ -2507,9 +2498,7 @@
 }
 
 .ProseMirror .horizontal-rule-node.ProseMirror-selectednode {
-  outline: 2px solid var(--md-selection, #68cef8);
-  outline-offset: 4px;
-  border-radius: 2px;
+  outline: none;
 }
 
 /* ——— 图片尺寸编辑器浮层 ——— */
@@ -2619,8 +2608,12 @@
 }
 
 .search-match-active {
-  background-color: color-mix(in srgb, var(--md-editor-accent) 80%, var(--md-editor-accent-strong) 20%);
+  background-color: color-mix(
+    in srgb,
+    var(--md-editor-accent) 80%,
+    var(--md-editor-accent-strong) 20%
+  );
   border-radius: 2px;
-  outline: 2.0px solid var(--md-editor-accent);
+  outline: 2px solid var(--md-editor-accent);
   /* outline-offset: 1px; */
 }

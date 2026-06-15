@@ -56,7 +56,6 @@ const LANGUAGES: Array<{ label: string; value: string; aliases: string[] }> = [
 ];
 
 const MIN_VISIBLE_LINES = 3;
-const EDIT_HIGHLIGHT_DEBOUNCE_MS = 240;
 const EDIT_HIGHLIGHT_MAX_CHARS = 20_000;
 const DISPLAY_HIGHLIGHT_MAX_CHARS = 80_000;
 
@@ -98,6 +97,37 @@ function countLines(text: string): number {
   return lines;
 }
 
+function getTextOffsetFromDomPosition(root: Node, offsetNode: Node, offset: number): number | null {
+  if (offsetNode !== root && !root.contains(offsetNode)) return null;
+
+  let textOffset = 0;
+  const walk = (node: Node): boolean => {
+    if (node === offsetNode) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        textOffset += Math.min(offset, node.textContent?.length ?? 0);
+      } else {
+        const children = Array.from(node.childNodes);
+        for (const child of children.slice(0, offset)) {
+          textOffset += child.textContent?.length ?? 0;
+        }
+      }
+      return true;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      textOffset += node.textContent?.length ?? 0;
+      return false;
+    }
+
+    for (const child of Array.from(node.childNodes)) {
+      if (walk(child)) return true;
+    }
+    return false;
+  };
+
+  return walk(root) ? textOffset : null;
+}
+
 function getCodeBlockIndentText(): string {
   const indent = document.documentElement.dataset.codeBlockIndent;
   if (indent === 'tab') {
@@ -107,16 +137,6 @@ function getCodeBlockIndentText(): string {
     return '    ';
   }
   return '  ';
-}
-
-function runWhenIdle(callback: () => void, timeout = 500): () => void {
-  if ('requestIdleCallback' in window) {
-    const id = window.requestIdleCallback(callback, { timeout });
-    return () => window.cancelIdleCallback(id);
-  }
-
-  const id = setTimeout(callback, 0);
-  return () => clearTimeout(id);
 }
 
 function createCopyIcon(): SVGSVGElement {
@@ -193,8 +213,6 @@ export class CodeBlockNodeView {
   private highlightLayer: HTMLElement | null = null;
   private editArea: HTMLElement | null = null;
   private needsAutoEdit = false;
-  private highlightTimer: ReturnType<typeof setTimeout> | null = null;
-  private cancelPendingHighlight: (() => void) | null = null;
   private langSelector: HTMLElement | null = null;
   private copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribeLocale: () => void = () => undefined;
@@ -269,8 +287,12 @@ export class CodeBlockNodeView {
       if ((event.target as HTMLElement).closest('button')) return;
       event.preventDefault();
       event.stopPropagation();
-      const clickLine = this.getClickLine(event);
-      this.enterEdit(clickLine);
+      const clickOffset = this.getClickTextOffset(event);
+      if (clickOffset !== null) {
+        this.enterEdit(undefined, 'start', clickOffset);
+        return;
+      }
+      this.enterEdit(this.getClickLine(event));
     });
 
     // 标记首次选中时自动进入编辑态（如 InputRule 从 ``` 创建 或快捷键插入）
@@ -416,7 +438,7 @@ export class CodeBlockNodeView {
 
   // ---- 编辑态管理 ----
 
-  enterEdit(clickLine?: number, caret: 'start' | 'end' = 'start'): void {
+  enterEdit(clickLine?: number, caret: 'start' | 'end' = 'start', textOffset?: number): void {
     if (this.editing) return;
 
     if (CodeBlockNodeView.activeEditingView && CodeBlockNodeView.activeEditingView !== this) {
@@ -443,6 +465,10 @@ export class CodeBlockNodeView {
     const highlightCode = document.createElement('code');
     this.highlightLayer.appendChild(highlightCode);
     this.editArea.appendChild(this.highlightLayer);
+
+    // 先复用展示态已渲染的高亮 HTML，避免进入编辑态时出现空白帧或文字闪烁
+    const displayCode = this.codeDisplay.querySelector('code');
+    highlightCode.innerHTML = displayCode?.innerHTML ?? escapeHtml(this.originalCode);
 
     // 输入层 textarea
     this.textarea = document.createElement('textarea');
@@ -485,7 +511,10 @@ export class CodeBlockNodeView {
     requestAnimationFrame(() => {
       if (!this.textarea) return;
       this.textarea.focus({ preventScroll: true });
-      if (clickLine !== undefined) {
+      if (textOffset !== undefined) {
+        const offset = Math.min(Math.max(textOffset, 0), this.textarea.value.length);
+        this.textarea.selectionStart = this.textarea.selectionEnd = offset;
+      } else if (clickLine !== undefined) {
         const lines = this.textarea.value.split('\n');
         let offset = 0;
         for (let i = 0; i < Math.min(clickLine, lines.length); i++) {
@@ -539,7 +568,6 @@ export class CodeBlockNodeView {
       CodeBlockNodeView.activeEditingView = null;
     }
     this.dom.classList.remove('is-editing');
-    this.dom.classList.remove('is-highlight-pending');
     this.cancelScheduledHighlight();
     this.hideLangSelector();
     if (this.editArea) {
@@ -565,41 +593,21 @@ export class CodeBlockNodeView {
     const lineCount = countLines(code);
     this.syncTextareaRows(lineCount);
     this.updateLineNumbers(lineCount);
-    this.dom.classList.add('is-highlight-pending');
     this.scheduleEditHighlight(code);
   }
 
   private scheduleEditHighlight(code: string): void {
-    this.cancelScheduledHighlight();
-
-    this.highlightTimer = setTimeout(() => {
-      this.highlightTimer = null;
-      this.cancelPendingHighlight = runWhenIdle(() => {
-        this.cancelPendingHighlight = null;
-        if (!this.highlightLayer || !this.editing) return;
-        void this.renderHighlightFor(
-          code,
-          this.language,
-          this.highlightLayer,
-          EDIT_HIGHLIGHT_MAX_CHARS,
-        ).finally(() => {
-          if (this.editing && this.textarea?.value === code) {
-            this.dom.classList.remove('is-highlight-pending');
-          }
-        });
-      });
-    }, EDIT_HIGHLIGHT_DEBOUNCE_MS);
+    if (!this.highlightLayer || !this.editing) return;
+    void this.renderHighlightFor(
+      code,
+      this.language,
+      this.highlightLayer,
+      EDIT_HIGHLIGHT_MAX_CHARS,
+    );
   }
 
   private cancelScheduledHighlight(): void {
-    if (this.highlightTimer) {
-      clearTimeout(this.highlightTimer);
-      this.highlightTimer = null;
-    }
-    if (this.cancelPendingHighlight) {
-      this.cancelPendingHighlight();
-      this.cancelPendingHighlight = null;
-    }
+    this.renderId++;
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -949,6 +957,38 @@ export class CodeBlockNodeView {
     const codeRect = this.codeBody.getBoundingClientRect();
     const relativeY = event.clientY - codeRect.top + this.codeBody.scrollTop;
     return Math.max(0, Math.floor(relativeY / EDIT_LINE_HEIGHT_PX));
+  }
+
+  /** 计算点击位置对应的代码文本 offset，保证进入编辑态后光标停在鼠标点击的列 */
+  private getClickTextOffset(event: MouseEvent): number | null {
+    if (!this.codeDisplay.contains(event.target as Node)) return null;
+
+    const codeEl = this.codeDisplay.querySelector('code');
+    if (!codeEl) return null;
+
+    const docWithCaret = document as Document & {
+      caretPositionFromPoint?: (
+        x: number,
+        y: number,
+      ) => { offsetNode: Node; offset: number } | null;
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+
+    const caretPosition = docWithCaret.caretPositionFromPoint?.(event.clientX, event.clientY);
+    if (caretPosition) {
+      return getTextOffsetFromDomPosition(codeEl, caretPosition.offsetNode, caretPosition.offset);
+    }
+
+    const caretRange = docWithCaret.caretRangeFromPoint?.(event.clientX, event.clientY);
+    if (caretRange) {
+      return getTextOffsetFromDomPosition(
+        codeEl,
+        caretRange.startContainer,
+        caretRange.startOffset,
+      );
+    }
+
+    return null;
   }
 
   /** 通过 transaction 更新节点内容 */

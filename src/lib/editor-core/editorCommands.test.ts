@@ -947,6 +947,90 @@ describe('editorCommands', () => {
     view.destroy();
     target.remove();
   });
+
+  describe('insertHorizontalRule', () => {
+    function createViewWithDoc(doc: PmNode, selection: TextSelection | NodeSelection): EditorView {
+      const target = document.createElement('div');
+      document.body.appendChild(target);
+      return new EditorView(target, {
+        state: EditorState.create({ doc, selection }),
+      });
+    }
+
+    it('在空文档中插入水平分割线', () => {
+      const view = createMarkdownCommandView('', (doc) => TextSelection.create(doc, 1));
+
+      executeEditorCommand({ type: 'insertHorizontalRule' }, view, '', () => undefined);
+
+      expect(getTopLevelNodeNames(view.state.doc)).toEqual(['horizontal_rule', 'paragraph']);
+      expect(currentMarkdown(view)).toBe('---');
+      destroyView(view);
+    });
+
+    it('在水平分割线后的空段落再次插入时取消该分割线', () => {
+      const doc = schema.nodes.doc.create(null, [
+        schema.nodes.horizontal_rule.create(),
+        schema.nodes.paragraph.create(),
+      ]);
+      const view = createViewWithDoc(doc, TextSelection.create(doc, doc.content.size - 1));
+
+      executeEditorCommand({ type: 'insertHorizontalRule' }, view, '', () => undefined);
+
+      expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph']);
+      expect(currentMarkdown(view)).toBe('');
+      expect(view.state.selection).toBeInstanceOf(TextSelection);
+      expect(view.state.selection.empty).toBe(true);
+      view.destroy();
+      view.dom.parentElement?.remove();
+    });
+
+    it('在水平分割线前的空段落再次插入时取消该分割线', () => {
+      const doc = schema.nodes.doc.create(null, [
+        schema.nodes.paragraph.create(),
+        schema.nodes.horizontal_rule.create(),
+      ]);
+      const view = createViewWithDoc(doc, TextSelection.create(doc, 1));
+
+      executeEditorCommand({ type: 'insertHorizontalRule' }, view, '', () => undefined);
+
+      expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph']);
+      expect(currentMarkdown(view)).toBe('');
+      expect(view.state.selection).toBeInstanceOf(TextSelection);
+      expect(view.state.selection.empty).toBe(true);
+      view.destroy();
+      view.dom.parentElement?.remove();
+    });
+
+    it('直接选中水平分割线时插入命令会删除它', () => {
+      const doc = schema.nodes.doc.create(null, [
+        schema.nodes.horizontal_rule.create(),
+        schema.nodes.paragraph.create(),
+      ]);
+      const view = createViewWithDoc(doc, NodeSelection.create(doc, 0));
+
+      executeEditorCommand({ type: 'insertHorizontalRule' }, view, '', () => undefined);
+
+      expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph']);
+      expect(currentMarkdown(view)).toBe('');
+      expect(view.state.selection).toBeInstanceOf(TextSelection);
+      view.destroy();
+      view.dom.parentElement?.remove();
+    });
+
+    it('在非空段落中始终插入新的水平分割线', () => {
+      const view = createMarkdownCommandView('正文', paragraphContentSelection);
+
+      executeEditorCommand({ type: 'insertHorizontalRule' }, view, '', () => undefined);
+
+      expect(getTopLevelNodeNames(view.state.doc)).toEqual([
+        'paragraph',
+        'horizontal_rule',
+        'paragraph',
+      ]);
+      expect(currentMarkdown(view)).toBe('正文\n\n---');
+      destroyView(view);
+    });
+  });
 });
 
 function getTopLevelNodeNames(doc: PmNode): string[] {

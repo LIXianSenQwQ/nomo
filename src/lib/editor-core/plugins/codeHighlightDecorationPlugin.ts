@@ -17,15 +17,21 @@ interface InlineCodeToken {
   value: string;
 }
 
-export function codeHighlightDecorationPlugin(): Plugin {
+export interface CodeHighlightDecorationOptions {
+  /** 是否启用行内代码语法高亮；默认 true */
+  enabled?: boolean;
+}
+
+export function codeHighlightDecorationPlugin(options?: CodeHighlightDecorationOptions): Plugin {
+  const enabled = options?.enabled ?? true;
   return new Plugin({
     state: {
       init(_, { doc }) {
-        return buildDecorations(doc);
+        return buildDecorations(doc, enabled);
       },
       apply(tr, value) {
         if (!tr.docChanged) return value.map(tr.mapping, tr.doc);
-        return buildDecorations(tr.doc);
+        return buildDecorations(tr.doc, enabled);
       },
     },
     props: {
@@ -36,7 +42,11 @@ export function codeHighlightDecorationPlugin(): Plugin {
   });
 }
 
-function buildDecorations(doc: ProseMirrorNode): DecorationSet {
+function buildDecorations(doc: ProseMirrorNode, enabled: boolean): DecorationSet {
+  if (!enabled) {
+    return DecorationSet.empty;
+  }
+
   const decorations: Decoration[] = [];
 
   doc.descendants((node, pos) => {

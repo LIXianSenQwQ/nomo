@@ -14,7 +14,9 @@ struct LoggerState {
 
 static LOGGER_STATE: OnceLock<Mutex<LoggerState>> = OnceLock::new();
 
-pub(crate) fn init() {
+pub(crate) fn init(identifier: &str) {
+    // 启动阶段根据配置提前开启日志，确保后续渲染模式等关键启动日志能落盘
+    set_enabled(crate::config::is_developer_mode(identifier));
     info("App", "日志系统初始化");
 }
 

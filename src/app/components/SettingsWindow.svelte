@@ -45,6 +45,7 @@
     type EditorModePreference,
     type FolderOpenDefaultBehavior,
     type InterfaceLanguagePreference,
+    type RenderModePreference,
     type ShortcutCommandId,
     type ThemePreference,
     type WritingStatsMetric,
@@ -824,6 +825,10 @@
 
   function setCodeBlockIndent(codeBlockIndent: CodeBlockIndentPreference) {
     updateDraft({ codeBlockIndent });
+  }
+
+  function setRenderMode(renderMode: RenderModePreference) {
+    updateDraft({ renderMode });
   }
 
   function updateShortcut(commandId: ShortcutCommandId, event: Event) {
@@ -2126,6 +2131,28 @@
             </div>
           {:else if activeCategory === 'advanced'}
             <div class="settings-group">
+              <h2>{t.renderingMode()}</h2>
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.renderMode()}</span>
+                  <p>{t.renderModeDescription()}</p>
+                </div>
+                <div class="segmented-control" role="group" aria-label={t.renderMode()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.renderMode === 'hardware'}
+                    aria-pressed={draftSettings.renderMode === 'hardware'}
+                    on:click={() => setRenderMode('hardware')}>{t.renderModeHardware()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.renderMode === 'software'}
+                    aria-pressed={draftSettings.renderMode === 'software'}
+                    on:click={() => setRenderMode('software')}>{t.renderModeSoftware()}</button
+                  >
+                </div>
+              </div>
+
               <h2>{t.defaultInsertBehavior()}</h2>
               <div class="setting-row">
                 <div>

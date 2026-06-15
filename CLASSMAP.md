@@ -102,7 +102,7 @@
 | 设置模型与持久化 | `src/app/services/settings.ts` | `src/lib/desktop/tauriStorage.ts` | AppPreferences 定义/默认值/加载/保存 |
 | 编辑器设置应用 | `src/app/services/editorSettingsController.ts` | `src/app/services/settings.ts` | 字体/主题/布局/模式同步到编辑器 |
 | 设置窗口 UI | `src/app/components/SettingsWindow.svelte` | `src/app/services/settings.ts`, `src/lib/desktop/tauriUpdater.ts` | 设置界面/更新/文件关联/图片配置 |
-| Rust 数据库设置 | `src-tauri/src/database/mod.rs` | `src-tauri/src/database/connection.rs` | SQLite 建表/迁移/设置读写 |
+| Rust 配置管理 | `src-tauri/src/config/mod.rs` | `src-tauri/src/models.rs` | 应用配置 JSON 持久化、设置读写、启动前读取 |
 
 ### 搜索与替换
 
@@ -1148,6 +1148,38 @@
 - 修改具体业务逻辑（在子模块中）
 
 **Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src-tauri/src/config/mod.rs`
+
+**Kind:** service
+
+**Owns：**
+- 应用配置 JSON 持久化：`config.json` 的读取、写入、备份
+- 设置键值存储（`app.settings`）：为前端偏好设置提供后端读写
+- 启动前设置读取：在 `AppHandle` 可用前从磁盘读取配置（如渲染模式）
+
+**Does not own：**
+- 不拥有具体 IPC 命令实现（在 `config/commands.rs` 中）
+- 不拥有前端设置模型与归一化（在 `settings.ts` 中）
+
+**Called by:** `src-tauri/src/lib.rs`（注册为 IPC）, `src-tauri/src/config/commands.rs`, 启动流程
+
+**Depends on:** `src-tauri/src/models.rs`, Tauri path API
+
+**Change this when：**
+- 新增/修改配置结构或存储路径
+- 新增启动前需要读取的设置项
+- 修改配置备份/恢复逻辑
+
+**Do not change this when：**
+- 修改前端设置 UI
+- 修改具体业务逻辑
+
+**Related tests:** `src-tauri/src/config/mod.rs` 模块内测试
 
 **Confidence:** high
 

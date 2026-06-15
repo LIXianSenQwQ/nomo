@@ -15,16 +15,27 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    crate::app_logger::init();
+    // 先生成 context 以获取应用 identifier，便于启动阶段读取配置
+    let context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+
+    // 根据配置提前初始化日志开关，确保渲染模式等启动日志能被记录
+    crate::app_logger::init(&context.config().identifier);
     let startup_timer = std::time::Instant::now();
 
-    // 强制 WebView2 使用 GPU 加速
+    // 步骤1：根据用户偏好设置 WebView2 渲染模式（必须在 WebView2 环境初始化前设置环境变量）
     #[cfg(target_os = "windows")]
-    unsafe {
-        std::env::set_var(
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-            "--ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy --enable-accelerated-2d-canvas",
-        );
+    {
+        if crate::config::is_software_render_mode(&context.config().identifier) {
+            unsafe {
+                std::env::set_var(
+                    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                    "--disable-gpu --disable-gpu-compositing",
+                );
+            }
+            crate::app_logger::info("App", "已启用软件渲染模式");
+        }else{
+            crate::app_logger::info("App", "已启用硬件加速渲染模式");
+        }
     }
 
     tauri::Builder::default()
@@ -203,7 +214,7 @@ pub fn run() {
             crate::external_link::open_external_link,
             crate::external_link::reveal_in_explorer
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Nomo")
         .run(|_app, _event| {
             #[cfg(target_os = "macos")]

@@ -236,6 +236,15 @@ describe('settings', () => {
     expect(normalizeAppPreferences({ developerMode: false }).developerMode).toBe(false);
   });
 
+  it('defaults render mode to hardware and normalizes invalid values', () => {
+    expect(DEFAULT_APP_PREFERENCES.renderMode).toBe('hardware');
+    expect(normalizeAppPreferences({}).renderMode).toBe('hardware');
+    expect(normalizeAppPreferences({ renderMode: 'software' }).renderMode).toBe('software');
+    expect(normalizeAppPreferences({ renderMode: 'unknown' as never }).renderMode).toBe(
+      'hardware',
+    );
+  });
+
   it('migrates legacy close-to-tray choices into close window behavior', async () => {
     await expect(
       loadAppPreferences(true, [

@@ -1342,16 +1342,65 @@ function setSelectionAfterMermaidBlock(
 }
 
 /**
- * 插入水平分割线并在下方新建空段落聚焦
+ * 插入/取消水平分割线。
+ *
+ * 行为：
+ * - 直接选中了水平分割线：删除它。
+ * - 光标在空段落且紧邻水平分割线：删除相邻的水平分割线（开关逻辑）。
+ * - 否则：在当前块位置插入 HR，并在下方新建空段落聚焦。
  */
 function insertHorizontalRule(view: EditorView): boolean {
   const { state, dispatch } = view;
-  const { $from, empty } = state.selection;
+  const { selection } = state;
+
+  // 1. 直接选中水平分割线：删除
+  if (selection instanceof NodeSelection && selection.node.type === schema.nodes.horizontal_rule) {
+    const tr = state.tr.delete(selection.from, selection.to);
+    const $pos = tr.doc.resolve(clampDocPosition(selection.from, tr.doc));
+    tr.setSelection(TextSelection.near($pos, 1));
+    dispatch(tr.scrollIntoView());
+    return true;
+  }
+
+  const { $from, empty } = selection;
   const hrNode = schema.nodes.horizontal_rule.create();
   const emptyParagraph = schema.nodes.paragraph.create();
 
-  if (empty && $from.depth === 1 && $from.parent.isTextblock && $from.parent.content.size === 0) {
-    // 当前是空段落：替换为 HR + 空段落
+  // 2. 光标在空段落且紧邻水平分割线：取消相邻的分割线
+  if (
+    empty &&
+    $from.depth === 1 &&
+    $from.parent.type === schema.nodes.paragraph &&
+    $from.parent.content.size === 0
+  ) {
+    const currentIndex = $from.index(0);
+    const docNode = $from.doc;
+
+    // 优先取消前一条水平分割线
+    if (currentIndex > 0) {
+      const prevNode = docNode.child(currentIndex - 1);
+      if (prevNode.type === schema.nodes.horizontal_rule) {
+        const hrFrom = $from.before(1) - prevNode.nodeSize;
+        const tr = state.tr.delete(hrFrom, $from.before(1));
+        tr.setSelection(TextSelection.create(tr.doc, hrFrom + 1));
+        dispatch(tr.scrollIntoView());
+        return true;
+      }
+    }
+
+    // 其次取消后一条水平分割线
+    if (currentIndex < docNode.childCount - 1) {
+      const nextNode = docNode.child(currentIndex + 1);
+      if (nextNode.type === schema.nodes.horizontal_rule) {
+        const hrFrom = $from.after(1);
+        const tr = state.tr.delete(hrFrom, hrFrom + nextNode.nodeSize);
+        tr.setSelection(TextSelection.create(tr.doc, $from.start(1)));
+        dispatch(tr.scrollIntoView());
+        return true;
+      }
+    }
+
+    // 当前是空段落，但附近没有分割线：替换为 HR + 空段落
     const blockStart = $from.before(1);
     const blockEnd = $from.after(1);
     const tr = state.tr.replaceWith(blockStart, blockEnd, [hrNode, emptyParagraph]);
@@ -1360,7 +1409,7 @@ function insertHorizontalRule(view: EditorView): boolean {
     return true;
   }
 
-  // 在当前位置后插入 HR + 空段落
+  // 3. 默认：在当前位置后插入 HR + 空段落
   const insertPos = $from.after(1);
   const tr = state.tr.insert(insertPos, [hrNode, emptyParagraph]);
   tr.setSelection(TextSelection.create(tr.doc, insertPos + hrNode.nodeSize + 1));

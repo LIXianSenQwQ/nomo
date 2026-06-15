@@ -454,7 +454,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         inlineMarkdownMarkInputPlugin(),
         linkInteractionPlugin({ openLink: this.options.onOpenLink }),
         codeHighlightPlugin(),
-        codeHighlightDecorationPlugin(),
+        codeHighlightDecorationPlugin({ enabled: false }),
         searchHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
