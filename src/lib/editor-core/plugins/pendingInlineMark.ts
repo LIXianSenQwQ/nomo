@@ -207,10 +207,12 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
           return false;
         }
 
-        // 如果当前是在 mark 外侧，则强制插入无 mark 文本
+        // 如果当前是在 mark 外侧，则强制插入无 mark 文本。
+        // 不能使用 insertText 后再 setStoredMarks([])，因为边界位置会先沿用左侧 mark。
+        const tr = view.state.tr.replaceRangeWith(from, to, view.state.schema.text(text));
         view.dispatch(
-          view.state.tr
-            .insertText(text, from, to)
+          tr
+            .setSelection(TextSelection.create(tr.doc, from + text.length))
             .setStoredMarks([]),
         );
 
@@ -221,9 +223,8 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
     appendTransaction(transactions, oldState, newState) {
       const hasDocChanged = transactions.some((tr) => tr.docChanged);
       const hasSelectionMoved = transactions.some((tr) => tr.selectionSet);
-      const isPointerSelection = transactions.some((tr) => tr.getMeta('pointer'));
 
-      if (!hasDocChanged && hasSelectionMoved && !isPointerSelection) {
+      if (!hasDocChanged && hasSelectionMoved) {
         const tr = restoreMarkedSideAfterSelectionMove(oldState, newState);
         if (tr) return tr;
       }
@@ -595,6 +596,16 @@ function createDelimiterWidget(
  *
  * 灰色标签是不可编辑的整体占位节点。点击标签左半边表示落到标签前，
  * 点击右半边表示落到标签后，从而区分 `b后 / 1前`、`6后 / c前`。
+ *
+ * 内/外判定镜像方向键逻辑（见 handleMarkBoundaryArrowKey）：
+ * - 目标位置由 widget 物理半边决定（open→from，close→to）。
+ * - 目标侧（要带 mark 还是清空）也由物理半边决定：open 左半/close 右半=外侧，
+ *   open 右半/close 左半=内侧。
+ * - 只有当光标正好落在该 widget 边界时，才读取当前侧并镜像方向键保护：
+ *   当前侧 == 目标侧时不切换 storedMarks（避免已在内侧点内侧 widget 还反向跳）；
+ *   当前侧 != 目标侧时按目标侧切换 storedMarks。
+ * - 光标不在边界（mark 内部、跨段、选区非空等无法判定当前侧）时退回物理半边硬编码，
+ *   保证从别处点过来进入 mark 的正常路径不受影响。
  */
 function handleEditRangeBoundaryMouseDown(
   view: {
@@ -621,39 +632,62 @@ function handleEditRangeBoundaryMouseDown(
 
   event.preventDefault();
 
-  if (edge === 'open-before') {
-    const tr = view.state.tr
-      .setSelection(TextSelection.create(view.state.doc, from))
-      .setStoredMarks([]);
-    view.dispatch(tr);
-    view.focus();
-    return true;
+  const target = resolveBoundaryTarget(edge, from, to);
+  const cursorPos = view.state.selection.from;
+  // 仅当光标正好落在 widget 的某个边界位置时，才能可靠读取"当前在内侧还是外侧"。
+  // 此时镜像方向键逻辑：当前侧 == 目标侧时不反向跳（不切 storedMarks）。
+  // 否则（光标在 mark 内部、跨段、选区非空等无法判定当前侧的情况），
+  // 退回物理半边硬编码，保证从别处点过来进入 mark 的正常路径不受影响。
+  const cursorOnBoundary = view.state.selection.empty && (cursorPos === from || cursorPos === to);
+
+  let wantInside = target.wantInside;
+  if (cursorOnBoundary) {
+    const currentlyInside = isCursorOnMarkedSide(view.state, cursorPos, markTypeNames);
+    // 当前侧与点击的目标侧一致：保持当前 storedMarks，只挪光标位置（避免反向跳）。
+    if (currentlyInside === target.wantInside) {
+      if (cursorPos === target.pos) {
+        view.focus();
+        return true;
+      }
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, target.pos));
+      view.dispatch(tr);
+      view.focus();
+      return true;
+    }
+    // 否则按目标侧切换 storedMarks（与 wantInside 一致，下面统一处理）。
+    wantInside = target.wantInside;
   }
 
-  if (edge === 'open-after') {
-    const tr = view.state.tr
-      .setSelection(TextSelection.create(view.state.doc, from))
-      .setStoredMarks(markTypes.map((markType) => markType.create()));
-    view.dispatch(tr);
-    view.focus();
-    return true;
-  }
-
-  if (edge === 'close-before') {
-    const tr = view.state.tr
-      .setSelection(TextSelection.create(view.state.doc, to))
-      .setStoredMarks(markTypes.map((markType) => markType.create()));
-    view.dispatch(tr);
-    view.focus();
-    return true;
-  }
-
+  const marks = wantInside ? markTypes.map((markType) => markType.create()) : [];
   const tr = view.state.tr
-    .setSelection(TextSelection.create(view.state.doc, to))
-    .setStoredMarks([]);
+    .setSelection(TextSelection.create(view.state.doc, target.pos))
+    .setStoredMarks(marks);
   view.dispatch(tr);
   view.focus();
   return true;
+}
+
+/**
+ * 根据物理半边计算点击目标位置和目标侧。
+ *
+ * - open widget：左半落在 from（外侧），右半落在 from（内侧，开标签之后即进入 mark）。
+ * - close widget：左半落在 to（内侧，闭标签之前仍是 mark），右半落在 to（外侧）。
+ */
+function resolveBoundaryTarget(
+  edge: MarkBoundaryEdge,
+  from: number,
+  to: number,
+): { pos: number; wantInside: boolean } {
+  switch (edge) {
+    case 'open-before':
+      return { pos: from, wantInside: false };
+    case 'open-after':
+      return { pos: from, wantInside: true };
+    case 'close-before':
+      return { pos: to, wantInside: true };
+    case 'close-after':
+      return { pos: to, wantInside: false };
+  }
 }
 
 function findDelimiterWidgetHit(

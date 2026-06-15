@@ -510,6 +510,24 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('keeps the cursor inside the mark when pointer-clicking before the first marked character', () => {
+    const { target, view } = createMarkedTextView(9);
+
+    // 模拟浏览器处理正文点击：点在第一个加粗字符前时，ProseMirror 会把 selection 放到 from=8，
+    // 并给事务标记 pointer。这个路径不会经过灰色 delimiter widget 的 mousedown。
+    view.dispatch(
+      view.state.tr
+        .setSelection(TextSelection.create(view.state.doc, 8))
+        .setMeta('pointer', true),
+    );
+
+    expect(view.state.selection.from).toBe(8);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('keeps typed text inside the mark at the closing delimiter', () => {
     const { target, view } = createMarkedTextView(12);
     view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
@@ -548,6 +566,100 @@ describe('pendingInlineMarkPlugin', () => {
 
     view.destroy();
     target.remove();
+  });
+
+  describe('mousedown boundary click mirrors arrow keys (current side aware)', () => {
+    // 场景：光标已在 mark 内侧（storedMarks 带 strong），点击 close widget 右半（目标=外）。
+    // 旧逻辑硬塞 strong，导致光标看起来没动/反向跳；新逻辑应清空 storedMarks 正常出到外侧。
+    it('clears storedMarks when clicking the outer half of the close delimiter while inside the mark', () => {
+      const { target, view } = createMarkedTextView(12);
+      // 让光标处于闭边界内侧（to=12，带 strong）
+      view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
+      const closeWidget = getDelimiterWidget(target, 'close');
+      mockRangeRect(closeWidget, { left: 164, right: 180 });
+
+      closeWidget.dispatchEvent(createMouseDown(176, 10));
+
+      expect(view.state.selection.from).toBe(12);
+      expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
+        true,
+      );
+
+      view.destroy();
+      target.remove();
+    });
+
+    // 场景：光标已在 mark 内侧，点 open widget 右半（目标=内）。
+    // 当前侧 == 目标侧，不应反向跳；selection 挪到 from=8，storedMarks 仍带 strong。
+    it('keeps storedMarks when clicking the inner half of the open delimiter while inside the mark', () => {
+      const { target, view } = createMarkedTextView(12);
+      view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
+      const openWidget = getDelimiterWidget(target, 'open');
+      mockRangeRect(openWidget, { left: 100, right: 116 });
+
+      openWidget.dispatchEvent(createMouseDown(112, 10));
+
+      expect(view.state.selection.from).toBe(8);
+      expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
+
+      view.destroy();
+      target.remove();
+    });
+
+    // 场景：光标在闭边界外侧（to=12，storedMarks 空），点 close widget 左半（目标=内）。
+    // 当前侧(外) != 目标侧(内)，正常进入，storedMarks 切到 strong。
+    it('enters the mark when clicking the inner half of the close delimiter while outside', () => {
+      const { target, view } = createMarkedTextView(12);
+      // 显式清空 storedMarks，确保当前在闭边界外侧
+      view.dispatch(view.state.tr.setStoredMarks([]));
+      const closeWidget = getDelimiterWidget(target, 'close');
+      mockRangeRect(closeWidget, { left: 164, right: 180 });
+
+      closeWidget.dispatchEvent(createMouseDown(168, 10));
+
+      expect(view.state.selection.from).toBe(12);
+      expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
+
+      view.destroy();
+      target.remove();
+    });
+
+    // 场景：光标在开边界外侧（from=8，storedMarks 空），点 open widget 左半（目标=外）。
+    // 当前侧 == 目标侧，不反向跳；selection 保持在 from=8，storedMarks 仍空。
+    it('stays outside when clicking the outer half of the open delimiter while outside', () => {
+      const { target, view } = createMarkedTextView(8);
+      view.dispatch(view.state.tr.setStoredMarks([]));
+      const openWidget = getDelimiterWidget(target, 'open');
+      mockRangeRect(openWidget, { left: 100, right: 116 });
+
+      openWidget.dispatchEvent(createMouseDown(104, 10));
+
+      expect(view.state.selection.from).toBe(8);
+      expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
+        true,
+      );
+
+      view.destroy();
+      target.remove();
+    });
+
+    // 场景：光标在 mark 内部（pos 9，storedMarks 带 strong），点 open widget 右半（目标=内）。
+    // 此时 pos 9 不在边界（8 或 12），cursorOnBoundary=false → currentlyInside=false，
+    // 走 fallback 物理半边硬编码：open 右半 = 内 → setStoredMarks(strong)。验证不回归。
+    it('falls back to physical-half logic when cursor is inside the mark but not on its boundary', () => {
+      const { target, view } = createMarkedTextView(9);
+      view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
+      const openWidget = getDelimiterWidget(target, 'open');
+      mockRangeRect(openWidget, { left: 100, right: 116 });
+
+      openWidget.dispatchEvent(createMouseDown(112, 10));
+
+      expect(view.state.selection.from).toBe(8);
+      expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
+
+      view.destroy();
+      target.remove();
+    });
   });
 });
 
