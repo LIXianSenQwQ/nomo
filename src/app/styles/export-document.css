@@ -60,9 +60,10 @@ body {
 }
 
 .nomo-export {
-  max-width: 210mm;
+  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 20mm;
+  padding: 40px clamp(24px, 6vw, 80px);
   color: var(--nomo-export-fg);
   font-family: var(--nomo-export-font-body);
   font-size: 16px;
@@ -378,6 +379,7 @@ body {
   white-space: pre;
 }
 
+/* 支持 .table-scroll 包裹的表格（tableHtml 插件渲染的管道表格） */
 .nomo-export .table-scroll {
   max-width: 100%;
   margin: 18px 0;
@@ -420,6 +422,44 @@ body {
   border-right: 0;
 }
 
+/* 支持无 .table-scroll 包裹的纯 table（prosemirror-tables 渲染的表格） */
+.nomo-export table {
+  width: auto;
+  max-width: 100%;
+  margin: 18px 0;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 14px;
+  border: 1px solid var(--nomo-export-table-border);
+  border-radius: var(--nomo-export-radius-md);
+  background: #ffffff;
+  page-break-inside: avoid;
+}
+
+.nomo-export table th,
+.nomo-export table td {
+  padding: 10px 12px;
+  border-right: 1px solid var(--nomo-export-table-border);
+  border-bottom: 1px solid var(--nomo-export-table-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.nomo-export table th {
+  background: var(--nomo-export-table-header-bg);
+  color: var(--nomo-export-heading-fg);
+  font-weight: 700;
+}
+
+.nomo-export table tr:last-child td {
+  border-bottom: 0;
+}
+
+.nomo-export table th:last-child,
+.nomo-export table td:last-child {
+  border-right: 0;
+}
+
 .nomo-export .task-row {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -453,6 +493,21 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
 }
 
+.nomo-export .mermaid-block {
+  margin: 18px 0;
+  page-break-inside: avoid;
+}
+
+.nomo-export .mermaid-block-rendered {
+  display: flex;
+  justify-content: center;
+}
+
+.nomo-export .mermaid-block-rendered svg {
+  max-width: 100%;
+  height: auto;
+}
+
 .nomo-export .footnote {
   margin: 18px 0 0;
   padding-top: 12px;
@@ -476,7 +531,7 @@ body {
   }
 
   .nomo-export {
-    padding: 0;
+    padding: 24px clamp(16px, 4vw, 40px);
     max-width: none;
   }
 
@@ -491,6 +546,7 @@ body {
 
   .nomo-export .code-card,
   .nomo-export .table-scroll,
+  .nomo-export table,
   .nomo-export img {
     page-break-inside: avoid;
   }

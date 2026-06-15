@@ -115,7 +115,7 @@ function tryParseTable(
     i += 1;
   }
   if (rows.length === 0 || i === startIndex) return null;
-  let html = '<table>';
+  let html = '<div class="table-scroll"><table>';
   if (rows.length > 0 && hasSeparator) {
     html +=
       '<thead><tr>' +
@@ -136,7 +136,7 @@ function tryParseTable(
         .join('') +
       '</tbody>';
   }
-  html += '</table>';
+  html += '</table></div>';
   const from = blocks[startIndex].pos;
   const lastBlock = blocks[i - 1];
   const to = lastBlock.pos + lastBlock.node.nodeSize;

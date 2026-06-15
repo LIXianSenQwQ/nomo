@@ -126,9 +126,9 @@ export async function buildExportDocument(
 export function cleanEditorArtifacts(htmlFragment: string): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlFragment, 'text/html');
-  const root = doc.body.firstElementChild;
+  const root = doc.body;
 
-  if (!root) {
+  if (!root.children.length) {
     return htmlFragment;
   }
 
@@ -147,7 +147,9 @@ export function cleanEditorArtifacts(htmlFragment: string): string {
     '.inline-comment-edit-hint',
     '.footnote-backref',
     '.table-resize-handle',
-    '[contenteditable="false"]:not(.image-node)',
+    '.mermaid-block-fullscreen-button',
+    '.callout-type-picker',
+    '[contenteditable="false"]:not(.image-node):not(.mermaid-block):not(.table-widget):not(.horizontal-rule-node)',
   ];
 
   for (const selector of selectorsToRemove) {
@@ -172,6 +174,16 @@ export function cleanEditorArtifacts(htmlFragment: string): string {
     const img = node.querySelector('img');
     if (img) {
       node.replaceWith(img);
+    } else {
+      node.remove();
+    }
+  });
+
+  // 水平分割线节点只保留 hr 本身。
+  root.querySelectorAll('.horizontal-rule-node').forEach((node) => {
+    const hr = node.querySelector('hr');
+    if (hr) {
+      node.replaceWith(hr);
     } else {
       node.remove();
     }
