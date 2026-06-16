@@ -59,6 +59,14 @@ body {
   line-height: 1.7;
 }
 
+/* 防止点击页面时浏览器给 body 或 article 容器添加 focus outline 黑边框 */
+body:focus,
+body:focus-visible,
+.nomo-export:focus,
+.nomo-export:focus-visible {
+  outline: none;
+}
+
 .nomo-export {
   width: 100%;
   max-width: 1200px;

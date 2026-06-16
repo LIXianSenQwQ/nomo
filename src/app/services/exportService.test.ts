@@ -60,6 +60,22 @@ describe('exportService', () => {
     expect(output).not.toContain('image-node');
   });
 
+  it('cleanEditorArtifacts 移除 contenteditable 属性，防止导出 HTML 点击时出现黑边框', () => {
+    const input = `
+      <div contenteditable="true" class="ProseMirror">
+        <p>正文内容</p>
+        <span contenteditable="false">不可编辑装饰</span>
+      </div>
+    `;
+    const output = cleanEditorArtifacts(input);
+    // contenteditable 属性应被完全移除
+    expect(output).not.toContain('contenteditable="true"');
+    expect(output).not.toContain('contenteditable="false"');
+    expect(output).not.toContain('contenteditable');
+    // 正文内容应保留
+    expect(output).toContain('正文内容');
+  });
+
   it('inlineLocalImages 保留 data/blob 图片链接，对 http/https 尝试转 base64', async () => {
     const originalFetch = globalThis.fetch;
     // 模拟 fetch 返回图片 blob

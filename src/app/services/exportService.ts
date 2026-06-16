@@ -201,6 +201,12 @@ export function cleanEditorArtifacts(htmlFragment: string): string {
     }
   });
 
+  // 移除所有 contenteditable 属性——导出 HTML 是只读文档，
+  // 若保留 contenteditable="true"，浏览器点击时会显示 focus outline 黑边框。
+  root.querySelectorAll('[contenteditable]').forEach((el) => {
+    el.removeAttribute('contenteditable');
+  });
+
   return root.innerHTML;
 }
 
