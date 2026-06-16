@@ -965,8 +965,8 @@ describe('App outline layout', () => {
     expect(tauriTraySource).toContain('set_tray_active');
     expect(tauriTraySource).toContain('sync_tray_active_with_window_visibility');
     expect(tauriTraySource).toContain('set_desktop_icon_theme');
-    expect(tauriTraySource).toContain('nomo-app-light-256.png');
-    expect(tauriTraySource).toContain('nomo-app-dark-256.png');
+    expect(tauriTraySource).toContain('nomo/macos/nomo-app-light-256.png');
+    expect(tauriTraySource).toContain('nomo/macos/nomo-app-dark-256.png');
     expect(tauriWindowCommandsSource).toContain('get_desktop_system_theme');
     expect(tauriLibSource).toContain('crate::window::commands::get_desktop_system_theme');
     expect(tauriTraySource).toContain('apply_window_icons');

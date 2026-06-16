@@ -2,16 +2,33 @@
 
 本目录存放 Nomo 已接入的正式图标源图和托盘图标。
 
-Nomo 正式应用图标已改用 `source/nomo-app-light-256.png` 作为源图，并通过 Tauri CLI 生成 `src-tauri/icons` 根目录下的正式打包图标。图标生成链路必须只依赖项目内文件，不引用桌面或其他外部目录。
+## macOS 两套图标（重要）
 
-托盘当前正式使用 `tray/` 下四个 24px 图标，并按软件当前有效主题在 light/dark 间切换，按窗口可见状态在 active/inactive 间切换。Windows 任务栏、开始菜单、桌面快捷方式和安装包图标统一使用 `src-tauri/icons/icon.ico` 等 Tauri bundle 派生图标，保持稳定，不随软件主题动态切换。
+macOS 上 Dock / Cmd+Tab 看到的图标，**不只看 `icon.icns`**：
 
-旧版应用图标候选、品牌预览、概念图和接触表预览已清理，不再作为项目内资产保留。当前保留 `source/` 中的新版 128/256 应用 logo 源图，方便后续重新生成派生图标。
+| 资源 | 用途 |
+|------|------|
+| `../icon.icns` | `.app` 包内图标；应用**未运行**时 Finder / 启动台显示 |
+| `macos/nomo-app-light-256.png` / `dark` | 应用**运行后**由 Rust 调用 `setApplicationIconImage` 设置 Dock / Cmd+Tab |
+
+因此只改 `icon.icns` 而应用已在运行，或只重打前端包、未重编译 Rust，Dock 图标**不会变化**。
+
+调整 Dock 边距请直接编辑 `macos/nomo-app-light-256.png` / `nomo-app-dark-256.png`，然后执行：
+
+```bash
+bash scripts/regenerate-macos-icons.sh   # 仅根据 macos/*.png 更新 icon.icns
+pnpm run build:macos                     # 或 pnpm tauri dev，重新编译 Rust
+```
+
+当前 macOS 运行时图标内容区约 **218px**（256 画布）。
+
+托盘使用 `tray/` 下四个 24px 图标。Windows 等使用 `src-tauri/icons/icon.ico`，不随 macOS 边距策略变化。
 
 ## 目录说明
 
-- `source/`: 应用 logo 源图，保留 light/dark 与 128/256 两组 PNG；当前正式 bundle 图标生成源为 `source/nomo-app-light-256.png`。应用图标源图必须保留透明安全边距，当前 256px 源图内容区为 224px，128px 源图内容区为 112px，避免 macOS Dock 视觉尺寸偏大。
-- `tray/`: 托盘/系统栏图标，保留 dark/light 与 active/inactive 四个 24px 状态图标。
+- `source/`: 未缩放的原始 logo 源图（light/dark × 128/256），供生成脚本读取。
+- `macos/`: 已应用 macOS 安全边距的 256px Dock 运行时图标；`regenerate-macos-icons.sh` 据此生成 `icon.icns`。
+- `tray/`: 托盘/系统栏图标（dark/light × active/inactive，24px）。
 
 ## 命名规则
 
@@ -26,7 +43,6 @@ Nomo 正式应用图标已改用 `source/nomo-app-light-256.png` 作为源图，
 
 - 已按需求排除渐变版图标。
 - 已修改 `src-tauri/tauri.conf.json`，应用外显名称迁移为 Nomo。
-- 已用 `source/nomo-app-light-256.png` 通过 Tauri CLI 重新生成 `src-tauri/icons/icon.png`、`icon.ico`、`icon.icns`、`32x32.png`、`128x128.png`、`128x128@2x.png`、Windows Store Logo、iOS 和 Android 派生图标。
-- 已将四个 24px 托盘图标纳入 `tray/`，对应 active/inactive、light/dark 文件；前端主题变化会通过 `set_desktop_icon_theme` 同步后端托盘图标。
+- macOS 运行时 Dock 图标由 `src-tauri/src/window/tray.rs` 嵌入 `macos/*.png`。
+- 已将四个 24px 托盘图标纳入 `tray/`；前端主题变化通过 `set_desktop_icon_theme` 同步托盘与 Dock 图标。
 - Windows 安装态任务栏图标保持固定 bundle 图标，避免动态切换导致任务栏按钮闪烁、消失、重排或受快捷方式图标缓存影响。
-- 已清理旧版候选图标目录和未引用的 `src/app/assets/nomo-app-icon.png`。

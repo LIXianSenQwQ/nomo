@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "npx @inlang/paraglide-js compile && vite build",
     "build:quicklook-renderer": "vite build --config vite.quicklook.config.ts",
     "build:quicklook-extension": "bash scripts/build-macos-quicklook.sh",
     "build:macos": "pnpm run build:quicklook-extension && tauri build --bundles app,dmg && bash scripts/embed-quicklook-extension.sh",

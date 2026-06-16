@@ -22,9 +22,9 @@ const TRAY_LIGHT_ACTIVE_ICON_BYTES: &[u8] =
 const TRAY_LIGHT_INACTIVE_ICON_BYTES: &[u8] =
     include_bytes!("../../icons/nomo/tray/nomo-tray-light-inactive-24-preview.png");
 const WINDOW_LIGHT_ICON_BYTES: &[u8] =
-    include_bytes!("../../icons/nomo/source/nomo-app-light-256.png");
+    include_bytes!("../../icons/nomo/macos/nomo-app-light-256.png");
 const WINDOW_DARK_ICON_BYTES: &[u8] =
-    include_bytes!("../../icons/nomo/source/nomo-app-dark-256.png");
+    include_bytes!("../../icons/nomo/macos/nomo-app-dark-256.png");
 
 #[derive(Clone, Copy)]
 enum TrayTheme {

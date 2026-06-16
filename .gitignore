@@ -32,3 +32,7 @@ pnpm-debug.log*
 !.vscode/settings.json
 .DS_Store
 Thumbs.db
+.pnpm-store
+
+# Paraglide 由 build 前 npx @inlang/paraglide-js compile 生成
+src/paraglide/
