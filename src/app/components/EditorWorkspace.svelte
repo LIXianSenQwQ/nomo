@@ -4,7 +4,6 @@
   import type { EditorMode } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
-  import type { ExternalFileChangeState } from '../types';
   import {
     modePaneMotion,
     motionIn,
@@ -24,7 +23,6 @@
   export let frontMatterFocusRequest: number;
   export let frontMatterFocusTarget: 'default' | 'title-value';
   export let readonlyDocumentMode: boolean;
-  export let externalFileChange: ExternalFileChangeState;
   export let outlineVisible: boolean;
   export let outline: OutlineItem[];
   export let activeOutlineId: string;
@@ -64,29 +62,6 @@
 </script>
 
 {#key interfaceLocale}
-{#if externalFileChange.type !== 'none'}
-  <div
-    class="desktop-alert"
-    role="status"
-    use:motionIn={{ kind: 'panel', y: -8 }}
-    transition:slide={{ duration: transitionDuration('panel') }}
-  >
-    <strong>{t.externalFileChanged()}</strong>
-    <span>{externalFileChange.message}</span>
-    <div class="desktop-alert-actions">
-      {#if externalFileChange.type === 'modified'}
-        <button type="button" on:click={reloadExternalFile}>{t.reloadExternalVersion()}</button>
-      {/if}
-      <button type="button" on:click={() => saveMarkdownFile(true)}>{t.saveAsCurrentContent()}</button>
-      {#if externalFileChange.type === 'modified'}
-        <button type="button" class="danger" on:click={overwriteExternalFile}>
-          {t.overwriteExternalVersion()}
-        </button>
-      {/if}
-    </div>
-  </div>
-{/if}
-
 <div
   class="editor-grid"
   class:source-only={mode === 'source'}

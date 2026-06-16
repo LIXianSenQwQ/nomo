@@ -93,6 +93,7 @@
   import ContextMenu from './components/ContextMenu.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
   import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.svelte';
+  import ExternalChangeDialog from './components/ExternalChangeDialog.svelte';
   import CloseWindowBehaviorDialog from './components/CloseWindowBehaviorDialog.svelte';
   import type {
     ContextMenuOpenEvent,
@@ -273,6 +274,10 @@
   let deleteConfirmPath = '';
   let deleteConfirmIsDir = false;
   let deleteConfirmName = '';
+  // 外部文件变更弹框状态
+  let externalChangeDialogOpen = false;
+  let externalChangeDialogState: ExternalFileChangeState | null = null;
+
   let closeWindowChoiceDialogOpen = false;
   let rememberCloseWindowChoice = true;
   let closeWindowChoiceResolver: ((choice: CloseWindowChoiceResult) => void) | null = null;
@@ -310,13 +315,38 @@
     }));
   }
 
+  // 防抖持久化工作区状态，避免每次按键都触发两次 IPC 调用 + 磁盘写入
+  let _persistTimer: number | null = null;
+  const WORKSPACE_PERSIST_DEBOUNCE_MS = 500;
+
   function persistWorkspaceState() {
-    if (desktopEnabled && windowLabel) {
+    if (!desktopEnabled || !windowLabel) return;
+
+    if (_persistTimer !== null) {
+      window.clearTimeout(_persistTimer);
+    }
+
+    _persistTimer = window.setTimeout(() => {
+      _persistTimer = null;
       const state = { tabs, activeTabId, currentFolderPath };
       updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
       if (currentFolderPath) {
         updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(() => undefined);
       }
+    }, WORKSPACE_PERSIST_DEBOUNCE_MS);
+  }
+
+  /** 立即刷新待持久化的工作区状态（用于关闭窗口/退出应用等场景） */
+  function flushPersistWorkspaceState() {
+    if (_persistTimer !== null) {
+      window.clearTimeout(_persistTimer);
+      _persistTimer = null;
+    }
+    if (!desktopEnabled || !windowLabel) return;
+    const state = { tabs, activeTabId, currentFolderPath };
+    updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
+    if (currentFolderPath) {
+      updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(() => undefined);
     }
   }
 
@@ -693,6 +723,8 @@
       }
     }
 
+    // 关闭窗口前立即持久化工作区状态
+    flushPersistWorkspaceState();
     const shouldHideToTray = closeBehavior === 'close-to-tray';
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
   }
@@ -749,6 +781,31 @@
     resolver?.(null);
   }
 
+  // 外部文件变更弹框 —— 重新载入外部版本
+  function handleExternalChangeReload() {
+    externalChangeDialogOpen = false;
+    externalChangeDialogState = null;
+    reloadExternalFile().catch(() => undefined);
+  }
+
+  // 外部文件变更弹框 —— 覆盖外部版本
+  function handleExternalChangeOverwrite() {
+    externalChangeDialogOpen = false;
+    externalChangeDialogState = null;
+    overwriteExternalFile().catch(() => undefined);
+  }
+
+  // 外部文件变更弹框 —— 忽略（保留当前内容，关闭弹框）
+  function handleExternalChangeDismiss() {
+    // 更新 lastKnownModifiedAt 为磁盘时间，避免下次轮询重复弹框
+    if (externalChangeDialogState && externalChangeDialogState.modifiedAt > 0) {
+      lastKnownModifiedAt = externalChangeDialogState.modifiedAt;
+    }
+    externalFileChange = createEmptyExternalFileChange();
+    externalChangeDialogOpen = false;
+    externalChangeDialogState = null;
+  }
+
   async function requestExitApp() {
     const dirtyTabs = getDirtyTabs(tabs);
     if (dirtyTabs.length > 0) {
@@ -756,6 +813,8 @@
       const ok = await confirmAction(t.unsavedChangesExitApp({ names }));
       if (ok === false) return;
     }
+    // 退出应用前立即持久化工作区状态
+    flushPersistWorkspaceState();
     await exitDesktopApp(desktopEnabled);
   }
 
@@ -1377,12 +1436,18 @@
     },
     getExternalFileChange: () => externalFileChange,
     setExternalFileChange: (value) => {
+      const changed = externalFileChange.type !== value.type;
       externalFileChange = value;
       const activeTab = tabs.find((tab) => tab.id === activeTabId);
-      if (activeTab) {
+      if (activeTab && changed) {
         activeTab.externalFileChange = value;
         tabs = [...tabs];
         persistWorkspaceState();
+      }
+      // 检测到外部变更且弹框未打开时，弹出模态对话框
+      if (value.type !== 'none' && !externalChangeDialogOpen) {
+        externalChangeDialogState = value;
+        externalChangeDialogOpen = true;
       }
     },
     getCurrentFolderPath: () => currentFolderPath,
@@ -2246,6 +2311,8 @@
   });
 
   onDestroy(() => {
+    // 组件销毁前立即持久化工作区状态
+    flushPersistWorkspaceState();
     _unsubConfirmStore();
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
@@ -3094,4 +3161,12 @@
   onRememberChange={(value) => (rememberCloseWindowChoice = value)}
   onChoose={resolveCloseWindowChoice}
   onCancel={cancelCloseWindowChoice}
+/>
+
+<ExternalChangeDialog
+  open={externalChangeDialogOpen}
+  change={externalChangeDialogState}
+  onReload={handleExternalChangeReload}
+  onOverwrite={handleExternalChangeOverwrite}
+  onDismiss={handleExternalChangeDismiss}
 />
