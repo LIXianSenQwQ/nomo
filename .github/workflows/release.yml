@@ -133,6 +133,7 @@ jobs:
       - name: Generate and upload checksums.md5
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
