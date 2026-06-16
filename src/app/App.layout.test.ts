@@ -893,6 +893,11 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain('t.autoCleanLocalImages()');
     expect(settingsWindowSource).toContain('t.defaultCodeBlockLanguage()');
     expect(settingsWindowSource).toContain('t.defaultDiagramType()');
+    expect(settingsWindowSource).toMatch(
+      /:global\(html\),\s*:global\(body\)\s*\{\s*overflow:\s*hidden;/,
+    );
+    expect(settingsWindowSource).toMatch(/\.toggle-row\s*\{[\s\S]*?position:\s*relative;/);
+    expect(settingsWindowSource).toMatch(/\.toggle-row input\s*\{[\s\S]*?right:\s*0;/);
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.filePreviewEnabled');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.autoSaveEnabled');
     expect(appSource).toContain('DEFAULT_APP_PREFERENCES.closeWindowBehavior');

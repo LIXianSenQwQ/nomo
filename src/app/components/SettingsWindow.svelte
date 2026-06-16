@@ -2288,6 +2288,7 @@
 {/key}
 
 <style>
+  :global(html),
   :global(body) {
     overflow: hidden;
   }
@@ -2546,6 +2547,7 @@
 
   .toggle-row {
     cursor: pointer;
+    position: relative;
   }
 
   .setting-label,
@@ -2772,6 +2774,12 @@
 
   .toggle-row input {
     position: absolute;
+    top: 50%;
+    right: 0;
+    width: 42px;
+    height: 24px;
+    margin: 0;
+    transform: translateY(-50%);
     opacity: 0;
     pointer-events: none;
   }
