@@ -2,7 +2,7 @@ import type { NativeDocument, RecentEntry } from '../../lib/desktop/tauriStorage
 import type { EditorCore } from '../../lib/editor-core';
 import { calculateDocumentStats } from '../../lib/outline/outlineService';
 import { createEmptyExternalFileChange, type ExternalFileChangeState, type Tab } from '../types';
-import { getDirectoryLabel } from '../utils/pathLabels';
+import { getDirectoryLabel, sameNativePath } from '../utils/pathLabels';
 import {
   exportMarkdownInBrowser,
   findDroppedMarkdownPath,
@@ -223,7 +223,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const isLargeDocument =
       document.markdown.length > options.getLargeDocumentLimit() ||
       document.sizeBytes > options.getLargeDocumentLimit();
-    const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
+    const existingTab = options
+      .getTabs()
+      .find((tab) => tab.nativePath && sameNativePath(tab.nativePath, document.path));
     if (existingTab && !saved) {
       // 预览标签再次通过“正式打开”路径打开时，升级为固定标签。
       if (existingTab.id === options.getPreviewTabId()) {
@@ -279,7 +281,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const isLargeDocument =
       document.markdown.length > options.getLargeDocumentLimit() ||
       document.sizeBytes > options.getLargeDocumentLimit();
-    const existingTab = options.getTabs().find((tab) => tab.nativePath === document.path);
+    const existingTab = options
+      .getTabs()
+      .find((tab) => tab.nativePath && sameNativePath(tab.nativePath, document.path));
 
     options.saveActiveTabState();
 

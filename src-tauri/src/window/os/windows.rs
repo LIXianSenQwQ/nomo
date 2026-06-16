@@ -1,6 +1,6 @@
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SetForegroundWindow, SetWindowPos, ShowWindow, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE,
-    SWP_NOSIZE, SW_RESTORE,
+    SetForegroundWindow, SetWindowPos, ShowWindow, IsZoomed, HWND_NOTOPMOST, HWND_TOPMOST,
+    SWP_NOMOVE, SWP_NOSIZE, SW_RESTORE, SW_SHOW,
 };
 
 pub(crate) fn window_decorations() -> bool {
@@ -25,7 +25,10 @@ pub(crate) fn bring_window_to_front<R: tauri::Runtime>(window: &tauri::WebviewWi
     };
     let hwnd = hwnd.0;
     unsafe {
-        ShowWindow(hwnd, SW_RESTORE);
+        // 如果窗口已最大化，使用 SW_SHOW 保持最大化状态；
+        // 否则使用 SW_RESTORE 从最小化/隐藏状态还原窗口。
+        let show_cmd = if IsZoomed(hwnd) != 0 { SW_SHOW } else { SW_RESTORE };
+        ShowWindow(hwnd, show_cmd);
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         SetForegroundWindow(hwnd);

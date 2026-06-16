@@ -54,7 +54,7 @@
     type Tab,
     type WorkspaceState,
   } from './types';
-  import { getCompactPath, getDirectoryLabel, getFolderName } from './utils/pathLabels';
+  import { getCompactPath, getDirectoryLabel, getFolderName, sameNativePath, pathEqualsOrDescendsFrom } from './utils/pathLabels';
   import {
     executeDesktopCommand as executeDesktopAppCommand,
     handleGlobalShortcut as handleGlobalAppShortcut,
@@ -1266,7 +1266,7 @@
     }
 
     // 已有固定标签页打开此文件 → 切换到它
-    const existingFixedTab = tabs.find((t) => t.nativePath === path && t.id !== previewTabId);
+    const existingFixedTab = tabs.find((t) => t.nativePath && sameNativePath(t.nativePath, path) && t.id !== previewTabId);
     if (existingFixedTab) {
       if (activeTabId !== previewTabId) {
         saveActiveTabState();
@@ -1775,11 +1775,10 @@
     try {
       await deleteFile(path);
       // 关闭受影响的标签页（精确匹配或以文件夹路径开头）
-      const sep = path.includes('\\') ? '\\' : '/';
       const affectedTabs = tabs.filter((t) =>
         isDir
-          ? t.nativePath && (t.nativePath === path || t.nativePath.startsWith(path + sep))
-          : t.nativePath === path,
+          ? t.nativePath && pathEqualsOrDescendsFrom(t.nativePath, path)
+          : t.nativePath != null && sameNativePath(t.nativePath, path),
       );
       for (const tab of affectedTabs) {
         if (tab.id === previewTabId) {
@@ -1895,11 +1894,11 @@
     await loadFolder(currentFolderPath);
 
     tabs.forEach((t) => {
-      if (t.nativePath === path || t.nativePath?.startsWith(path + '/')) {
+      if (t.nativePath && pathEqualsOrDescendsFrom(t.nativePath, path)) {
         const newNativePath = t.nativePath.replace(path, targetPath);
         t.nativePath = newNativePath;
         t.filePath = newNativePath;
-        if (t.nativePath === targetPath) {
+        if (sameNativePath(t.nativePath, targetPath)) {
           t.fileName = finalName;
         }
         if (activeTabId === t.id) {
