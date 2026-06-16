@@ -226,6 +226,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateDownloadingShort: '下载中...',
     softwareUpdateDownloaded: '更新已下载并通过 MD5 校验，重启后完成安装。',
     softwareUpdateWaitingInstall: '更新已下载并通过 MD5 校验，等待你确认重启并安装。',
+    softwareUpdateDownloadNow: '下载更新',
     softwareUpdateRestartAndInstall: '重启并安装',
     softwareUpdateInstalling: '正在启动安装流程，Nomo 将会重启。',
     softwareUpdateInstallingShort: '安装中...',
@@ -683,6 +684,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateDownloadingShort: '下載中...',
     softwareUpdateDownloaded: '更新已下載並通過 MD5 校驗，重啟後完成安裝。',
     softwareUpdateWaitingInstall: '更新已下載並通過 MD5 校驗，等待你確認重啟並安裝。',
+    softwareUpdateDownloadNow: '下載更新',
     softwareUpdateRestartAndInstall: '重啟並安裝',
     softwareUpdateInstalling: '正在啟動安裝流程，Nomo 將會重啟。',
     softwareUpdateInstallingShort: '安裝中...',
@@ -1143,6 +1145,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
       'Update downloaded and verified with MD5. Restart to finish installing.',
     softwareUpdateWaitingInstall:
       'Update downloaded and verified with MD5. Waiting for restart and install confirmation.',
+    softwareUpdateDownloadNow: 'Download update',
     softwareUpdateRestartAndInstall: 'Restart and install',
     softwareUpdateInstalling: 'Starting the installer. Nomo will restart.',
     softwareUpdateInstallingShort: 'Installing...',

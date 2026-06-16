@@ -150,6 +150,14 @@ export function createSoftwareUpdateProgress(
   };
 }
 
+export async function getCachedSoftwareUpdate(): Promise<DownloadedSoftwareUpdate | null> {
+  if (!isSoftwareUpdateSupported()) {
+    return null;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<DownloadedSoftwareUpdate | null>('get_cached_software_update').catch(() => null);
+}
+
 export function isSoftwareUpdateIntegrityFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /MD5|校验失败|integrity|checksum/i.test(message);

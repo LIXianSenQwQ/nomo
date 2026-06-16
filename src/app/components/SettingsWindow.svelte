@@ -17,9 +17,9 @@
   import {
     checkSoftwareUpdate,
     downloadSoftwareUpdate,
+    getCachedSoftwareUpdate,
     installSoftwareUpdate,
     isSoftwareUpdateIntegrityFailure,
-    isSoftwareUpdateInstallerSupported,
     isSoftwareUpdateSupported,
     type DownloadedSoftwareUpdate,
     type SoftwareUpdateProgress,
@@ -137,6 +137,10 @@
     message: '',
   };
   let updateDecisionUnlisten: (() => void) | null = null;
+
+  // 响应式派生：强制 Svelte 追踪 updateState 的变化
+  $: updateStatus = updateState.status;
+  $: updateBusy = updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing';
 
   function createCategoryTitles(_locale: EffectiveInterfaceLocale): Record<CategoryId, string> {
     return {
@@ -368,13 +372,20 @@
     }, 1800);
   }
 
+  // 暂存检查结果中的候选版本信息，用于后续下载步骤
+  let pendingUpdateCandidate: import('../../lib/desktop/tauriUpdater').SoftwareUpdateCandidate | null = null;
+  let pendingUpdateVersion: string | null = null;
+
   async function checkForSoftwareUpdate() {
     if (['checking', 'downloading', 'installing'].includes(updateState.status)) {
       return;
     }
-    logToTerminal('info', 'SettingsWindow', '点击检查软件更新按钮');
+    logToTerminal('info', 'SettingsWindow', '开始检查软件更新');
 
     downloadedSoftwareUpdate = null;
+    pendingUpdateCandidate = null;
+    pendingUpdateVersion = null;
+
     if (!isSoftwareUpdateSupported()) {
       logToTerminal('warn', 'SettingsWindow', '当前平台不支持软件更新');
       updateState = {
@@ -414,17 +425,60 @@
       logToTerminal('info', 'SettingsWindow', '发现新版本', {
         version: result.version,
       });
+      // 暂存候选版本信息，等用户确认后再下载
+      pendingUpdateCandidate = result.candidate;
+      pendingUpdateVersion = result.version ?? null;
+
+      // 检查本地是否已经下载过同一版本
+      const cached = await getCachedSoftwareUpdate().catch(() => null);
+      if (cached && cached.version === result.version) {
+        logToTerminal('info', 'SettingsWindow', `版本 ${result.version} 已下载过，直接显示安装入口`);
+        downloadedSoftwareUpdate = cached;
+        updateState = {
+          status: 'downloaded',
+          message: t.softwareUpdateDownloaded(),
+          version: result.version,
+        };
+        return;
+      }
+
       updateState = {
         status: 'available',
         message: t.softwareUpdateAvailable({ version: result.version ?? '' }),
         version: result.version,
       };
+    } catch (error) {
+      logToTerminal('error', 'SettingsWindow', '软件更新检查失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      updateState = {
+        status: 'error',
+        message: t.softwareUpdateFailed(),
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
-      downloadedSoftwareUpdate = await downloadSoftwareUpdate(result.candidate, (progress) => {
+  async function downloadAvailableUpdate() {
+    if (!pendingUpdateCandidate || updateState.status !== 'available') {
+      return;
+    }
+    logToTerminal('info', 'SettingsWindow', '用户确认，开始下载更新');
+
+    try {
+      const candidate = pendingUpdateCandidate;
+      const version = pendingUpdateVersion;
+      updateState = {
+        status: 'downloading',
+        message: t.softwareUpdateDownloading(),
+        version: version ?? undefined,
+      };
+
+      downloadedSoftwareUpdate = await downloadSoftwareUpdate(candidate, (progress) => {
         updateState = {
           status: 'downloading',
           message: getSoftwareUpdateDownloadMessage(progress),
-          version: result.version,
+          version: version ?? undefined,
           progress,
         };
       });
@@ -433,12 +487,12 @@
       updateState = {
         status: 'downloaded',
         message: t.softwareUpdateDownloaded(),
-        version: result.version,
+        version: version ?? undefined,
         progress: updateState.progress,
       };
     } catch (error) {
       downloadedSoftwareUpdate = null;
-      logToTerminal('error', 'SettingsWindow', '软件更新检查/下载失败', {
+      logToTerminal('error', 'SettingsWindow', '软件更新下载失败', {
         error: error instanceof Error ? error.message : String(error),
       });
       updateState = {
@@ -454,72 +508,20 @@
   async function ensureSoftwareUpdateSupportChecked() {
     // 只在首次进入关于页且状态为 idle 时检查，避免反复切换分类重复执行
     if (updateState.status !== 'idle') {
+      logToTerminal('info', 'SettingsWindow', `跳过自动更新检查，当前状态：${updateState.status}`);
       return;
     }
+    logToTerminal('info', 'SettingsWindow', '进入关于页，开始自动检查更新');
     if (!isSoftwareUpdateSupported()) {
+      logToTerminal('warn', 'SettingsWindow', '当前平台不支持软件更新（非 Windows）');
       updateState = {
         status: 'unsupported',
         message: t.softwareUpdateUnsupported(),
       };
       return;
     }
-    await refreshSoftwareUpdateSupport();
-  }
-
-  async function refreshSoftwareUpdateSupport() {
-    const timer = createPerfTimer('SettingsWindow', 'refreshSoftwareUpdateSupport');
-    updateState = {
-      ...updateState,
-      status: 'checking',
-      message: t.softwareUpdateChecking(),
-    };
-
-    // 步骤1：调用后端检查安装方式，设置超时防止子进程异常导致 UI 永久转圈
-    const SUPPORT_CHECK_TIMEOUT_MS = 8000;
-    let timeoutId: number | null = null;
-    try {
-      const supported = await Promise.race([
-        isSoftwareUpdateInstallerSupported().finally(() => {
-          if (timeoutId !== null) {
-            window.clearTimeout(timeoutId);
-            timeoutId = null;
-          }
-        }),
-        new Promise<boolean>((_, reject) => {
-          timeoutId = window.setTimeout(
-            () => reject(new Error('检查更新支持状态超时')),
-            SUPPORT_CHECK_TIMEOUT_MS,
-          );
-        }),
-      ]);
-
-      // 步骤2：根据检查结果更新 UI 状态
-      if (!supported) {
-        logToTerminal('warn', 'SettingsWindow', '当前安装方式不支持软件更新');
-        updateState = {
-          status: 'unsupported',
-          message: t.softwareUpdateUnsupported(),
-        };
-        return;
-      }
-      updateState = {
-        status: 'idle',
-        message: '',
-      };
-    } catch (error) {
-      logToTerminal('error', 'SettingsWindow', '检查软件更新支持状态失败', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      updateState = {
-        status: 'unsupported',
-        message: t.softwareUpdateUnsupported(),
-      };
-    } finally {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-      timer.end();
-    }
+    await checkForSoftwareUpdate();
+    logToTerminal('info', 'SettingsWindow', `ensureSoftwareUpdateSupportChecked 完成，最终状态：${updateState.status}`);
   }
 
   async function installDownloadedSoftwareUpdate() {
@@ -613,87 +615,65 @@
     return t.softwareUpdateDownloading();
   }
 
-  function getSoftwareUpdateButtonLabel() {
-    if (updateState.status === 'checking') {
-      return t.softwareUpdateCheckingShort();
-    }
-    if (updateState.status === 'downloading') {
-      return t.softwareUpdateDownloadingShort();
-    }
-    if (updateState.status === 'downloaded') {
-      return t.softwareUpdateRestartAndInstall();
-    }
-    if (updateState.status === 'installing') {
-      return t.softwareUpdateInstallingShort();
-    }
-    return t.softwareUpdateCheckNow();
-  }
+  // 以下软件更新相关的 UI 派生值必须用 $: 声明，不能使用普通函数。
+  // 原因：Svelte 5 兼容模式下，编译器无法穿透函数体追踪 updateState/updateStatus 的依赖，
+  // 导致状态变为 idle 后按钮仍然显示"检测中"且转圈不消失。
+  $: softwareUpdateButtonLabel =
+    updateStatus === 'checking'
+      ? t.softwareUpdateCheckingShort()
+      : updateStatus === 'downloading'
+        ? t.softwareUpdateDownloadingShort()
+        : updateStatus === 'available'
+          ? t.softwareUpdateDownloadNow()
+          : updateStatus === 'downloaded'
+            ? t.softwareUpdateRestartAndInstall()
+            : updateStatus === 'installing'
+              ? t.softwareUpdateInstallingShort()
+              : t.softwareUpdateCheckNow();
 
-  function getSoftwareUpdateDescription() {
-    if (updateState.error) {
-      return updateState.error;
-    }
-    return updateState.message || t.updateCheckDescription();
-  }
+  $: softwareUpdateDescription = updateState.error
+    ? updateState.error
+    : updateState.message || t.updateCheckDescription();
 
-  function getSoftwareUpdatePillLabel() {
-    if (updateState.status === 'checking') {
-      return t.checking();
-    }
-    if (updateState.status === 'upToDate') {
-      return t.softwareUpdateLatest();
-    }
-    if (updateState.status === 'downloaded') {
-      return t.softwareUpdateReady();
-    }
-    if (updateState.status === 'error') {
-      return t.checkFailed();
-    }
-    if (updateState.status === 'unsupported') {
-      return t.unsupported();
-    }
-    if (updateState.version) {
-      return `v${updateState.version}`;
-    }
-    return t.softwareUpdateManual();
-  }
+  $: softwareUpdatePillLabel =
+    updateStatus === 'checking'
+      ? t.checking()
+      : updateStatus === 'upToDate'
+        ? t.softwareUpdateLatest()
+        : updateStatus === 'downloaded'
+          ? t.softwareUpdateReady()
+          : updateStatus === 'error'
+            ? t.checkFailed()
+            : updateStatus === 'unsupported'
+              ? t.unsupported()
+              : updateState.version
+                ? `v${updateState.version}`
+                : t.softwareUpdateManual();
 
-  function getSoftwareUpdatePillClass() {
-    if (updateState.status === 'checking') {
-      return 'pending';
-    }
-    if (updateState.status === 'upToDate' || updateState.status === 'downloaded') {
-      return 'bound';
-    }
-    if (updateState.status === 'error') {
-      return 'error';
-    }
-    if (updateState.status === 'available' || updateState.status === 'downloading') {
-      return 'pending';
-    }
-    return 'idle';
-  }
+  $: softwareUpdatePillClass =
+    updateStatus === 'checking'
+      ? 'pending'
+      : updateStatus === 'upToDate' || updateStatus === 'downloaded'
+        ? 'bound'
+        : updateStatus === 'error'
+          ? 'error'
+          : updateStatus === 'available' || updateStatus === 'downloading'
+            ? 'pending'
+            : 'idle';
 
-  function isSoftwareUpdateButtonDisabled() {
-    return (
-      updateState.status === 'checking' ||
-      updateState.status === 'downloading' ||
-      updateState.status === 'installing' ||
-      updateState.status === 'unsupported'
-    );
-  }
-
-  function isSoftwareUpdateBusy() {
-    return (
-      updateState.status === 'checking' ||
-      updateState.status === 'downloading' ||
-      updateState.status === 'installing'
-    );
-  }
+  $: softwareUpdateButtonDisabled =
+    updateStatus === 'checking' ||
+    updateStatus === 'downloading' ||
+    updateStatus === 'installing' ||
+    updateStatus === 'unsupported';
 
   function handleSoftwareUpdateButton() {
     if (updateState.status === 'downloaded') {
       void installDownloadedSoftwareUpdate();
+      return;
+    }
+    if (updateState.status === 'available') {
+      void downloadAvailableUpdate();
       return;
     }
     void checkForSoftwareUpdate();
@@ -2260,22 +2240,22 @@
               <div class="setting-row">
                 <div>
                   <span class="setting-label">{t.updateCheck()}</span>
-                  <p>{getSoftwareUpdateDescription()}</p>
+                  <p>{softwareUpdateDescription}</p>
                 </div>
                 <div class="association-action">
-                  <span class={`association-pill ${getSoftwareUpdatePillClass()}`}>
-                    {getSoftwareUpdatePillLabel()}
+                  <span class={`association-pill ${softwareUpdatePillClass}`}>
+                    {softwareUpdatePillLabel}
                   </span>
                   <button
                     type="button"
                     class="action-button"
-                    disabled={isSoftwareUpdateButtonDisabled()}
+                    disabled={softwareUpdateButtonDisabled}
                     on:click={handleSoftwareUpdateButton}
                   >
-                    {#if isSoftwareUpdateBusy()}
+                    {#if updateBusy}
                       <span class="update-busy-spinner" aria-hidden="true"></span>
                     {/if}
-                    {getSoftwareUpdateButtonLabel()}
+                    {softwareUpdateButtonLabel}
                   </button>
                 </div>
               </div>
