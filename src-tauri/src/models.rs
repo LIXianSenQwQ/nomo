@@ -91,6 +91,7 @@ pub(crate) struct WindowStateInput {
     pub(crate) y: Option<i32>,
     pub(crate) width: Option<u32>,
     pub(crate) height: Option<u32>,
+    pub(crate) maximized: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]

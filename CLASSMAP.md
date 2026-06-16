@@ -24,7 +24,7 @@
 | 桌面窗口生命周期 | `src/app/services/desktopWindow.ts` | `src-tauri/src/window/` | 窗口事件、关闭行为、托盘交互变更 |
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
 | 自定义标题栏菜单 | `src/app/components/AppTitleBar.svelte` | `src/app/App.svelte`, `src/app/services/appCommands.ts` | 添加/移除菜单项、修改菜单文案 |
-| 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
+| 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs`, `src-tauri/src/models.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
 | 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 
 ### 编辑器核心（ProseMirror）

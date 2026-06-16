@@ -69,6 +69,8 @@ pub fn run() {
                 if crate::window::external_open::is_document_window_label(label) {
                     crate::window::tray::forget_window(window.app_handle(), label);
                 }
+                crate::app_logger::debug("Window", &format!("窗口销毁前持久化状态：{label}"));
+                crate::window::state::persist_current_window_state(window);
             }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();

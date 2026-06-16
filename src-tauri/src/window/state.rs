@@ -19,12 +19,14 @@ pub(crate) fn persist_current_window_state(window: &tauri::Window) {
     let Ok(size) = window.inner_size() else {
         return;
     };
+    let maximized = window.is_maximized().unwrap_or(false);
 
     let input = WindowStateInput {
         x: Some(position.x),
         y: Some(position.y),
         width: Some(size.width),
         height: Some(size.height),
+        maximized: Some(maximized),
     };
 
     let key = format!("windowState:{}", window.label());
@@ -61,12 +63,15 @@ pub(crate) fn restore_window_state<R: Runtime>(app: &AppHandle<R>, label: &str) 
         if is_window_visible_on_any_monitor(x, y, width, height, &monitors) {
             let _ =
                 window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
-            return;
+        } else if let Some(position) = centered_position_on_primary_monitor(&window, width, height) {
+            let _ = window.set_position(tauri::Position::Physical(position));
         }
+    } else if let Some(position) = centered_position_on_primary_monitor(&window, width, height) {
+        let _ = window.set_position(tauri::Position::Physical(position));
     }
 
-    if let Some(position) = centered_position_on_primary_monitor(&window, width, height) {
-        let _ = window.set_position(tauri::Position::Physical(position));
+    if state.maximized == Some(true) {
+        let _ = window.maximize();
     }
 }
 
