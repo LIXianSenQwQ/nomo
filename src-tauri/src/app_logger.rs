@@ -1,5 +1,6 @@
 use chrono::Local;
 use std::{
+    ffi::OsStr,
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
@@ -13,9 +14,11 @@ struct LoggerState {
 }
 
 static LOGGER_STATE: OnceLock<Mutex<LoggerState>> = OnceLock::new();
+static APP_IDENTIFIER: OnceLock<String> = OnceLock::new();
 
 pub(crate) fn init(identifier: &str) {
     // 启动阶段根据配置提前开启日志，确保后续渲染模式等关键启动日志能落盘
+    let _ = APP_IDENTIFIER.set(identifier.to_string());
     set_enabled(crate::config::is_developer_mode(identifier));
     info("App", "日志系统初始化");
 }
@@ -125,10 +128,16 @@ fn current_log_path() -> Result<PathBuf, String> {
         .map_err(|error| format!("定位当前目录失败：{error}"))?;
 
     // dev 模式下当前目录为 src-tauri/，日志放到项目根目录避免触发 Cargo 重建
-    let logs_dir = if current_dir.file_name() == Some(std::ffi::OsStr::new("src-tauri")) {
+    let logs_dir = if current_dir.file_name() == Some(OsStr::new("src-tauri")) {
         current_dir.join("../logs")
     } else {
-        current_dir.join("logs")
+        // 生产环境：日志应输出到应用数据目录（安装目录），而非运行目录
+        let identifier = APP_IDENTIFIER
+            .get()
+            .ok_or_else(|| "应用标识符未初始化".to_string())?;
+        let app_data_dir = crate::config::resolve_app_data_dir(identifier)
+            .ok_or_else(|| "无法定位应用数据目录".to_string())?;
+        app_data_dir.join("logs")
     };
 
     fs::create_dir_all(&logs_dir).map_err(|error| format!("创建日志目录失败：{error}"))?;

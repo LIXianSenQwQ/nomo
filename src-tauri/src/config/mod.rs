@@ -205,7 +205,7 @@ fn backup_broken_config(config_path: &Path) -> Result<(), String> {
 }
 
 /// 步骤1：根据应用标识符构造各平台的应用数据目录路径
-fn resolve_app_data_dir(identifier: &str) -> Option<PathBuf> {
+pub(crate) fn resolve_app_data_dir(identifier: &str) -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         // 与 Tauri 的 app_data_dir() 保持一致：Windows 使用 Roaming 目录（APPDATA）
