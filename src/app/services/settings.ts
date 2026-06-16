@@ -151,7 +151,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
 
 const LEGACY_CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY = 'closeToTrayPromptAnswered';
-const IMAGE_SETTINGS_STORAGE_KEY = 'nomo-image-handling-settings';
 const THEME_SYSTEM_MIGRATION_KEY = 'themeFollowSystemMigrationV1';
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
 const THEME_TRANSITION_MS = 180;
@@ -168,19 +167,11 @@ export async function loadPersistedEditorSettings(
   const settings = await perfAsync('settings', 'readNativeSettingsMap(editor)', () =>
     readNativeSettingsMap(desktopEnabled, nativeSettings),
   );
-  const savedTheme = parseSetting<string>(settings, 'theme') ?? localStorage.getItem('nomo-theme');
-  const savedFontSize = Number(
-    parseSetting<number>(settings, 'fontSize') ?? localStorage.getItem('nomo-font-size'),
-  );
-  const savedLineHeight = Number(
-    parseSetting<number>(settings, 'lineHeight') ?? localStorage.getItem('nomo-line-height'),
-  );
-  const savedContentWidthPercent = Number(
-    parseSetting<number>(settings, 'contentWidthPercent') ??
-      localStorage.getItem('nomo-content-width-percent'),
-  );
-  const savedBlockStyle =
-    parseSetting<string>(settings, 'blockStyle') ?? localStorage.getItem('nomo-block-style');
+  const savedTheme = parseSetting<string>(settings, 'theme');
+  const savedFontSize = Number(parseSetting<number>(settings, 'fontSize'));
+  const savedLineHeight = Number(parseSetting<number>(settings, 'lineHeight'));
+  const savedContentWidthPercent = Number(parseSetting<number>(settings, 'contentWidthPercent'));
+  const savedBlockStyle = parseSetting<string>(settings, 'blockStyle');
 
   return {
     theme: isThemePreference(savedTheme) ? savedTheme : undefined,
@@ -215,18 +206,13 @@ export async function loadPersistedImageSettings(
   nativeSettings?: SettingRecord[],
 ): Promise<ImageHandlingSettings> {
   const settings = await readNativeSettingsMap(desktopEnabled, nativeSettings);
-  const saved =
-    parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
-    parseLocalImageSettings();
+  const saved = parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings');
 
   return normalizeImageSettings(saved);
 }
 
 export function persistImageSettings(desktopEnabled: boolean, settings: ImageHandlingSettings) {
   const normalized = normalizeImageSettings(settings);
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(IMAGE_SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
-  }
   if (!desktopEnabled) {
     return;
   }
@@ -240,23 +226,20 @@ export async function loadAppPreferences(
   const settings = await perfAsync('settings', 'readNativeSettingsMap(prefs)', () =>
     readNativeSettingsMap(desktopEnabled, nativeSettings),
   );
-  const local = readLocalPreferenceFallbacks();
-  const storedTheme = parseSetting<unknown>(settings, 'theme') ?? local.theme;
+  const storedTheme = parseSetting<unknown>(settings, 'theme');
   const theme = await migrateThemePreferenceToSystem(desktopEnabled, settings, storedTheme);
 
   return normalizeAppPreferences({
     theme,
-    interfaceLanguage:
-      parseSetting<unknown>(settings, 'interfaceLanguage') ?? local.interfaceLanguage,
+    interfaceLanguage: parseSetting<unknown>(settings, 'interfaceLanguage'),
     editorMode: parseSetting<unknown>(settings, 'editorMode'),
     autoSaveEnabled: parseSetting<unknown>(settings, 'autoSaveEnabled'),
     autoSaveDelayMs: parseSetting<unknown>(settings, 'autoSaveDelayMs'),
     createSnapshotBeforeSave: parseSetting<unknown>(settings, 'createSnapshotBeforeSave'),
-    fontSize: parseSetting<unknown>(settings, 'fontSize') ?? local.fontSize,
-    lineHeight: parseSetting<unknown>(settings, 'lineHeight') ?? local.lineHeight,
-    contentWidthPercent:
-      parseSetting<unknown>(settings, 'contentWidthPercent') ?? local.contentWidthPercent,
-    blockStyle: parseSetting<unknown>(settings, 'blockStyle') ?? local.blockStyle,
+    fontSize: parseSetting<unknown>(settings, 'fontSize'),
+    lineHeight: parseSetting<unknown>(settings, 'lineHeight'),
+    contentWidthPercent: parseSetting<unknown>(settings, 'contentWidthPercent'),
+    blockStyle: parseSetting<unknown>(settings, 'blockStyle'),
     largeDocumentLimit: parseSetting<unknown>(settings, 'largeDocumentLimit'),
     folderOpenDefaultBehavior: parseSetting<unknown>(settings, 'folderOpenDefaultBehavior'),
     filePreviewEnabled: parseSetting<unknown>(settings, 'filePreviewEnabled'),
@@ -278,9 +261,10 @@ export async function loadAppPreferences(
     inlineCodeRenderingEnabled: parseSetting<unknown>(settings, 'inlineCodeRenderingEnabled'),
     renderMode: parseSetting<unknown>(settings, 'renderMode'),
     shortcutPreferences: parseSetting<unknown>(settings, 'shortcutPreferences'),
-    imageHandlingSettings:
-      parseSetting<Partial<ImageHandlingSettings>>(settings, 'imageHandlingSettings') ??
-      parseLocalImageSettings(),
+    imageHandlingSettings: parseSetting<Partial<ImageHandlingSettings>>(
+      settings,
+      'imageHandlingSettings',
+    ),
     developerMode: parseSetting<unknown>(settings, 'developerMode'),
   });
 }
@@ -307,8 +291,6 @@ export async function saveAppPreferences(
 ) {
   const normalized = normalizeAppPreferences(preferences);
 
-  writeLocalPreferenceFallbacks(normalized);
-  writeLocalImageSettings(normalized.imageHandlingSettings);
   markThemeSystemMigrationDone(desktopEnabled);
 
   if (!desktopEnabled) {
@@ -336,7 +318,12 @@ export function normalizeAppPreferences(
       typeof value.autoSaveEnabled === 'boolean'
         ? value.autoSaveEnabled
         : DEFAULT_APP_PREFERENCES.autoSaveEnabled,
-    autoSaveDelayMs: clampNumber(value.autoSaveDelayMs, 500, 5000, 1000),
+    autoSaveDelayMs: clampNumber(
+      value.autoSaveDelayMs,
+      500,
+      5000,
+      DEFAULT_APP_PREFERENCES.autoSaveDelayMs,
+    ),
     createSnapshotBeforeSave:
       typeof value.createSnapshotBeforeSave === 'boolean'
         ? value.createSnapshotBeforeSave
@@ -588,44 +575,6 @@ function pickPersistedPreferenceEntries(preferences: AppPreferences, keys?: AppP
   );
 }
 
-function readLocalPreferenceFallbacks(): Partial<AppPreferences> {
-  if (typeof localStorage === 'undefined') {
-    return {};
-  }
-
-  return {
-    theme: localStorage.getItem('nomo-theme') ?? undefined,
-    interfaceLanguage: localStorage.getItem('nomo-interface-language') ?? undefined,
-    fontSize: localStorage.getItem('nomo-font-size') ?? undefined,
-    lineHeight: localStorage.getItem('nomo-line-height') ?? undefined,
-    contentWidthPercent: localStorage.getItem('nomo-content-width-percent') ?? undefined,
-    blockStyle: localStorage.getItem('nomo-block-style') ?? undefined,
-  } as Partial<AppPreferences>;
-}
-
-function writeLocalPreferenceFallbacks(preferences: AppPreferences) {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
-
-  localStorage.setItem('nomo-theme', preferences.theme);
-  localStorage.setItem('nomo-interface-language', preferences.interfaceLanguage);
-  localStorage.setItem('nomo-font-size', String(preferences.fontSize));
-  localStorage.setItem('nomo-line-height', String(preferences.lineHeight));
-  localStorage.setItem('nomo-content-width-percent', String(preferences.contentWidthPercent));
-  localStorage.setItem('nomo-block-style', preferences.blockStyle);
-}
-
-function writeLocalImageSettings(settings: ImageHandlingSettings) {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
-  localStorage.setItem(
-    IMAGE_SETTINGS_STORAGE_KEY,
-    JSON.stringify(normalizeImageSettings(settings)),
-  );
-}
-
 async function migrateThemePreferenceToSystem(
   desktopEnabled: boolean,
   settings: Map<string, string>,
@@ -683,23 +632,6 @@ function parseSetting<T>(settings: Map<string, string>, key: string): T | null {
 
   try {
     return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
-}
-
-function parseLocalImageSettings(): Partial<ImageHandlingSettings> | null {
-  if (typeof localStorage === 'undefined') {
-    return null;
-  }
-
-  const raw = localStorage.getItem(IMAGE_SETTINGS_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as Partial<ImageHandlingSettings>;
   } catch {
     return null;
   }
@@ -814,6 +746,9 @@ function normalizeShortcutText(value: string): string {
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
   const numberValue = typeof value === 'string' ? Number(value) : Number(value);
   if (!Number.isFinite(numberValue)) {
     return fallback;

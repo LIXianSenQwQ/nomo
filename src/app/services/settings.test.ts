@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_IMAGE_HANDLING_SETTINGS } from '../../lib/services/render';
 
 const storageMock = vi.hoisted(() => ({
   listAppSettings: vi.fn(),
@@ -14,6 +15,8 @@ import {
   DEFAULT_APP_PREFERENCES,
   applyZoomSetting,
   loadAppPreferences,
+  loadPersistedEditorSettings,
+  loadPersistedImageSettings,
   normalizeAppPreferences,
   normalizeImageSettings,
 } from './settings';
@@ -101,6 +104,78 @@ describe('settings', () => {
 
     expect(preferences.fontSize).toBe(19);
     expect(storageMock.listAppSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores legacy local storage preference fallbacks when native settings are missing', async () => {
+    localStorage.setItem('nomo-theme', 'dark');
+    localStorage.setItem('nomo-interface-language', 'ja-JP');
+    localStorage.setItem('nomo-font-size', '21');
+    localStorage.setItem('nomo-line-height', '2.1');
+    localStorage.setItem('nomo-content-width-percent', '80');
+    localStorage.setItem('nomo-block-style', 'classic');
+
+    const preferences = await loadAppPreferences(true, [
+      createSetting('themeFollowSystemMigrationV1', true),
+    ]);
+
+    expect(preferences.theme).toBe(DEFAULT_APP_PREFERENCES.theme);
+    expect(preferences.interfaceLanguage).toBe(DEFAULT_APP_PREFERENCES.interfaceLanguage);
+    expect(preferences.fontSize).toBe(DEFAULT_APP_PREFERENCES.fontSize);
+    expect(preferences.lineHeight).toBe(DEFAULT_APP_PREFERENCES.lineHeight);
+    expect(preferences.contentWidthPercent).toBe(DEFAULT_APP_PREFERENCES.contentWidthPercent);
+    expect(preferences.blockStyle).toBe(DEFAULT_APP_PREFERENCES.blockStyle);
+  });
+
+  it('ignores legacy local image settings when native image preferences are missing', async () => {
+    localStorage.setItem(
+      'nomo-image-handling-settings',
+      JSON.stringify({
+        imageInsertStrategy: 'upload',
+        uploadProvider: 'picgo-core',
+        defaultImageWidth: '80%',
+        defaultImageAlign: 'center',
+      }),
+    );
+
+    const preferences = await loadAppPreferences(true, [
+      createSetting('themeFollowSystemMigrationV1', true),
+    ]);
+    const imageSettings = await loadPersistedImageSettings(true, []);
+
+    expect(preferences.imageHandlingSettings).toEqual(DEFAULT_IMAGE_HANDLING_SETTINGS);
+    expect(imageSettings).toEqual(DEFAULT_IMAGE_HANDLING_SETTINGS);
+  });
+
+  it('returns only native editor settings and ignores legacy local storage values', async () => {
+    localStorage.setItem('nomo-theme', 'dark');
+    localStorage.setItem('nomo-font-size', '21');
+    localStorage.setItem('nomo-line-height', '2.1');
+    localStorage.setItem('nomo-content-width-percent', '80');
+    localStorage.setItem('nomo-block-style', 'classic');
+
+    await expect(loadPersistedEditorSettings(true, [])).resolves.toEqual({
+      theme: undefined,
+      fontSize: undefined,
+      lineHeight: undefined,
+      contentWidthPercent: undefined,
+      blockStyle: undefined,
+    });
+
+    await expect(
+      loadPersistedEditorSettings(true, [
+        createSetting('theme', 'dark'),
+        createSetting('fontSize', 18),
+        createSetting('lineHeight', 1.8),
+        createSetting('contentWidthPercent', 72),
+        createSetting('blockStyle', 'classic'),
+      ]),
+    ).resolves.toEqual({
+      theme: 'dark',
+      fontSize: 18,
+      lineHeight: 1.8,
+      contentWidthPercent: 72,
+      blockStyle: 'classic',
+    });
   });
 
   it('saves settings window changes as dirty preference patches', () => {

@@ -255,7 +255,8 @@ pub(crate) struct MarkdownAssociationStatus {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct WindowLabelPayload {
-    pub(crate) windowLabel: String,
+    #[serde(rename = "windowLabel")]
+    pub(crate) window_label: String,
 }
 
 #[derive(Debug, Serialize)]
