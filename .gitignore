@@ -34,5 +34,5 @@ pnpm-debug.log*
 Thumbs.db
 .pnpm-store
 
-# Paraglide 由 build 前 npx @inlang/paraglide-js compile 生成
+# Paraglide 由 build 前 pnpm exec paraglide-js compile 生成
 src/paraglide/
