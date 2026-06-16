@@ -1,5 +1,7 @@
 export const JA_JP_EXTRA_TRANSLATIONS = {
   close: '閉じる',
+  cancel: 'キャンセル',
+  discardChanges: '変更を破棄',
   theme: 'テーマ',
   interfaceLanguageJaJp: '日本語',
   interfaceLanguageKoKr: '韓国語',
@@ -84,6 +86,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   closeWindowBehaviorCloseToTray: 'トレイに隠す',
   closeWindowChoiceTitle: 'Nomo を閉じる',
   closeWindowChoiceMessage: 'メインウィンドウを閉じるときの動作を選択してください。',
+  unsavedChangesBeforeClosingWindow:
+    '未保存の変更があるファイルがあります: {names}。このウィンドウを閉じてもよろしいですか？',
   rememberCloseWindowChoice: '今後は既定として使用',
   bindMdDefaultApp: '.md のデフォルト アプリをバインドする',
   registerMdContextMenu: '.mdとフォルダーのコンテキストメニューを登録する',
@@ -442,8 +446,7 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
     'UI のブロックを避けるために、大きなドキュメントを読み取り専用ソース モードで開いています。',
   newFileWithRecovery:
     '現在のドキュメントには保存されていない変更があります。リカバリ コピーが保管され、新しい文書が作成されました。',
-  confirmCloseModifiedFile:
-    'ファイル「{fileName}」が変更されました。閉めますか？変更内容が失われる可能性があります。',
+  confirmCloseModifiedFile: '閉じますか？変更内容が失われる可能性があります。',
   reloadExternalFailed: '外部バージョンのリロードに失敗しました',
   reloadedExternalVersion: '外部バージョンをリロードしました',
   noExternalChangeToOverwrite: '上書きする外部変更はありません',

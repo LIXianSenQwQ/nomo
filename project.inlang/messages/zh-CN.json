@@ -36,6 +36,7 @@
   "delete": "删除",
   "confirmDelete": "确认删除",
   "unsavedChangesCloseWindow": "以下文件有未保存修改：{names}。关闭窗口将丢失这些更改，是否继续？",
+  "unsavedChangesBeforeClosingWindow": "以下文件有未保存修改：{names}。是否继续关闭当前窗口？",
   "unsavedChangesExitApp": "以下文件有未保存修改：{names}。退出应用将丢失这些更改，是否继续？",
   "unsavedChangesCloseTabs": "以下文件有未保存修改：{names}。关闭将丢失这些更改，是否继续？",
   "closeToTrayFirstPrompt": "第一次关闭主窗口时，是否将 Nomo 隐藏到系统托盘？\r\n\r\n确定：隐藏到托盘，并记住此选择。\r\n取消：直接关闭窗口，之后也可在偏好设置中开启。",

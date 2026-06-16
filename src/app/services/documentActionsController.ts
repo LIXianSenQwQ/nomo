@@ -14,6 +14,8 @@ import {
   saveNativeMarkdownFile,
 } from './documentFiles';
 import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
+import { logInfo } from '../../lib/services/logger';
+import { confirmAction } from './confirmAction';
 import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
 import { t } from '../i18n';
 
@@ -28,6 +30,12 @@ function suggestFileNameFromH1(markdown: string, fallbackName: string): string {
   return name.endsWith('.md') ? name : `${name}.md`;
 }
 
+function logCloseDiagnostics(message: string, data?: Record<string, unknown>) {
+  logInfo('CloseGuard', message, data);
+  // eslint-disable-next-line no-console
+  console.info('[CloseGuard]', message, data ?? '');
+}
+
 interface DocumentActionsOptions {
   recoveryKey: string;
   getLargeDocumentLimit(): number;
@@ -38,6 +46,7 @@ interface DocumentActionsOptions {
   getAutoSaveEnabled(): boolean;
   getNativePath(): string | null;
   setMarkdown(value: string): void;
+  setSavedMarkdown(value: string): void;
   setNativePath(value: string | null): void;
   getFileName(): string;
   setFileName(value: string): void;
@@ -129,6 +138,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.filePath = t.localBrowserFile({ name: file.name });
     targetTab.nativePath = null;
     targetTab.markdown = text;
+    targetTab.savedMarkdown = text;
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = 0;
     targetTab.largeDocumentMode = text.length > options.getLargeDocumentLimit();
@@ -182,8 +192,16 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     exportMarkdownInBrowser(markdownToSave, fileName);
     options.setStatusMessage(t.markdownExported());
     options.setMarkdown(markdownToSave);
+    options.setSavedMarkdown(markdownToSave);
     options.setDirty(false);
     options.getEditor().setDirty(false);
+    const browserSavedTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
+    if (browserSavedTab) {
+      browserSavedTab.markdown = markdownToSave;
+      browserSavedTab.savedMarkdown = markdownToSave;
+      browserSavedTab.dirty = false;
+      options.setTabs([...options.getTabs()]);
+    }
   }
 
   async function openRecentFile(path: string) {
@@ -232,6 +250,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
     targetTab.markdown = document.markdown;
+    targetTab.savedMarkdown = document.markdown;
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
@@ -278,6 +297,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
     targetTab.markdown = markdownToSave;
+    targetTab.savedMarkdown = markdownToSave;
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
@@ -288,6 +308,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setFilePath(targetTab.filePath);
     options.setNativePath(targetTab.nativePath);
     options.setMarkdown(markdownToSave);
+    options.setSavedMarkdown(markdownToSave);
     options.setDirty(false);
     options.getEditor().setDirty(false);
     options.setLastKnownModifiedAt(targetTab.lastKnownModifiedAt);
@@ -336,14 +357,57 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.updateWindowTitle();
   }
 
-  function closeTab(tabId: string, event?: Event) {
+  async function closeTab(tabId: string, event?: Event) {
     event?.stopPropagation();
     const tabToClose = options.getTabs().find((tab) => tab.id === tabId);
-    if (!tabToClose) return;
+    if (!tabToClose) {
+      logCloseDiagnostics('documentActions.closeTab: 未找到目标标签', {
+        tabId,
+        activeTabId: options.getActiveTabId(),
+        tabCount: options.getTabs().length,
+      });
+      return;
+    }
+
+    logCloseDiagnostics('documentActions.closeTab: 进入关闭流程', {
+      tabId,
+      activeTabId: options.getActiveTabId(),
+      targetDirty: tabToClose.dirty,
+      fileName: tabToClose.fileName,
+      version: tabToClose.version,
+      markdownLength: tabToClose.markdown.length,
+      savedMarkdownLength: tabToClose.savedMarkdown?.length ?? null,
+    });
 
     if (tabToClose.dirty) {
-      const confirmClose = confirm(t.confirmCloseModifiedFile({ fileName: tabToClose.fileName }));
-      if (!confirmClose) return;
+      const message = t.confirmCloseModifiedFile();
+      logCloseDiagnostics('documentActions.closeTab: 准备弹出未保存确认框', {
+        tabId,
+        fileName: tabToClose.fileName,
+      });
+      const confirmClose = await confirmAction(message, {
+        title: tabToClose.fileName,
+        okLabel: t.discardChanges(),
+        cancelLabel: t.cancel(),
+        saveLabel: tabToClose.nativePath ? t.save() : undefined,
+      });
+      logCloseDiagnostics('documentActions.closeTab: 未保存确认框返回', {
+        tabId,
+        confirmClose,
+      });
+
+      // cancel → 取消关闭
+      if (confirmClose === false) return;
+
+      // 用户选择保存后再关闭
+      if (confirmClose === 'save') {
+        await saveMarkdownFile(false);
+      }
+    } else {
+      logCloseDiagnostics('documentActions.closeTab: 标签未标记 dirty，跳过确认', {
+        tabId,
+        fileName: tabToClose.fileName,
+      });
     }
 
     const index = options.getTabs().findIndex((tab) => tab.id === tabId);
@@ -460,12 +524,15 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         const tabs = options.getTabs();
         const savedTab = tabs.find((tab) => tab.id === tabId);
         if (savedTab) {
+          savedTab.markdown = markdownToSave;
+          savedTab.savedMarkdown = markdownToSave;
           savedTab.dirty = false;
           savedTab.lastKnownModifiedAt = document.modifiedAt;
 
           if (options.getActiveTabId() === tabId) {
             options.setDirty(false);
             options.getEditor().setDirty(false);
+            options.setSavedMarkdown(markdownToSave);
             options.setLastKnownModifiedAt(document.modifiedAt);
           }
           options.setTabs([...tabs]);

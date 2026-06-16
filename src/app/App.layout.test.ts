@@ -1047,6 +1047,38 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain("setCloseWindowBehavior('close-to-tray')");
   });
 
+  it('prompts before closing the window when any tab has unsaved changes', () => {
+    const closeCurrentWindowStart = appSource.indexOf('async function closeCurrentWindow()');
+    const closeCurrentWindowEnd = appSource.indexOf(
+      'async function resolveCloseWindowBehaviorForCloseRequest',
+      closeCurrentWindowStart,
+    );
+    const closeCurrentWindowSource = appSource.slice(closeCurrentWindowStart, closeCurrentWindowEnd);
+
+    expect(appSource).toContain('function getDirtyTabs(candidateTabs: Tab[])');
+    expect(appSource).toContain('const dirtyTabs = getDirtyTabs(tabs);');
+    expect(appSource).toContain('t.unsavedChangesBeforeClosingWindow({ names })');
+    expect(closeCurrentWindowSource.indexOf('const dirtyTabs = getDirtyTabs(tabs);')).toBeLessThan(
+      closeCurrentWindowSource.indexOf('const closeBehavior = await resolveCloseWindowBehaviorForCloseRequest();'),
+    );
+    expect(appSource).toContain('if (dirty && activeTab && !dirtyTabs.some((tab) => tab.id === activeTab.id))');
+    expect(appSource).not.toContain("if (closeBehavior === 'close-window' && dirtyTabs.length > 0)");
+    expect(appSource).toContain("listen<{ windowLabel?: string; window_label?: string }>('nomo://request-close-window'");
+    expect(appSource).toContain('const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;');
+    expect(tauriLibSource).toContain('请求前端确认关闭');
+    expect(tauriLibSource).not.toContain('窗口隐藏到托盘：{label}');
+  });
+
+  it('only skips close confirmation for clean preview tabs', () => {
+    expect(appSource).toContain('const tabToClose = tabs.find((t) => t.id === tabId);');
+    expect(appSource).toContain(
+      'const dirtyTabToClose = getDirtyTabs([tabToClose]).find((tab) => tab.id === tabId);',
+    );
+    expect(appSource).toContain('if (dirtyTabToClose && !tabToClose.dirty)');
+    expect(appSource).toContain('if (tabId === previewTabId && !dirtyTabToClose)');
+    expect(documentActionsSource).toContain('t.confirmCloseModifiedFile()');
+  });
+
   it('bundles and opens the first-run sample document through the normal document flow', () => {
     const tauriConfig = JSON.parse(tauriConfigSource);
 

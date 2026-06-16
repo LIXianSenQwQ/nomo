@@ -87,6 +87,7 @@ export class ProseMirrorEditorCore implements EditorCore {
   private target: HTMLElement | null;
   private view: EditorView | null = null;
   private markdown: string;
+  private originalMarkdown: string;
   private semanticViewDirty = false;
   private frontMatter = '';
   private version = 0;
@@ -98,6 +99,7 @@ export class ProseMirrorEditorCore implements EditorCore {
   constructor(private readonly options: EditorCoreOptions) {
     this.target = options.target ?? null;
     this.markdown = updateTocBlocks(options.markdown);
+    this.originalMarkdown = this.markdown;
     this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.runtime = {
       readonly: options.readonly ?? false,
@@ -161,6 +163,9 @@ export class ProseMirrorEditorCore implements EditorCore {
   setDirty(dirty: boolean): void {
     this.assertActive();
     this.dirty = dirty;
+    if (!dirty) {
+      this.originalMarkdown = this.markdown;
+    }
   }
 
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
@@ -173,11 +178,18 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.markdown = updateTocBlocks(markdown);
     this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
     this.version += 1;
-    this.dirty =
-      options?.dirty ??
-      (options?.reason !== 'open-file' &&
-        options?.reason !== 'save-file' &&
-        options?.reason !== 'switch-tab');
+
+    const savedMarkdown =
+      options?.savedMarkdown === undefined ? undefined : updateTocBlocks(options.savedMarkdown);
+    if (savedMarkdown !== undefined) {
+      this.originalMarkdown = savedMarkdown;
+    } else if (options?.reason === 'open-file' || options?.reason === 'save-file') {
+      this.originalMarkdown = this.markdown;
+    } else if (options?.reason === 'switch-tab' && options?.dirty !== true) {
+      this.originalMarkdown = this.markdown;
+    }
+
+    this.dirty = options?.dirty ?? this.markdown !== this.originalMarkdown;
     if (delaySemanticSync) {
       this.semanticViewDirty = true;
       if (shouldReportImageDeletion(options)) {
@@ -211,6 +223,7 @@ export class ProseMirrorEditorCore implements EditorCore {
   restoreSnapshot(snapshot: EditorSnapshot): void {
     this.assertActive();
     this.markdown = updateTocBlocks(snapshot.markdown);
+    this.originalMarkdown = this.markdown;
     this.version = snapshot.version;
     this.dirty = true;
     this.replaceViewState(this.markdown);
@@ -658,7 +671,8 @@ export class ProseMirrorEditorCore implements EditorCore {
     if (transaction.docChanged) {
       const serializedMarkdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
       this.markdown = updateTocBlocks(serializedMarkdown);
-      this.dirty = true;
+      // 脏状态应基于当前内容与原始基准值的比较，而非仅判断事务是否改变了文档
+      this.dirty = this.markdown !== this.originalMarkdown;
       if (this.markdown !== serializedMarkdown) {
         this.replaceViewState(this.markdown, {
           anchor: nextState.selection.anchor,

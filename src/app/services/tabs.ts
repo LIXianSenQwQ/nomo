@@ -6,6 +6,7 @@ export interface ActiveTabState {
   filePath: string;
   nativePath: string | null;
   markdown: string;
+  savedMarkdown: string;
   dirty: boolean;
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
@@ -21,6 +22,7 @@ export function createBlankTab(fileName = 'untitled.md', filePath = t.untitledMa
     filePath,
     nativePath: null,
     markdown: '',
+    savedMarkdown: '',
     dirty: false,
     lastKnownModifiedAt: 0,
     largeDocumentMode: false,
@@ -50,12 +52,15 @@ export function getNativeDocumentTargetTab(
   if (isReusableUntitledTab(activeTab)) {
     return { tabs, activeTabId, targetTab: activeTab };
   }
-  if (existingTab && saved) {
-    return { tabs, activeTabId, targetTab: existingTab };
-  }
-  // 保存未命名文件时，当前标签页即目标标签页，避免重复创建
-  if (saved && activeTab && !activeTab.nativePath) {
-    return { tabs, activeTabId, targetTab: activeTab };
+  if (saved) {
+    if (existingTab) {
+      return { tabs, activeTabId, targetTab: existingTab };
+    }
+    const activeTabForSave = tabs.find((tab) => tab.id === activeTabId);
+    // 保存未命名文件时，当前标签页即目标标签页，避免重复创建
+    if (activeTabForSave && !activeTabForSave.nativePath) {
+      return { tabs, activeTabId, targetTab: activeTabForSave };
+    }
   }
 
   const newTab = createBlankTab('', '');

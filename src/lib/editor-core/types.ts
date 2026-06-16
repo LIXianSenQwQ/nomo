@@ -20,6 +20,7 @@ export interface SetMarkdownOptions {
   preserveHistory?: boolean;
   reason?: 'open-file' | 'save-file' | 'switch-tab' | 'restore-snapshot' | 'programmatic-update';
   dirty?: boolean;
+  savedMarkdown?: string;
   sourceInput?: boolean;
 }
 

@@ -4,6 +4,7 @@ export interface Tab {
   filePath: string;
   nativePath: string | null;
   markdown: string;
+  savedMarkdown: string;
   dirty: boolean;
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;

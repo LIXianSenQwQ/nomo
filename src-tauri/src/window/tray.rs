@@ -205,14 +205,6 @@ pub(crate) fn set_desktop_icon_theme<R: Runtime>(
     apply_tray_icon(app, state)
 }
 
-pub(crate) fn close_to_tray_enabled<R: Runtime>(app: &AppHandle<R>) -> bool {
-    if let Some(behavior) = config_string_setting(app, "closeWindowBehavior") {
-        return behavior == "close-to-tray";
-    }
-
-    config_bool_setting(app, "closeToTrayEnabled").unwrap_or(false)
-}
-
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     crate::app_logger::info("Tray", "从托盘打开文档窗口");
     let windows = collect_document_windows(app);
@@ -292,16 +284,6 @@ fn window_display_title<R: Runtime>(label: &str, window: &WebviewWindow<R>) -> S
         .ok()
         .filter(|title| !title.trim().is_empty())
         .unwrap_or_else(|| label.to_string())
-}
-
-fn config_bool_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<bool> {
-    let value_json = crate::config::commands::get_setting_value(app, key).ok()??;
-    serde_json::from_str::<bool>(&value_json).ok()
-}
-
-fn config_string_setting<R: Runtime>(app: &AppHandle<R>, key: &str) -> Option<String> {
-    let value_json = crate::config::commands::get_setting_value(app, key).ok()??;
-    serde_json::from_str::<String>(&value_json).ok()
 }
 
 fn tray_state() -> &'static Mutex<TrayVisualState> {

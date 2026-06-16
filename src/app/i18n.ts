@@ -42,6 +42,8 @@ const generatedMessages = { ...messages.m } as unknown as MessageBag;
 const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTable>> = {
   'zh-CN': {
     close: '关闭',
+    cancel: '取消',
+    discardChanges: '放弃修改',
     theme: '主题',
     interfaceLanguageJaJp: '日本語',
     interfaceLanguageKoKr: '한국어',
@@ -117,6 +119,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     closeWindowBehaviorCloseToTray: '关闭到托盘',
     closeWindowChoiceTitle: '关闭 Nomo',
     closeWindowChoiceMessage: '选择关闭主窗口时的行为。',
+    unsavedChangesBeforeClosingWindow:
+      '以下文件有未保存修改：{names}。是否继续关闭当前窗口？',
     rememberCloseWindowChoice: '以后默认这样做',
     bindMdDefaultApp: '绑定 .md 默认打开方式',
     registerMdContextMenu: '注册 .md 与文件夹右键菜单',
@@ -462,7 +466,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     switchedToOpenedTab: '已切换到已打开的标签页',
     largeDocumentReadonlyOpened: '大文件已用只读源码模式打开，避免语义解析阻塞界面',
     newFileWithRecovery: '当前文档有未保存修改，已保留恢复副本并新建文档',
-    confirmCloseModifiedFile: '文件 "{fileName}" 已修改，是否确认关闭？您的修改可能会丢失。',
+    confirmCloseModifiedFile: '是否确认关闭？您的修改可能会丢失。',
     reloadExternalFailed: '重新载入外部版本失败',
     reloadedExternalVersion: '已重新载入外部版本',
     noExternalChangeToOverwrite: '当前没有可覆盖的外部修改',
@@ -498,6 +502,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
   },
   'zh-TW': {
     close: '關閉',
+    cancel: '取消',
+    discardChanges: '放棄修改',
     theme: '主題',
     interfaceLanguageJaJp: '日本語',
     interfaceLanguageKoKr: '한국어',
@@ -574,6 +580,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     closeWindowBehaviorCloseToTray: '關閉到系統匣',
     closeWindowChoiceTitle: '關閉 Nomo',
     closeWindowChoiceMessage: '選擇關閉主視窗時的行為。',
+    unsavedChangesBeforeClosingWindow:
+      '以下檔案有未儲存修改：{names}。是否繼續關閉目前視窗？',
     rememberCloseWindowChoice: '以後預設這樣做',
     bindMdDefaultApp: '綁定 .md 預設開啟方式',
     registerMdContextMenu: '註冊 .md 與資料夾右鍵選單',
@@ -900,7 +908,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     switchedToOpenedTab: '已切換到已開啟的分頁',
     largeDocumentReadonlyOpened: '大檔案已用唯讀原始碼模式開啟，避免語義解析阻塞介面',
     newFileWithRecovery: '目前文件有未儲存修改，已保留復原副本並新增文件',
-    confirmCloseModifiedFile: '檔案 "{fileName}" 已修改，是否確認關閉？您的修改可能會遺失。',
+    confirmCloseModifiedFile: '是否確認關閉？您的修改可能會遺失。',
     reloadExternalFailed: '重新載入外部版本失敗',
     reloadedExternalVersion: '已重新載入外部版本',
     noExternalChangeToOverwrite: '目前沒有可覆蓋的外部修改',
@@ -937,6 +945,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
   'ja-JP': JA_JP_EXTRA_TRANSLATIONS,
   'en-US': {
     close: 'Close',
+    cancel: 'Cancel',
+    discardChanges: 'Discard',
     theme: 'Theme',
     interfaceLanguageJaJp: 'Japanese',
     interfaceLanguageKoKr: 'Korean',
@@ -1019,6 +1029,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     closeWindowBehaviorCloseToTray: 'Close to tray',
     closeWindowChoiceTitle: 'Close Nomo',
     closeWindowChoiceMessage: 'Choose what happens to the main window.',
+    unsavedChangesBeforeClosingWindow:
+      'These files have unsaved changes: {names}. Continue closing this window?',
     rememberCloseWindowChoice: 'Use this as the default',
     bindMdDefaultApp: 'Bind .md default app',
     registerMdContextMenu: 'Register .md and folder context menu',
@@ -1379,8 +1391,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
       'Large document opened in read-only source mode to avoid blocking the UI',
     newFileWithRecovery:
       'The current document has unsaved changes. A recovery copy was kept and a new document was created.',
-    confirmCloseModifiedFile:
-      'File "{fileName}" has been modified. Close it? Your changes may be lost.',
+    confirmCloseModifiedFile: 'Close without saving? Your changes may be lost.',
     reloadExternalFailed: 'Failed to reload external version',
     reloadedExternalVersion: 'Reloaded external version',
     noExternalChangeToOverwrite: 'There are no external changes to overwrite',

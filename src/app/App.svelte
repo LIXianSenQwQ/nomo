@@ -92,6 +92,7 @@
   import { createEditorSettingsController } from './services/editorSettingsController';
   import ContextMenu from './components/ContextMenu.svelte';
   import ConfirmDialog from './components/ConfirmDialog.svelte';
+  import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.svelte';
   import CloseWindowBehaviorDialog from './components/CloseWindowBehaviorDialog.svelte';
   import type {
     ContextMenuOpenEvent,
@@ -130,6 +131,7 @@
   } from './services/firstRunSample';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
+  import { confirmAction, confirmDialogStore, resolveConfirmDialog, dismissConfirmDialog, type ConfirmDialogState } from './services/confirmAction';
   import { setScrollTop } from './services/outlineNavigation';
   import {
     findTextMatches,
@@ -144,12 +146,18 @@
     type ImageContext,
     type ImageHandlingSettings,
   } from '../lib/services/render';
-  import { disableLogger, enableLogger } from '../lib/services/logger';
+  import { disableLogger, enableLogger, logInfo } from '../lib/services/logger';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
   type CloseWindowAction = Exclude<CloseWindowBehavior, 'ask-every-time'>;
   type CloseWindowChoiceResult = { behavior: CloseWindowAction; remember: boolean } | null;
+
+  function logCloseDiagnostics(message: string, data?: Record<string, unknown>) {
+    logInfo('CloseGuard', message, data);
+    // eslint-disable-next-line no-console
+    console.info('[CloseGuard]', message, data ?? '');
+  }
 
   setCodeBlockTokenizer(createShikiCodeTokenizer());
   setCodeBlockDiagramRenderer(createMermaidDiagramRenderer());
@@ -157,6 +165,7 @@
   setImageLoader(createDesktopImageLoader());
 
   let markdown = '',
+    savedMarkdown = '',
     dirty = false,
     version = 0;
   let mode: EditorMode = DEFAULT_APP_PREFERENCES.editorMode;
@@ -269,6 +278,19 @@
   let closeWindowChoiceResolver: ((choice: CloseWindowChoiceResult) => void) | null = null;
   let closeWindowChoicePromise: Promise<CloseWindowChoiceResult> | null = null;
 
+  // 订阅自定义确认对话框（Svelte 5 Runes 模式 $store 语法不工作，需手动订阅）
+  let confirmDialogState: ConfirmDialogState = {
+    open: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Discard',
+    cancelLabel: 'Cancel',
+    saveLabel: '',
+  };
+  const _unsubConfirmStore = confirmDialogStore.subscribe((v) => {
+    confirmDialogState = v;
+  });
+
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
@@ -280,6 +302,13 @@
   let closeWindowBehavior = DEFAULT_APP_PREFERENCES.closeWindowBehavior;
   let windowLabel = '';
   let developerMode = DEFAULT_APP_PREFERENCES.developerMode;
+
+  function normalizeWorkspaceTabs(restoredTabs: Tab[]): Tab[] {
+    return restoredTabs.map((tab) => ({
+      ...tab,
+      savedMarkdown: tab.savedMarkdown ?? tab.markdown,
+    }));
+  }
 
   function persistWorkspaceState() {
     if (desktopEnabled && windowLabel) {
@@ -312,7 +341,7 @@
     try {
       const state = JSON.parse(setting.valueJson) as WorkspaceState;
       if (state.tabs && state.tabs.length > 0) {
-        tabs = state.tabs;
+        tabs = normalizeWorkspaceTabs(state.tabs);
         activeTabId = state.activeTabId;
         const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
         if (activeTab) {
@@ -330,6 +359,7 @@
     if (!activeTabId) return;
     tabs = writeActiveTabState(tabs, activeTabId, {
       markdown,
+      savedMarkdown,
       dirty,
       version,
       fileName,
@@ -350,6 +380,7 @@
     isSwitchingTab = true;
     try {
       markdown = tab.markdown;
+      savedMarkdown = tab.savedMarkdown ?? tab.markdown;
       dirty = tab.dirty;
       version = tab.version;
       fileName = tab.fileName;
@@ -368,7 +399,11 @@
           mode: nextMode,
         });
         mode = nextMode;
-        editor.setMarkdown(markdown, { reason: 'switch-tab', dirty: tab.dirty });
+        editor.setMarkdown(markdown, {
+          reason: 'switch-tab',
+          dirty: tab.dirty,
+          savedMarkdown,
+        });
       }
 
       const analysis = analyzeMarkdown(markdown);
@@ -473,12 +508,12 @@
   }
 
   // 步骤：关闭全部标签页前统一确认未保存内容，确认后不自动创建空白标签。
-  function closeAllTabsWithConfirmation(options?: { skipPersist?: boolean }) {
-    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+  async function closeAllTabsWithConfirmation(options?: { skipPersist?: boolean }) {
+    const dirtyTabs = getDirtyTabs(tabs);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
-      if (!ok) return false;
+      const ok = await confirmAction(t.unsavedChangesCloseTabs({ names }));
+      if (ok === false) return false;
     }
 
     clearAllTabsWithoutCreatingBlank(options);
@@ -492,6 +527,7 @@
       activeTabId = '';
       previewTabId = null;
       markdown = '';
+      savedMarkdown = '';
       fileName = '';
       filePath = '';
       nativePath = null;
@@ -503,7 +539,7 @@
       externalFileChange = createEmptyExternalFileChange();
       outline = [];
       if (editor) {
-        editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+        editor.setMarkdown('', { reason: 'switch-tab', dirty: false, savedMarkdown: '' });
       }
     } finally {
       isSwitchingTab = false;
@@ -522,7 +558,7 @@
           () => undefined,
         );
       }
-      if (!closeAllTabsWithConfirmation({ skipPersist: true })) {
+      if (!(await closeAllTabsWithConfirmation({ skipPersist: true }))) {
         return;
       }
     }
@@ -626,10 +662,10 @@
     await refreshRecentFiles();
   }
 
-  function closeCurrentFile() {
+  async function closeCurrentFile() {
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab) return;
-    closeTab(activeTab.id);
+    await closeTab(activeTab.id);
   }
 
   async function closeCurrentWindow() {
@@ -638,13 +674,26 @@
       return;
     }
 
-    const shouldHideToTray = closeBehavior === 'close-to-tray';
-    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
-    if (closeBehavior === 'close-window' && dirtyTabs.length > 0) {
-      const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesCloseWindow({ names }));
-      if (!ok) return;
+    // 步骤：关闭窗口前检查未保存的脏标签，弹出确认对话框（三按钮模式，与关闭标签页 UI 一致）
+    if (closeBehavior === 'close-window') {
+      const dirtyTabs = getDirtyTabs(tabs);
+      if (dirtyTabs.length > 0) {
+        const names = dirtyTabs.map((t) => t.fileName).join('、');
+        const hasSaveable = dirtyTabs.some((t) => t.nativePath);
+        const result = await confirmAction(t.unsavedChangesCloseWindow({ names }), {
+          okLabel: t.discardChanges(),
+          cancelLabel: t.cancel(),
+          saveLabel: hasSaveable ? t.save() : undefined,
+        });
+        if (result === false) return;
+        // 用户选择保存：保存当前活动文件后继续关闭
+        if (result === 'save') {
+          await saveMarkdownFile(false);
+        }
+      }
     }
+
+    const shouldHideToTray = closeBehavior === 'close-to-tray';
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
   }
 
@@ -701,21 +750,21 @@
   }
 
   async function requestExitApp() {
-    const dirtyTabs = tabs.filter((t) => t.dirty && t.id !== previewTabId);
+    const dirtyTabs = getDirtyTabs(tabs);
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesExitApp({ names }));
-      if (!ok) return;
+      const ok = await confirmAction(t.unsavedChangesExitApp({ names }));
+      if (ok === false) return;
     }
     await exitDesktopApp(desktopEnabled);
   }
 
   async function approveSoftwareUpdateInstall(requestId: string) {
-    const dirtyTabs = tabs.filter((tab) => tab.dirty && tab.id !== previewTabId);
+    const dirtyTabs = getDirtyTabs(tabs);
     let approved = true;
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((tab) => tab.fileName).join('、');
-      approved = confirm(t.unsavedChangesBeforeUpdate({ names }));
+      approved = (await confirmAction(t.unsavedChangesBeforeUpdate({ names }))) !== false;
     }
 
     const { emit } = await import('@tauri-apps/api/event');
@@ -1203,6 +1252,7 @@
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
     targetTab.markdown = document.markdown;
+    targetTab.savedMarkdown = document.markdown;
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
@@ -1232,16 +1282,16 @@
   }
 
   // 步骤：关闭除指定标签外的所有标签页（保留标签自动固定）
-  function handleCloseOtherTabs(event: CustomEvent<{ tabId: string }>) {
+  async function handleCloseOtherTabs(event: CustomEvent<{ tabId: string }>) {
     const keepTabId = event.detail.tabId;
     const keepTab = tabs.find((t) => t.id === keepTabId);
     if (!keepTab) return;
 
-    const dirtyTabs = tabs.filter((t) => t.id !== keepTabId && t.dirty && t.id !== previewTabId);
+    const dirtyTabs = getDirtyTabs(tabs.filter((t) => t.id !== keepTabId));
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
-      if (!ok) return;
+      const ok = await confirmAction(t.unsavedChangesCloseTabs({ names }));
+      if (ok === false) return;
     }
 
     tabs = [keepTab];
@@ -1254,17 +1304,17 @@
   }
 
   // 步骤：关闭指定标签页右侧的所有标签页
-  function handleCloseTabsToRight(event: CustomEvent<{ tabId: string }>) {
+  async function handleCloseTabsToRight(event: CustomEvent<{ tabId: string }>) {
     const tabId = event.detail.tabId;
     const tabIndex = tabs.findIndex((t) => t.id === tabId);
     if (tabIndex < 0) return;
 
     const rightTabs = tabs.slice(tabIndex + 1);
-    const dirtyRightTabs = rightTabs.filter((t) => t.dirty && t.id !== previewTabId);
+    const dirtyRightTabs = getDirtyTabs(rightTabs);
     if (dirtyRightTabs.length > 0) {
       const names = dirtyRightTabs.map((t) => t.fileName).join('、');
-      const ok = confirm(t.unsavedChangesCloseTabs({ names }));
-      if (!ok) return;
+      const ok = await confirmAction(t.unsavedChangesCloseTabs({ names }));
+      if (ok === false) return;
     }
 
     const remaining = tabs.slice(0, tabIndex + 1);
@@ -1283,7 +1333,7 @@
 
   // 步骤：关闭全部标签页，清空状态不保留空白标签
   function handleCloseAllTabs() {
-    closeAllTabsWithConfirmation();
+    closeAllTabsWithConfirmation().catch(() => undefined);
   }
 
   const documentActions = createDocumentActionsController({
@@ -1296,6 +1346,9 @@
     getAutoSaveEnabled: () => autoSaveEnabled,
     setMarkdown: (value) => {
       markdown = value;
+    },
+    setSavedMarkdown: (value) => {
+      savedMarkdown = value;
     },
     setDirty: (value) => {
       dirty = value;
@@ -1480,10 +1533,57 @@
   const checkExternalFileChange = documentActions.checkExternalFileChange;
 
   // 包装 closeTab：预览标签页直接关闭无需确认
-  function closeTab(tabId: string, event?: Event) {
+  async function closeTab(tabId: string, event?: Event) {
     event?.stopPropagation();
 
-    if (tabId === previewTabId) {
+    const tabToClose = tabs.find((t) => t.id === tabId);
+    if (!tabToClose) {
+      logCloseDiagnostics('closeTab: 未找到目标标签', {
+        tabId,
+        activeTabId,
+        tabCount: tabs.length,
+      });
+      return;
+    }
+
+    logCloseDiagnostics('closeTab: 收到关闭请求', {
+      tabId,
+      activeTabId,
+      previewTabId,
+      targetDirty: tabToClose.dirty,
+      appDirty: dirty,
+      isActiveTarget: tabId === activeTabId,
+      targetVersion: tabToClose.version,
+      appVersion: version,
+      targetMarkdownLength: tabToClose.markdown.length,
+      appMarkdownLength: markdown.length,
+      targetSavedMarkdownLength: tabToClose.savedMarkdown?.length ?? null,
+      appSavedMarkdownLength: savedMarkdown.length,
+    });
+
+    const dirtyTabToClose = getDirtyTabs([tabToClose]).find((tab) => tab.id === tabId);
+    logCloseDiagnostics('closeTab: 实时 dirty 判定完成', {
+      tabId,
+      hasDirtyTabToClose: Boolean(dirtyTabToClose),
+      targetDirtyAfterCheck: tabToClose.dirty,
+      appDirty: dirty,
+      dirtyTabVersion: dirtyTabToClose?.version ?? null,
+      dirtyMarkdownLength: dirtyTabToClose?.markdown.length ?? null,
+      dirtySavedMarkdownLength: dirtyTabToClose?.savedMarkdown.length ?? null,
+    });
+
+    if (dirtyTabToClose && !tabToClose.dirty) {
+      Object.assign(tabToClose, dirtyTabToClose);
+      tabs = [...tabs];
+      logCloseDiagnostics('closeTab: 已把活动标签 dirty 状态写回 tabs', {
+        tabId,
+        targetDirty: tabToClose.dirty,
+        targetVersion: tabToClose.version,
+      });
+    }
+
+    if (tabId === previewTabId && !dirtyTabToClose) {
+      logCloseDiagnostics('closeTab: 干净预览标签直接关闭', { tabId });
       const wasActive = activeTabId === tabId;
       const index = tabs.findIndex((t) => t.id === tabId);
       tabs = tabs.filter((t) => t.id !== tabId);
@@ -1497,6 +1597,7 @@
         } else {
           activeTabId = '';
           markdown = '';
+          savedMarkdown = '';
           fileName = '';
           filePath = '';
           nativePath = null;
@@ -1509,7 +1610,7 @@
           isSwitchingTab = true;
           try {
             if (editor) {
-              editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+              editor.setMarkdown('', { reason: 'switch-tab', dirty: false, savedMarkdown: '' });
             }
           } finally {
             isSwitchingTab = false;
@@ -1521,11 +1622,16 @@
       return;
     }
 
-    _documentCloseTab(tabId, event);
+    logCloseDiagnostics('closeTab: 交给 documentActions.closeTab 处理确认', {
+      tabId,
+      targetDirty: tabToClose.dirty,
+    });
+    await _documentCloseTab(tabId, event);
 
     // 关闭最后一个普通标签后清空编辑器状态
     if (tabs.length === 0) {
       markdown = '';
+      savedMarkdown = '';
       fileName = '';
       filePath = '';
       nativePath = null;
@@ -1538,13 +1644,31 @@
       isSwitchingTab = true;
       try {
         if (editor) {
-          editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+          editor.setMarkdown('', { reason: 'switch-tab', dirty: false, savedMarkdown: '' });
         }
       } finally {
         isSwitchingTab = false;
       }
       updateWindowTitle();
     }
+  }
+
+  function getDirtyTabs(candidateTabs: Tab[]) {
+    const dirtyTabs = candidateTabs.filter((tab) => tab.dirty);
+    const activeTab = candidateTabs.find((tab) => tab.id === activeTabId);
+    if (dirty && activeTab && !dirtyTabs.some((tab) => tab.id === activeTab.id)) {
+      return [
+        ...dirtyTabs,
+        {
+          ...activeTab,
+          markdown,
+          savedMarkdown,
+          dirty: true,
+          version,
+        },
+      ];
+    }
+    return dirtyTabs;
   }
   const jumpToOutlineItem = outlineInteraction.jumpToOutlineItem;
   const updateActiveOutlineFromSourceScroll =
@@ -1605,6 +1729,7 @@
       if (tabs.length === 0) {
         activeTabId = '';
         markdown = '';
+        savedMarkdown = '';
         fileName = '';
         filePath = '';
         nativePath = null;
@@ -1617,7 +1742,7 @@
         isSwitchingTab = true;
         try {
           if (editor) {
-            editor.setMarkdown('', { reason: 'switch-tab', dirty: false });
+            editor.setMarkdown('', { reason: 'switch-tab', dirty: false, savedMarkdown: '' });
           }
         } finally {
           isSwitchingTab = false;
@@ -1991,7 +2116,7 @@
         startupFolderPath = state.currentFolderPath;
       }
       if (state.tabs && state.tabs.length > 0) {
-        tabs = state.tabs;
+        tabs = normalizeWorkspaceTabs(state.tabs);
         activeTabId = state.activeTabId;
         const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
         if (activeTab) {
@@ -2121,6 +2246,7 @@
   });
 
   onDestroy(() => {
+    _unsubConfirmStore();
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
     if (toastTimer !== null) window.clearTimeout(toastTimer);
@@ -2147,11 +2273,27 @@
     }
 
     dirty = event.dirty;
+    if (!event.dirty) {
+      savedMarkdown = event.markdown;
+    }
     version = event.version;
     mode = event.mode;
     pendingInlineMarks = event.pendingInlineMarks;
 
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (activeTab) {
+      activeTab.dirty = dirty;
+      activeTab.version = version;
+      if (!dirty) {
+        activeTab.savedMarkdown = event.markdown;
+      }
+    }
+
     if (!markdownChanged) {
+      if (activeTab) {
+        tabs = [...tabs];
+        persistWorkspaceState();
+      }
       return;
     }
 
@@ -2163,11 +2305,11 @@
     pruneCollapsedOutlineIds();
     stats = analysis.stats;
 
-    const activeTab = tabs.find((t) => t.id === activeTabId);
     if (activeTab) {
       activeTab.markdown = markdown;
-      activeTab.dirty = dirty;
-      activeTab.version = version;
+      if (!dirty) {
+        activeTab.savedMarkdown = markdown;
+      }
       tabs = [...tabs];
       persistWorkspaceState();
     }
@@ -2439,9 +2581,10 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
-      listen<{ windowLabel?: string }>('nomo://request-close-window', (event) => {
+      listen<{ windowLabel?: string; window_label?: string }>('nomo://request-close-window', (event) => {
         // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
-        if (event.payload?.windowLabel !== windowLabel) return;
+        const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
+        if (requestedWindowLabel !== windowLabel) return;
         closeCurrentWindow().catch(() => undefined);
       }).catch(() => null),
     ]);
@@ -2926,6 +3069,18 @@
   danger={true}
   onConfirm={executeDelete}
   onCancel={closeDeleteConfirm}
+/>
+
+<UnsavedConfirmDialog
+  open={confirmDialogState.open}
+  title={confirmDialogState.title}
+  message={confirmDialogState.message}
+  confirmLabel={confirmDialogState.confirmLabel}
+  cancelLabel={confirmDialogState.cancelLabel}
+  saveLabel={confirmDialogState.saveLabel}
+  onConfirm={() => resolveConfirmDialog(true)}
+  onCancel={() => dismissConfirmDialog()}
+  onSave={() => resolveConfirmDialog('save')}
 />
 
 <CloseWindowBehaviorDialog

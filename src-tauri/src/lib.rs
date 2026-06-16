@@ -83,18 +83,13 @@ pub fn run() {
                 }
 
                 api.prevent_close();
-                if crate::window::tray::close_to_tray_enabled(window.app_handle()) {
-                    crate::app_logger::info("Window", &format!("窗口隐藏到托盘：{label}"));
-                    let _ = window.set_skip_taskbar(true);
-                    let _ = window.hide();
-                    crate::window::tray::sync_tray_active_with_window_visibility(
-                        window.app_handle(),
-                    );
-                    let _ = crate::window::tray::refresh_tray_menu(window.app_handle());
-                } else {
-                    crate::app_logger::info("Window", &format!("请求前端确认关闭：{label}"));
-                    let _ = window.emit("nomo://request-close-window", crate::models::WindowLabelPayload { window_label: label.to_string() });
-                }
+                crate::app_logger::info("Window", &format!("请求前端确认关闭：{label}"));
+                let _ = window.emit(
+                    "nomo://request-close-window",
+                    crate::models::WindowLabelPayload {
+                        window_label: label.to_string(),
+                    },
+                );
             }
             _ => {}
         })

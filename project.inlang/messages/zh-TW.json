@@ -36,6 +36,7 @@
   "delete": "刪除",
   "confirmDelete": "確認刪除",
   "unsavedChangesCloseWindow": "以下檔案有未儲存修改：{names}。關閉視窗將遺失這些變更，是否繼續？",
+  "unsavedChangesBeforeClosingWindow": "以下檔案有未儲存修改：{names}。是否繼續關閉目前視窗？",
   "unsavedChangesExitApp": "以下檔案有未儲存修改：{names}。結束應用程式將遺失這些變更，是否繼續？",
   "unsavedChangesCloseTabs": "以下檔案有未儲存修改：{names}。關閉將遺失這些變更，是否繼續？",
   "closeToTrayFirstPrompt": "第一次關閉主視窗時，是否將 Nomo 隱藏到系統匣？\r\n\r\n確定：隱藏到系統匣，並記住此選擇。\r\n取消：直接關閉視窗，之後也可在偏好設定中開啟。",

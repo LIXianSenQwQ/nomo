@@ -37,6 +37,7 @@
   "delete": "削除",
   "confirmDelete": "削除の確認",
   "unsavedChangesCloseWindow": "未保存の変更があるファイルがあります: {names}。ウィンドウを閉じると変更は破棄されます。続行しますか？",
+  "unsavedChangesBeforeClosingWindow": "未保存の変更があるファイルがあります: {names}。このウィンドウを閉じてもよろしいですか？",
   "unsavedChangesExitApp": "未保存の変更があるファイルがあります: {names}。アプリを終了すると変更は破棄されます。続行しますか？",
   "unsavedChangesCloseTabs": "未保存の変更があるファイルがあります: {names}。閉じると変更は破棄されます。続行しますか？",
   "closeToTrayFirstPrompt": "初めてメインウィンドウを閉じるとき、Nomo をシステムトレイに隠しますか？\r\n\r\nOK: トレイに隠し、この選択を記憶します。\r\nキャンセル: ウィンドウを直接閉じます。後で環境設定から有効にできます。",

@@ -470,4 +470,147 @@ describe('createEditorCore', () => {
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
     expect(dirtyEvents.at(-1)).toBe(false);
   });
+
+  it('setDirty(false) makes the current markdown the clean baseline', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    view.dispatch(view.state.tr.insertText('已保存'));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    editor.setDirty(false);
+    const tempFrom = view.state.doc.content.size - 1;
+    view.dispatch(view.state.tr.insertText('临时', tempFrom));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    view.dispatch(view.state.tr.delete(tempFrom, tempFrom + '临时'.length));
+    expect(editor.getMarkdown()).toBe('已保存正文');
+    expect(dirtyEvents.at(-1)).toBe(false);
+  });
+
+  it('clears dirty state when undo restores original content', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    // 输入内容触发 dirty
+    view.dispatch(view.state.tr.insertText('1'));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    // 撤销回到原始内容，dirty 应恢复为 false
+    editor.execute({ type: 'undo' });
+    expect(dirtyEvents.at(-1)).toBe(false);
+    expect(editor.getMarkdown()).toBe('正文');
+  });
+
+  it('clears dirty state when deleting typed text restores original content', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    // 在末尾输入 '1'
+    const endPos = view.state.doc.content.size;
+    view.dispatch(view.state.tr.insertText('1', endPos - 1));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    // 删除输入的 '1' 回到原始内容
+    view.dispatch(view.state.tr.delete(endPos - 1, endPos));
+    expect(dirtyEvents.at(-1)).toBe(false);
+    expect(editor.getMarkdown()).toBe('正文');
+  });
+
+  it('clears dirty state when source input restores original markdown', () => {
+    const editor = createEditorCore({ markdown: '正文' });
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    editor.setMarkdown('正文1', { sourceInput: true });
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    editor.setMarkdown('正文', { sourceInput: true });
+    expect(dirtyEvents.at(-1)).toBe(false);
+  });
+
+  it('remains dirty after undo if content still differs from original', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    // 先输入 '1'，再移动光标（改变选区但不改变 doc），再输入 '2'
+    // 中间加入 selection-only 事务可以打断 ProseMirror history 的合并
+    const pos1 = view.state.doc.content.size - 1;
+    view.dispatch(view.state.tr.insertText('1', pos1));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    // 移动选区以打断 history 合并
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
+
+    // 在另一个位置输入 '2'
+    view.dispatch(view.state.tr.insertText('2', 1));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    // 撤销一步只删除 '2'，内容仍与原始不同（还剩 '1'）
+    editor.execute({ type: 'undo' });
+    expect(dirtyEvents.at(-1)).toBe(true);
+    expect(editor.getMarkdown()).toContain('1');
+  });
+
+  it('resets original baseline on open-file and stays clean', () => {
+    const editor = createEditorCore({ markdown: '旧内容' });
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    editor.setMarkdown('新内容', { reason: 'open-file' });
+    expect(dirtyEvents.at(-1)).toBe(false);
+
+    // 编辑后再撤销应能回到 clean 状态
+    const target = document.createElement('div');
+    const editor2 = createEditorCore({ markdown: '基准', target });
+    const view2 = (editor2 as unknown as { view: EditorView }).view;
+    const dirtyEvents2: boolean[] = [];
+    editor2.subscribe((event) => dirtyEvents2.push(event.dirty));
+
+    editor2.setMarkdown('基准', { reason: 'open-file' });
+    view2.dispatch(view2.state.tr.insertText('1'));
+    expect(dirtyEvents2.at(-1)).toBe(true);
+    editor2.execute({ type: 'undo' });
+    expect(dirtyEvents2.at(-1)).toBe(false);
+  });
+
+  it('uses savedMarkdown as the clean baseline when switching to a dirty tab', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '其他文档', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    editor.setMarkdown('已保存正文1', {
+      reason: 'switch-tab',
+      dirty: true,
+      savedMarkdown: '已保存正文',
+    });
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    const tempFrom = view.state.doc.content.size - 1;
+    view.dispatch(view.state.tr.insertText('临时', tempFrom));
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    view.dispatch(view.state.tr.delete(tempFrom, tempFrom + '临时'.length));
+    expect(editor.getMarkdown()).toBe('已保存正文1');
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    const suffixFrom = view.state.doc.content.size - 2;
+    view.dispatch(view.state.tr.delete(suffixFrom, suffixFrom + 1));
+    expect(editor.getMarkdown()).toBe('已保存正文');
+    expect(dirtyEvents.at(-1)).toBe(false);
+  });
 });
