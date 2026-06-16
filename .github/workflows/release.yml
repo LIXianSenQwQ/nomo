@@ -66,6 +66,14 @@ jobs:
             Remove-Item -LiteralPath $_ -Recurse -Force -ErrorAction SilentlyContinue
           }
 
+      - name: Build macOS Quick Look extension
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          QUICKLOOK_ARCH: ${{ matrix.rust-target == 'aarch64-apple-darwin' && 'arm64' || 'x86_64' }}
+          APPLE_CODESIGN_IDENTITY: '-'
+        run: pnpm run build:quicklook-extension
+
       - name: Build and publish release assets
         uses: tauri-apps/tauri-action@v0.6.2
         env:

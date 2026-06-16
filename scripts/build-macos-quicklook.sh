@@ -28,16 +28,26 @@ cp -R "$RENDERER_DIR" "$RESOURCES_DIR/quicklook-renderer"
 APP_VERSION="$(node -p "require('./package.json').version")"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$CONTENTS_DIR/Info.plist"
 
-# 获取当前 macOS 版本用于构建 target
-MACOS_VERSION=$(sw_vers -productVersion | awk -F. '{print $1 "." $2}')
-ARCH=$(uname -m)
+ARCH="${QUICKLOOK_ARCH:-$(uname -m)}"
+case "$ARCH" in
+  arm64|aarch64)
+    SWIFT_TARGET_ARCH="arm64"
+    ;;
+  x86_64|amd64)
+    SWIFT_TARGET_ARCH="x86_64"
+    ;;
+  *)
+    echo "Unsupported Quick Look architecture: $ARCH" >&2
+    exit 1
+    ;;
+esac
 
 xcrun swiftc \
   "$EXTENSION_SRC_DIR/main.swift" \
   "$EXTENSION_SRC_DIR/PreviewViewController.swift" \
   -module-name NomoQuickLookPreview \
   -application-extension \
-  -target "${ARCH}-apple-macosx12.0" \
+  -target "${SWIFT_TARGET_ARCH}-apple-macosx12.0" \
   -o "$MACOS_DIR/NomoQuickLookPreview" \
   -framework Cocoa \
   -framework QuickLook \
