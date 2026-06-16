@@ -42,6 +42,9 @@ async fn print_with_edge(
         .arg("--disable-extensions")
         .arg("--no-sandbox")
         .arg("--disable-dev-shm-usage")
+        // 同时传入新旧参数名，确保不同 Edge/Chromium 版本都能正确关闭
+        // 浏览器自动页眉页脚（日期、文件名、file:// 路径、页码等）。
+        .arg("--no-pdf-header-footer")
         .arg("--print-to-pdf-no-header")
         .arg(format!("--print-to-pdf={}", pdf_path))
         .arg(&html_file_url)
