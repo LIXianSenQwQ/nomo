@@ -400,6 +400,7 @@ body {
 
 .nomo-export .table-scroll th,
 .nomo-export .table-scroll td {
+  min-width: 90px;
   padding: 10px 12px;
   border-right: 1px solid var(--nomo-export-table-border);
   border-bottom: 1px solid var(--nomo-export-table-border);
@@ -438,6 +439,7 @@ body {
 
 .nomo-export table th,
 .nomo-export table td {
+  min-width: 90px;
   padding: 10px 12px;
   border-right: 1px solid var(--nomo-export-table-border);
   border-bottom: 1px solid var(--nomo-export-table-border);

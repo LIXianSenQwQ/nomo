@@ -457,6 +457,7 @@
 
 .table-scroll th,
 .table-scroll td {
+  min-width: 90px;
   padding: 10px 12px;
   border-right: 1px solid var(--md-editor-table-border);
   border-bottom: 1px solid var(--md-editor-table-border);

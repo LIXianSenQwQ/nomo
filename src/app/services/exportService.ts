@@ -169,10 +169,22 @@ export function cleanEditorArtifacts(htmlFragment: string): string {
     el.className = classes.join(' ');
   });
 
-  // 图片节点只保留 img 本身。
+  // 图片节点只保留 img 本身，同时将对齐样式从 wrapper 迁移到 img。
   root.querySelectorAll('.image-node').forEach((node) => {
     const img = node.querySelector('img');
     if (img) {
+      const wrapper = node as HTMLElement;
+      // ImageNodeView 将对齐（居中/右对齐/左对齐）通过内联样式设置在 .image-node wrapper 上，
+      // 导出 HTML 中没有 .image-node 包装，需要将这些样式迁移到 <img> 内联样式。
+      if (wrapper.style.display === 'block') {
+        img.style.display = 'block';
+      }
+      if (wrapper.style.marginLeft) {
+        img.style.marginLeft = wrapper.style.marginLeft;
+      }
+      if (wrapper.style.marginRight) {
+        img.style.marginRight = wrapper.style.marginRight;
+      }
       node.replaceWith(img);
     } else {
       node.remove();
@@ -272,9 +284,16 @@ async function inlineImageSrc(
 ): Promise<{ dataUrl?: string; warning?: string }> {
   const trimmed = src.trim();
 
-  // 远程图片或已内嵌图片保持原样。
-  if (isRemoteOrDataSrc(trimmed)) {
+  // data: 和 blob: 已经内嵌，保持原样。
+  if (/^(data:|blob:)/i.test(trimmed)) {
     return {};
+  }
+
+  // 远程图片（https://）fetch 后转为 base64 内嵌，保证导出 HTML 自包含。
+  if (/^https?:/i.test(trimmed)) {
+    return fetchImageAsBase64(trimmed).catch((error) => ({
+      warning: `远程图片未能内嵌（${error instanceof Error ? error.message : String(error)}）：${trimmed}`,
+    }));
   }
 
   // asset:// 或 http://asset.localhost/ 是 Tauri 本地资源协议，尝试 fetch 转 base64。
@@ -306,10 +325,6 @@ async function inlineImageSrc(
       warning: `图片读取失败（${error instanceof Error ? error.message : String(error)}）：${trimmed}`,
     };
   }
-}
-
-function isRemoteOrDataSrc(src: string): boolean {
-  return /^(https?:|data:|blob:)/i.test(src.trim());
 }
 
 function isAssetUrl(src: string): boolean {

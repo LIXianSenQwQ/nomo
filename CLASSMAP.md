@@ -112,6 +112,12 @@
 | 搜索替换逻辑 | `src/app/services/searchReplace.ts` | `src/app/components/SearchReplacePanel.svelte` | 搜索/替换算法和状态管理 |
 | 搜索替换面板 | `src/app/components/SearchReplacePanel.svelte` | `src/app/services/searchReplace.ts` | 搜索替换 UI 交互 |
 
+### 导出
+
+| Responsibility | Primary code | Related code | Change when |
+|---|---|---|---|
+| HTML/PDF 导出 | `src/app/services/exportService.ts` | `src/lib/desktop/tauriStorage.ts`, `src/app/styles/export-document.css` | 导出格式、图片内嵌策略、HTML 模板变更 |
+
 ### 本地化
 
 | Responsibility | Primary code | Related code | Change when |
@@ -623,6 +629,41 @@
 - 修改搜索面板 UI
 
 **Related tests:** `src/app/services/searchReplace.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/services/exportService.ts`
+
+**Kind:** service
+
+**Owns:**
+- HTML/PDF 导出：构建自包含 HTML 文档
+- 图片内嵌策略：将本地图片（本地路径、asset 协议）和远程图片（https://）转为 base64 data URL
+- 编辑器 UI 痕迹清理（cleanEditorArtifacts）
+- 完整 HTML 文档外壳生成（createExportHtmlDocument）
+- 文件保存对话框调用（pickSavePath）
+
+**Does not own：**
+- 不拥有文件系统写入（通过 tauriStorage.ts 的 invoke 调用）
+- 不拥有 PDF 渲染（通过 tauriStorage.ts 的 exportPdfFromHtml）
+- 不拥有导出 UI 触发（在 AppShell.svelte / AppTitleBar.svelte 中）
+
+**Called by:** `src/app/App.svelte`（通过菜单/快捷键触发导出）
+
+**Depends on:** `src/lib/desktop/tauriStorage.ts`, `src/app/styles/export-document.css`
+
+**Change this when：**
+- 修改图片内嵌策略（新增/移除图片来源类型支持）
+- 修改 HTML 模板结构或样式
+- 修改编辑器痕迹清理规则
+
+**Do not change this when：**
+- 修改导出触发 UI
+- 修改后端文件写入逻辑
+
+**Related tests:** `src/app/services/exportService.test.ts`
 
 **Confidence:** high
 
