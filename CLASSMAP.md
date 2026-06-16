@@ -25,6 +25,7 @@
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
 | 自定义标题栏菜单 | `src/app/components/AppTitleBar.svelte` | `src/app/App.svelte`, `src/app/services/appCommands.ts` | 添加/移除菜单项、修改菜单文案 |
 | 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
+| 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 
 ### 编辑器核心（ProseMirror）
 
@@ -1128,7 +1129,7 @@
 **Owns：**
 - Tauri 后端装配：初始化日志、插件、数据库、窗口、菜单、托盘
 - 外部打开路由
-- 关闭拦截
+- 关闭拦截（`WindowEvent::CloseRequested`）
 - IPC command 注册
 
 **Does not own：**
@@ -1141,11 +1142,39 @@
 **Change this when：**
 - 新增 IPC 命令
 - 新增插件
-- 修改窗口事件处理
+- 修改窗口事件处理（如 `CloseRequested` 关闭确认逻辑）
 - 修改启动流程
 
 **Do not change this when：**
 - 修改具体业务逻辑（在子模块中）
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src-tauri/src/models.rs`
+
+**Kind:** model
+
+**Owns：**
+- 跨端序列化数据结构：DocumentPayload、RecentEntry、SnapshotRecord、SettingRecord、WindowStateInput、FileTreeEntry、ImageAssetPayload、DesktopActionPayload 等
+- 窗口事件通信 payload（如 `WindowLabelPayload`）
+
+**Does not own：**
+- 不拥有具体业务逻辑
+
+**Called by:** 前后端各模块
+
+**Depends on:** `serde`
+
+**Change this when：**
+- 新增/修改 IPC 参数或返回值结构
+- 新增前后端通信数据结构
+
+**Do not change this when：**
+- 修改业务逻辑
 
 **Related tests:** —
 

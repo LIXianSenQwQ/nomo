@@ -252,6 +252,11 @@ pub(crate) struct MarkdownAssociationStatus {
     pub(crate) message: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct WindowLabelPayload {
+    pub(crate) windowLabel: String,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct WindowsContextMenuStatus {
     pub(crate) supported: bool,

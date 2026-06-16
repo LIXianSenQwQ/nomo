@@ -91,7 +91,7 @@ pub fn run() {
                     let _ = crate::window::tray::refresh_tray_menu(window.app_handle());
                 } else {
                     crate::app_logger::info("Window", &format!("请求前端确认关闭：{label}"));
-                    let _ = window.emit("nomo://request-close-window", ());
+                    let _ = window.emit("nomo://request-close-window", crate::models::WindowLabelPayload { windowLabel: label.to_string() });
                 }
             }
             _ => {}
