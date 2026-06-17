@@ -1,7 +1,5 @@
-![128x128@2x.png](./assets/128x128@2x.png){align=center}
-
 <p align="center">
-  <img alt="Logo" src="./assets/128x128@2x.png" width="128" />
+  <img src="./assets/128x128@2x.png" alt="128x128@2x.png">
 </p>
 
 # Nomo

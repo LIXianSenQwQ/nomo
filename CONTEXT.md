@@ -1,6 +1,6 @@
 # Nomo
 
-本上下文描述 Nomo：一个本地优先、Markdown-first、面向阅读与写作的桌面 Markdown 编辑器。它的核心目标是用稳定的工程边界承载接近 Typora 的语义编辑体验，同时保持 Typedown 式轻量桌面应用气质。
+本上下文描述 Nomo：一个本地优先、Markdown-first、面向阅读与写作的桌面 Markdown 编辑器。它的核心目标是 所见即所得 Markdown 编辑器、即时渲染 Markdown 编辑器、单栏 Markdown 编辑器、富文本化 Markdown 编辑体验
 
 ## Language
 

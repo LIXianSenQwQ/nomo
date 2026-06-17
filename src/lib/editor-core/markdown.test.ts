@@ -244,7 +244,7 @@ describe('markdown serialization', () => {
     );
   });
 
-  it('parses image with align and width attributes', () => {
+  it('parses image with align and width attributes (legacy format)', () => {
     const input = '![demo](./assets/demo.png){align=center width=60%}';
     const doc = parseMarkdown(input);
     const img = doc.child(0).child(0);
@@ -255,18 +255,103 @@ describe('markdown serialization', () => {
     expect(img.attrs.width).toBe('60%');
   });
 
-  it('round-trips image with attributes', () => {
+  it('serializes aligned image as <p> block HTML', () => {
     const input = '![demo](./assets/demo.png){align=center width=60%}';
-    expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(
+      '<p align="center">\n  <img src="./assets/demo.png" alt="demo" width="60%">\n</p>',
+    );
   });
 
-  it('parses image with px width', () => {
+  it('serializes width-only image as inline <img> tag', () => {
+    const input = '![demo](./assets/demo.png){width=128}';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(
+      '<img src="./assets/demo.png" alt="demo" width="128">',
+    );
+  });
+
+  it('serializes plain image as standard Markdown', () => {
+    const input = '![demo](./assets/demo.png)';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(input);
+  });
+
+  it('parses image with px width (legacy format)', () => {
     const input = '![pic](./a.png){align=left width=600}';
     const doc = parseMarkdown(input);
     const img = doc.child(0).child(0);
 
     expect(img.attrs.align).toBe('left');
     expect(img.attrs.width).toBe('600');
+  });
+
+  it('parses inline <img> HTML tag', () => {
+    const input = '<img src="./a.png" alt="pic" width="200">';
+    const doc = parseMarkdown(input);
+    const img = doc.child(0).child(0);
+
+    expect(img.type.name).toBe('image');
+    expect(img.attrs.src).toBe('./a.png');
+    expect(img.attrs.alt).toBe('pic');
+    expect(img.attrs.width).toBe('200');
+    expect(img.attrs.align).toBeNull();
+  });
+
+  it('parses <p align="center"><img ...></p> block HTML', () => {
+    const input = '<p align="center">\n  <img src="./a.png" alt="pic" width="200">\n</p>';
+    const doc = parseMarkdown(input);
+    const img = doc.child(0).child(0);
+
+    expect(img.type.name).toBe('image');
+    expect(img.attrs.src).toBe('./a.png');
+    expect(img.attrs.alt).toBe('pic');
+    expect(img.attrs.width).toBe('200');
+    expect(img.attrs.align).toBe('center');
+  });
+
+  it('round-trips <p align> block HTML', () => {
+    const input = '<p align="right">\n  <img src="./a.png" alt="pic">\n</p>';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(input);
+  });
+
+  it('round-trips inline <img> with width', () => {
+    const input = '<img src="./a.png" alt="pic" width="300">';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(input);
+  });
+
+  it('serializes image with title as standard Markdown', () => {
+    const input = '![截图](./assets/a.png "说明")';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(input);
+  });
+
+  it('serializes image with title and width as inline <img>', () => {
+    const input = '![截图](./assets/a.png "说明"){width=50%}';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(
+      '<img src="./assets/a.png" alt="截图" title="说明" width="50%">',
+    );
+  });
+
+  it('serializes image with title and align as <p> block', () => {
+    const input = '![截图](./assets/a.png "说明"){align=left}';
+    expect(serializeMarkdown(parseMarkdown(input)).trim()).toBe(
+      '<p align="left">\n  <img src="./assets/a.png" alt="截图" title="说明">\n</p>',
+    );
+  });
+
+  it('does not parse non-image HTML blocks as image', () => {
+    const input = '<div>not an image</div>';
+    const doc = parseMarkdown(input);
+    expect(doc.child(0).type.name).toBe('html_block');
+  });
+
+  it('does not parse <p> with multiple children as image', () => {
+    const input = '<p align="center"><img src="./a.png" alt="a"><span>extra</span></p>';
+    const doc = parseMarkdown(input);
+    // 不应被解析为 image 节点 — 内有额外元素时不转换
+    let hasImage = false;
+    doc.descendants((node) => {
+      if (node.type.name === 'image') hasImage = true;
+      return !hasImage;
+    });
+    expect(hasImage).toBe(false);
   });
 
   it('parses image without attributes', () => {

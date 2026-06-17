@@ -118,6 +118,36 @@ markdownIt.block.ruler.before('reference', 'footnote_def', (state, startLine, _e
   return true;
 });
 
+// ——— 图片 HTML / 属性解析工具 ———
+
+/** HTML 属性值转义：& " < > */
+function escapeHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** 从 <img ...> 标签内容中提取 src / alt / title / width */
+function parseHtmlImgAttrs(tagContent: string): {
+  src: string | null;
+  alt: string | null;
+  title: string | null;
+  width: string | null;
+} {
+  const result: { src: string | null; alt: string | null; title: string | null; width: string | null } =
+    { src: null, alt: null, title: null, width: null };
+  // 匹配 key="value" | key='value' | key=value（value 不含空白和 >）
+  const attrRegex = /([a-zA-Z][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+  let match: RegExpExecArray | null;
+  while ((match = attrRegex.exec(tagContent)) !== null) {
+    const name = match[1].toLowerCase();
+    const value = match[2] ?? match[3] ?? match[4];
+    if (name === 'src') result.src = value;
+    else if (name === 'alt') result.alt = value;
+    else if (name === 'title') result.title = value;
+    else if (name === 'width') result.width = value;
+  }
+  return result;
+}
+
 // ——— 图片属性解析：支持 ![alt](src){align=center width=60%} 语法 ———
 
 // 1. 行内规则：在 image token 后方检测 {key=value ...} 属性块
@@ -149,6 +179,35 @@ markdownIt.inline.ruler.after('image', 'image_attrs', (state, silent) => {
   if (attrs.width) prevToken.attrSet('width', attrs.width);
 
   state.pos = closeBrace + 1;
+  return true;
+});
+
+// 2. 行内规则：在 html_inline 之前检测 <img src="..." ...> 内联 HTML 图片
+markdownIt.inline.ruler.before('html_inline', 'image_html_inline', (state, silent) => {
+  const pos = state.pos;
+  if (state.src.slice(pos, pos + 4).toLowerCase() !== '<img') return false;
+
+  // 找到结束的 >（简单匹配，不处理属性值内含 > 的极端情况）
+  const end = state.src.indexOf('>', pos + 4);
+  if (end === -1) return false;
+
+  // 检查闭合前没有未转义的 <（防止误匹配 <img ...><script>）
+  const tagContent = state.src.slice(pos + 4, end).replace(/\/$/, '').trim();
+  if (tagContent.includes('<')) return false;
+
+  const imgAttrs = parseHtmlImgAttrs(tagContent);
+  if (!imgAttrs.src) return false;
+
+  if (silent) return true;
+
+  const token = state.push('image', 'img', 0);
+  token.attrSet('src', imgAttrs.src);
+  if (imgAttrs.alt !== null) token.attrSet('alt', imgAttrs.alt);
+  if (imgAttrs.title) token.attrSet('title', imgAttrs.title);
+  if (imgAttrs.width) token.attrSet('width', imgAttrs.width);
+
+  // 删除属性块空行（如果有）
+  state.pos = end + 1;
   return true;
 });
 
@@ -495,19 +554,35 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.closeBlock(node);
     },
     image(state, node) {
-      const src = state.esc(node.attrs.src || '');
-      const alt = state.esc(node.attrs.alt || '', false);
-      const title = node.attrs.title ? ` "${state.esc(node.attrs.title, false)}"` : '';
+      const src = String(node.attrs.src ?? '');
+      const alt = String(node.attrs.alt ?? '');
+      const title = node.attrs.title as string | null;
       const align = node.attrs.align as string | null;
       const width = node.attrs.width as string | null;
-      let attrs = '';
-      if (align || width) {
-        const parts: string[] = [];
-        if (align) parts.push(`align=${align}`);
-        if (width) parts.push(`width=${width}`);
-        attrs = `{${parts.join(' ')}}`;
+
+      if (align === 'left' || align === 'center' || align === 'right') {
+        // 有对齐 → 块级 HTML：<p align="...">\n  <img ...>\n</p>
+        state.ensureNewLine();
+        let imgTag = `<img src="${escapeHtmlAttr(src)}" alt="${escapeHtmlAttr(alt)}"`;
+        if (title) imgTag += ` title="${escapeHtmlAttr(title)}"`;
+        if (width) imgTag += ` width="${escapeHtmlAttr(width)}"`;
+        imgTag += '>';
+        state.write(`<p align="${align}">\n  ${imgTag}\n</p>`);
+        state.closeBlock(node);
+      } else if (width) {
+        // 只有宽度 → 内联 <img ...>（不换行，保留在段落内）
+        let imgTag = `<img src="${escapeHtmlAttr(src)}" alt="${escapeHtmlAttr(alt)}"`;
+        if (title) imgTag += ` title="${escapeHtmlAttr(title)}"`;
+        imgTag += ` width="${escapeHtmlAttr(width)}"`;
+        imgTag += '>';
+        state.write(imgTag);
+      } else {
+        // 无样式 → 标准 Markdown 图片
+        const escapedAlt = state.esc(alt, false);
+        const escapedSrc = state.esc(src);
+        const titleStr = title ? ` "${state.esc(title, false)}"` : '';
+        state.write(`![${escapedAlt}](${escapedSrc}${titleStr})`);
       }
-      state.write(`![${alt}](${src}${title})${attrs}`);
     },
     math_inline(state, node) {
       state.write(`$${node.attrs.tex.replace(/\$/g, '\\$')}$`);
@@ -579,11 +654,52 @@ const tableMarkdownSerializer = new MarkdownSerializer(
   },
 );
 
+/**
+ * 预处理：将 GitHub 兼容的 HTML 图片格式转换为旧 {align=center width=128} 格式，
+ * 让现有 parser 统一处理。
+ *   - <p align="left|center|right"><img ...></p>  → ![alt](src){align=X width=Y}
+ *   - 独立一行的 <img src="..." ...>             → ![alt](src){width=Y}
+ */
+function preprocessImageHtml(markdown: string): string {
+  // 步骤1：<p align="..."><img ...></p>（单行或多行）
+  let result = markdown.replace(
+    /<p\s+align="(left|center|right)"\s*>\s*(<img\s+[^>]+(?:\/>|>))\s*<\/p>/gi,
+    (_full, align: string, imgTag: string) => {
+      const cleaned = imgTag.replace(/\/>$/, '').replace(/>$/, '').trim();
+      const attrs = parseHtmlImgAttrs(cleaned);
+      if (!attrs.src) return _full;
+      const parts: string[] = [`align=${align.toLowerCase()}`];
+      if (attrs.width) parts.push(`width=${attrs.width}`);
+      const titleStr = attrs.title ? ` "${attrs.title}"` : '';
+      return `![${attrs.alt || ''}](${attrs.src}${titleStr}){${parts.join(' ')}}`;
+    },
+  );
+
+  // 步骤2：独立一行的 <img src="..." ...>（不跟在 <p> 里）
+  result = result.replace(
+    /^<img\s+[^>]+(?:\/>|>)\s*$/gim,
+    (imgTag: string) => {
+      const cleaned = imgTag.replace(/\/>$/, '').replace(/>$/, '').trim();
+      if (/<[^>]+<[^>]+>/.test(cleaned)) return imgTag; // 含嵌套标签，不处理
+      const attrs = parseHtmlImgAttrs(cleaned);
+      if (!attrs.src) return imgTag;
+      const parts: string[] = [];
+      if (attrs.width) parts.push(`width=${attrs.width}`);
+      const titleStr = attrs.title ? ` "${attrs.title}"` : '';
+      const attrsStr = parts.length > 0 ? `{${parts.join(' ')}}` : '';
+      return `![${attrs.alt || ''}](${attrs.src}${titleStr})${attrsStr}`;
+    },
+  );
+
+  return result;
+}
+
 export function parseMarkdown(markdown: string): ProseMirrorNode {
   resetHtmlInlineStack();
   const rawBody = splitFrontMatter(markdown).body;
+  const preprocessed = preprocessImageHtml(rawBody);
   try {
-    return tableMarkdownParser.parse(rawBody);
+    return tableMarkdownParser.parse(preprocessed);
   } catch {
     resetHtmlInlineStack();
     return schema.node('doc', null, [schema.node('paragraph', null, [schema.text(rawBody)])]);

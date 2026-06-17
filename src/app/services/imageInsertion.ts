@@ -118,17 +118,34 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     logInfo('ImageInsertion', '图片插入完成', { inserted: imported.length, failed });
   }
 
+  /** HTML 属性值转义：& " < > */
+  function escapeHtmlAttr(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function insertSourceMarkdown(items: Array<{ src: string; alt: string }>) {
     const textarea = options.getSourceTextarea();
     const markdown = options.getEditor().getMarkdown();
     const start = textarea?.selectionStart ?? markdown.length;
     const end = textarea?.selectionEnd ?? start;
     const imageSettings = options.getImageContext().settings;
-    const attrs = createImageAttributeText(
-      imageSettings?.defaultImageWidth || '',
-      imageSettings?.defaultImageAlign ?? 'none',
-    );
-    const snippet = items.map((item) => `${createImageMarkdown(item.alt, item.src)}${attrs}`).join('\n');
+    const width = imageSettings?.defaultImageWidth || '';
+    const align = imageSettings?.defaultImageAlign ?? 'none';
+
+    const snippet = items
+      .map((item) => {
+        if (align === 'left' || align === 'center' || align === 'right') {
+          let imgTag = `<img src="${escapeHtmlAttr(item.src)}" alt="${escapeHtmlAttr(item.alt)}"`;
+          if (width) imgTag += ` width="${escapeHtmlAttr(width)}"`;
+          imgTag += '>';
+          return `<p align="${align}">\n  ${imgTag}\n</p>`;
+        } else if (width) {
+          return `<img src="${escapeHtmlAttr(item.src)}" alt="${escapeHtmlAttr(item.alt)}" width="${escapeHtmlAttr(width)}">`;
+        } else {
+          return createImageMarkdown(item.alt, item.src);
+        }
+      })
+      .join('\n');
     const prefix = markdown.slice(0, start);
     const suffix = markdown.slice(end);
     const before = prefix.endsWith('\n') || prefix.length === 0 ? '' : '\n';
@@ -147,16 +164,6 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     });
   }
 
-  function createImageAttributeText(width: string, align: string) {
-    const attributes: string[] = [];
-    if (width) {
-      attributes.push(`width=${width}`);
-    }
-    if (align === 'left' || align === 'center' || align === 'right') {
-      attributes.push(`align=${align}`);
-    }
-    return attributes.length > 0 ? `{${attributes.join(' ')}}` : '';
-  }
 
   function getInsertFileName(file: File, index: number) {
     if (file.name?.trim()) {
