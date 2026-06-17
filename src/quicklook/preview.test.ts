@@ -48,6 +48,14 @@ describe('quicklook preview renderer', () => {
     expect(html).toContain('width="240"');
   });
 
+  it('marks shields badges so they keep GitHub-like inline sizing', () => {
+    const html = renderMarkdownPreview(
+      '![Release](https://img.shields.io/github/v/release/LIXianSenQwQ/nomo?label=release)',
+    );
+
+    expect(html).toContain('class="image-badge"');
+  });
+
   it('does not allow data image sources', () => {
     const html = renderMarkdownPreview('![x](data:image/svg+xml,<svg></svg>)');
 

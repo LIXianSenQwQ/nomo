@@ -3030,8 +3030,6 @@
   {closeCurrentFile}
   {closeCurrentWindow}
   {saveMarkdownFile}
-  {reloadExternalFile}
-  {overwriteExternalFile}
   {runCommand}
   {pendingInlineMarks}
   {openTablePicker}

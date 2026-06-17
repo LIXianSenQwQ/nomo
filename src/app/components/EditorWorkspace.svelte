@@ -32,9 +32,6 @@
   export let sourcePane: HTMLElement;
   export let semanticPane: HTMLElement;
   export let editorHost: HTMLDivElement;
-  export let saveMarkdownFile: (saveAs?: boolean) => void;
-  export let reloadExternalFile: () => void;
-  export let overwriteExternalFile: () => void;
   export let updateMarkdown: (event: Event) => void;
   export let enterFrontMatterEdit: () => void;
   export let leaveFrontMatterEdit: () => void;

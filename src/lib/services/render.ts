@@ -65,7 +65,7 @@ export interface ImageHandlingSettings {
 
 export const DEFAULT_IMAGE_HANDLING_SETTINGS: ImageHandlingSettings = {
   imageInsertStrategy: 'copy-assets',
-  autoDeleteUnusedLocalImages: true,
+  autoDeleteUnusedLocalImages: false,
   uploadProvider: 'picgo',
   picgoServerUrl: 'http://127.0.0.1:36677/upload',
   picgoCoreCommand: 'picgo',

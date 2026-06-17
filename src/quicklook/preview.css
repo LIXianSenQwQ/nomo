@@ -375,6 +375,36 @@ body {
   background: var(--md-editor-surface);
 }
 
+.quicklook-markdown img.image-badge,
+.quicklook-markdown img[src*='img.shields.io'],
+.quicklook-markdown img[src*='badgen.net'] {
+  display: inline-block;
+  width: auto;
+  height: 20px;
+  margin: 2px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  vertical-align: text-bottom;
+}
+
+.quicklook-markdown a:has(img.image-badge),
+.quicklook-markdown a:has(img[src*='img.shields.io']),
+.quicklook-markdown a:has(img[src*='badgen.net']) {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 4px;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: text-bottom;
+}
+
+.quicklook-markdown a:has(img.image-badge) img,
+.quicklook-markdown a:has(img[src*='img.shields.io']) img,
+.quicklook-markdown a:has(img[src*='badgen.net']) img {
+  margin: 0;
+}
+
 .image-align-left {
   margin-right: auto;
   margin-left: 0;

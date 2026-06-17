@@ -1836,6 +1836,90 @@
   pointer-events: none;
 }
 
+.image-node.is-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 2px 4px;
+  line-height: 1;
+  vertical-align: text-bottom;
+}
+
+.image-node.is-badge img {
+  width: auto;
+  height: 20px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+}
+
+.image-node.is-badge .image-node-fullscreen-button {
+  display: none;
+}
+
+.prosemirror-host .ProseMirror img[width],
+.prosemirror-host .ProseMirror img[height],
+.prosemirror-host .ProseMirror img[src*='img.shields.io'],
+.prosemirror-host .ProseMirror img[src*='badgen.net'] {
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.prosemirror-host .ProseMirror img[src*='img.shields.io'],
+.prosemirror-host .ProseMirror img[src*='badgen.net'] {
+  display: inline-block;
+  width: auto;
+  height: 20px;
+  margin: 2px 4px;
+  vertical-align: text-bottom;
+}
+
+.prosemirror-host .ProseMirror a:has(.image-node.is-badge),
+.prosemirror-host .ProseMirror a:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror a:has(img[src*='badgen.net']) {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 4px;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: text-bottom;
+}
+
+.prosemirror-host .ProseMirror a:has(.image-node.is-badge) .image-node.is-badge,
+.prosemirror-host .ProseMirror a:has(img[src*='img.shields.io']) img,
+.prosemirror-host .ProseMirror a:has(img[src*='badgen.net']) img {
+  margin: 0;
+}
+
+.prosemirror-host .ProseMirror p:has(.image-node.is-badge),
+.prosemirror-host .ProseMirror p:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror p:has(img[src*='badgen.net']),
+.prosemirror-host .ProseMirror .html-widget:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror .html-widget:has(img[src*='badgen.net']),
+.prosemirror-host .ProseMirror .html-widget p:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror .html-widget p:has(img[src*='badgen.net']) {
+  white-space: normal;
+}
+
+.prosemirror-host .ProseMirror p:has(.image-node.is-badge),
+.prosemirror-host .ProseMirror p:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror p:has(img[src*='badgen.net']) {
+  line-height: 1.4;
+}
+
+.prosemirror-host .ProseMirror .html-widget:has(img[src*='img.shields.io']),
+.prosemirror-host .ProseMirror .html-widget:has(img[src*='badgen.net']) {
+  display: block;
+}
+
 .image-node.is-loading::before {
   content: attr(data-loading-label);
   display: inline-grid;

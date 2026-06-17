@@ -65,7 +65,7 @@ const GLOBAL_ATTRS = new Set(['class', 'title']);
 const ATTRS_BY_TAG: Record<string, Set<string>> = {
   a: new Set(['href', 'title', 'target', 'rel']),
   div: new Set(['class', 'data-callout-type']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height']),
+  img: new Set(['src', 'alt', 'title', 'width', 'height', 'class']),
   input: new Set(['class', 'type', 'checked', 'disabled', 'aria-label']),
   span: new Set(['class', 'aria-hidden']),
   td: new Set(['style']),
@@ -188,6 +188,9 @@ function createQuickLookMarkdownIt() {
     token.attrSet('src', src);
     token.attrSet('alt', alt);
     token.attrSet('loading', 'lazy');
+    if (isBadgeImageSrc(rawSrc)) {
+      token.attrJoin('class', 'image-badge');
+    }
     return self.renderToken(tokens, index, options);
   };
 
@@ -225,6 +228,16 @@ function createQuickLookMarkdownIt() {
   };
 
   return md;
+}
+
+function isBadgeImageSrc(src: string): boolean {
+  try {
+    const url = new URL(src);
+    const host = url.hostname.toLowerCase();
+    return host === 'img.shields.io' || host === 'badgen.net';
+  } catch {
+    return false;
+  }
 }
 
 function parseImageAttrs(state: QuickLookInlineState, silent: boolean) {

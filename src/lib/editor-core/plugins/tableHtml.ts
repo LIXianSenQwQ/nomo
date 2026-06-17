@@ -58,7 +58,7 @@ function buildTableHtmlDecorations(doc: ProseMirrorNode): DecorationSet {
       const widget = document.createElement('span');
       widget.className = 'html-widget';
       widget.setAttribute('contenteditable', 'false');
-      widget.innerHTML = safeHtml;
+      renderHtmlWidget(widget, safeHtml);
       decorations.push(Decoration.widget(pos, widget, { side: 0 }));
       decorations.push(
         Decoration.inline(
@@ -154,4 +154,33 @@ function tryParseHtmlBlock(block: {
   const safeHtml = sanitizeHtml(text);
   if (!safeHtml) return null;
   return { pos: block.pos, node: block.node, safeHtml };
+}
+
+function renderHtmlWidget(widget: HTMLElement, safeHtml: string): void {
+  const template = document.createElement('template');
+  template.innerHTML = safeHtml.trim();
+  const root = getSingleRootElement(template.content);
+
+  if (root?.tagName.toLowerCase() === 'p') {
+    const align = root.getAttribute('align')?.toLowerCase();
+    if (align === 'left' || align === 'center' || align === 'right') {
+      widget.classList.add('html-widget-aligned-paragraph');
+      widget.style.display = 'block';
+      widget.style.textAlign = align;
+      widget.style.whiteSpace = 'normal';
+    }
+    widget.innerHTML = root.innerHTML;
+    return;
+  }
+
+  widget.innerHTML = safeHtml;
+}
+
+function getSingleRootElement(fragment: DocumentFragment): HTMLElement | null {
+  const childNodes = Array.from(fragment.childNodes).filter(
+    (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim(),
+  );
+  return childNodes.length === 1 && childNodes[0].nodeType === Node.ELEMENT_NODE
+    ? (childNodes[0] as HTMLElement)
+    : null;
 }

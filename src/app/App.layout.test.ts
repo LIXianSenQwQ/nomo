@@ -175,6 +175,24 @@ describe('App outline layout', () => {
     }
     expect(styles).toMatch(/\.content-outline\s*\{[\s\S]*?position:\s*fixed;/);
     expect(styles).toMatch(/\.editor-shell\s*\{[\s\S]*?container-type:\s*inline-size;/);
+    expect(styles).toMatch(/\.image-node\.is-badge img\s*\{[\s\S]*?height:\s*20px;/);
+    expect(styles).toMatch(/\.image-node\.is-badge img\s*\{[\s\S]*?min-width:\s*0;/);
+    expect(styles).toMatch(/\.image-node\.is-badge \.image-node-fullscreen-button\s*\{[\s\S]*?display:\s*none;/);
+    expect(styles).toMatch(
+      /\.prosemirror-host \.ProseMirror img\[src\*='img\.shields\.io'\][\s\S]*?\{\s*display:\s*inline-block;[\s\S]*?height:\s*20px;/,
+    );
+    expect(styles).toMatch(
+      /\.prosemirror-host \.ProseMirror img\[width\][\s\S]*?\.prosemirror-host \.ProseMirror img\[src\*='img\.shields\.io'\][\s\S]*?min-width:\s*0;/,
+    );
+    expect(styles).toMatch(
+      /\.prosemirror-host \.ProseMirror a:has\(img\[src\*='img\.shields\.io'\]\)[\s\S]*?\{\s*display:\s*inline-flex;[\s\S]*?text-decoration:\s*none;/,
+    );
+    expect(styles).toMatch(
+      /\.prosemirror-host \.ProseMirror p:has\(img\[src\*='img\.shields\.io'\]\)[\s\S]*?white-space:\s*normal;/,
+    );
+    expect(styles).toMatch(
+      /\.prosemirror-host \.ProseMirror \.html-widget:has\(img\[src\*='img\.shields\.io'\]\)[\s\S]*?display:\s*block;/,
+    );
     expect(styles).toMatch(
       /\.content-outline\s*\{[\s\S]*?right:\s*clamp\(32px,\s*3\.5cqw,\s*160px\);/,
     );
@@ -371,7 +389,8 @@ describe('App outline layout', () => {
   });
 
   it('keeps table inline controls aligned and exposes compact table utility actions', () => {
-    expect(tableControlsSource).toContain('getOverlayScale(view.dom)');
+    expect(tableControlsSource).toContain('const overlayHost = this.getOverlayHost(view);');
+    expect(tableControlsSource).toContain('getOverlayScale(overlayHost)');
     expect(tableControlsSource).toContain('tableRect.width / scale.x');
     expect(tableControlsSource).toContain('resizeCurrentTable(rows, columns)');
     expect(tableControlsSource).toContain('t.resizeTable()');

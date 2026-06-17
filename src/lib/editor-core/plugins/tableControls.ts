@@ -81,11 +81,12 @@ class TableControlsView {
       return;
     }
 
-    const hostRect = view.dom.getBoundingClientRect();
+    const overlayHost = this.getOverlayHost(view);
+    const hostRect = overlayHost.getBoundingClientRect();
     const tableRect = table.getBoundingClientRect();
-    const scale = this.getOverlayScale(view.dom);
-    const left = (tableRect.left - hostRect.left) / scale.x + view.dom.scrollLeft;
-    const top = (tableRect.top - hostRect.top) / scale.y + view.dom.scrollTop;
+    const scale = this.getOverlayScale(overlayHost);
+    const left = (tableRect.left - hostRect.left) / scale.x + overlayHost.scrollLeft;
+    const top = (tableRect.top - hostRect.top) / scale.y + overlayHost.scrollTop;
 
     this.dom.style.setProperty('--table-control-left', `${Math.max(0, left)}px`);
     this.dom.style.setProperty('--table-control-top', `${Math.max(0, top)}px`);
@@ -651,6 +652,10 @@ class TableControlsView {
       x: rect.width > 0 && host.offsetWidth > 0 ? rect.width / host.offsetWidth : 1,
       y: rect.height > 0 && host.offsetHeight > 0 ? rect.height / host.offsetHeight : 1,
     };
+  }
+
+  private getOverlayHost(view: EditorView): HTMLElement {
+    return this.dom.parentElement instanceof HTMLElement ? this.dom.parentElement : view.dom;
   }
 
   // ===== 操作：插入行 =====

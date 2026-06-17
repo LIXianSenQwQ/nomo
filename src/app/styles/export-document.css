@@ -157,6 +157,30 @@ body:focus-visible,
   margin: 12px 0;
 }
 
+.nomo-export img[src*='img.shields.io'],
+.nomo-export img[src*='badgen.net'] {
+  display: inline-block;
+  width: auto;
+  height: 20px;
+  margin: 2px 4px;
+  vertical-align: text-bottom;
+}
+
+.nomo-export a:has(img[src*='img.shields.io']),
+.nomo-export a:has(img[src*='badgen.net']) {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 4px;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: text-bottom;
+}
+
+.nomo-export a:has(img[src*='img.shields.io']) img,
+.nomo-export a:has(img[src*='badgen.net']) img {
+  margin: 0;
+}
+
 .nomo-export hr {
   margin: 24px 0;
   border: 0;

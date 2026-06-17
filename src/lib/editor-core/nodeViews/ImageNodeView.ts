@@ -114,6 +114,7 @@ export class ImageNodeView {
     const src = String(this.node.attrs.src ?? '');
     const alt = String(this.node.attrs.alt ?? '');
     this.dom.dataset.src = src;
+    this.dom.classList.toggle('is-badge', isBadgeImageSrc(src));
     this.dom.dataset.loadingLabel = t.imageLoading();
     this.dom.replaceChildren();
     this.dom.classList.add('is-loading');
@@ -717,5 +718,15 @@ export class ImageNodeView {
         ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg>'
         : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
     return button;
+  }
+}
+
+function isBadgeImageSrc(src: string): boolean {
+  try {
+    const url = new URL(src);
+    const host = url.hostname.toLowerCase();
+    return host === 'img.shields.io' || host === 'badgen.net';
+  } catch {
+    return false;
   }
 }

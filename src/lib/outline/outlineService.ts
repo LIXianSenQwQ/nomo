@@ -41,8 +41,30 @@ export function analyzeMarkdown(markdown: string): {
   const outline: OutlineItem[] = [];
   const usedIds = new Map<string, number>();
   const lines = markdown.split(/\r\n|\r|\n/);
+  // 围栏代码块状态追踪：跳过代码块内的 # 标题匹配
+  let inFence = false;
+  let fenceMarker = '';
 
   lines.forEach((line, index) => {
+    // 检测围栏代码块的开启与关闭（``` 或 ~~~）
+    const fenceMatch = /^(\s*)(`{3,}|~{3,})/.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[2];
+      if (!inFence) {
+        inFence = true;
+        fenceMarker = marker[0];
+      } else if (marker[0] === fenceMarker) {
+        inFence = false;
+        fenceMarker = '';
+      }
+      return;
+    }
+
+    // 跳过代码块内的行，避免误识别为标题
+    if (inFence) {
+      return;
+    }
+
     const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (match) {
       const rawTitle = match[2].trim();

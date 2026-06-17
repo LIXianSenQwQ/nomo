@@ -101,8 +101,6 @@
   export let closeCurrentFile: () => void;
   export let closeCurrentWindow: () => void;
   export let saveMarkdownFile: (saveAs?: boolean) => void;
-  export let reloadExternalFile: () => void;
-  export let overwriteExternalFile: () => void;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let openTablePicker: () => void;
@@ -335,9 +333,6 @@
           {activeOutlineId}
           {collapsedOutlineIds}
           {visibleOutlineIds}
-          {saveMarkdownFile}
-          {reloadExternalFile}
-          {overwriteExternalFile}
           {updateMarkdown}
           {enterFrontMatterEdit}
           {leaveFrontMatterEdit}

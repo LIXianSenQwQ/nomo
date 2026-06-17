@@ -404,6 +404,26 @@ describe('createEditorCore', () => {
     );
   });
 
+  it('renders fallback aligned paragraph HTML as one inline widget row', () => {
+    const target = document.createElement('div');
+    createEditorCore({
+      markdown:
+        '<p align="center">\n  <a href="./README.md"><strong>简体中文</strong></a>\n  ·\n  <a href="./README.en.md">English</a>\n</p>',
+      target,
+    });
+
+    const widget = target.querySelector<HTMLElement>('.html-widget');
+
+    expect(widget).not.toBeNull();
+    expect(widget?.classList.contains('html-widget-aligned-paragraph')).toBe(true);
+    expect(widget?.style.display).toBe('block');
+    expect(widget?.style.textAlign).toBe('center');
+    expect(widget?.style.whiteSpace).toBe('normal');
+    expect(widget?.querySelector('p')).toBeNull();
+    expect(widget?.querySelectorAll('a')).toHaveLength(2);
+    expect(widget?.textContent?.replace(/\s+/g, ' ').trim()).toBe('简体中文 · English');
+  });
+
   it('scrolls to the nth heading via scrollToHeading command', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({
