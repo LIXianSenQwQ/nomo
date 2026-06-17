@@ -150,6 +150,7 @@ Nomo 采用 **Tauri 2** + **Svelte 5** 的桌面端架构：
 └── vite.config.ts
 ```
 
+
 ### 环境要求
 
 - [Node.js](https://nodejs.org/)（建议 LTS 版本）
@@ -204,6 +205,10 @@ pnpm run build:macos
 
 Nomo 使用 [PolyForm Noncommercial License 1.0.0](./LICENSE) 授权，仅允许非商业用途使用、修改和分发。商业使用请先联系作者取得额外授权。
 
+## 社区
+
+- [linux](https://linux.do/)
+
 ## 致谢
 
 感谢以下开源项目为 Nomo 提供的基础能力：
@@ -215,3 +220,4 @@ Nomo 使用 [PolyForm Noncommercial License 1.0.0](./LICENSE) 授权，仅允许
 - [Shiki](https://shiki.style/)
 - [KaTeX](https://katex.org/)
 - [Mermaid](https://mermaid.js.org/)
+
