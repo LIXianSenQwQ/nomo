@@ -54,7 +54,6 @@
   export let frontMatterFocusRequest: number;
   export let frontMatterFocusTarget: 'default' | 'title-value';
   export let readonlyDocumentMode: boolean;
-  export let externalFileChange: ExternalFileChangeState;
   export let outline: OutlineItem[];
   export let activeOutlineId: string;
   export let collapsedOutlineIds: Set<string>;
@@ -153,6 +152,8 @@
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
   export let onZoomChange: (percent: number) => void;
   export let appBootState: AppBootState;
+  export let onSourceScroll: (() => void) | undefined = undefined;
+  export let onSemanticScroll: (() => void) | undefined = undefined;
 
   $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
 </script>
@@ -327,7 +328,6 @@
           {frontMatterFocusRequest}
           {frontMatterFocusTarget}
           {readonlyDocumentMode}
-          {externalFileChange}
           {outlineVisible}
           {outline}
           {activeOutlineId}
@@ -340,6 +340,8 @@
           {deleteFrontMatter}
           {updateActiveOutlineFromSourceScroll}
           {updateActiveOutlineFromSemanticScroll}
+          {onSourceScroll}
+          {onSemanticScroll}
           {handleEditorPaste}
           {handleEditorDrop}
           {isOutlineItemExpandable}
@@ -362,12 +364,7 @@
           {closeLinkPicker}
         />
       {:else}
-        <EmptyWorkspace
-          {interfaceLocale}
-          {createNewFile}
-          {openFileDialog}
-          {openFolderDialog}
-        />
+        <EmptyWorkspace {interfaceLocale} {createNewFile} {openFileDialog} {openFolderDialog} />
       {/if}
     </section>
 

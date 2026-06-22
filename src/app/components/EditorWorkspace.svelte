@@ -44,6 +44,8 @@
   export let isOutlineItemExpandable: (index: number) => boolean;
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
+  export let onSourceScroll: (() => void) | undefined = undefined;
+  export let onSemanticScroll: (() => void) | undefined = undefined;
 
   function handleOutlineToggle(event: MouseEvent, item: OutlineItem) {
     event.preventDefault();
@@ -59,112 +61,124 @@
 </script>
 
 {#key interfaceLocale}
-<div
-  class="editor-grid"
-  class:source-only={mode === 'source'}
-  use:modePaneMotion={{ mode, disabled: largeDocumentMode }}
->
-  <section
-    bind:this={sourcePane}
-    class="editor-pane source-pane"
-    aria-label={t.markdownSource()}
-    on:scroll={updateActiveOutlineFromSourceScroll}
+  <div
+    class="editor-grid"
+    class:source-only={mode === 'source'}
+    use:modePaneMotion={{ mode, disabled: largeDocumentMode }}
   >
-    <div class="document-layout">
-      <textarea
-        bind:this={sourceTextarea}
-        class="source-editor"
-        value={markdown}
-        readonly={readonlyDocumentMode}
-        on:input={updateMarkdown}
-        on:paste={handleEditorPaste}
-        on:drop={handleEditorDrop}
-        spellcheck="false"
-      ></textarea>
-    </div>
-  </section>
-
-  <section
-    bind:this={semanticPane}
-    class="semantic-pane"
-    aria-label={t.semanticEditorArea()}
-    on:scroll={updateActiveOutlineFromSemanticScroll}
-    on:paste={handleEditorPaste}
-    on:drop={handleEditorDrop}
-    on:dragover|preventDefault
-  >
-    <div class="document-layout">
-      {#if frontMatter}
-        <FrontMatterCard
-          {frontMatter}
-          {interfaceLocale}
-          editing={frontMatterEditing}
-          focusRequest={frontMatterFocusRequest}
-          focusTarget={frontMatterFocusTarget}
+    <section
+      bind:this={sourcePane}
+      class="editor-pane source-pane"
+      aria-label={t.markdownSource()}
+      on:scroll={() => {
+        updateActiveOutlineFromSourceScroll();
+        onSourceScroll?.();
+      }}
+    >
+      <div class="document-layout">
+        <textarea
+          bind:this={sourceTextarea}
+          class="source-editor"
+          value={markdown}
           readonly={readonlyDocumentMode}
-          enterEdit={enterFrontMatterEdit}
-          leaveEdit={leaveFrontMatterEdit}
-          updateContent={updateFrontMatterContent}
-          {deleteFrontMatter}
-        />
-      {/if}
-      <div bind:this={editorHost} class="prosemirror-host"></div>
-    </div>
-  </section>
+          on:input={updateMarkdown}
+          on:paste={handleEditorPaste}
+          on:drop={handleEditorDrop}
+          spellcheck="false"
+        ></textarea>
+      </div>
+    </section>
 
-  {#if outlineVisible}
-    <aside class="content-outline" aria-label={t.documentOutline()} transition:outlinePanelTransition>
-      <strong>{t.documentOutline()}</strong>
-      {#if outline.length > 0}
-        <div class="content-outline-list">
-          {#each outline as item, index (item.id)}
-            {#if visibleOutlineIds.has(item.id)}
-              <div
-                class:active={activeOutlineId === item.id}
-                class="content-outline-row"
-                style={`padding-left: ${(item.level - 1) * 16}px`}
-                transition:outlineRowTransition
-              >
-                {#if isOutlineItemExpandable(index)}
+    <section
+      bind:this={semanticPane}
+      class="semantic-pane"
+      aria-label={t.semanticEditorArea()}
+      on:scroll={() => {
+        updateActiveOutlineFromSemanticScroll();
+        onSemanticScroll?.();
+      }}
+      on:paste={handleEditorPaste}
+      on:drop={handleEditorDrop}
+      on:dragover|preventDefault
+    >
+      <div class="document-layout">
+        {#if frontMatter}
+          <FrontMatterCard
+            {frontMatter}
+            {interfaceLocale}
+            editing={frontMatterEditing}
+            focusRequest={frontMatterFocusRequest}
+            focusTarget={frontMatterFocusTarget}
+            readonly={readonlyDocumentMode}
+            enterEdit={enterFrontMatterEdit}
+            leaveEdit={leaveFrontMatterEdit}
+            updateContent={updateFrontMatterContent}
+            {deleteFrontMatter}
+          />
+        {/if}
+        <div bind:this={editorHost} class="prosemirror-host"></div>
+      </div>
+    </section>
+
+    {#if outlineVisible}
+      <aside
+        class="content-outline"
+        aria-label={t.documentOutline()}
+        transition:outlinePanelTransition
+      >
+        <strong>{t.documentOutline()}</strong>
+        {#if outline.length > 0}
+          <div class="content-outline-list">
+            {#each outline as item, index (item.id)}
+              {#if visibleOutlineIds.has(item.id)}
+                <div
+                  class:active={activeOutlineId === item.id}
+                  class="content-outline-row"
+                  style={`padding-left: ${(item.level - 1) * 16}px`}
+                  transition:outlineRowTransition
+                >
+                  {#if isOutlineItemExpandable(index)}
+                    <button
+                      type="button"
+                      class:collapsed={collapsedOutlineIds.has(item.id)}
+                      class="outline-toggle"
+                      title={collapsedOutlineIds.has(item.id)
+                        ? t.expandHeading()
+                        : t.collapseHeading()}
+                      aria-label={collapsedOutlineIds.has(item.id)
+                        ? t.expandNamedHeading({ title: item.title })
+                        : t.collapseNamedHeading({ title: item.title })}
+                      aria-expanded={!collapsedOutlineIds.has(item.id)}
+                      on:click={(event) => handleOutlineToggle(event, item)}
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+                  {:else}
+                    <span class="outline-toggle-placeholder"></span>
+                  {/if}
                   <button
                     type="button"
-                    class:collapsed={collapsedOutlineIds.has(item.id)}
-                    class="outline-toggle"
-                    title={collapsedOutlineIds.has(item.id) ? t.expandHeading() : t.collapseHeading()}
-                    aria-label={collapsedOutlineIds.has(item.id)
-                      ? t.expandNamedHeading({ title: item.title })
-                      : t.collapseNamedHeading({ title: item.title })}
-                    aria-expanded={!collapsedOutlineIds.has(item.id)}
-                    on:click={(event) => handleOutlineToggle(event, item)}
+                    class="outline-link"
+                    title={item.title}
+                    on:click={() => jumpToOutlineItem(item)}
                   >
-                    <ChevronDown size={13} />
+                    <span>
+                      {#if splitTitleNumber(item.title)[0]}
+                        <span class="outline-num">{splitTitleNumber(item.title)[0]}</span
+                        >{splitTitleNumber(item.title)[1]}
+                      {:else}
+                        {item.title}
+                      {/if}
+                    </span>
                   </button>
-                {:else}
-                  <span class="outline-toggle-placeholder"></span>
-                {/if}
-                <button
-                  type="button"
-                  class="outline-link"
-                  title={item.title}
-                  on:click={() => jumpToOutlineItem(item)}
-                >
-                  <span>
-                    {#if splitTitleNumber(item.title)[0]}
-                      <span class="outline-num">{splitTitleNumber(item.title)[0]}</span
-                      >{splitTitleNumber(item.title)[1]}
-                    {:else}
-                      {item.title}
-                    {/if}
-                  </span>
-                </button>
-              </div>
-            {/if}
-          {/each}
-        </div>
-      {:else}
-        <p>{t.documentHasNoHeadings()}</p>
-      {/if}
-    </aside>
-  {/if}
-</div>
+                </div>
+              {/if}
+            {/each}
+          </div>
+        {:else}
+          <p>{t.documentHasNoHeadings()}</p>
+        {/if}
+      </aside>
+    {/if}
+  </div>
 {/key}

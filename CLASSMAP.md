@@ -81,6 +81,7 @@
 |---|---|---|---|
 | 文档操作控制器 | `src/app/services/documentActionsController.ts` | `src/app/services/documentFiles.ts`, `tabs.ts`, `recoveryDraft.ts` | 打开/保存/另存/自动保存/外部变更 |
 | 标签页状态管理 | `src/app/services/tabs.ts` | `src/app/types.ts` | 标签页创建/复用/状态写入 |
+| 阅读位置持久化 | `src/app/services/readingPosition.ts` | `src/app/App.svelte`, `src/app/services/outlineNavigation.ts` | Markdown 文件按路径保存/恢复语义与源码模式阅读位置 |
 | 恢复草稿 | `src/app/services/recoveryDraft.ts` | `src/app/services/documentActionsController.ts` | 异常退出后草稿写入/恢复 |
 | Markdown 桥接 | `src/lib/markdown/MarkdownBridge.ts` | `src/lib/markdown/frontMatter.ts` | front matter 与正文分离/合并规则变更 |
 | 图片插入协调 | `src/app/services/imageInsertion.ts` | `src/app/services/imageMarkdown.ts`, `src/lib/editor-core/renderers.ts` | 粘贴/拖放图片导入、策略选择、源码插入 |
@@ -1541,6 +1542,36 @@
 
 ---
 
+### `src/app/services/readingPosition.ts`
+
+**Kind:** service
+
+**Owns:**
+- 按标准化 filePath 维护 Markdown 阅读位置内存缓存
+- 语义模式与源码模式阅读位置分别保存
+- 滚动停止后防抖写入应用配置，强制 flush 时立即持久化
+- 多窗口配置合并时按 `updatedAt` 保留最新记录
+- 按 `updatedAt` 裁剪最近 300 个文件的阅读位置
+
+**Does not own:**
+- 不拥有滚动锚点计算与滚动执行（在 outlineNavigation.ts 中）
+- 不拥有标签页状态写入（在 tabs.ts / App.svelte 中）
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `src/lib/desktop/tauriStorage.ts`, `src/app/services/outlineNavigation.ts`
+
+**Change this when:**
+- 修改阅读位置持久化结构
+- 修改 filePath 标准化或多窗口合并策略
+- 修改防抖写入、强制 flush 或记录数量限制
+
+**Related tests:** `src/app/services/readingPosition.test.ts`
+
+**Confidence:** high
+
+---
+
 ### `src/app/services/confirmAction.ts`
 
 **Kind:** service
@@ -2831,9 +2862,11 @@
 **Owns:**
 - 大纲滚动定位：按大纲锚点恢复编辑区视觉焦点
 - 源码与语义视图滚动同步
+- 阅读位置恢复专用滚动：优先使用锚点位置与顶部偏移，失败时回退 scrollTop / 文档进度
 
 **Does not own:**
 - 不拥有大纲数据计算（在 outlineService.ts 中）
+- 不拥有阅读位置持久化（在 readingPosition.ts 中）
 
 **Called by:** `src/app/services/outlineInteractionController.ts`, `src/app/services/editorInteractionController.ts`
 

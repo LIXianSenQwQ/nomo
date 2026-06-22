@@ -29,6 +29,7 @@ interface OutlineInteractionOptions {
   getSemanticPane(): HTMLElement;
   getSourcePane(): HTMLElement;
   getSourceTextarea(): HTMLTextAreaElement;
+  onExplicitJumpIntent?(): void;
 }
 
 export function createOutlineInteractionController(options: OutlineInteractionOptions) {
@@ -55,6 +56,7 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
   function jumpToOutlineItem(item: OutlineItem) {
     options.setActiveOutlineId(item.id);
     options.setSuppressOutlineScrollUntil(Date.now() + 800);
+    options.onExplicitJumpIntent?.();
 
     requestAnimationFrame(() => {
       if (options.getMode() === 'semantic') {

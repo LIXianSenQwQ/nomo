@@ -54,7 +54,13 @@
     type Tab,
     type WorkspaceState,
   } from './types';
-  import { getCompactPath, getDirectoryLabel, getFolderName, sameNativePath, pathEqualsOrDescendsFrom } from './utils/pathLabels';
+  import {
+    getCompactPath,
+    getDirectoryLabel,
+    getFolderName,
+    sameNativePath,
+    pathEqualsOrDescendsFrom,
+  } from './utils/pathLabels';
   import {
     executeDesktopCommand as executeDesktopAppCommand,
     handleGlobalShortcut as handleGlobalAppShortcut,
@@ -132,8 +138,29 @@
   } from './services/firstRunSample';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
-  import { confirmAction, confirmDialogStore, resolveConfirmDialog, dismissConfirmDialog, type ConfirmDialogState } from './services/confirmAction';
-  import { setScrollTop } from './services/outlineNavigation';
+  import {
+    confirmAction,
+    confirmDialogStore,
+    resolveConfirmDialog,
+    dismissConfirmDialog,
+    type ConfirmDialogState,
+  } from './services/confirmAction';
+  import {
+    getSemanticScrollAnchor,
+    getSourceScrollAnchor,
+    restoreSemanticReadingPosition,
+    restoreSourceReadingPosition,
+    setScrollTop,
+    type OutlineScrollAnchor,
+  } from './services/outlineNavigation';
+  import {
+    flushReadingPositions,
+    getReadingPosition,
+    loadReadingPositions,
+    saveReadingPositionToMemory,
+    saveReadingPositionToMemoryOnly,
+    type ReadingPositionMode,
+  } from './services/readingPosition';
   import {
     findTextMatches,
     replaceAllTextMatches,
@@ -251,6 +278,10 @@
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
   let frontMatterEditing = false;
   let frontMatterFocusRequest = 0;
+  let scrollDebounceTimer: number | null = null;
+  let readingPositionRestoreToken = 0;
+  let skipNextReadingPositionRestore = false;
+  let skipReadingPositionRestoreUntil = 0;
   let frontMatterFocusTarget: 'default' | 'title-value' = 'default';
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
   let searchPanelOpen = false;
@@ -313,6 +344,10 @@
       ...tab,
       savedMarkdown: tab.savedMarkdown ?? tab.markdown,
     }));
+  }
+
+  function hasPersistableReadingPositionPath(path: string) {
+    return Boolean(desktopEnabled && path && path !== t.untitledMarkdown());
   }
 
   // 防抖持久化工作区状态，避免每次按键都触发两次 IPC 调用 + 磁盘写入
@@ -387,6 +422,9 @@
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
     if (!activeTabId) return;
+
+    saveCurrentReadingPositionToMemoryOnly();
+
     tabs = writeActiveTabState(tabs, activeTabId, {
       markdown,
       savedMarkdown,
@@ -401,6 +439,39 @@
       lastKnownModifiedAt,
     });
     persistWorkspaceState();
+  }
+
+  function getCurrentReadingAnchor(modeToSave: ReadingPositionMode): OutlineScrollAnchor | null {
+    if (modeToSave === 'semantic') {
+      return semanticPane
+        ? getSemanticScrollAnchor(outline, semanticPane, semanticPane.scrollTop)
+        : null;
+    }
+    if (!sourcePane) {
+      return null;
+    }
+    return getSourceScrollAnchor(
+      outline,
+      sourcePane.scrollTop,
+      getSourceLineHeight(),
+      sourceTextarea,
+      sourcePane,
+    );
+  }
+
+  function saveCurrentReadingPositionToMemoryOnly(modeToSave: ReadingPositionMode = mode) {
+    if (!hasPersistableReadingPositionPath(filePath)) return;
+    saveReadingPositionToMemoryOnly(filePath, modeToSave, getCurrentReadingAnchor(modeToSave));
+  }
+
+  function saveCurrentReadingPositionDebounced(modeToSave: ReadingPositionMode = mode) {
+    if (!hasPersistableReadingPositionPath(filePath)) return;
+    saveReadingPositionToMemory(filePath, modeToSave, getCurrentReadingAnchor(modeToSave));
+  }
+
+  async function flushCurrentReadingPosition() {
+    saveCurrentReadingPositionToMemoryOnly();
+    await flushReadingPositions();
   }
 
   let isSwitchingTab = false;
@@ -436,12 +507,32 @@
         });
       }
 
+      // 步骤：仅当新标签页没有可恢复的阅读位置时，立即将滚动归零。
+      // editor.setMarkdown() 更新了 DOM 内容，但 scrollTop 仍保留旧标签页的值。
+      // 若 scrollTop 远超新内容的 scrollHeight，macOS WebKit 会渲染空白页，
+      // Windows Chromium 则显示在底部。
+      // 有阅读位置的标签页留给 scheduleRestoreReadingPosition 异步恢复，不在此处干预。
+      const storedPosition = hasPersistableReadingPositionPath(filePath)
+        ? getReadingPosition(filePath)
+        : undefined;
+      const hasAnchor = storedPosition != null
+        && (mode === 'semantic'
+          ? storedPosition.semanticAnchor != null
+          : storedPosition.sourceAnchor != null);
+
+      if (!hasAnchor) {
+        if (semanticPane) setScrollTop(semanticPane, 0);
+        if (sourcePane) setScrollTop(sourcePane, 0);
+      }
+
       const analysis = analyzeMarkdown(markdown);
       outline = analysis.outline;
       activeOutlineId = outline[0]?.id ?? '';
       applyOutlineDefaultExpansion();
       stats = analysis.stats;
       syncSourceTextareaHeight();
+
+      scheduleRestoreReadingPosition(tab.filePath, mode);
     } finally {
       isSwitchingTab = false;
     }
@@ -451,6 +542,7 @@
   function switchTab(tabId: string) {
     if (!tabId || activeTabId === tabId) return;
     saveActiveTabState();
+    void flushReadingPositions();
     const targetTab = tabs.find((t) => t.id === tabId);
     if (targetTab) {
       activeTabId = tabId;
@@ -462,6 +554,79 @@
         expandAncestors(targetTab.nativePath, currentFolderPath);
       }
     }
+  }
+
+  function handleSemanticScroll() {
+    debounceReadingPositionSave('semantic');
+  }
+
+  function handleSourceScroll() {
+    debounceReadingPositionSave('source');
+  }
+
+  function debounceReadingPositionSave(modeToSave: ReadingPositionMode) {
+    saveCurrentReadingPositionToMemoryOnly(modeToSave);
+    if (scrollDebounceTimer !== null) {
+      window.clearTimeout(scrollDebounceTimer);
+    }
+    scrollDebounceTimer = window.setTimeout(() => {
+      scrollDebounceTimer = null;
+      saveCurrentReadingPositionDebounced(modeToSave);
+    }, 1500);
+  }
+
+  function skipReadingPositionRestoreOnce() {
+    skipNextReadingPositionRestore = true;
+    skipReadingPositionRestoreUntil = Date.now() + 1000;
+    readingPositionRestoreToken += 1;
+  }
+
+  function scheduleRestoreReadingPosition(path: string, targetMode: EditorMode, attempts = 120) {
+    if (skipNextReadingPositionRestore) {
+      skipNextReadingPositionRestore = false;
+      if (Date.now() <= skipReadingPositionRestoreUntil) {
+        return;
+      }
+    }
+    if (!hasPersistableReadingPositionPath(path)) return;
+
+    const position = getReadingPosition(path);
+    const anchor = targetMode === 'semantic' ? position?.semanticAnchor : position?.sourceAnchor;
+    if (!anchor) return;
+
+    const restoreToken = ++readingPositionRestoreToken;
+    const tryRestore = async (remainingAttempts: number) => {
+      await tick();
+      await waitForAnimationFrame();
+      if (
+        restoreToken !== readingPositionRestoreToken ||
+        filePath !== path ||
+        mode !== targetMode
+      ) {
+        return;
+      }
+
+      const pane = targetMode === 'semantic' ? semanticPane : sourcePane;
+      const contentReady =
+        targetMode === 'semantic'
+          ? Boolean(semanticPane?.querySelector('.ProseMirror'))
+          : Boolean(sourceTextarea && sourceTextarea.value === markdown);
+
+      if (!pane || !contentReady) {
+        if (remainingAttempts > 0) {
+          requestAnimationFrame(() => void tryRestore(remainingAttempts - 1));
+        }
+        return;
+      }
+
+      if (targetMode === 'semantic') {
+        restoreSemanticReadingPosition(outline, semanticPane, anchor);
+      } else {
+        restoreSourceReadingPosition(outline, sourcePane, sourceTextarea, anchor);
+      }
+    };
+
+    requestAnimationFrame(() => void tryRestore(attempts));
   }
 
   // 顶级目录展开与收起状态
@@ -723,8 +888,9 @@
       }
     }
 
-    // 关闭窗口前立即持久化工作区状态
+    // 关闭窗口前立即持久化工作区状态和阅读位置
     flushPersistWorkspaceState();
+    await flushCurrentReadingPosition();
     const shouldHideToTray = closeBehavior === 'close-to-tray';
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
   }
@@ -813,8 +979,9 @@
       const ok = await confirmAction(t.unsavedChangesExitApp({ names }));
       if (ok === false) return;
     }
-    // 退出应用前立即持久化工作区状态
+    // 退出应用前立即持久化工作区状态和阅读位置
     flushPersistWorkspaceState();
+    await flushCurrentReadingPosition();
     await exitDesktopApp(desktopEnabled);
   }
 
@@ -835,11 +1002,16 @@
   }
 
   function setMode(nextMode: EditorMode) {
+    const previousMode = mode;
+    saveCurrentReadingPositionToMemoryOnly(previousMode);
     editorInteraction
       .setMode(nextMode)
       .then(() => {
         if (!(largeDocumentMode && nextMode === 'semantic')) {
           persistEditorModePreference(nextMode);
+        }
+        if (previousMode !== nextMode && mode === nextMode) {
+          scheduleRestoreReadingPosition(filePath, nextMode);
         }
       })
       .catch(() => undefined);
@@ -1156,6 +1328,8 @@
     const match = searchMatches[searchActiveIndex];
     if (!match) return;
 
+    skipReadingPositionRestoreOnce();
+
     const isSearchFocused = document.activeElement?.closest('.search-replace-panel') !== null;
     const activeSearchInput =
       document.activeElement instanceof HTMLInputElement &&
@@ -1266,7 +1440,9 @@
     }
 
     // 已有固定标签页打开此文件 → 切换到它
-    const existingFixedTab = tabs.find((t) => t.nativePath && sameNativePath(t.nativePath, path) && t.id !== previewTabId);
+    const existingFixedTab = tabs.find(
+      (t) => t.nativePath && sameNativePath(t.nativePath, path) && t.id !== previewTabId,
+    );
     if (existingFixedTab) {
       if (activeTabId !== previewTabId) {
         saveActiveTabState();
@@ -1504,6 +1680,7 @@
     getSemanticPane: () => semanticPane,
     getSourcePane: () => sourcePane,
     getSourceTextarea: () => sourceTextarea,
+    onExplicitJumpIntent: skipReadingPositionRestoreOnce,
   });
   const editorInteraction = createEditorInteractionController({
     getEditor: () => editor,
@@ -1600,6 +1777,12 @@
   // 包装 closeTab：预览标签页直接关闭无需确认
   async function closeTab(tabId: string, event?: Event) {
     event?.stopPropagation();
+
+    // 关闭前保存阅读位置
+    if (activeTabId === tabId) {
+      saveActiveTabState();
+      void flushReadingPositions();
+    }
 
     const tabToClose = tabs.find((t) => t.id === tabId);
     if (!tabToClose) {
@@ -2212,6 +2395,7 @@
         await setupCriticalDesktopEvents();
 
         settings = await listAppSettings().catch(() => []);
+        await loadReadingPositions();
 
         // 先读取待处理的外部打开路径和文件夹，再决定如何恢复工作区
         const pendingExternalOpenSetting = settings.find(
@@ -2276,6 +2460,7 @@
       if (persistedEditorMode && !largeDocumentMode) {
         mode = persistedEditorMode;
         editor.updateOptions({ mode: persistedEditorMode });
+        scheduleRestoreReadingPosition(filePath, persistedEditorMode);
       }
       // 确保 blockStyle 默认值写入 DOM
       applyBlockStyleSetting(blockStyle);
@@ -2310,8 +2495,10 @@
   });
 
   onDestroy(() => {
-    // 组件销毁前立即持久化工作区状态
+    // 组件销毁前立即持久化工作区状态和阅读位置
     flushPersistWorkspaceState();
+    saveCurrentReadingPositionToMemoryOnly();
+    void flushReadingPositions();
     _unsubConfirmStore();
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
@@ -2647,12 +2834,15 @@
       listen('nomo://request-exit-app', () => {
         requestExitApp().catch(() => undefined);
       }).catch(() => null),
-      listen<{ windowLabel?: string; window_label?: string }>('nomo://request-close-window', (event) => {
-        // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
-        const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
-        if (requestedWindowLabel !== windowLabel) return;
-        closeCurrentWindow().catch(() => undefined);
-      }).catch(() => null),
+      listen<{ windowLabel?: string; window_label?: string }>(
+        'nomo://request-close-window',
+        (event) => {
+          // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
+          const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
+          if (requestedWindowLabel !== windowLabel) return;
+          closeCurrentWindow().catch(() => undefined);
+        },
+      ).catch(() => null),
     ]);
 
     criticalDesktopEventsReady = true;
@@ -2984,7 +3174,6 @@
   {frontMatterFocusRequest}
   {frontMatterFocusTarget}
   {readonlyDocumentMode}
-  {externalFileChange}
   {outline}
   {activeOutlineId}
   {collapsedOutlineIds}
@@ -3070,6 +3259,8 @@
   {deleteFrontMatter}
   {updateActiveOutlineFromSourceScroll}
   {updateActiveOutlineFromSemanticScroll}
+  onSourceScroll={handleSourceScroll}
+  onSemanticScroll={handleSemanticScroll}
   {handleEditorPaste}
   {handleEditorDrop}
   {isOutlineItemExpandable}
