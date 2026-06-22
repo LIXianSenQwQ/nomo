@@ -12,7 +12,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import type { Node as ProseMirrorNode, ResolvedPos } from 'prosemirror-model';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
@@ -29,7 +29,12 @@ import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { CalloutNodeView } from './nodeViews/CalloutNodeView';
 import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
-import { executeEditorCommand, splitBlockExitHeading, toggleList, toggleTaskListAtCursor } from './editorCommands';
+import {
+  executeEditorCommand,
+  splitBlockExitHeading,
+  toggleList,
+  toggleTaskListAtCursor,
+} from './editorCommands';
 import { findActiveLinkRange } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
@@ -557,6 +562,7 @@ export class ProseMirrorEditorCore implements EditorCore {
               return true;
             },
             newlineInCode,
+            splitTaskListItem(schema.nodes.list_item),
             splitListItem(schema.nodes.list_item),
             createParagraphNear,
             liftEmptyBlock,
@@ -564,12 +570,15 @@ export class ProseMirrorEditorCore implements EditorCore {
           ),
           Backspace: chainCommands(
             deleteSelection,
+            deleteTaskListItemBeforeCursor,
             removeEmptyCalloutOnBackspace,
             deleteCodeBlockBeforeCursor,
             joinBackward,
             selectNodeBackward,
           ),
+          Space: convertMarkdownListShortcut,
           Tab: chainCommands(
+            convertMarkdownListShortcut,
             goToNextCell(1),
             sinkListItem(schema.nodes.list_item),
             insertTabInTextblock,
@@ -784,10 +793,7 @@ function isPendingInlineMarkCommand(command: EditorCommand): boolean {
   );
 }
 
-function insertTabInTextblock(
-  state: EditorState,
-  dispatch?: (tr: Transaction) => void,
-): boolean {
+function insertTabInTextblock(state: EditorState, dispatch?: (tr: Transaction) => void): boolean {
   const { $from } = state.selection;
   if (!$from.parent.isTextblock) {
     return false;
@@ -815,6 +821,223 @@ function removeTabBeforeCursorInTextblock(
   if (dispatch) {
     dispatch(state.tr.delete(cursor - 1, cursor).scrollIntoView());
   }
+  return true;
+}
+
+function convertMarkdownListShortcut(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { selection } = state;
+  if (!selection.empty || !selection.$from.parent.isTextblock) {
+    return false;
+  }
+
+  const { $from } = selection;
+  if ($from.parentOffset !== $from.parent.content.size) {
+    return false;
+  }
+
+  const shortcutText = $from.parent.textBetween(0, $from.parentOffset);
+  const taskMatch = /^(\d+\.|[-+*])\s+\[([ xX])\]$/.exec(shortcutText);
+  const orderedMatch = /^(\d+)\.$/.exec(shortcutText);
+  const bulletMatch = /^[-+*]$/.exec(shortcutText);
+  if (!taskMatch && !orderedMatch && !bulletMatch) {
+    return false;
+  }
+
+  const listType =
+    orderedMatch || taskMatch?.[1].endsWith('.')
+      ? schema.nodes.ordered_list
+      : schema.nodes.bullet_list;
+  const attrs = orderedMatch
+    ? { order: Number(orderedMatch[1]) }
+    : taskMatch?.[1].endsWith('.')
+      ? { order: Number.parseInt(taskMatch[1], 10) }
+      : null;
+
+  if (dispatch) {
+    const tr = state.tr.delete($from.start(), $from.pos);
+    if (!appendCommandTransaction(state, tr, wrapInList(listType, attrs))) {
+      return false;
+    }
+
+    if (taskMatch) {
+      const checked = taskMatch[2].toLowerCase() === 'x' ? 'x' : ' ';
+      tr.insertText(`[${checked}] `, tr.selection.from);
+    }
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+function splitTaskListItem(itemType: typeof schema.nodes.list_item) {
+  return (state: EditorState, dispatch?: (tr: Transaction) => void): boolean => {
+    const taskItem = findCurrentTaskListItem(state);
+    if (!taskItem || !state.selection.empty) {
+      return false;
+    }
+
+    const visibleText = taskItem.itemNode.textContent.slice(taskItem.markerLength).trim();
+    if (!visibleText) {
+      return false;
+    }
+
+    let capturedTr: Transaction | null = null;
+    const handled = splitListItem(itemType)(state, (tr) => {
+      capturedTr = tr;
+    });
+    if (!handled || !capturedTr) {
+      return false;
+    }
+
+    if (dispatch) {
+      const tr = capturedTr as Transaction;
+      const nextSelection = tr.selection;
+      if (isSelectionInsideListItem(nextSelection.$from)) {
+        tr.insertText('[ ] ', nextSelection.from);
+      }
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
+  };
+}
+
+function deleteTaskListItemBeforeCursor(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const taskItem = findCurrentTaskListItem(state);
+  if (!taskItem || !state.selection.empty) {
+    return false;
+  }
+
+  const cursor = state.selection.from;
+  if (cursor < taskItem.markerRange.from - 1 || cursor > taskItem.markerRange.to) {
+    return false;
+  }
+
+  if (dispatch) {
+    const tr = state.tr;
+    if (taskItem.parentListNode.childCount === 1) {
+      tr.replaceWith(
+        taskItem.parentListPos,
+        taskItem.parentListPos + taskItem.parentListNode.nodeSize,
+        schema.nodes.paragraph.create(),
+      );
+      dispatch(
+        tr.setSelection(TextSelection.create(tr.doc, taskItem.parentListPos + 1)).scrollIntoView(),
+      );
+      return true;
+    }
+
+    const nextSelectionPos =
+      taskItem.itemIndex > 0
+        ? taskItem.itemPos - 1
+        : taskItem.itemPos + taskItem.itemNode.nodeSize + 1;
+    tr.delete(taskItem.itemPos, taskItem.itemPos + taskItem.itemNode.nodeSize);
+    const safeSelectionPos = clampDocPosition(tr.doc, tr.mapping.map(nextSelectionPos, -1));
+    dispatch(
+      tr.setSelection(TextSelection.near(tr.doc.resolve(safeSelectionPos))).scrollIntoView(),
+    );
+  }
+  return true;
+}
+
+function findCurrentTaskListItem(state: EditorState): {
+  itemNode: ProseMirrorNode;
+  itemPos: number;
+  itemIndex: number;
+  parentListNode: ProseMirrorNode;
+  parentListPos: number;
+  markerLength: number;
+  markerRange: { from: number; to: number };
+} | null {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 0; depth -= 1) {
+    const itemNode = $from.node(depth);
+    if (itemNode.type !== schema.nodes.list_item) {
+      continue;
+    }
+
+    const parentListNode = $from.node(depth - 1);
+    if (
+      parentListNode.type !== schema.nodes.bullet_list &&
+      parentListNode.type !== schema.nodes.ordered_list
+    ) {
+      return null;
+    }
+
+    const itemPos = $from.before(depth);
+    const firstText = findFirstTextInNode(itemNode);
+    if (!firstText?.node.text) {
+      return null;
+    }
+
+    const markerMatch = /^\[[ x]\]\s?/.exec(firstText.node.text);
+    if (!markerMatch) {
+      return null;
+    }
+
+    const markerFrom = itemPos + 1 + firstText.offset;
+    return {
+      itemNode,
+      itemPos,
+      itemIndex: $from.index(depth - 1),
+      parentListNode,
+      parentListPos: $from.before(depth - 1),
+      markerLength: markerMatch[0].length,
+      markerRange: {
+        from: markerFrom,
+        to: markerFrom + markerMatch[0].length,
+      },
+    };
+  }
+  return null;
+}
+
+function findFirstTextInNode(
+  root: ProseMirrorNode,
+): { node: ProseMirrorNode; offset: number } | null {
+  let result: { node: ProseMirrorNode; offset: number } | null = null;
+  root.descendants((node, pos) => {
+    if (node.isText) {
+      result = { node, offset: pos };
+      return false;
+    }
+    return true;
+  });
+  return result;
+}
+
+function isSelectionInsideListItem($pos: ResolvedPos): boolean {
+  for (let depth = $pos.depth; depth >= 0; depth -= 1) {
+    if ($pos.node(depth).type === schema.nodes.list_item) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function appendCommandTransaction(
+  state: EditorState,
+  tr: Transaction,
+  command: (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean,
+): boolean {
+  let capturedTr: Transaction | null = null;
+  const handled = command(state.apply(tr), (nextTr) => {
+    capturedTr = nextTr;
+  });
+  if (!handled || !capturedTr) {
+    return false;
+  }
+
+  const selectionAnchor = (capturedTr as Transaction).selection.anchor;
+  for (const step of (capturedTr as Transaction).steps) {
+    tr.step(step);
+  }
+  const nextAnchor = clampDocPosition(tr.doc, selectionAnchor);
+  tr.setSelection(TextSelection.near(tr.doc.resolve(nextAnchor)));
   return true;
 }
 
@@ -867,7 +1090,9 @@ function selectEditorTextRange(view: EditorView, from: number, to: number, focus
 
   try {
     view.dispatch(
-      view.state.tr.setSelection(TextSelection.create(view.state.doc, safeFrom, safeTo)).scrollIntoView(),
+      view.state.tr
+        .setSelection(TextSelection.create(view.state.doc, safeFrom, safeTo))
+        .scrollIntoView(),
     );
     if (focus) {
       view.focus();

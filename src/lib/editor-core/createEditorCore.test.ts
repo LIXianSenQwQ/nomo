@@ -22,6 +22,20 @@ function findFirstNode(
   return found;
 }
 
+function pressEditorKey(view: EditorView, key: string): boolean {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+  });
+  let handled = false;
+  view.someProp('handleKeyDown', (handler) => {
+    handled = handler(view, event) || handled;
+    return handled;
+  });
+  return handled;
+}
+
 describe('createEditorCore', () => {
   it('keeps Markdown as the observable editor state', () => {
     const editor = createEditorCore({ markdown: '# Nomo' });
@@ -343,6 +357,83 @@ describe('createEditorCore', () => {
 
     editor.execute({ type: 'toggleOrderedList' });
     expect(editor.getMarkdown()).toBe('1. [ ] 待办事项');
+  });
+
+  it('converts typed Markdown list shortcuts with Space or Tab', () => {
+    const orderedTarget = document.createElement('div');
+    const orderedEditor = createEditorCore({ markdown: '', target: orderedTarget });
+    const orderedView = (orderedEditor as unknown as { view: EditorView }).view;
+
+    orderedView.dispatch(orderedView.state.tr.insertText('1.'));
+    expect(pressEditorKey(orderedView, 'Tab')).toBe(true);
+    orderedView.dispatch(orderedView.state.tr.insertText('第一项'));
+
+    expect(orderedEditor.getMarkdown()).toBe('1. 第一项');
+
+    const bulletTarget = document.createElement('div');
+    const bulletEditor = createEditorCore({ markdown: '', target: bulletTarget });
+    const bulletView = (bulletEditor as unknown as { view: EditorView }).view;
+
+    bulletView.dispatch(bulletView.state.tr.insertText('*'));
+    expect(pressEditorKey(bulletView, ' ')).toBe(true);
+    bulletView.dispatch(bulletView.state.tr.insertText('无序项'));
+
+    expect(bulletEditor.getMarkdown()).toBe('- 无序项');
+  });
+
+  it('continues task list items with an unchecked task marker on Enter', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '- [ ] 待办事项', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findFirstNode(view.state.doc, 'paragraph');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, paragraph.pos + paragraph.node.nodeSize - 1),
+      ),
+    );
+
+    expect(pressEditorKey(view, 'Enter')).toBe(true);
+    view.dispatch(view.state.tr.insertText('下一项'));
+
+    expect(editor.getMarkdown()).toBe('- [ ] 待办事项\n- [ ] 下一项');
+  });
+
+  it('deletes the task item with Backspace at the start of a task item', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '- [ ] 待办事项', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findFirstNode(view.state.doc, 'paragraph');
+
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, paragraph.pos + 4)),
+    );
+
+    expect(pressEditorKey(view, 'Backspace')).toBe(true);
+    expect(editor.getMarkdown()).toBe('');
+  });
+
+  it('deletes only the current task item when Backspace is pressed in a multi-item task list', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '- [ ] 第一项\n- [ ] 第二项',
+      target,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraphs: Array<{ node: ProseMirrorNode; pos: number }> = [];
+    view.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'paragraph') {
+        paragraphs.push({ node, pos });
+      }
+      return true;
+    });
+
+    view.dispatch(
+      view.state.tr.setSelection(TextSelection.create(view.state.doc, paragraphs[1].pos + 5)),
+    );
+
+    expect(pressEditorKey(view, 'Backspace')).toBe(true);
+    expect(editor.getMarkdown()).toBe('- [ ] 第一项');
   });
 
   it('removes task markers when cancelling task lists through the same list shortcut', () => {

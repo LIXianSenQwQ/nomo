@@ -450,12 +450,12 @@
                 <button
                   on:click={() =>
                     finish(() => runCommand({ type: 'toggleOrderedList' }), 'paragraph')}
-                  >{t.taskList()} <span class="shortcut">Ctrl + Shift + [</span></button
+                  >{t.orderedList()} <span class="shortcut">Ctrl + Shift + [</span></button
                 >
                 <button
                   on:click={() =>
                     finish(() => runCommand({ type: 'toggleBulletList' }), 'paragraph')}
-                  >{t.list()} <span class="shortcut">Ctrl + Shift + ]</span></button
+                  >{t.unorderedList()} <span class="shortcut">Ctrl + Shift + ]</span></button
                 >
                 <button
                   on:click={() => finish(() => runCommand({ type: 'toggleTaskList' }), 'paragraph')}

@@ -49,7 +49,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
     '有効にすると、インライン コードにスタイルが設定されます。無効にすると、生の Markdown バッククォートは表示されたままになります。',
   renderingMode: 'レンダリング',
   renderMode: 'レンダリングモード',
-  renderModeDescription: 'WebView2 がハードウェア GPU アクセラレーションを使用するか、ソフトウェア レンダリングを使用するかを選択します。変更を適用するにはアプリを再起動してください。',
+  renderModeDescription:
+    'WebView2 がハードウェア GPU アクセラレーションを使用するか、ソフトウェア レンダリングを使用するかを選択します。変更を適用するにはアプリを再起動してください。',
   renderModeHardware: 'ハードウェア',
   renderModeSoftware: 'ソフトウェア',
   visualZoom: 'ビジュアルズーム',
@@ -191,7 +192,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   exportHtmlSuccess: 'HTML をエクスポートしました：{path}',
   exportPdfSuccess: 'PDF をエクスポートしました：{path}',
   exportFailed: 'エクスポートに失敗しました',
-  noOpenDocumentForExport: 'ドキュメントが開かれていません。まずドキュメントを開くか作成してください。',
+  noOpenDocumentForExport:
+    'ドキュメントが開かれていません。まずドキュメントを開くか作成してください。',
   exportSettings: '設定のエクスポート',
   exportSettingsDescription:
     '完全なエクスポート パイプラインは現在のフェーズの一部ではありません。',
@@ -256,6 +258,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   insertCallout: '吹き出しの挿入',
   list: 'リスト',
   toggleList: 'リストの切り替え',
+  orderedList: '番号付きリスト',
+  unorderedList: '箇条書きリスト',
   taskList: 'タスクリスト',
   toggleTaskList: 'タスクリストの切り替え',
   table: 'テーブル',
