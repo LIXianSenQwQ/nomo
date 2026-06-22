@@ -3,7 +3,7 @@ import type { Node as PmNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { TableMap } from 'prosemirror-tables';
-import { executeEditorCommand } from './editorCommands';
+import { executeEditorCommand, splitBlockExitHeading } from './editorCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
 import { FootnoteDefNodeView } from './nodeViews/FootnoteDefNodeView';
@@ -1028,6 +1028,62 @@ describe('editorCommands', () => {
         'paragraph',
       ]);
       expect(currentMarkdown(view)).toBe('正文\n\n---');
+      destroyView(view);
+    });
+  });
+
+  describe('splitBlockExitHeading', () => {
+    it('标题末尾回车时，新块退化为普通段落', () => {
+      const view = createMarkdownCommandView('# 标题', (doc) =>
+        TextSelection.create(doc, doc.child(0).nodeSize - 1),
+      );
+
+      expect(splitBlockExitHeading(view.state, view.dispatch.bind(view))).toBe(true);
+
+      const doc = view.state.doc;
+      expect(doc.childCount).toBe(2);
+      expect(doc.child(0).type.name).toBe('heading');
+      expect(doc.child(0).textContent).toBe('标题');
+      expect(doc.child(1).type.name).toBe('paragraph');
+      expect(doc.child(1).textContent).toBe('');
+      // 光标应位于新段落开头
+      expect(view.state.selection.from).toBe(doc.child(0).nodeSize + 1);
+
+      destroyView(view);
+    });
+
+    it('标题中间回车时，后半部分也退化为普通段落', () => {
+      const view = createMarkdownCommandView('# 一二三四', (doc) => {
+        // heading open(1) + "一" + "二" 之后，光标在 "二" 和 "三" 之间
+        return TextSelection.create(doc, 3);
+      });
+
+      expect(splitBlockExitHeading(view.state, view.dispatch.bind(view))).toBe(true);
+
+      const doc = view.state.doc;
+      expect(doc.childCount).toBe(2);
+      expect(doc.child(0).type.name).toBe('heading');
+      expect(doc.child(0).textContent).toBe('一二');
+      expect(doc.child(1).type.name).toBe('paragraph');
+      expect(doc.child(1).textContent).toBe('三四');
+
+      destroyView(view);
+    });
+
+    it('正文末尾回车时，行为与默认 splitBlock 一致', () => {
+      const view = createMarkdownCommandView('正文', (doc) =>
+        TextSelection.create(doc, doc.child(0).nodeSize - 1),
+      );
+
+      expect(splitBlockExitHeading(view.state, view.dispatch.bind(view))).toBe(true);
+
+      const doc = view.state.doc;
+      expect(doc.childCount).toBe(2);
+      expect(doc.child(0).type.name).toBe('paragraph');
+      expect(doc.child(0).textContent).toBe('正文');
+      expect(doc.child(1).type.name).toBe('paragraph');
+      expect(doc.child(1).textContent).toBe('');
+
       destroyView(view);
     });
   });

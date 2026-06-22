@@ -6,7 +6,6 @@ import {
   liftEmptyBlock,
   newlineInCode,
   selectNodeBackward,
-  splitBlock,
   toggleMark,
 } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
@@ -30,7 +29,7 @@ import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { CalloutNodeView } from './nodeViews/CalloutNodeView';
 import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
-import { executeEditorCommand, toggleList, toggleTaskListAtCursor } from './editorCommands';
+import { executeEditorCommand, splitBlockExitHeading, toggleList, toggleTaskListAtCursor } from './editorCommands';
 import { findActiveLinkRange } from './editorCommands';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
@@ -561,7 +560,7 @@ export class ProseMirrorEditorCore implements EditorCore {
             splitListItem(schema.nodes.list_item),
             createParagraphNear,
             liftEmptyBlock,
-            splitBlock,
+            splitBlockExitHeading,
           ),
           Backspace: chainCommands(
             deleteSelection,

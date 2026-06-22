@@ -1,4 +1,4 @@
-import { lift, setBlockType, toggleMark, wrapIn } from 'prosemirror-commands';
+import { lift, setBlockType, splitBlockAs, toggleMark, wrapIn } from 'prosemirror-commands';
 import { pendingInlineMarkKey, toggleMarkPending } from './plugins/pendingInlineMark';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
@@ -171,6 +171,25 @@ function decreaseHeadingLevel(state: EditorState, dispatch?: (tr: Transaction) =
   }
 
   return false;
+}
+
+/**
+ * 自定义 split 命令：在标题内按 Enter 时，拆分出的新块退化为普通段落，
+ * 而不是继续继承 heading 的 level 属性。
+ * 其他场景（正文、列表项等）沿用 splitBlock 默认行为。
+ */
+export function splitBlockExitHeading(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  return splitBlockAs((node) => {
+    // 标题内回车：强制新块为普通段落
+    if (node.type === schema.nodes.heading) {
+      return { type: schema.nodes.paragraph };
+    }
+    // 其他场景沿用默认行为
+    return null;
+  })(state, dispatch);
 }
 
 // 查找光标所在位置的父列表（bullet_list 或 ordered_list）
