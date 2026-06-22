@@ -150,12 +150,13 @@
   --explorer-scrollbar-safe-area: 8px;
   --explorer-row-height: 26px;
   --explorer-row-control-height: 24px;
+  --explorer-bottom-padding: 18px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 8px var(--explorer-scrollbar-safe-area) 12px 8px;
-  scroll-padding-block: 8px 12px;
+  padding: 8px var(--explorer-scrollbar-safe-area) var(--explorer-bottom-padding) 8px;
+  scroll-padding-block: 8px var(--explorer-bottom-padding);
   user-select: none;
 }
 
@@ -399,6 +400,45 @@
 .tree-folder svg,
 .tree-file svg {
   color: var(--md-editor-muted-fg);
+}
+
+.tree-file-renaming {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--explorer-row-control-height);
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--md-editor-accent) 6%, transparent);
+  color: var(--md-editor-fg);
+  font-size: 12px;
+  line-height: 1;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.tree-file-renaming svg {
+  flex-shrink: 0;
+  color: var(--md-editor-muted-fg);
+}
+
+.tree-file-renaming input.rename-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.rename-input-wrapper {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+}
+
+.rename-input-wrapper .rename-input {
+  width: 100%;
 }
 
 .tree-children {

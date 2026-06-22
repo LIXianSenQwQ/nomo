@@ -46,8 +46,9 @@
   }
 
   function handleItemClick(item: ContextMenuItem) {
-    item.action();
+    // 先关闭菜单，再执行动作：避免菜单 DOM 移除前 action 里对焦点/选区的操作被中断
     onClose();
+    item.action();
   }
 
   $: if (x !== undefined && y !== undefined) {

@@ -796,6 +796,15 @@ describe('App outline layout', () => {
     expect(explorerSidebarSource).toContain('class="folder-actions"');
     expect(styles).toMatch(/\.file-tree\s*\{[\s\S]*?scrollbar-gutter:\s*stable;/);
     expect(styles).toMatch(/--explorer-scrollbar-safe-area:\s*8px;/);
+    expect(styles).toMatch(/--explorer-bottom-padding:\s*18px;/);
+    expect(styles).toContain(
+      'padding: 8px var(--explorer-scrollbar-safe-area) var(--explorer-bottom-padding) 8px;',
+    );
+    expect(explorerSidebarSource).toContain('const TREE_BOTTOM_PADDING = 18;');
+    expect(explorerSidebarSource).toContain(
+      'flattenedRows.length * TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING',
+    );
+    expect(explorerSidebarSource).toContain('const rowBottomWithPadding = rowBottom + TREE_BOTTOM_PADDING;');
     expect(styles).toMatch(
       /\.rail:not\(:hover\) \.file-tree\s*\{[\s\S]*?scrollbar-color:\s*var\(--md-scrollbar-thumb-idle\) var\(--md-scrollbar-track\);/,
     );
@@ -826,9 +835,21 @@ describe('App outline layout', () => {
       "import { clickOutside } from '../actions/clickOutside';",
     );
     expect(explorerSidebarSource).toContain('on:blur={cancelRenaming}');
-    expect(explorerSidebarSource).toContain('use:clickOutside={cancelRenaming}');
+    expect(explorerSidebarSource).toContain('use:renamingClickOutside={cancelRenaming}');
     expect(explorerSidebarSource).toContain("if (event.key === 'Enter')");
     expect(explorerSidebarSource).toContain('commitRenaming();');
+  });
+
+  it('auto-selects explorer rename text after context menu rename starts', () => {
+    expect(explorerSidebarSource).toContain(
+      "import { getExplorerRenameSelectionRange } from '../services/explorerRename';",
+    );
+    expect(explorerSidebarSource).toContain('function renameAutoSelect');
+    expect(explorerSidebarSource).toContain('function startRenamingFromContextMenu');
+    expect(explorerSidebarSource).toContain('setTimeout(() => {');
+    expect(explorerSidebarSource).toContain('node.focus({ preventScroll: true });');
+    expect(explorerSidebarSource).toContain('node.setSelectionRange(range.start, range.end);');
+    expect(explorerSidebarSource.match(/use:renameAutoSelect=/g)).toHaveLength(2);
   });
 
   it('cancels explorer create mode when the new node input loses focus or receives an outside click', () => {

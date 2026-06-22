@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import {
     FileText,
     FolderOpen,
@@ -14,6 +14,100 @@
   import { createEventDispatcher } from 'svelte';
   import { clickOutside } from '../actions/clickOutside';
   import { motionIn, pulseOnChange, transitionDuration } from '../actions/motion';
+  import { getExplorerRenameSelectionRange } from '../services/explorerRename';
+
+  // 重命名输入框专用：延迟激活点击外部检测，避免菜单关闭时的 click 冒泡误触发取消
+  function renamingClickOutside(node: HTMLElement, handler: () => void) {
+    let active = false;
+    const onClick = (event: MouseEvent) => {
+      if (!active) return;
+      if (node && !node.contains(event.target as Node)) {
+        handler();
+      }
+    };
+    const timer = setTimeout(() => {
+      active = true;
+    }, 0);
+    document.addEventListener('click', onClick, true);
+    return {
+      destroy() {
+        clearTimeout(timer);
+        document.removeEventListener('click', onClick, true);
+      },
+    };
+  }
+
+  // 重命名输入框挂载后多次应用同一选区，避免菜单点击收尾或重绘覆盖 selection。
+  function renameAutoSelect(
+    node: HTMLInputElement,
+    params: { isDir: boolean },
+  ) {
+    let disposed = false;
+    let frameId: number | null = null;
+    let timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    let initialValue = '';
+
+    const clearScheduledSelection = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      if (timeoutIds.length > 0) {
+        timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
+        timeoutIds = [];
+      }
+    };
+
+    const applySelection = (onlyIfUnedited = false) => {
+      if (disposed || !node.isConnected) {
+        return;
+      }
+      if (onlyIfUnedited && node.value !== initialValue) {
+        return;
+      }
+
+      try {
+        node.focus({ preventScroll: true });
+      } catch {
+        node.focus();
+      }
+
+      const range = getExplorerRenameSelectionRange(node.value, params.isDir);
+      node.setSelectionRange(range.start, range.end);
+    };
+
+    const scheduleSelection = () => {
+      clearScheduledSelection();
+      void tick().then(() => {
+        if (disposed) {
+          return;
+        }
+        initialValue = node.value;
+        applySelection();
+        frameId = requestAnimationFrame(() => {
+          frameId = null;
+          applySelection();
+          timeoutIds = [
+            setTimeout(() => applySelection(true), 0),
+            setTimeout(() => applySelection(true), 50),
+          ];
+        });
+      });
+    };
+
+    scheduleSelection();
+
+    return {
+      update(nextParams: { isDir: boolean }) {
+        params = nextParams;
+        scheduleSelection();
+      },
+      destroy() {
+        disposed = true;
+        clearScheduledSelection();
+      },
+    };
+  }
   import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';
   import { canExpandFolderNode } from '../services/folderTree';
   import ContextMenu from './ContextMenu.svelte';
@@ -60,6 +154,7 @@
   let renamingPath: string | null = null;
   let renamingValue = '';
   let renamingInputRef: HTMLInputElement | null = null;
+  let pendingRenameTimer: ReturnType<typeof setTimeout> | null = null;
 
   // 正在创建中的文件夹路径（用于空文件夹创建时临时显示箭头）
   let pendingCreatePaths: Set<string> = new Set();
@@ -70,6 +165,7 @@
 
   const TREE_ROW_HEIGHT = 26;
   const TREE_OVERSCAN = 8;
+  const TREE_BOTTOM_PADDING = 18;
   let fileTreeElement: HTMLElement;
   let fileTreeScrollTop = 0;
   let fileTreeViewportHeight = 0;
@@ -84,7 +180,7 @@
     creatingParentPath,
     TREE_ROW_HEIGHT,
   );
-  $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT;
+  $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING;
   $: hasStandaloneFile = fileName.trim().length > 0 && filePath.trim().length > 0;
   $: activeExplorerPath = nativePath ?? previewNativePath;
   $: {
@@ -124,14 +220,15 @@
     const viewportBottom = viewportTop + fileTreeViewportHeight;
     const rowTop = activeRow.top;
     const rowBottom = rowTop + TREE_ROW_HEIGHT;
-    if (rowTop >= viewportTop && rowBottom <= viewportBottom) {
+    const rowBottomWithPadding = rowBottom + TREE_BOTTOM_PADDING;
+    if (rowTop >= viewportTop && rowBottomWithPadding <= viewportBottom) {
       return;
     }
 
     const nextScrollTop =
       rowTop < viewportTop
         ? rowTop
-        : Math.max(0, rowBottom - Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT));
+        : Math.max(0, rowBottomWithPadding - Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT));
     fileTreeElement.scrollTop = nextScrollTop;
     fileTreeScrollTop = nextScrollTop;
   }
@@ -241,14 +338,24 @@
 
   function startRenaming(path: string, currentName: string, event?: MouseEvent) {
     event?.stopPropagation();
+    clearPendingRename();
     renamingPath = path;
     renamingValue = currentName;
-    setTimeout(() => {
-      if (renamingInputRef) {
-        renamingInputRef.focus();
-        renamingInputRef.select();
-      }
+  }
+
+  function startRenamingFromContextMenu(path: string, currentName: string) {
+    clearPendingRename();
+    pendingRenameTimer = setTimeout(() => {
+      pendingRenameTimer = null;
+      startRenaming(path, currentName);
     }, 0);
+  }
+
+  function clearPendingRename() {
+    if (pendingRenameTimer !== null) {
+      clearTimeout(pendingRenameTimer);
+      pendingRenameTimer = null;
+    }
   }
 
   function handleFolderDoubleClick(node: FileTreeNode, event: MouseEvent) {
@@ -310,7 +417,7 @@
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.rename(),
-      action: () => startRenaming(node.path, node.name),
+      action: () => startRenamingFromContextMenu(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
@@ -353,7 +460,7 @@
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.rename(),
-      action: () => startRenaming(node.path, node.name),
+      action: () => startRenamingFromContextMenu(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
@@ -407,6 +514,8 @@
     explorerContextMenuOpen = false;
     explorerContextMenuItems = [];
   }
+
+  onDestroy(clearPendingRename);
 </script>
 
 {#key interfaceLocale}
@@ -596,16 +705,18 @@
                         <FolderOpen size={13} />
                       {/if}
                       {#if renamingPath === node.path}
-                        <input
-                          bind:this={renamingInputRef}
-                          bind:value={renamingValue}
-                          on:blur={cancelRenaming}
-                          on:keydown={handleRenamingKeydown}
-                          class="rename-input"
-                          use:clickOutside={cancelRenaming}
-                          use:motionIn={{ kind: 'micro', y: -2 }}
-                          on:click|stopPropagation
-                        />
+                        <span class="rename-input-wrapper" use:motionIn={{ kind: 'micro', y: -2 }}>
+                          <input
+                            bind:this={renamingInputRef}
+                            bind:value={renamingValue}
+                            on:blur={cancelRenaming}
+                            on:keydown={handleRenamingKeydown}
+                            class="rename-input"
+                            use:renamingClickOutside={cancelRenaming}
+                            use:renameAutoSelect={{ isDir: node.is_dir }}
+                            on:click|stopPropagation
+                          />
+                        </span>
                       {:else}
                         <span class="node-name">{node.name}</span>
                         <div class="folder-actions">
@@ -652,21 +763,41 @@
                   </div>
                 {:else}
                   {@const node = row.node}
-                  <button
-                    type="button"
-                    class="tree-file"
-                    class:active={isActiveFilePath(node.path)}
-                    class:preview={isPreviewFilePath(node.path)}
-                    style="padding-left: {34 + row.depth * 12}px"
-                    title={node.path}
-                    use:pulseOnChange={isActiveFilePath(node.path) || isPreviewFilePath(node.path)}
-                    on:click={() => handleFileClick(node.path)}
-                    on:dblclick={() => handleFileDblClick(node.path)}
-                    on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
-                  >
-                    <FileText size={13} />
-                    <span>{node.name}</span>
-                  </button>
+                  {#if renamingPath === node.path}
+                    <div
+                      class="tree-file tree-file-renaming"
+                      style="padding-left: {34 + row.depth * 12}px"
+                      use:motionIn={{ kind: 'micro', y: -2 }}
+                    >
+                      <FileText size={13} />
+                      <input
+                        bind:this={renamingInputRef}
+                        bind:value={renamingValue}
+                        on:blur={cancelRenaming}
+                        on:keydown={handleRenamingKeydown}
+                        class="rename-input"
+                        use:renamingClickOutside={cancelRenaming}
+                        use:renameAutoSelect={{ isDir: false }}
+                        on:click|stopPropagation
+                      />
+                    </div>
+                  {:else}
+                    <button
+                      type="button"
+                      class="tree-file"
+                      class:active={isActiveFilePath(node.path)}
+                      class:preview={isPreviewFilePath(node.path)}
+                      style="padding-left: {34 + row.depth * 12}px"
+                      title={node.path}
+                      use:pulseOnChange={isActiveFilePath(node.path) || isPreviewFilePath(node.path)}
+                      on:click={() => handleFileClick(node.path)}
+                      on:dblclick={() => handleFileDblClick(node.path)}
+                      on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
+                    >
+                      <FileText size={13} />
+                      <span>{node.name}</span>
+                    </button>
+                  {/if}
                 {/if}
               </div>
             {/each}

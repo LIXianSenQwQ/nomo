@@ -92,6 +92,7 @@
 | 文件夹资源管理 | `src/app/services/folderExplorerController.ts` | `src/app/services/folderTree.ts`, `explorerRows.ts` | 目录树加载/展开/同步 |
 | 目录树纯函数 | `src/app/services/folderTree.ts` | — | 树的归一化/查找/更新 |
 | 资源管理器展示 | `src/app/services/explorerRows.ts` | — | 树形拍平为可渲染行 |
+| 资源管理器重命名规则 | `src/app/services/explorerRename.ts` | — | 行内重命名输入框选区范围 |
 | Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写/目录扫描/索引 |
 | 图片资源后端 | `src-tauri/src/file_system/image_assets.rs` | — | 图片导入/解析/PicGo 上传/删除 |
 
@@ -370,7 +371,7 @@
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `src/app/services/explorerRows.ts`, `ContextMenu.svelte`, `src/app/types.ts`
+**Depends on:** `src/app/services/explorerRows.ts`, `src/app/services/explorerRename.ts`, `ContextMenu.svelte`, `src/app/types.ts`
 
 **Change this when:**
 - 修改侧边栏布局或交互
@@ -381,7 +382,7 @@
 - 修改目录扫描后端逻辑
 - 修改文件树数据结构定义
 
-**Related tests:** —
+**Related tests:** `src/app/App.layout.test.ts`
 
 **Confidence:** high
 
@@ -632,6 +633,35 @@
 - 修改目录树纯数据结构操作
 
 **Related tests:** `src/app/services/folderExplorerController.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/services/explorerRename.ts`
+
+**Kind:** service / pure helper
+
+**Owns:**
+- 资源管理器行内重命名输入框的默认选区范围
+- 文件夹全选、文件默认保留最后扩展名的规则
+
+**Does not own：**
+- 不拥有重命名输入框 DOM 挂载与焦点时序（在 ExplorerSidebar.svelte 中）
+- 不拥有文件系统重命名落盘
+
+**Called by:** `src/app/components/ExplorerSidebar.svelte`
+
+**Depends on:** —
+
+**Change this when：**
+- 修改资源管理器重命名时默认选中文本的规则
+
+**Do not change this when：**
+- 修改右键菜单、输入框布局或焦点时序
+- 修改后端文件重命名逻辑
+
+**Related tests:** `src/app/services/explorerRename.test.ts`
 
 **Confidence:** high
 
