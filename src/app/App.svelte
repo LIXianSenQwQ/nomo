@@ -2882,13 +2882,19 @@
           approveSoftwareUpdateInstall(requestId).catch(() => undefined);
         }
       }).catch(() => null),
-      listenDesktopOpenDocuments((paths) => {
+      listenDesktopOpenDocuments((paths, targetWindowLabel) => {
+        if (targetWindowLabel && targetWindowLabel !== windowLabel) {
+          return;
+        }
         if (windowLabel) {
           updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
         }
         openExternalMarkdownPaths(paths).catch(() => undefined);
       }).catch(() => null),
-      listenDesktopOpenFolder((folderPath) => {
+      listenDesktopOpenFolder((folderPath, targetWindowLabel) => {
+        if (targetWindowLabel && targetWindowLabel !== windowLabel) {
+          return;
+        }
         if (windowLabel) {
           updateAppSetting(`pendingFolder:${windowLabel}`, '').catch(() => undefined);
         }

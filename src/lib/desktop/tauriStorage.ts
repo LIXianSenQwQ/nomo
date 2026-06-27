@@ -116,10 +116,14 @@ interface SnapshotRecordPayload {
 }
 
 interface ExternalOpenPayload {
+  windowLabel?: unknown;
+  window_label?: unknown;
   paths?: unknown;
 }
 
 interface ExternalOpenFolderPayload {
+  windowLabel?: unknown;
+  window_label?: unknown;
   folder_path?: unknown;
 }
 
@@ -494,29 +498,38 @@ export async function listenDesktopFileDrops(
 }
 
 export async function listenDesktopOpenDocuments(
-  handler: (paths: string[]) => void,
+  handler: (paths: string[], windowLabel?: string) => void,
 ): Promise<UnlistenFn> {
   const { listen } = await import('@tauri-apps/api/event');
   return listen<ExternalOpenPayload>('nomo://open-document', (event) => {
+    const eventWindowLabel = normalizeEventWindowLabel(event.payload);
     const paths = Array.isArray(event.payload?.paths)
       ? event.payload.paths.filter((path): path is string => typeof path === 'string')
       : [];
     if (paths.length > 0) {
-      handler(paths);
+      handler(paths, eventWindowLabel);
     }
   });
 }
 
 export async function listenDesktopOpenFolder(
-  handler: (folderPath: string) => void,
+  handler: (folderPath: string, windowLabel?: string) => void,
 ): Promise<UnlistenFn> {
   const { listen } = await import('@tauri-apps/api/event');
   return listen<ExternalOpenFolderPayload>('nomo://open-folder', (event) => {
+    const eventWindowLabel = normalizeEventWindowLabel(event.payload);
     const folderPath = event.payload?.folder_path;
     if (typeof folderPath === 'string' && folderPath.length > 0) {
-      handler(folderPath);
+      handler(folderPath, eventWindowLabel);
     }
   });
+}
+
+function normalizeEventWindowLabel(
+  payload: Pick<ExternalOpenPayload, 'windowLabel' | 'window_label'> | null | undefined,
+): string | undefined {
+  const label = payload?.windowLabel ?? payload?.window_label;
+  return typeof label === 'string' && label.length > 0 ? label : undefined;
 }
 
 function normalizeDocumentPayload(payload: NativeDocumentPayload): NativeDocument {

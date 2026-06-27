@@ -16,11 +16,15 @@ const PENDING_EXTERNAL_FOLDER_PREFIX: &str = "pendingFolder:";
 
 #[derive(Clone, Debug, Serialize)]
 struct ExternalOpenPayload {
+    #[serde(rename = "windowLabel")]
+    window_label: String,
     paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 struct ExternalFolderOpenPayload {
+    #[serde(rename = "windowLabel")]
+    window_label: String,
     folder_path: String,
 }
 
@@ -151,6 +155,7 @@ pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result
         .emit(
             OPEN_DOCUMENT_EVENT,
             ExternalOpenPayload {
+                window_label: label.clone(),
                 paths: paths.clone(),
             },
         )
@@ -213,6 +218,7 @@ pub(crate) fn route_external_folder_open(
         .emit(
             OPEN_FOLDER_EVENT,
             ExternalFolderOpenPayload {
+                window_label: label.clone(),
                 folder_path: folder_path.clone(),
             },
         )
