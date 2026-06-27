@@ -1,4 +1,4 @@
-use crate::models::{RecentEntry, SettingRecord, SnapshotRecord};
+use crate::models::{RecentEntry, SettingRecord, StoredSnapshotRecord};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -13,6 +13,8 @@ use tauri::{AppHandle, Manager, Runtime};
 pub(crate) mod commands;
 
 const CONFIG_FILE_NAME: &str = "config.json";
+pub(crate) const DRAFTS_DIR_NAME: &str = "drafts";
+pub(crate) const SNAPSHOTS_DIR_NAME: &str = "snapshots";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -58,7 +60,7 @@ pub(crate) struct WorkspaceSection {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct SnapshotSection {
-    pub(crate) documents: BTreeMap<String, Vec<SnapshotRecord>>,
+    pub(crate) documents: BTreeMap<String, Vec<StoredSnapshotRecord>>,
 }
 
 #[derive(Clone)]
@@ -87,7 +89,7 @@ impl ConfigManager {
     }
 
     pub(crate) fn load_or_default_from_path(config_path: PathBuf) -> Result<Self, String> {
-        let config = match fs::read_to_string(&config_path) {
+        let mut config = match fs::read_to_string(&config_path) {
             Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
                 Ok(config) => config,
                 Err(error) => {
@@ -102,6 +104,8 @@ impl ConfigManager {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => AppConfig::default(),
             Err(error) => return Err(format!("读取配置文件失败：{error}")),
         };
+
+        migrate_legacy_snapshot_markdown(&config_path, &mut config)?;
 
         let manager = Self {
             config_path,
@@ -185,6 +189,71 @@ pub(crate) fn now_ts() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
+}
+
+pub(crate) fn app_data_dir_from_config_path(config_path: &Path) -> Result<PathBuf, String> {
+    config_path
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "配置文件路径缺少父目录".to_string())
+}
+
+pub(crate) fn content_store_dir<R: Runtime>(
+    app: &AppHandle<R>,
+    directory_name: &str,
+) -> Result<PathBuf, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("定位应用数据目录失败：{error}"))?;
+    Ok(app_dir.join(directory_name))
+}
+
+pub(crate) fn validate_content_id(id: &str) -> Result<(), String> {
+    let valid = !id.is_empty()
+        && id.len() <= 96
+        && id
+            .bytes()
+            .all(|value| value.is_ascii_alphanumeric() || value == b'-' || value == b'_');
+    if valid {
+        Ok(())
+    } else {
+        Err("正文存储标识非法".to_string())
+    }
+}
+
+pub(crate) fn markdown_store_path(root: &Path, id: &str) -> Result<PathBuf, String> {
+    validate_content_id(id)?;
+    Ok(root.join(format!("{id}.md")))
+}
+
+fn migrate_legacy_snapshot_markdown(
+    config_path: &Path,
+    config: &mut AppConfig,
+) -> Result<(), String> {
+    let app_dir = app_data_dir_from_config_path(config_path)?;
+    let snapshot_dir = app_dir.join(SNAPSHOTS_DIR_NAME);
+    let mut migrated = 0usize;
+
+    for snapshots in config.snapshots.documents.values_mut() {
+        for snapshot in snapshots.iter_mut() {
+            if let Some(markdown) = snapshot.markdown.take() {
+                let snapshot_path = markdown_store_path(&snapshot_dir, &snapshot.content_hash)?;
+                if let Some(parent) = snapshot_path.parent() {
+                    fs::create_dir_all(parent)
+                        .map_err(|error| format!("创建快照目录失败：{error}"))?;
+                }
+                fs::write(&snapshot_path, markdown.as_bytes())
+                    .map_err(|error| format!("迁移快照正文失败：{error}"))?;
+                migrated += 1;
+            }
+        }
+    }
+
+    if migrated > 0 {
+        crate::app_logger::info("Config", &format!("已迁移旧快照正文：{migrated} 个"));
+    }
+    Ok(())
 }
 
 fn config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -316,6 +385,51 @@ mod tests {
     }
 
     #[test]
+    fn migrates_legacy_snapshot_markdown_to_content_files() {
+        let root = unique_test_dir("snapshot-migration");
+        fs::create_dir_all(&root).expect("test dir");
+        let config_path = root.join("config.json");
+        fs::write(
+            &config_path,
+            r##"{
+              "app": {},
+              "snapshots": {
+                "documents": {
+                  "D:\\docs\\a.md": [
+                    {
+                      "id": "1-abc123",
+                      "document_path": "D:\\docs\\a.md",
+                      "content_hash": "abc123",
+                      "markdown": "# legacy",
+                      "created_at": 1,
+                      "reason": "before-save"
+                    }
+                  ]
+                }
+              }
+            }"##,
+        )
+        .expect("write config");
+
+        let manager = ConfigManager::load_or_default_from_path(config_path).expect("load");
+        let config = manager.get_config().expect("config");
+        let snapshot = config
+            .snapshots
+            .documents
+            .get("D:\\docs\\a.md")
+            .and_then(|items| items.first())
+            .expect("snapshot");
+
+        assert!(snapshot.markdown.is_none());
+        assert_eq!(
+            fs::read_to_string(root.join(super::SNAPSHOTS_DIR_NAME).join("abc123.md"))
+                .expect("snapshot"),
+            "# legacy"
+        );
+        cleanup(root);
+    }
+
+    #[test]
     #[cfg(target_os = "windows")]
     fn reads_software_render_mode_from_disk_before_app_handle_available() {
         use super::{is_software_render_mode, CONFIG_FILE_NAME};
@@ -332,12 +446,12 @@ mod tests {
         )
         .expect("write config");
 
-        let original_local_app_data = std::env::var("LOCALAPPDATA").ok();
-        std::env::set_var("LOCALAPPDATA", &root);
+        let original_app_data = std::env::var("APPDATA").ok();
+        std::env::set_var("APPDATA", &root);
         let result = is_software_render_mode(identifier);
-        match original_local_app_data {
-            Some(value) => std::env::set_var("LOCALAPPDATA", value),
-            None => std::env::remove_var("LOCALAPPDATA"),
+        match original_app_data {
+            Some(value) => std::env::set_var("APPDATA", value),
+            None => std::env::remove_var("APPDATA"),
         }
 
         cleanup(root);

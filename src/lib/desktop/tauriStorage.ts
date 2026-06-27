@@ -48,6 +48,12 @@ export interface SnapshotRecord {
   reason: string;
 }
 
+export interface WorkspaceDraftRecord {
+  draftId: string;
+  markdown: string;
+  updatedAt: number;
+}
+
 export interface WindowState {
   x?: number | null;
   y?: number | null;
@@ -113,6 +119,12 @@ interface SnapshotRecordPayload {
   markdown: string;
   created_at: number;
   reason: string;
+}
+
+interface WorkspaceDraftPayload {
+  draft_id: string;
+  markdown: string;
+  updated_at: number;
 }
 
 interface ExternalOpenPayload {
@@ -512,6 +524,34 @@ export async function listenDesktopOpenDocuments(
   });
 }
 
+export async function writeWorkspaceDraft(
+  markdown: string,
+  draftId?: string | null,
+): Promise<WorkspaceDraftRecord> {
+  logDebug('tauriStorage', '写入工作区草稿', { draftId, bytes: markdown.length });
+  const { invoke } = await import('@tauri-apps/api/core');
+  const row = await invoke<WorkspaceDraftPayload>('write_workspace_draft', {
+    input: {
+      draft_id: draftId ?? null,
+      markdown,
+    },
+  });
+  return normalizeWorkspaceDraftPayload(row);
+}
+
+export async function readWorkspaceDraft(draftId: string): Promise<WorkspaceDraftRecord> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return normalizeWorkspaceDraftPayload(
+    await invoke<WorkspaceDraftPayload>('read_workspace_draft', { draftId }),
+  );
+}
+
+export async function deleteWorkspaceDraft(draftId: string): Promise<void> {
+  logDebug('tauriStorage', '删除工作区草稿', { draftId });
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('delete_workspace_draft', { draftId });
+}
+
 export async function listenDesktopOpenFolder(
   handler: (folderPath: string, windowLabel?: string) => void,
 ): Promise<UnlistenFn> {
@@ -551,6 +591,14 @@ function normalizeFileStatus(payload: FileStatusPayload): FileStatus {
     modifiedAt: payload.modified_at,
     sizeBytes: payload.size_bytes,
     readonly: payload.readonly,
+  };
+}
+
+function normalizeWorkspaceDraftPayload(payload: WorkspaceDraftPayload): WorkspaceDraftRecord {
+  return {
+    draftId: payload.draft_id,
+    markdown: payload.markdown,
+    updatedAt: payload.updated_at,
   };
 }
 

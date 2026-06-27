@@ -10,6 +10,8 @@
     installSampleDocument,
     openExternalLink,
     updateAppSetting,
+    readWorkspaceDraft,
+    deleteWorkspaceDraft,
     rememberRecentEntry,
     checkPathsExist,
     deleteFile,
@@ -51,8 +53,9 @@
     normalizeExternalFileChange,
     type ExternalFileChangeState,
     type FileTreeNode,
+    type PersistedWorkspaceState,
+    type PersistedWorkspaceTab,
     type Tab,
-    type WorkspaceState,
   } from './types';
   import {
     getCompactPath,
@@ -83,6 +86,11 @@
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
   import { createBlankTab, writeActiveTabState } from './services/tabs';
+  import {
+    createPersistedWorkspaceState,
+    createRuntimeTabFromPersisted,
+    migrateWorkspaceSetting,
+  } from './services/workspacePersistence';
   import {
     listenFolderIndexBatches,
     listenFolderIndexFinished,
@@ -314,6 +322,21 @@
   let closeWindowChoiceResolver: ((choice: CloseWindowChoiceResult) => void) | null = null;
   let closeWindowChoicePromise: Promise<CloseWindowChoiceResult> | null = null;
 
+  interface StartupDraftConflict {
+    tabId: string;
+    fileName: string;
+    filePath: string;
+    nativePath: string;
+    draftId: string;
+    draftMarkdown: string;
+    diskMarkdown: string;
+    diskModifiedAt: number;
+    diskReadonly: boolean;
+    diskLargeDocumentMode: boolean;
+  }
+
+  let startupDraftConflict: StartupDraftConflict | null = null;
+
   // 订阅自定义确认对话框（Svelte 5 Runes 模式 $store 语法不工作，需手动订阅）
   let confirmDialogState: ConfirmDialogState = {
     open: false,
@@ -339,13 +362,6 @@
   let windowLabel = '';
   let developerMode = DEFAULT_APP_PREFERENCES.developerMode;
 
-  function normalizeWorkspaceTabs(restoredTabs: Tab[]): Tab[] {
-    return restoredTabs.map((tab) => ({
-      ...tab,
-      savedMarkdown: tab.savedMarkdown ?? tab.markdown,
-    }));
-  }
-
   function hasPersistableReadingPositionPath(path: string) {
     return Boolean(desktopEnabled && path && path !== t.untitledMarkdown());
   }
@@ -363,11 +379,7 @@
 
     _persistTimer = window.setTimeout(() => {
       _persistTimer = null;
-      const state = { tabs, activeTabId, currentFolderPath };
-      updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
-      if (currentFolderPath) {
-        updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(() => undefined);
-      }
+      persistWorkspaceStateNow().catch(() => undefined);
     }, WORKSPACE_PERSIST_DEBOUNCE_MS);
   }
 
@@ -378,10 +390,23 @@
       _persistTimer = null;
     }
     if (!desktopEnabled || !windowLabel) return;
-    const state = { tabs, activeTabId, currentFolderPath };
-    updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
+    persistWorkspaceStateNow().catch(() => undefined);
+  }
+
+  async function persistWorkspaceStateNow() {
+    if (!desktopEnabled || !windowLabel) return;
+    const state = await createPersistedWorkspaceState({
+      tabs,
+      activeTabId,
+      currentFolderPath,
+      desktopEnabled,
+      preservedDraftIds: getPendingStartupConflictDraftIds(),
+    });
+    await updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
     if (currentFolderPath) {
-      updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(() => undefined);
+      await updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(
+        () => undefined,
+      );
     }
   }
 
@@ -391,11 +416,18 @@
     folderActiveTabId: string,
   ) {
     if (!desktopEnabled || !folderPath || !windowLabel) return;
-    await updateAppSetting(`workspaceTabs:folder:${folderPath}`, {
+    const state = await createPersistedWorkspaceState({
       tabs: folderTabs,
       activeTabId: folderActiveTabId,
       currentFolderPath: folderPath,
-    }).catch(() => undefined);
+      desktopEnabled,
+      preservedDraftIds: getPendingStartupConflictDraftIds(),
+    });
+    await updateAppSetting(`workspaceTabs:folder:${folderPath}`, state).catch(() => undefined);
+  }
+
+  function getPendingStartupConflictDraftIds() {
+    return startupDraftConflict ? new Set([startupDraftConflict.draftId]) : undefined;
   }
 
   async function restoreFolderWorkspaceState(folderPath: string) {
@@ -403,20 +435,194 @@
     const settings = await listAppSettings().catch(() => []);
     const setting = settings.find((s) => s.key === `workspaceTabs:folder:${folderPath}`);
     if (!setting) return;
-    try {
-      const state = JSON.parse(setting.valueJson) as WorkspaceState;
-      if (state.tabs && state.tabs.length > 0) {
-        tabs = normalizeWorkspaceTabs(state.tabs);
-        activeTabId = state.activeTabId;
-        const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-        if (activeTab) {
-          activeTabId = activeTab.id;
-          loadTabState(activeTab);
-        }
-      }
-    } catch {
-      // ignore
+    const result = await migrateWorkspaceSetting(setting).catch(() => null);
+    if (!result) return;
+    if (result.migrated) {
+      await updateAppSetting(`workspaceTabs:folder:${folderPath}`, result.state).catch(
+        () => undefined,
+      );
     }
+    await restorePersistedWorkspaceState(result.state);
+  }
+
+  async function restorePersistedWorkspaceState(state: PersistedWorkspaceState) {
+    if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
+      currentFolderPath = state.currentFolderPath;
+      startupFolderPath = state.currentFolderPath;
+    }
+    if (state.tabs.length === 0) return;
+
+    const restoredTabs: Tab[] = [];
+    for (const persistedTab of state.tabs) {
+      const restoredTab = await restorePersistedWorkspaceTab(persistedTab);
+      if (restoredTab) {
+        restoredTabs.push(restoredTab);
+      }
+    }
+
+    if (restoredTabs.length === 0) return;
+    tabs = restoredTabs;
+    activeTabId = tabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : tabs[0].id;
+    const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
+    activeTabId = activeTab.id;
+    loadTabState(activeTab);
+  }
+
+  async function restorePersistedWorkspaceTab(
+    persistedTab: PersistedWorkspaceTab,
+  ): Promise<Tab | null> {
+    const draft = persistedTab.draftId
+      ? await readWorkspaceDraft(persistedTab.draftId).catch(() => null)
+      : null;
+
+    if (!persistedTab.nativePath) {
+      if (!draft) {
+        return createRuntimeTabFromPersisted(persistedTab, '', {
+          savedMarkdown: '',
+          dirty: false,
+          lastKnownModifiedAt: 0,
+          largeDocumentMode: false,
+          readonlyDocumentMode: false,
+        });
+      }
+      return createRuntimeTabFromPersisted(persistedTab, draft.markdown, {
+        savedMarkdown: '',
+        dirty: true,
+        lastKnownModifiedAt: 0,
+        largeDocumentMode: draft.markdown.length > largeDocumentLimit,
+        readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
+      });
+    }
+
+    const { document, error } = await readMarkdownFromPath(
+      persistedTab.nativePath,
+      t.openRecentFailed(),
+    );
+    if (!document) {
+      if (draft) {
+        statusMessage = error || t.openRecentFailed();
+        return createRuntimeTabFromPersisted(persistedTab, draft.markdown, {
+          savedMarkdown: '',
+          dirty: true,
+          largeDocumentMode: draft.markdown.length > largeDocumentLimit,
+          readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
+        });
+      }
+      statusMessage = error || t.openRecentFailed();
+      return createRuntimeTabFromPersisted(persistedTab, '', {
+        savedMarkdown: '',
+        dirty: false,
+        largeDocumentMode: false,
+        readonlyDocumentMode: true,
+      });
+    }
+
+    const diskLargeDocument =
+      document.markdown.length > largeDocumentLimit || document.sizeBytes > largeDocumentLimit;
+    if (!draft) {
+      return createRuntimeTabFromPersisted(persistedTab, document.markdown, {
+        savedMarkdown: document.markdown,
+        dirty: false,
+        lastKnownModifiedAt: document.modifiedAt,
+        largeDocumentMode: diskLargeDocument,
+        readonlyDocumentMode: diskLargeDocument || document.readonly,
+      });
+    }
+
+    const changedOnDisk =
+      persistedTab.lastKnownModifiedAt > 0 &&
+      document.modifiedAt !== persistedTab.lastKnownModifiedAt;
+    if (changedOnDisk) {
+      const diskTab = createRuntimeTabFromPersisted(persistedTab, document.markdown, {
+        savedMarkdown: document.markdown,
+        dirty: false,
+        lastKnownModifiedAt: document.modifiedAt,
+        largeDocumentMode: diskLargeDocument,
+        readonlyDocumentMode: diskLargeDocument || document.readonly,
+      });
+      queueStartupDraftConflict({
+        tabId: persistedTab.id,
+        fileName: persistedTab.fileName,
+        filePath: persistedTab.filePath,
+        nativePath: persistedTab.nativePath,
+        draftId: draft.draftId,
+        draftMarkdown: draft.markdown,
+        diskMarkdown: document.markdown,
+        diskModifiedAt: document.modifiedAt,
+        diskReadonly: document.readonly,
+        diskLargeDocumentMode: diskLargeDocument,
+      });
+      return diskTab;
+    }
+
+    return createRuntimeTabFromPersisted(persistedTab, draft.markdown, {
+      savedMarkdown: document.markdown,
+      dirty: true,
+      lastKnownModifiedAt: document.modifiedAt,
+      largeDocumentMode: draft.markdown.length > largeDocumentLimit,
+      readonlyDocumentMode: draft.markdown.length > largeDocumentLimit || document.readonly,
+    });
+  }
+
+  function queueStartupDraftConflict(conflict: StartupDraftConflict) {
+    if (!startupDraftConflict) {
+      startupDraftConflict = conflict;
+    }
+  }
+
+  function applyStartupConflictDraft() {
+    const conflict = startupDraftConflict;
+    if (!conflict) return;
+    const targetTab = tabs.find((tab) => tab.id === conflict.tabId);
+    if (!targetTab) {
+      startupDraftConflict = null;
+      return;
+    }
+
+    Object.assign(targetTab, {
+      markdown: conflict.draftMarkdown,
+      savedMarkdown: conflict.diskMarkdown,
+      dirty: true,
+      draftId: conflict.draftId,
+      lastKnownModifiedAt: conflict.diskModifiedAt,
+      largeDocumentMode: conflict.draftMarkdown.length > largeDocumentLimit,
+      readonlyDocumentMode:
+        conflict.draftMarkdown.length > largeDocumentLimit || conflict.diskReadonly,
+    });
+    tabs = [...tabs];
+    switchTab(conflict.tabId);
+    startupDraftConflict = null;
+    persistWorkspaceState();
+  }
+
+  function applyStartupConflictDiskVersion() {
+    const conflict = startupDraftConflict;
+    if (!conflict) return;
+    const targetTab = tabs.find((tab) => tab.id === conflict.tabId);
+    if (targetTab) {
+      Object.assign(targetTab, {
+        markdown: conflict.diskMarkdown,
+        savedMarkdown: conflict.diskMarkdown,
+        dirty: false,
+        draftId: null,
+        lastKnownModifiedAt: conflict.diskModifiedAt,
+        largeDocumentMode: conflict.diskLargeDocumentMode,
+        readonlyDocumentMode: conflict.diskLargeDocumentMode || conflict.diskReadonly,
+      });
+      tabs = [...tabs];
+      loadTabState(targetTab);
+    }
+    deleteWorkspaceDraft(conflict.draftId).catch(() => undefined);
+    startupDraftConflict = null;
+    persistWorkspaceState();
+  }
+
+  async function saveStartupConflictDraftAs() {
+    const conflict = startupDraftConflict;
+    if (!conflict) return;
+    applyStartupConflictDraft();
+    await tick();
+    await saveMarkdownFile(true);
   }
 
   // 保存当前活跃 Tab 的状态
@@ -515,8 +721,9 @@
       const storedPosition = hasPersistableReadingPositionPath(filePath)
         ? getReadingPosition(filePath)
         : undefined;
-      const hasAnchor = storedPosition != null
-        && (mode === 'semantic'
+      const hasAnchor =
+        storedPosition != null &&
+        (mode === 'semantic'
           ? storedPosition.semanticAnchor != null
           : storedPosition.sourceAnchor != null);
 
@@ -1486,6 +1693,7 @@
     targetTab.fileName = document.fileName;
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
+    targetTab.draftId = null;
     targetTab.markdown = document.markdown;
     targetTab.savedMarkdown = document.markdown;
     targetTab.dirty = false;
@@ -2356,24 +2564,12 @@
       settings.find((s) => s.key === workspaceTabsKey) ??
       settings.find((s) => s.key === 'workspaceTabs');
     if (!workspaceTabsSetting) return;
-    try {
-      const state = JSON.parse(workspaceTabsSetting.valueJson) as WorkspaceState;
-      if (typeof state.currentFolderPath === 'string' && state.currentFolderPath.length > 0) {
-        currentFolderPath = state.currentFolderPath;
-        startupFolderPath = state.currentFolderPath;
-      }
-      if (state.tabs && state.tabs.length > 0) {
-        tabs = normalizeWorkspaceTabs(state.tabs);
-        activeTabId = state.activeTabId;
-        const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-        if (activeTab) {
-          activeTabId = activeTab.id;
-          loadTabState(activeTab);
-        }
-      }
-    } catch {
-      // ignore
+    const result = await migrateWorkspaceSetting(workspaceTabsSetting).catch(() => null);
+    if (!result) return;
+    if (result.migrated) {
+      await updateAppSetting(workspaceTabsKey, result.state).catch(() => undefined);
     }
+    await restorePersistedWorkspaceState(result.state);
   }
 
   onMount(async () => {
@@ -3355,6 +3551,20 @@
   onRememberChange={(value) => (rememberCloseWindowChoice = value)}
   onChoose={resolveCloseWindowChoice}
   onCancel={cancelCloseWindowChoice}
+/>
+
+<UnsavedConfirmDialog
+  open={startupDraftConflict !== null}
+  title={t.startupDraftConflictTitle()}
+  message={startupDraftConflict
+    ? t.startupDraftConflictMessage({ fileName: startupDraftConflict.fileName })
+    : ''}
+  confirmLabel={t.startupDraftConflictRestoreDraft()}
+  cancelLabel={t.startupDraftConflictUseDisk()}
+  saveLabel={t.startupDraftConflictSaveDraftAs()}
+  onConfirm={applyStartupConflictDraft}
+  onCancel={applyStartupConflictDiskVersion}
+  onSave={saveStartupConflictDraftAs}
 />
 
 <ExternalChangeDialog

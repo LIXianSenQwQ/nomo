@@ -52,7 +52,7 @@ pub(crate) struct SnapshotInput {
     pub(crate) reason: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct SnapshotRecord {
     pub(crate) id: String,
     pub(crate) document_path: String,
@@ -60,6 +60,30 @@ pub(crate) struct SnapshotRecord {
     pub(crate) markdown: String,
     pub(crate) created_at: i64,
     pub(crate) reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct StoredSnapshotRecord {
+    pub(crate) id: String,
+    pub(crate) document_path: String,
+    pub(crate) content_hash: String,
+    pub(crate) created_at: i64,
+    pub(crate) reason: String,
+    #[serde(default, skip_serializing)]
+    pub(crate) markdown: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct WorkspaceDraftInput {
+    pub(crate) draft_id: Option<String>,
+    pub(crate) markdown: String,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct WorkspaceDraftPayload {
+    pub(crate) draft_id: String,
+    pub(crate) markdown: String,
+    pub(crate) updated_at: i64,
 }
 
 #[derive(Debug, Deserialize)]

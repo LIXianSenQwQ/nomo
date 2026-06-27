@@ -137,6 +137,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.fileName = file.name;
     targetTab.filePath = t.localBrowserFile({ name: file.name });
     targetTab.nativePath = null;
+    targetTab.draftId = null;
     targetTab.markdown = text;
     targetTab.savedMarkdown = text;
     targetTab.dirty = false;
@@ -169,7 +170,9 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
       const path = saveAs ? null : options.getNativePath();
       // 步骤1：新文件保存时，尝试用文档第一个 H1 标题作为建议文件名
-      const fileName = path ? options.getFileName() : suggestFileNameFromH1(markdownToSave, options.getFileName());
+      const fileName = path
+        ? options.getFileName()
+        : suggestFileNameFromH1(markdownToSave, options.getFileName());
       options.writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
       const { document, error } = await saveNativeMarkdownFile(
         path,
@@ -251,6 +254,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.fileName = document.fileName;
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
+    targetTab.draftId = null;
     targetTab.markdown = document.markdown;
     targetTab.savedMarkdown = document.markdown;
     targetTab.dirty = false;
@@ -300,6 +304,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.fileName = document.fileName;
     targetTab.filePath = document.path;
     targetTab.nativePath = document.path;
+    targetTab.draftId = null;
     targetTab.markdown = markdownToSave;
     targetTab.savedMarkdown = markdownToSave;
     targetTab.dirty = false;
@@ -531,6 +536,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
           savedTab.markdown = markdownToSave;
           savedTab.savedMarkdown = markdownToSave;
           savedTab.dirty = false;
+          savedTab.draftId = null;
           savedTab.lastKnownModifiedAt = document.modifiedAt;
 
           if (options.getActiveTabId() === tabId) {

@@ -3,6 +3,7 @@ export interface Tab {
   fileName: string;
   filePath: string;
   nativePath: string | null;
+  draftId?: string | null;
   markdown: string;
   savedMarkdown: string;
   dirty: boolean;
@@ -64,6 +65,26 @@ export interface FileTreeNode {
 
 export interface WorkspaceState {
   tabs: Tab[];
+  activeTabId: string;
+  currentFolderPath?: string;
+}
+
+export interface PersistedWorkspaceTab {
+  id: string;
+  fileName: string;
+  filePath: string;
+  nativePath: string | null;
+  draftId?: string | null;
+  dirty: boolean;
+  lastKnownModifiedAt: number;
+  largeDocumentMode: boolean;
+  readonlyDocumentMode: boolean;
+  version: number;
+}
+
+export interface PersistedWorkspaceState {
+  version: 2;
+  tabs: PersistedWorkspaceTab[];
   activeTabId: string;
   currentFolderPath?: string;
 }

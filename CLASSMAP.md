@@ -81,6 +81,7 @@
 |---|---|---|---|
 | 文档操作控制器 | `src/app/services/documentActionsController.ts` | `src/app/services/documentFiles.ts`, `tabs.ts`, `recoveryDraft.ts` | 打开/保存/另存/自动保存/外部变更 |
 | 标签页状态管理 | `src/app/services/tabs.ts` | `src/app/types.ts` | 标签页创建/复用/状态写入 |
+| 工作区持久化 | `src/app/services/workspacePersistence.ts` | `src/app/App.svelte`, `src/lib/desktop/tauriStorage.ts` | 工作区 v2 元数据、草稿引用、旧 workspaceTabs 迁移 |
 | 阅读位置持久化 | `src/app/services/readingPosition.ts` | `src/app/App.svelte`, `src/app/services/outlineNavigation.ts` | Markdown 文件按路径保存/恢复语义与源码模式阅读位置 |
 | 恢复草稿 | `src/app/services/recoveryDraft.ts` | `src/app/services/documentActionsController.ts` | 异常退出后草稿写入/恢复 |
 | Markdown 桥接 | `src/lib/markdown/MarkdownBridge.ts` | `src/lib/markdown/frontMatter.ts` | front matter 与正文分离/合并规则变更 |
@@ -265,7 +266,7 @@
 - 应用核心装配：连接 Tauri、编辑器核心、文件系统、设置、标签页
 - 初始化渲染服务（Shiki、KaTeX、Mermaid、图片加载器）
 - 创建 `EditorCore` 实例
-- 加载设置和工作区状态
+- 加载设置和 v2 工作区状态，协调草稿恢复与启动冲突选择
 - 协调打开、保存、自动保存、模式切换、外部文件打开、关闭确认
 - 订阅编辑器内容变化并同步 dirty/统计/大纲状态
 
@@ -282,6 +283,7 @@
 - 添加新的全局事件监听
 - 修改编辑器初始化流程
 - 修改文件打开/保存/自动保存协调逻辑
+- 修改工作区恢复、草稿冲突选择、标签页恢复流程
 - 修改标签页管理流程
 
 **Do not change this when:**
@@ -1208,12 +1210,13 @@
 
 **Owns：**
 - 封装配置存储、文件系统、图片资源、窗口设置等 Tauri `invoke` 调用
+- 封装工作区草稿、快照正文文件相关 IPC 调用
 - 为浏览器环境提供 fallback
 
 **Does not own：**
 - 不拥有后端具体实现（在 Rust 中）
 
-**Called by:** `src/app/services/settings.ts`, `src/app/services/documentFiles.ts`, `src/app/services/folderExplorerController.ts`
+**Called by:** `src/app/services/settings.ts`, `src/app/services/documentFiles.ts`, `src/app/services/folderExplorerController.ts`, `src/app/services/workspacePersistence.ts`, `src/app/App.svelte`
 
 **Depends on:** `@tauri-apps/api`
 
@@ -1327,7 +1330,8 @@
 **Owns：**
 - 应用配置 JSON 持久化：`config.json` 的读取、写入、备份
 - `ConfigManager`：线程安全的配置管理器（`Arc<RwLock<AppConfig>>`）
-- `AppConfig` 结构定义：app（设置）、editor（编辑器设置）、window（窗口状态）、recent（最近打开）、workspace（工作区标签）、snapshots（文档快照）
+- `AppConfig` 结构定义：app（设置）、editor（编辑器设置）、window（窗口状态）、recent（最近打开）、workspace（工作区标签元数据）、snapshots（文档快照索引）
+- 草稿/快照正文仓库路径规则，以及旧 snapshot 正文迁移到独立内容文件
 - 设置键值存储：为前端偏好设置提供后端读写
 - 设置路由：按 key 前缀将设置分发到对应 section（`windowState:`、`workspaceTabs:`、`pendingFolder:` 等）
 - 启动前设置读取：在 `AppHandle` 可用前从磁盘读取配置（渲染模式、开发者模式）
@@ -1344,6 +1348,7 @@
 - 新增/修改 AppConfig section 或字段
 - 新增启动前需要读取的设置项
 - 修改配置备份/恢复逻辑
+- 修改草稿/快照正文文件目录或旧配置迁移规则
 - 修改设置路由规则
 
 **Do not change this when：**
@@ -1567,6 +1572,36 @@
 - 修改标签页 UI 样式
 
 **Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src/app/services/workspacePersistence.ts`
+
+**Kind:** service
+
+**Owns:**
+- `PersistedWorkspaceState v2` 的生成、归一化和旧 `workspaceTabs:*` 配置迁移
+- 工作区标签元数据持久化边界：禁止把 `markdown` / `savedMarkdown` 写回配置
+- 根据 dirty、未命名标签和 `draftId` 写入或清理工作区草稿正文文件
+- 将持久化标签元数据还原为运行时标签所需的基础结构
+
+**Does not own:**
+- 不拥有启动时磁盘文件读取与冲突 UI 决策（在 `App.svelte` 中协调）
+- 不拥有草稿文件后端路径安全与实际读写（通过 `tauriStorage.ts` 调用 Rust IPC）
+- 不拥有异常退出恢复草稿 localStorage 逻辑（在 `recoveryDraft.ts` 中）
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `src/app/types.ts`, `src/lib/desktop/tauriStorage.ts`
+
+**Change this when:**
+- 修改工作区配置版本、标签元数据字段或迁移策略
+- 修改哪些标签需要生成草稿正文文件
+- 修改配置正文剥离规则
+
+**Related tests:** `src/app/services/workspacePersistence.test.ts`
 
 **Confidence:** high
 
@@ -2715,9 +2750,10 @@
 **Owns:**
 - 数据操作 IPC 命令（原 database 层迁移至此）：
   - 最近打开：`remember_recent_entry`、`list_recent_entries`、`clear_recent_entries`
-  - 文档快照：`create_document_snapshot`、`list_document_snapshots`
+  - 文档快照索引与正文文件：`create_document_snapshot`、`list_document_snapshots`
+  - 工作区草稿正文文件：`write_workspace_draft`、`read_workspace_draft`、`delete_workspace_draft`
   - 应用设置：`update_app_setting`、`update_app_settings`、`list_app_settings`
-- 内部工具：`query_recent_entries`、`get_setting_value`、设置路由到 AppConfig section
+- 内部工具：`query_recent_entries`、`get_setting_value`、正文文件读写、设置路由到 AppConfig section
 
 **Does not own:**
 - 不拥有配置存储/结构定义（在 config/mod.rs 中）
@@ -2728,7 +2764,7 @@
 
 **Change this when:**
 - 新增数据操作 IPC 命令
-- 修改最近打开/快照/设置的查询逻辑
+- 修改最近打开/快照/草稿/设置的查询逻辑
 
 **Related tests:** `src-tauri/src/config/commands.rs` 模块内测试
 
@@ -2934,7 +2970,7 @@
 | `src/quicklook/` | macOS Quick Look 预览 |
 | `src/paraglide/` | Inlang/Paraglide 生成的本地化代码（**不要手改**） |
 | `src-tauri/src/` | Rust 后端 |
-| `src-tauri/src/config/` | JSON 配置管理（ConfigManager、commands）：设置、最近打开、快照、窗口状态 |
+| `src-tauri/src/config/` | JSON 配置管理（ConfigManager、commands）：设置、最近打开、快照索引、工作区状态/草稿正文仓库、窗口状态 |
 | `src-tauri/src/file_system/` | 文件系统与图片资源 |
 | `src-tauri/src/window/` | 窗口、菜单、托盘、外部打开、文件关联 |
 | `project.inlang/` | Inlang 本地化文案源文件（**修改这里而非 paraglide/**） |

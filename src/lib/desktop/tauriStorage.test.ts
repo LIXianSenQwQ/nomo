@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { installSampleDocument, parseNativeError } from './tauriStorage';
+import {
+  deleteWorkspaceDraft,
+  installSampleDocument,
+  parseNativeError,
+  readWorkspaceDraft,
+  writeWorkspaceDraft,
+} from './tauriStorage';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -94,5 +100,45 @@ describe('installSampleDocument', () => {
       readonly: false,
     });
     expect(invokeMock).toHaveBeenCalledWith('install_sample_document');
+  });
+});
+
+describe('workspace drafts', () => {
+  it('writes a workspace draft through the native command', async () => {
+    invokeMock.mockResolvedValue({
+      draft_id: 'draft-1',
+      markdown: '# 草稿',
+      updated_at: 123,
+    });
+
+    await expect(writeWorkspaceDraft('# 草稿', 'draft-1')).resolves.toEqual({
+      draftId: 'draft-1',
+      markdown: '# 草稿',
+      updatedAt: 123,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('write_workspace_draft', {
+      input: {
+        draft_id: 'draft-1',
+        markdown: '# 草稿',
+      },
+    });
+  });
+
+  it('reads and deletes workspace drafts by id', async () => {
+    invokeMock.mockResolvedValueOnce({
+      draft_id: 'draft-1',
+      markdown: '# 草稿',
+      updated_at: 123,
+    });
+    await expect(readWorkspaceDraft('draft-1')).resolves.toEqual({
+      draftId: 'draft-1',
+      markdown: '# 草稿',
+      updatedAt: 123,
+    });
+    expect(invokeMock).toHaveBeenCalledWith('read_workspace_draft', { draftId: 'draft-1' });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await deleteWorkspaceDraft('draft-1');
+    expect(invokeMock).toHaveBeenCalledWith('delete_workspace_draft', { draftId: 'draft-1' });
   });
 });

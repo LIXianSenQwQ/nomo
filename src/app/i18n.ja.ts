@@ -468,6 +468,12 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
     'ファイルが外部で変更されたため、自動保存が一時停止されています。外部バージョンを再ロード、名前を付けて保存、または上書きします。',
   externalFileModifiedClean:
     'ファイルは外部で変更されました。外部バージョンをリロードするか、現在のコンテンツを保持します。',
+  startupDraftConflictTitle: '未保存の下書きと外部変更が見つかりました',
+  startupDraftConflictMessage:
+    '「{fileName}」は前回終了後にディスク上で変更され、未保存の下書きも残っています。保持するバージョンを選択してください。',
+  startupDraftConflictRestoreDraft: '下書きを復元',
+  startupDraftConflictUseDisk: 'ディスク版を使用',
+  startupDraftConflictSaveDraftAs: '下書きに名前を付けて保存',
   openFolderFailed: 'フォルダを開けませんでした',
   loadFolderTreeFailed: 'フォルダー ファイル ツリーのロードに失敗しました',
   loadSubfolderFailed: 'サブフォルダーのロードに失敗しました: {error}',

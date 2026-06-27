@@ -483,6 +483,12 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     externalFileModifiedDirty:
       '文件已被外部修改，自动保存已暂停；请选择重新载入、另存为或覆盖外部版本',
     externalFileModifiedClean: '文件已被外部修改，请选择重新载入外部版本或保留当前内容',
+    startupDraftConflictTitle: '发现未保存草稿和外部修改',
+    startupDraftConflictMessage:
+      '“{fileName}” 的本地文件已在上次退出后被修改，同时存在未保存草稿。请选择要保留的版本。',
+    startupDraftConflictRestoreDraft: '恢复草稿',
+    startupDraftConflictUseDisk: '使用磁盘版本',
+    startupDraftConflictSaveDraftAs: '草稿另存为',
     openFolderFailed: '打开文件夹失败',
     loadFolderTreeFailed: '载入文件夹文件树失败',
     loadSubfolderFailed: '载入子文件夹失败：{error}',
@@ -928,6 +934,12 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     externalFileModifiedDirty:
       '檔案已被外部修改，自動儲存已暫停；請選擇重新載入、另存新檔或覆蓋外部版本',
     externalFileModifiedClean: '檔案已被外部修改，請選擇重新載入外部版本或保留目前內容',
+    startupDraftConflictTitle: '發現未儲存草稿和外部修改',
+    startupDraftConflictMessage:
+      '「{fileName}」的本機檔案已在上次結束後被修改，同時存在未儲存草稿。請選擇要保留的版本。',
+    startupDraftConflictRestoreDraft: '復原草稿',
+    startupDraftConflictUseDisk: '使用磁碟版本',
+    startupDraftConflictSaveDraftAs: '草稿另存新檔',
     openFolderFailed: '開啟資料夾失敗',
     loadFolderTreeFailed: '載入資料夾檔案樹失敗',
     loadSubfolderFailed: '載入子資料夾失敗：{error}',
@@ -1417,6 +1429,12 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
       'The file was modified externally and autosave is paused. Reload, Save as, or overwrite the external version.',
     externalFileModifiedClean:
       'The file was modified externally. Reload the external version or keep the current content.',
+    startupDraftConflictTitle: 'Unsaved draft and external changes found',
+    startupDraftConflictMessage:
+      '"{fileName}" was modified on disk after the last exit, and an unsaved draft also exists. Choose which version to keep.',
+    startupDraftConflictRestoreDraft: 'Restore draft',
+    startupDraftConflictUseDisk: 'Use disk version',
+    startupDraftConflictSaveDraftAs: 'Save draft as',
     openFolderFailed: 'Failed to open folder',
     loadFolderTreeFailed: 'Failed to load folder file tree',
     loadSubfolderFailed: 'Failed to load subfolder: {error}',

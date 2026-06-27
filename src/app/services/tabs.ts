@@ -21,6 +21,7 @@ export function createBlankTab(fileName = 'untitled.md', filePath = t.untitledMa
     fileName,
     filePath,
     nativePath: null,
+    draftId: null,
     markdown: '',
     savedMarkdown: '',
     dirty: false,

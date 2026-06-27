@@ -1,7 +1,7 @@
 mod app_logger;
 mod config;
-mod external_link;
 mod export;
+mod external_link;
 mod file_system;
 mod i18n;
 mod models;
@@ -33,7 +33,7 @@ pub fn run() {
                 );
             }
             crate::app_logger::info("App", "已启用软件渲染模式");
-        }else{
+        } else {
             crate::app_logger::info("App", "已启用硬件加速渲染模式");
         }
     }
@@ -164,6 +164,9 @@ pub fn run() {
             crate::config::commands::clear_recent_entries,
             crate::config::commands::create_document_snapshot,
             crate::config::commands::list_document_snapshots,
+            crate::config::commands::write_workspace_draft,
+            crate::config::commands::read_workspace_draft,
+            crate::config::commands::delete_workspace_draft,
             crate::config::commands::update_app_setting,
             crate::config::commands::update_app_settings,
             crate::config::commands::list_app_settings,

@@ -1,11 +1,16 @@
-use crate::config::{self, now_ts};
+use crate::config::{
+    self, content_store_dir, markdown_store_path, now_ts, validate_content_id, DRAFTS_DIR_NAME,
+    SNAPSHOTS_DIR_NAME,
+};
 use crate::models::{
     RecentEntry, RecentEntryInput, RecentEntryType, SettingInput, SettingRecord, SnapshotInput,
-    SnapshotRecord,
+    SnapshotRecord, StoredSnapshotRecord, WorkspaceDraftInput, WorkspaceDraftPayload,
 };
 use std::{
     collections::hash_map::DefaultHasher,
+    fs,
     hash::{Hash, Hasher},
+    time::UNIX_EPOCH,
 };
 use tauri::{AppHandle, Runtime};
 
@@ -50,13 +55,21 @@ pub(crate) fn clear_recent_entries(app: AppHandle) -> Result<(), String> {
 pub(crate) fn create_document_snapshot(app: AppHandle, input: SnapshotInput) -> Result<(), String> {
     let now = now_ts();
     let content_hash = hash_text(&input.markdown);
-    let snapshot = SnapshotRecord {
+    let snapshot_dir = content_store_dir(&app, SNAPSHOTS_DIR_NAME)?;
+    write_markdown_store_file(
+        &snapshot_dir,
+        &content_hash,
+        &input.markdown,
+        "写入快照正文失败",
+    )?;
+
+    let snapshot = StoredSnapshotRecord {
         id: format!("{now}-{content_hash}"),
         document_path: input.path,
         content_hash,
-        markdown: input.markdown,
         created_at: now,
         reason: input.reason,
+        markdown: None,
     };
 
     config::with_manager(&app, |manager| {
@@ -77,9 +90,11 @@ pub(crate) fn list_document_snapshots(
     app: AppHandle,
     path: String,
 ) -> Result<Vec<SnapshotRecord>, String> {
+    let snapshot_dir = content_store_dir(&app, SNAPSHOTS_DIR_NAME)?;
     config::with_manager(&app, |manager| {
         let config = manager.get_config()?;
-        Ok(config
+        let mut records = Vec::new();
+        for snapshot in config
             .snapshots
             .documents
             .get(&path)
@@ -87,8 +102,67 @@ pub(crate) fn list_document_snapshots(
             .unwrap_or_default()
             .into_iter()
             .take(20)
-            .collect())
+        {
+            let markdown = read_markdown_store_file(
+                &snapshot_dir,
+                &snapshot.content_hash,
+                "读取快照正文失败",
+            )?;
+            records.push(SnapshotRecord {
+                id: snapshot.id,
+                document_path: snapshot.document_path,
+                content_hash: snapshot.content_hash,
+                markdown,
+                created_at: snapshot.created_at,
+                reason: snapshot.reason,
+            });
+        }
+        Ok(records)
     })
+}
+
+#[tauri::command]
+pub(crate) fn write_workspace_draft(
+    app: AppHandle,
+    input: WorkspaceDraftInput,
+) -> Result<WorkspaceDraftPayload, String> {
+    let draft_id = input
+        .draft_id
+        .filter(|value| validate_content_id(value).is_ok())
+        .unwrap_or_else(|| format!("draft-{}-{}", now_ts(), hash_text(&input.markdown)));
+    let draft_dir = content_store_dir(&app, DRAFTS_DIR_NAME)?;
+    write_markdown_store_file(&draft_dir, &draft_id, &input.markdown, "写入草稿失败")?;
+    let updated_at = markdown_store_updated_at(&draft_dir, &draft_id)?;
+    Ok(WorkspaceDraftPayload {
+        draft_id,
+        markdown: input.markdown,
+        updated_at,
+    })
+}
+
+#[tauri::command]
+pub(crate) fn read_workspace_draft(
+    app: AppHandle,
+    draft_id: String,
+) -> Result<WorkspaceDraftPayload, String> {
+    let draft_dir = content_store_dir(&app, DRAFTS_DIR_NAME)?;
+    let markdown = read_markdown_store_file(&draft_dir, &draft_id, "读取草稿失败")?;
+    let updated_at = markdown_store_updated_at(&draft_dir, &draft_id)?;
+    Ok(WorkspaceDraftPayload {
+        draft_id,
+        markdown,
+        updated_at,
+    })
+}
+
+#[tauri::command]
+pub(crate) fn delete_workspace_draft(app: AppHandle, draft_id: String) -> Result<(), String> {
+    let draft_dir = content_store_dir(&app, DRAFTS_DIR_NAME)?;
+    let path = markdown_store_path(&draft_dir, &draft_id)?;
+    if path.exists() {
+        fs::remove_file(path).map_err(|error| format!("删除草稿失败：{error}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -204,6 +278,38 @@ fn hash_text(text: &str) -> String {
     let mut hasher = DefaultHasher::new();
     text.hash(&mut hasher);
     format!("{:x}", hasher.finish())
+}
+
+fn write_markdown_store_file(
+    directory: &std::path::Path,
+    id: &str,
+    markdown: &str,
+    error_prefix: &str,
+) -> Result<(), String> {
+    let path = markdown_store_path(directory, id)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("{error_prefix}：{error}"))?;
+    }
+    fs::write(path, markdown.as_bytes()).map_err(|error| format!("{error_prefix}：{error}"))
+}
+
+fn read_markdown_store_file(
+    directory: &std::path::Path,
+    id: &str,
+    error_prefix: &str,
+) -> Result<String, String> {
+    let path = markdown_store_path(directory, id)?;
+    fs::read_to_string(path).map_err(|error| format!("{error_prefix}：{error}"))
+}
+
+fn markdown_store_updated_at(directory: &std::path::Path, id: &str) -> Result<i64, String> {
+    let path = markdown_store_path(directory, id)?;
+    Ok(fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default())
 }
 
 #[cfg(test)]
