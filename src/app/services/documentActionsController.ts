@@ -153,11 +153,11 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     input.value = '';
   }
 
-  async function saveMarkdownFile(saveAs = false) {
+  async function saveMarkdownFile(saveAs = false): Promise<boolean> {
     const activeTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
     if (activeTab?.largeDocumentMode && !saveAs) {
       options.setStatusMessage(t.largeDocumentReadonlySaveBlocked());
-      return;
+      return false;
     }
 
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
@@ -165,7 +165,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (options.getDesktopEnabled()) {
       if (!saveAs && hasExternalFileChange()) {
         options.setStatusMessage(t.externalChangeChooseAction());
-        return;
+        return false;
       }
 
       const path = saveAs ? null : options.getNativePath();
@@ -182,12 +182,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       );
       if (error) {
         options.setStatusMessage(error);
+        return false;
       }
       if (document) {
         localStorage.removeItem(options.recoveryKey);
         await applySavedNativeDocument(document, markdownToSave, t.savedByTauri());
+        return true;
       }
-      return;
+      return false;
     }
 
     // 浏览器模式下同样用 H1 作为建议文件名
@@ -205,6 +207,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       browserSavedTab.dirty = false;
       options.setTabs([...options.getTabs()]);
     }
+    return true;
   }
 
   async function openRecentFile(path: string) {
@@ -410,7 +413,14 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
       // 用户选择保存后再关闭
       if (confirmClose === 'save') {
-        await saveMarkdownFile(false);
+        const saved = await saveMarkdownFile(false);
+        if (!saved) {
+          logCloseDiagnostics('documentActions.closeTab: 保存失败或取消，停止关闭标签', {
+            tabId,
+            fileName: tabToClose.fileName,
+          });
+          return;
+        }
       }
     } else {
       logCloseDiagnostics('documentActions.closeTab: 标签未标记 dirty，跳过确认', {
@@ -548,62 +558,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
           options.setTabs([...tabs]);
         }
 
-        // H1 Sync
-        const match = markdownToSave.match(/^#\s+(.+)$/m);
-        const h1 = match ? match[1].trim() : null;
-        if (h1) {
-          let finalName = h1.replace(/[<>:"/\\|?*]/g, '');
-          if (finalName && !finalName.toLowerCase().endsWith('.md')) {
-            finalName += '.md';
-          }
-          if (finalName && finalName !== fileName) {
-            const { dirname, join } = await import('@tauri-apps/api/path');
-            const parentDir = await dirname(path);
-            let targetPath = await join(parentDir, finalName);
-
-            const { statMarkdownFile, renameFile } = await import('../../lib/desktop/tauriStorage');
-            let suffix = 1;
-            let currentName = finalName;
-            while (true) {
-              const stat = await statMarkdownFile(targetPath).catch(() => null);
-              if (!stat || !stat.exists) break;
-              if (stat.path === path) break; // It's the same file (e.g. case change on Windows)
-              const base = finalName.replace(/\.md$/i, '');
-              currentName = `${base} (${suffix}).md`;
-              targetPath = await join(parentDir, currentName);
-              suffix++;
-            }
-
-            if (targetPath !== path) {
-              await renameFile(path, targetPath).catch(() => null);
-
-              if (savedTab) {
-                savedTab.nativePath = targetPath;
-                savedTab.filePath = targetPath;
-                savedTab.fileName = currentName;
-
-                const stat = await statMarkdownFile(targetPath).catch(() => null);
-                if (stat && stat.exists) {
-                  savedTab.lastKnownModifiedAt = stat.modifiedAt;
-                  if (options.getActiveTabId() === tabId) {
-                    options.setLastKnownModifiedAt(stat.modifiedAt);
-                  }
-                }
-
-                if (options.getActiveTabId() === tabId) {
-                  options.setFileName(currentName);
-                  options.setFilePath(targetPath);
-                  options.setNativePath(targetPath);
-                }
-
-                options.setTabs([...options.getTabs()]);
-              }
-              if (options.getCurrentFolderPath()) {
-                options.loadFolder(options.getCurrentFolderPath());
-              }
-            }
-          }
-        }
+        // 自动保存只更新当前文件内容，不隐式重命名文件，避免用户未确认时改变磁盘路径。
       }
     }, options.getAutoSaveDelayMs());
   }

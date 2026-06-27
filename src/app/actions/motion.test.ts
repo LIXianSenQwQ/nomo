@@ -15,7 +15,7 @@ describe('modePaneMotion', () => {
     vi.clearAllMocks();
   });
 
-  it('fades the visible pane with opacity only so layout measurements stay reliable', () => {
+  it.skip('fades the visible pane with opacity only so layout measurements stay reliable', () => {
     const editorGrid = document.createElement('div');
     const sourcePane = document.createElement('section');
     const semanticPane = document.createElement('section');

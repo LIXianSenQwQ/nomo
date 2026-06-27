@@ -1,6 +1,12 @@
-import { exportHtmlFile, exportPdfFromHtml, readFileAsBase64 } from '../../lib/desktop/tauriStorage';
+import {
+  exportHtmlFile,
+  exportPdfFromHtml,
+  readFileAsBase64,
+} from '../../lib/desktop/tauriStorage';
 import { logDebug, logInfo, logWarn } from '../../lib/services/logger';
 import exportCssContent from '../styles/export-document.css?inline';
+
+const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 8_000;
 
 export interface ExportDocumentInput {
   /** 当前文档 Markdown 内容（用于 fallback 或元数据）。 */
@@ -295,16 +301,16 @@ async function inlineImageSrc(
     return {};
   }
 
-  // 远程图片（https://）fetch 后转为 base64 内嵌，保证导出 HTML 自包含。
+  // 远程图片 fetch 后转为 base64 内嵌；设置超时，避免导出被慢请求无限阻塞。
   if (/^https?:/i.test(trimmed)) {
-    return fetchImageAsBase64(trimmed).catch((error) => ({
+    return fetchImageAsBase64(trimmed, REMOTE_IMAGE_FETCH_TIMEOUT_MS).catch((error) => ({
       warning: `远程图片未能内嵌（${error instanceof Error ? error.message : String(error)}）：${trimmed}`,
     }));
   }
 
   // asset:// 或 http://asset.localhost/ 是 Tauri 本地资源协议，尝试 fetch 转 base64。
   if (isAssetUrl(trimmed)) {
-    return fetchImageAsBase64(trimmed).catch((error) => ({
+    return fetchImageAsBase64(trimmed, REMOTE_IMAGE_FETCH_TIMEOUT_MS).catch((error) => ({
       warning: `图片未能内嵌（${error instanceof Error ? error.message : String(error)}）：${trimmed}`,
     }));
   }
@@ -335,17 +341,36 @@ async function inlineImageSrc(
 
 function isAssetUrl(src: string): boolean {
   const lower = src.toLowerCase();
-  return lower.startsWith('asset://') || lower.startsWith('http://asset.localhost/') || lower.startsWith('https://asset.localhost/');
+  return (
+    lower.startsWith('asset://') ||
+    lower.startsWith('http://asset.localhost/') ||
+    lower.startsWith('https://asset.localhost/')
+  );
 }
 
-async function fetchImageAsBase64(url: string): Promise<{ dataUrl?: string; warning?: string }> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`fetch failed: ${response.status}`);
+async function fetchImageAsBase64(
+  url: string,
+  timeoutMs: number,
+): Promise<{ dataUrl?: string; warning?: string }> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`fetch failed: ${response.status}`);
+    }
+    const blob = await response.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    return { dataUrl };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`fetch timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  const blob = await response.blob();
-  const dataUrl = await blobToDataUrl(blob);
-  return { dataUrl };
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -443,11 +468,7 @@ function isAbsoluteLocalPath(src: string): boolean {
 }
 
 // 简化 perfAsync 本地实现，避免循环依赖。
-function perfAsync<T>(
-  namespace: string,
-  name: string,
-  fn: () => Promise<T>,
-): Promise<T> {
+function perfAsync<T>(namespace: string, name: string, fn: () => Promise<T>): Promise<T> {
   const start = performance.now();
   return fn().finally(() => {
     logDebug(namespace, `${name} 耗时`, { ms: Math.round(performance.now() - start) });

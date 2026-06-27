@@ -1,9 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import {
-  cleanEditorArtifacts,
-  createExportHtmlDocument,
-  inlineLocalImages,
-} from './exportService';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanEditorArtifacts, createExportHtmlDocument, inlineLocalImages } from './exportService';
 
 // 模拟 tauriStorage 的 readFileAsBase64，避免在单元测试中调用 Tauri。
 vi.mock('../../lib/desktop/tauriStorage', () => ({
@@ -14,6 +10,10 @@ vi.mock('../../lib/desktop/tauriStorage', () => ({
     mime_type: 'image/png',
   }),
 }));
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('exportService', () => {
   it('createExportHtmlDocument 生成完整独立 HTML', () => {
@@ -81,8 +81,7 @@ describe('exportService', () => {
     // 模拟 fetch 返回图片 blob
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      blob: () =>
-        Promise.resolve(new Blob(['fake-png'], { type: 'image/png' })),
+      blob: () => Promise.resolve(new Blob(['fake-png'], { type: 'image/png' })),
     });
 
     try {
@@ -109,5 +108,30 @@ describe('exportService', () => {
     const { html: result, warnings } = await inlineLocalImages(html, null);
     expect(result).toContain('./images/a.png');
     expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('inlineLocalImages 远程图片 fetch 超时后保留原链接并给出 warning', async () => {
+    vi.useFakeTimers();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn((_url, init) => {
+      const signal = init && typeof init === 'object' ? init.signal : null;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    });
+
+    try {
+      const promise = inlineLocalImages('<img src="https://example.com/slow.png" />', null);
+      await vi.advanceTimersByTimeAsync(8_000);
+      const { html: result, warnings } = await promise;
+
+      expect(result).toContain('https://example.com/slow.png');
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('fetch timeout after 8000ms');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -12,7 +12,7 @@ interface ImageInsertionOptions {
   getNativePath(): string | null;
   getSourceTextarea(): HTMLTextAreaElement;
   getImageContext(): ImageContext;
-  saveMarkdownFile(saveAs?: boolean): Promise<void> | void;
+  saveMarkdownFile(saveAs?: boolean): Promise<boolean | void> | boolean | void;
   setMarkdown(markdown: string): void;
   setStatusMessage(message: string): void;
   syncSourceTextareaHeight(): void;
@@ -108,9 +108,7 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
     }
 
     if (failed > 0) {
-      options.setStatusMessage(
-        t.imagesInsertedWithFailures({ inserted: imported.length, failed }),
-      );
+      options.setStatusMessage(t.imagesInsertedWithFailures({ inserted: imported.length, failed }));
     } else {
       options.setStatusMessage(t.imagesInserted({ inserted: imported.length }));
     }
@@ -120,7 +118,11 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
 
   /** HTML 属性值转义：& " < > */
   function escapeHtmlAttr(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   function insertSourceMarkdown(items: Array<{ src: string; alt: string }>) {
@@ -163,7 +165,6 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
       options.syncSourceTextareaHeight();
     });
   }
-
 
   function getInsertFileName(file: File, index: number) {
     if (file.name?.trim()) {

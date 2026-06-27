@@ -5,10 +5,11 @@ use crate::models::{
     FolderIndexFinished,
 };
 use std::{
-    fs,
+    fs::{self, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
-    thread,
-    time::UNIX_EPOCH,
+    process, thread,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
 
@@ -78,8 +79,7 @@ pub(crate) fn write_markdown_file(
         }
     }
 
-    fs::write(&path, markdown.as_bytes())
-        .map_err(|error| format!("保存 Markdown 文件失败：{error}"))?;
+    write_file_atomically(Path::new(&path), markdown.as_bytes())?;
     let payload = document_payload(path, markdown)?;
     crate::app_logger::perf("FileSystem", "文档保存", timer.elapsed());
     Ok(payload)
@@ -204,10 +204,95 @@ fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, S
     })
 }
 
+fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let temp_path = unique_temp_path(parent, path);
+
+    let mut temp_file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .map_err(|error| format!("创建临时保存文件失败：{error}"))?;
+
+    if let Err(error) = temp_file.write_all(bytes) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("写入临时保存文件失败：{error}"));
+    }
+    if let Err(error) = temp_file.sync_all() {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("同步临时保存文件失败：{error}"));
+    }
+    drop(temp_file);
+
+    if let Err(error) = replace_file(&temp_path, path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("保存 Markdown 文件失败：{error}"));
+    }
+
+    sync_parent_dir(parent);
+    Ok(())
+}
+
+fn unique_temp_path(parent: &Path, target: &Path) -> PathBuf {
+    let file_name = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("document.md");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    parent.join(format!(".{file_name}.{}.{}.tmp", process::id(), nonce))
+}
+
+#[cfg(target_os = "windows")]
+fn replace_file(temp_path: &Path, target_path: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let mut from: Vec<u16> = temp_path.as_os_str().encode_wide().collect();
+    from.push(0);
+    let mut to: Vec<u16> = target_path.as_os_str().encode_wide().collect();
+    to.push(0);
+
+    let result = unsafe {
+        MoveFileExW(
+            from.as_ptr(),
+            to.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file(temp_path: &Path, target_path: &Path) -> std::io::Result<()> {
+    fs::rename(temp_path, target_path)
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn sync_parent_dir(parent: &Path) {
+    if let Ok(dir) = fs::File::open(parent) {
+        let _ = dir.sync_all();
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn sync_parent_dir(_parent: &Path) {}
+
 fn read_sample_document(resource_path: &Path) -> Result<DocumentPayload, String> {
     // 直接读取安装目录下的实例文档资源，不再复制到用户应用数据目录。
-    let markdown = fs::read_to_string(resource_path)
-        .map_err(|error| format!("读取实例文档失败：{error}"))?;
+    let markdown =
+        fs::read_to_string(resource_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
     document_payload(resource_path.to_string_lossy().to_string(), markdown)
 }
 
@@ -610,7 +695,7 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::read_sample_document;
+    use super::{read_sample_document, write_markdown_file};
     use std::{
         fs,
         path::PathBuf,
@@ -643,6 +728,47 @@ mod tests {
 
         let result = read_sample_document(&resource_path);
         assert!(result.is_err());
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn write_markdown_file_overwrites_existing_file_with_payload() {
+        let root = unique_test_dir("atomic-write-overwrite");
+        let file_path = root.join("note.md");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(&file_path, "old").expect("write old");
+
+        let payload =
+            write_markdown_file(file_path.to_string_lossy().to_string(), "# 新内容".into())
+                .expect("write markdown");
+
+        assert_eq!(payload.path, file_path.to_string_lossy().to_string());
+        assert_eq!(payload.file_name, "note.md");
+        assert_eq!(payload.markdown, "# 新内容");
+        assert_eq!(
+            fs::read_to_string(&file_path).expect("read saved"),
+            "# 新内容"
+        );
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn write_markdown_file_removes_temporary_file_after_success() {
+        let root = unique_test_dir("atomic-write-cleanup");
+        let file_path = root.join("note.md");
+        fs::create_dir_all(&root).expect("create root");
+
+        write_markdown_file(file_path.to_string_lossy().to_string(), "content".into())
+            .expect("write markdown");
+
+        let temp_files: Vec<_> = fs::read_dir(&root)
+            .expect("read root")
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(temp_files.is_empty());
 
         cleanup(root);
     }
