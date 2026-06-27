@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tab } from '../types';
-import { createPersistedWorkspaceState, migrateWorkspaceSetting } from './workspacePersistence';
+import {
+  createPersistedWorkspaceState,
+  migrateWorkspaceSetting,
+  persistWorkspaceDrafts,
+  type WorkspaceDraftPersistenceCache,
+} from './workspacePersistence';
 
 const writeWorkspaceDraft = vi.hoisted(() => vi.fn());
 const deleteWorkspaceDraft = vi.hoisted(() => vi.fn());
@@ -77,6 +82,98 @@ describe('workspacePersistence', () => {
     expect(state.tabs.find((tab) => tab.id === 'dirty-native')?.draftId).toBe('draft-created');
     expect(state.tabs.find((tab) => tab.id === 'clean-native')?.draftId).toBeNull();
     expect(state.tabs.find((tab) => tab.id === 'pathless')?.draftId).toBe('draft-created');
+  });
+
+  it('can ensure missing draft ids without rewriting existing drafts', async () => {
+    const existingDirty = createTab({
+      id: 'existing-dirty',
+      nativePath: 'D:\\docs\\existing.md',
+      draftId: 'draft-existing',
+      markdown: '# existing',
+      dirty: true,
+    });
+    const missingDirty = createTab({
+      id: 'missing-dirty',
+      nativePath: 'D:\\docs\\missing.md',
+      draftId: null,
+      markdown: '# missing',
+      dirty: true,
+    });
+
+    const state = await createPersistedWorkspaceState({
+      tabs: [existingDirty, missingDirty],
+      activeTabId: existingDirty.id,
+      currentFolderPath: 'D:\\docs',
+      desktopEnabled: true,
+      draftWritePolicy: 'missing-only',
+    });
+
+    expect(writeWorkspaceDraft).toHaveBeenCalledTimes(1);
+    expect(writeWorkspaceDraft).toHaveBeenCalledWith('# missing', null);
+    expect(state.tabs.find((tab) => tab.id === 'existing-dirty')?.draftId).toBe('draft-existing');
+    expect(state.tabs.find((tab) => tab.id === 'missing-dirty')?.draftId).toBe('draft-created');
+  });
+
+  it('can build workspace metadata without touching draft files', async () => {
+    const dirtyTab = createTab({
+      id: 'dirty-native',
+      draftId: 'draft-existing',
+      markdown: '# dirty',
+      dirty: true,
+    });
+
+    const state = await createPersistedWorkspaceState({
+      tabs: [dirtyTab],
+      activeTabId: dirtyTab.id,
+      currentFolderPath: 'D:\\docs',
+      desktopEnabled: true,
+      draftWritePolicy: 'skip',
+    });
+
+    expect(writeWorkspaceDraft).not.toHaveBeenCalled();
+    expect(deleteWorkspaceDraft).not.toHaveBeenCalled();
+    expect(state.tabs[0].draftId).toBe('draft-existing');
+    expect(JSON.stringify(state)).not.toContain('# dirty');
+  });
+
+  it('persists changed drafts once per content signature', async () => {
+    const cache: WorkspaceDraftPersistenceCache = new Map();
+    const dirtyTab = createTab({
+      id: 'dirty-native',
+      nativePath: 'D:\\docs\\a.md',
+      draftId: null,
+      markdown: '# dirty',
+      dirty: true,
+      version: 1,
+    });
+
+    const first = await persistWorkspaceDrafts({
+      tabs: [dirtyTab],
+      desktopEnabled: true,
+      policy: 'changed',
+      cache,
+    });
+    const second = await persistWorkspaceDrafts({
+      tabs: [dirtyTab],
+      desktopEnabled: true,
+      policy: 'changed',
+      cache,
+    });
+    dirtyTab.markdown = '# dirty changed';
+    dirtyTab.version = 2;
+    const third = await persistWorkspaceDrafts({
+      tabs: [dirtyTab],
+      desktopEnabled: true,
+      policy: 'changed',
+      cache,
+    });
+
+    expect(first).toEqual({ changed: true, changedDraftIds: true });
+    expect(second).toEqual({ changed: false, changedDraftIds: false });
+    expect(third).toEqual({ changed: true, changedDraftIds: false });
+    expect(writeWorkspaceDraft).toHaveBeenCalledTimes(2);
+    expect(writeWorkspaceDraft).toHaveBeenNthCalledWith(1, '# dirty', null);
+    expect(writeWorkspaceDraft).toHaveBeenNthCalledWith(2, '# dirty changed', 'draft-created');
   });
 
   it('preserves pending conflict drafts without rewriting or deleting them', async () => {

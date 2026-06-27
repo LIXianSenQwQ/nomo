@@ -82,7 +82,8 @@ pub(crate) struct WorkspaceDraftInput {
 #[derive(Debug, Serialize)]
 pub(crate) struct WorkspaceDraftPayload {
     pub(crate) draft_id: String,
-    pub(crate) markdown: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) markdown: Option<String>,
     pub(crate) updated_at: i64,
 }
 

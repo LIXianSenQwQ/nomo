@@ -107,13 +107,12 @@ describe('workspace drafts', () => {
   it('writes a workspace draft through the native command', async () => {
     invokeMock.mockResolvedValue({
       draft_id: 'draft-1',
-      markdown: '# 草稿',
       updated_at: 123,
     });
 
     await expect(writeWorkspaceDraft('# 草稿', 'draft-1')).resolves.toEqual({
       draftId: 'draft-1',
-      markdown: '# 草稿',
+      markdown: '',
       updatedAt: 123,
     });
     expect(invokeMock).toHaveBeenCalledWith('write_workspace_draft', {

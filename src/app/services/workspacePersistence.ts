@@ -21,6 +21,21 @@ export interface WorkspaceMigrationResult {
   migrated: boolean;
 }
 
+export type WorkspaceDraftWritePolicy = 'write-needed' | 'missing-only' | 'skip';
+export type WorkspaceDraftPersistPolicy = 'changed' | 'missing-only';
+
+export interface WorkspaceDraftPersistenceCacheEntry {
+  draftId: string;
+  signature: string;
+}
+
+export type WorkspaceDraftPersistenceCache = Map<string, WorkspaceDraftPersistenceCacheEntry>;
+
+export interface WorkspaceDraftPersistenceResult {
+  changed: boolean;
+  changedDraftIds: boolean;
+}
+
 export function isPersistedWorkspaceState(value: unknown): value is PersistedWorkspaceState {
   if (!value || typeof value !== 'object') {
     return false;
@@ -35,8 +50,10 @@ export async function createPersistedWorkspaceState(input: {
   currentFolderPath: string;
   desktopEnabled: boolean;
   preservedDraftIds?: ReadonlySet<string>;
+  draftWritePolicy?: WorkspaceDraftWritePolicy;
 }): Promise<PersistedWorkspaceState> {
   const persistedTabs: PersistedWorkspaceTab[] = [];
+  const draftWritePolicy = input.draftWritePolicy ?? 'write-needed';
 
   for (const tab of input.tabs) {
     let draftId = tab.draftId ?? null;
@@ -46,13 +63,19 @@ export async function createPersistedWorkspaceState(input: {
     }
 
     if (input.desktopEnabled && shouldPersistDraft(tab)) {
-      const draft = await writeWorkspaceDraft(tab.markdown, draftId);
-      draftId = draft.draftId;
-      tab.draftId = draftId;
+      const shouldWriteDraft =
+        draftWritePolicy === 'write-needed' || (draftWritePolicy === 'missing-only' && !draftId);
+      if (shouldWriteDraft) {
+        const draft = await writeWorkspaceDraft(tab.markdown, draftId);
+        draftId = draft.draftId;
+        tab.draftId = draftId;
+      }
     } else if (input.desktopEnabled && draftId) {
-      await deleteWorkspaceDraft(draftId).catch(() => undefined);
-      draftId = null;
-      tab.draftId = null;
+      if (draftWritePolicy !== 'skip') {
+        await deleteWorkspaceDraft(draftId).catch(() => undefined);
+        draftId = null;
+        tab.draftId = null;
+      }
     }
 
     persistedTabs.push(toPersistedWorkspaceTab(tab, draftId));
@@ -64,6 +87,61 @@ export async function createPersistedWorkspaceState(input: {
     activeTabId: input.activeTabId,
     currentFolderPath: input.currentFolderPath || undefined,
   };
+}
+
+export async function persistWorkspaceDrafts(input: {
+  tabs: Tab[];
+  desktopEnabled: boolean;
+  policy: WorkspaceDraftPersistPolicy;
+  preservedDraftIds?: ReadonlySet<string>;
+  cache?: WorkspaceDraftPersistenceCache;
+}): Promise<WorkspaceDraftPersistenceResult> {
+  const result: WorkspaceDraftPersistenceResult = {
+    changed: false,
+    changedDraftIds: false,
+  };
+
+  if (!input.desktopEnabled) {
+    return result;
+  }
+
+  for (const tab of input.tabs) {
+    let draftId = tab.draftId ?? null;
+    if (draftId && input.preservedDraftIds?.has(draftId)) {
+      continue;
+    }
+
+    if (shouldPersistDraft(tab)) {
+      const signature = createWorkspaceDraftSignature(tab);
+      const cached = input.cache?.get(tab.id);
+      const hasCurrentDraft =
+        Boolean(draftId) && cached?.draftId === draftId && cached.signature === signature;
+      const shouldWrite = !draftId || (input.policy === 'changed' && !hasCurrentDraft);
+
+      if (!shouldWrite) {
+        continue;
+      }
+
+      const previousDraftId = draftId;
+      const draft = await writeWorkspaceDraft(tab.markdown, draftId);
+      draftId = draft.draftId;
+      tab.draftId = draftId;
+      input.cache?.set(tab.id, { draftId, signature });
+      result.changed = true;
+      result.changedDraftIds = result.changedDraftIds || previousDraftId !== draftId;
+      continue;
+    }
+
+    if (draftId) {
+      await deleteWorkspaceDraft(draftId).catch(() => undefined);
+      tab.draftId = null;
+      input.cache?.delete(tab.id);
+      result.changed = true;
+      result.changedDraftIds = true;
+    }
+  }
+
+  return result;
 }
 
 export async function migrateWorkspaceSetting(
@@ -165,6 +243,19 @@ export function createRuntimeTabFromPersisted(
 
 function shouldPersistDraft(tab: Tab) {
   return tab.dirty || (!tab.nativePath && tab.markdown.length > 0);
+}
+
+function createWorkspaceDraftSignature(tab: Tab) {
+  return `${tab.version}:${hashText(tab.markdown)}`;
+}
+
+function hashText(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${value.length}:${hash >>> 0}`;
 }
 
 function toPersistedWorkspaceTab(tab: Tab, draftId: string | null): PersistedWorkspaceTab {

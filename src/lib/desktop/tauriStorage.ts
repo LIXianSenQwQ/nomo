@@ -123,7 +123,7 @@ interface SnapshotRecordPayload {
 
 interface WorkspaceDraftPayload {
   draft_id: string;
-  markdown: string;
+  markdown?: string;
   updated_at: number;
 }
 
@@ -597,7 +597,7 @@ function normalizeFileStatus(payload: FileStatusPayload): FileStatus {
 function normalizeWorkspaceDraftPayload(payload: WorkspaceDraftPayload): WorkspaceDraftRecord {
   return {
     draftId: payload.draft_id,
-    markdown: payload.markdown,
+    markdown: payload.markdown ?? '',
     updatedAt: payload.updated_at,
   };
 }

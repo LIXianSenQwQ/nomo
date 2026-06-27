@@ -10,6 +10,7 @@
     installSampleDocument,
     openExternalLink,
     updateAppSetting,
+    updateAppSettings,
     readWorkspaceDraft,
     deleteWorkspaceDraft,
     rememberRecentEntry,
@@ -90,6 +91,8 @@
     createPersistedWorkspaceState,
     createRuntimeTabFromPersisted,
     migrateWorkspaceSetting,
+    persistWorkspaceDrafts,
+    type WorkspaceDraftPersistenceCache,
   } from './services/workspacePersistence';
   import {
     listenFolderIndexBatches,
@@ -368,7 +371,12 @@
 
   // 防抖持久化工作区状态，避免每次按键都触发两次 IPC 调用 + 磁盘写入
   let _persistTimer: number | null = null;
+  let _workspaceDraftTimer: number | null = null;
+  let _workspaceDraftWritePromise: Promise<void> | null = null;
   const WORKSPACE_PERSIST_DEBOUNCE_MS = 500;
+  const WORKSPACE_DRAFT_PERSIST_DEBOUNCE_MS = 2000;
+  const workspaceDraftPersistenceCache: WorkspaceDraftPersistenceCache = new Map();
+  const lastPersistedWorkspaceJsonByKey = new Map<string, string>();
 
   function persistWorkspaceState() {
     if (!desktopEnabled || !windowLabel) return;
@@ -384,30 +392,36 @@
   }
 
   /** 立即刷新待持久化的工作区状态（用于关闭窗口/退出应用等场景） */
-  function flushPersistWorkspaceState() {
+  async function flushPersistWorkspaceState() {
     if (_persistTimer !== null) {
       window.clearTimeout(_persistTimer);
       _persistTimer = null;
     }
     if (!desktopEnabled || !windowLabel) return;
-    persistWorkspaceStateNow().catch(() => undefined);
+    await persistWorkspaceDraftsNow('changed');
+    await persistWorkspaceStateNow({ ensureDraftIds: false });
   }
 
-  async function persistWorkspaceStateNow() {
+  async function persistWorkspaceStateNow(options?: { ensureDraftIds?: boolean }) {
     if (!desktopEnabled || !windowLabel) return;
+    if (options?.ensureDraftIds !== false) {
+      await persistWorkspaceDraftsNow('missing-only');
+    }
     const state = await createPersistedWorkspaceState({
       tabs,
       activeTabId,
       currentFolderPath,
       desktopEnabled,
       preservedDraftIds: getPendingStartupConflictDraftIds(),
+      draftWritePolicy: 'skip',
     });
-    await updateAppSetting(`workspaceTabs:${windowLabel}`, state).catch(() => undefined);
+    const workspaceEntries: Record<string, unknown> = {
+      [`workspaceTabs:${windowLabel}`]: state,
+    };
     if (currentFolderPath) {
-      await updateAppSetting(`workspaceTabs:folder:${currentFolderPath}`, state).catch(
-        () => undefined,
-      );
+      workspaceEntries[`workspaceTabs:folder:${currentFolderPath}`] = state;
     }
+    await updateWorkspaceStateSettings(workspaceEntries);
   }
 
   async function persistFolderWorkspaceState(
@@ -422,8 +436,83 @@
       currentFolderPath: folderPath,
       desktopEnabled,
       preservedDraftIds: getPendingStartupConflictDraftIds(),
+      draftWritePolicy: 'missing-only',
     });
-    await updateAppSetting(`workspaceTabs:folder:${folderPath}`, state).catch(() => undefined);
+    await updateWorkspaceStateSettings({ [`workspaceTabs:folder:${folderPath}`]: state });
+  }
+
+  function schedulePersistWorkspaceDrafts() {
+    if (!desktopEnabled || !windowLabel) return;
+    if (_workspaceDraftTimer !== null) {
+      window.clearTimeout(_workspaceDraftTimer);
+    }
+    _workspaceDraftTimer = window.setTimeout(() => {
+      _workspaceDraftTimer = null;
+      persistWorkspaceDraftsNow('changed')
+        .then((result) => {
+          if (result.changedDraftIds) {
+            persistWorkspaceState();
+          }
+        })
+        .catch(() => undefined);
+    }, WORKSPACE_DRAFT_PERSIST_DEBOUNCE_MS);
+  }
+
+  async function persistWorkspaceDraftsNow(policy: 'changed' | 'missing-only') {
+    if (policy === 'changed' && _workspaceDraftTimer !== null) {
+      window.clearTimeout(_workspaceDraftTimer);
+      _workspaceDraftTimer = null;
+    }
+    if (_workspaceDraftWritePromise) {
+      await _workspaceDraftWritePromise;
+    }
+
+    let result = { changed: false, changedDraftIds: false };
+    _workspaceDraftWritePromise = persistWorkspaceDrafts({
+      tabs,
+      desktopEnabled,
+      policy,
+      preservedDraftIds: getPendingStartupConflictDraftIds(),
+      cache: workspaceDraftPersistenceCache,
+    })
+      .then((value) => {
+        result = value;
+      })
+      .catch(() => undefined);
+
+    try {
+      await _workspaceDraftWritePromise;
+      return result;
+    } finally {
+      _workspaceDraftWritePromise = null;
+    }
+  }
+
+  async function updateWorkspaceStateSettings(entries: Record<string, unknown>) {
+    const changedEntries: Record<string, unknown> = {};
+    const changedJsonByKey = new Map<string, string>();
+
+    for (const [key, value] of Object.entries(entries)) {
+      const nextJson = JSON.stringify(value);
+      if (lastPersistedWorkspaceJsonByKey.get(key) === nextJson) {
+        continue;
+      }
+      changedEntries[key] = value;
+      changedJsonByKey.set(key, nextJson);
+    }
+
+    if (Object.keys(changedEntries).length === 0) {
+      return;
+    }
+
+    try {
+      await updateAppSettings(changedEntries);
+    } catch {
+      return;
+    }
+    for (const [key, json] of changedJsonByKey.entries()) {
+      lastPersistedWorkspaceJsonByKey.set(key, json);
+    }
   }
 
   function getPendingStartupConflictDraftIds() {
@@ -1096,7 +1185,7 @@
     }
 
     // 关闭窗口前立即持久化工作区状态和阅读位置
-    flushPersistWorkspaceState();
+    await flushPersistWorkspaceState();
     await flushCurrentReadingPosition();
     const shouldHideToTray = closeBehavior === 'close-to-tray';
     await closeDesktopWindow(desktopEnabled, shouldHideToTray);
@@ -1187,7 +1276,7 @@
       if (ok === false) return;
     }
     // 退出应用前立即持久化工作区状态和阅读位置
-    flushPersistWorkspaceState();
+    await flushPersistWorkspaceState();
     await flushCurrentReadingPosition();
     await exitDesktopApp(desktopEnabled);
   }
@@ -2692,7 +2781,7 @@
 
   onDestroy(() => {
     // 组件销毁前立即持久化工作区状态和阅读位置
-    flushPersistWorkspaceState();
+    void flushPersistWorkspaceState();
     saveCurrentReadingPositionToMemoryOnly();
     void flushReadingPositions();
     _unsubConfirmStore();
@@ -2760,6 +2849,7 @@
         activeTab.savedMarkdown = markdown;
       }
       tabs = [...tabs];
+      schedulePersistWorkspaceDrafts();
       persistWorkspaceState();
     }
 

@@ -618,7 +618,8 @@ describe('App outline layout', () => {
   });
 
   it('keeps the explicit explorer root across restored workspace tabs', () => {
-    expect(appSource).toMatch(/updateAppSetting\(`workspaceTabs:\$\{windowLabel\}`,\s*state\)/);
+    expect(appSource).toContain('updateWorkspaceStateSettings(workspaceEntries)');
+    expect(appSource).toContain('[`workspaceTabs:${windowLabel}`]: state');
     expect(appSource).toContain('workspaceTabs:folder:${currentFolderPath}');
     expect(appSource).toContain("typeof state.currentFolderPath === 'string'");
     expect(appSource).toContain('currentFolderPath = state.currentFolderPath');

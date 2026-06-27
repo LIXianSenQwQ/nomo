@@ -135,7 +135,7 @@ pub(crate) fn write_workspace_draft(
     let updated_at = markdown_store_updated_at(&draft_dir, &draft_id)?;
     Ok(WorkspaceDraftPayload {
         draft_id,
-        markdown: input.markdown,
+        markdown: None,
         updated_at,
     })
 }
@@ -150,7 +150,7 @@ pub(crate) fn read_workspace_draft(
     let updated_at = markdown_store_updated_at(&draft_dir, &draft_id)?;
     Ok(WorkspaceDraftPayload {
         draft_id,
-        markdown,
+        markdown: Some(markdown),
         updated_at,
     })
 }
