@@ -310,12 +310,18 @@
   color: var(--md-editor-link-fg);
 }
 
-.rich-markdown code {
-  padding: 2px 5px;
+.rich-markdown :not(pre) > code {
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-accent) 26%, var(--md-editor-code-border));
   border-radius: var(--md-editor-radius-sm);
-  background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+  background: color-mix(in srgb, var(--md-editor-accent) 8%, var(--md-editor-code-bg));
+  color: var(--md-editor-accent-strong);
   font-family: var(--md-editor-font-mono);
   font-size: 0.92em;
+  line-height: 1;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .task-row {
@@ -2184,12 +2190,16 @@
   display: inline;
   vertical-align: baseline;
   padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--md-editor-accent) 26%, var(--md-editor-code-border));
   border-radius: var(--md-editor-radius-sm, 3px);
-  background: color-mix(in srgb, var(--md-editor-code-bg) 12%, transparent);
+  background: color-mix(in srgb, var(--md-editor-accent) 8%, var(--md-editor-code-bg));
+  color: var(--md-editor-accent-strong);
   font-family: var(--md-editor-font-mono);
   font-size: 0.92em;
   line-height: 1;
   white-space: nowrap;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* ---- Markdown 注释 comment_inline ---- */
