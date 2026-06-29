@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.5.1",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "pnpm exec paraglide-js compile && vite --host 0.0.0.0",
     "build": "pnpm exec paraglide-js compile && vite build",
     "build:quicklook-renderer": "vite build --config vite.quicklook.config.ts",
     "build:quicklook-extension": "bash scripts/build-macos-quicklook.sh",
@@ -14,7 +14,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "tauri": "tauri",
+    "tauri": "node scripts/run-tauri.mjs",
     "build:win64:nsis": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
     "test": "vitest run",
     "test:watch": "vitest"
