@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import {
   type OutlineScrollAnchor,
   getSemanticScrollAnchorForBlock,
-  getSourceScrollAnchorAtLine,
+  getSourceScrollAnchor,
   scrollSemanticToAnchor,
   scrollSourceToAnchor,
   setScrollTop,
@@ -30,7 +30,7 @@ interface EditorInteractionOptions {
 export function createEditorInteractionController(options: EditorInteractionOptions) {
   let pendingSourceCaretLine: number | null = null;
 
-  async function setMode(nextMode: EditorMode) {
+  async function setMode(nextMode: EditorMode, modeSwitchAnchor?: OutlineScrollAnchor | null) {
     if (options.getLargeDocumentMode() && nextMode === 'semantic') {
       options.setStatusMessage(t.largeDocumentStayReadonlySource());
       return;
@@ -48,16 +48,19 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     const savedSemanticScrollTop = semanticPane?.scrollTop ?? 0;
     const savedSourceScrollTop = sourcePane?.scrollTop ?? 0;
     const scrollAnchor =
-      options.getMode() === 'semantic'
+      modeSwitchAnchor ??
+      (options.getMode() === 'semantic'
         ? getSemanticModeSwitchAnchor(outline, semanticPane, savedSemanticScrollTop)
-        : getSourceModeSwitchAnchor(outline, sourcePane, savedSourceScrollTop);
+        : getSourceModeSwitchAnchor(outline, sourcePane, savedSourceScrollTop));
     options.getEditor().updateOptions({ mode: nextMode });
     await tick();
     options.setSuppressOutlineScrollUntil(Date.now() + 300);
 
     scheduleAfterFrames(() => {
       if (nextMode === 'semantic') {
-        scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), scrollAnchor);
+        scrollSemanticToAnchor(options.getOutline(), options.getSemanticPane(), scrollAnchor, {
+          behavior: 'instant',
+        });
         refreshEditorViewportLayout();
         return;
       }
@@ -310,15 +313,8 @@ export function createEditorInteractionController(options: EditorInteractionOpti
   ): OutlineScrollAnchor | null {
     const sourceTextarea = options.getSourceTextarea();
     const lineHeight = options.getSourceLineHeight();
-    const selectionLine = getSourceSelectionLine(sourceTextarea);
-    const anchorLine =
-      sourcePane && selectionLine && isSourceLineVisible(sourcePane, selectionLine, lineHeight)
-        ? selectionLine
-        : Math.max(1, Math.floor(savedScrollTop / lineHeight) + 1);
-
-    return getSourceScrollAnchorAtLine(
+    return getSourceScrollAnchor(
       outline,
-      anchorLine,
       savedScrollTop,
       lineHeight,
       sourceTextarea,
@@ -381,15 +377,6 @@ export function createEditorInteractionController(options: EditorInteractionOpti
       return null;
     }
     return sourceTextarea.value.slice(0, sourceTextarea.selectionStart).split(/\r?\n/).length;
-  }
-
-  function isSourceLineVisible(sourcePane: HTMLElement, sourceLine: number, lineHeight: number) {
-    const lineTop = Math.max(0, (sourceLine - 1) * lineHeight);
-    const lineBottom = lineTop + lineHeight;
-    return (
-      lineBottom > sourcePane.scrollTop &&
-      lineTop < sourcePane.scrollTop + sourcePane.clientHeight
-    );
   }
 
   function clamp(value: number, min: number, max: number) {

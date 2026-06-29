@@ -43,27 +43,33 @@ describe('readingPosition', () => {
     __readingPositionTestUtils.resetStore();
   });
 
-  it('按标准化 filePath 保存和读取', () => {
+  it('按标准化 filePath 保存和读取单一锚点', () => {
     saveReadingPositionToMemoryOnly('C:\\Docs\\Article.md\\', 'semantic', semanticAnchor);
 
-    expect(getReadingPosition('c:/docs/article.md')?.semanticAnchor).toEqual(semanticAnchor);
+    expect(getReadingPosition('c:/docs/article.md')).toEqual({
+      anchor: semanticAnchor,
+      anchorMode: 'semantic',
+      updatedAt: expect.any(Number),
+    });
   });
 
-  it('按模式增量保存，不覆盖另一模式的位置', () => {
+  it('保存新模式位置会覆盖旧锚点，不再保留两套独立位置', () => {
     saveReadingPositionToMemoryOnly('/docs/a.md', 'semantic', semanticAnchor);
     saveReadingPositionToMemoryOnly('/docs/a.md', 'source', sourceAnchor);
 
     const position = getReadingPosition('/docs/a.md');
-    expect(position?.semanticAnchor).toEqual(semanticAnchor);
-    expect(position?.sourceAnchor).toEqual(sourceAnchor);
+    expect(position?.anchor).toEqual(sourceAnchor);
+    expect(position?.anchorMode).toBe('source');
+    expect(position).not.toHaveProperty('semanticAnchor');
+    expect(position).not.toHaveProperty('sourceAnchor');
   });
 
-  it('加载持久化记录到内存', async () => {
+  it('加载新结构持久化记录到内存', async () => {
     const { listAppSettings } = await import('../../lib/desktop/tauriStorage');
     const positions: Record<string, ReadingPosition> = {
       'C:/DOCS/A.md': {
-        semanticAnchor,
-        sourceAnchor: null,
+        anchor: semanticAnchor,
+        anchorMode: 'semantic',
         updatedAt: 100,
       },
     };
@@ -74,7 +80,57 @@ describe('readingPosition', () => {
 
     await loadReadingPositions();
 
-    expect(getReadingPosition('c:/docs/a.md')?.semanticAnchor).toEqual(semanticAnchor);
+    expect(getReadingPosition('c:/docs/a.md')?.anchor).toEqual(semanticAnchor);
+  });
+
+  it('旧结构按目标模式优先迁移为统一锚点', async () => {
+    const { listAppSettings } = await import('../../lib/desktop/tauriStorage');
+    vi.mocked(listAppSettings).mockResolvedValueOnce([
+      {
+        key: 'readingPositions',
+        valueJson: JSON.stringify({
+          '/docs/a.md': {
+            semanticAnchor,
+            sourceAnchor,
+            updatedAt: 100,
+          },
+        }),
+        updatedAt: 1,
+      },
+    ]);
+
+    await loadReadingPositions();
+
+    expect(getReadingPosition('/docs/a.md', 'source')).toEqual({
+      anchor: sourceAnchor,
+      anchorMode: 'source',
+      updatedAt: 100,
+    });
+  });
+
+  it('旧结构缺少目标模式锚点时回退另一模式', async () => {
+    const { listAppSettings } = await import('../../lib/desktop/tauriStorage');
+    vi.mocked(listAppSettings).mockResolvedValueOnce([
+      {
+        key: 'readingPositions',
+        valueJson: JSON.stringify({
+          '/docs/a.md': {
+            semanticAnchor,
+            sourceAnchor: null,
+            updatedAt: 100,
+          },
+        }),
+        updatedAt: 1,
+      },
+    ]);
+
+    await loadReadingPositions();
+
+    expect(getReadingPosition('/docs/a.md', 'source')).toEqual({
+      anchor: semanticAnchor,
+      anchorMode: 'semantic',
+      updatedAt: 100,
+    });
   });
 
   it('flush 时按 updatedAt 合并，避免旧状态覆盖新状态', async () => {
@@ -128,5 +184,9 @@ describe('readingPosition', () => {
     >;
     expect(Object.keys(persisted)).toHaveLength(300);
     expect(persisted['/docs/0.md']).toBeUndefined();
+    expect(persisted['/docs/300.md']).toMatchObject({
+      anchorMode: 'semantic',
+      anchor: expect.objectContaining({ sourceLine: 301 }),
+    });
   });
 });

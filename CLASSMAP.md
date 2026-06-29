@@ -82,7 +82,7 @@
 | 文档操作控制器 | `src/app/services/documentActionsController.ts` | `src/app/services/documentFiles.ts`, `tabs.ts`, `recoveryDraft.ts` | 打开/保存/另存/自动保存/外部变更 |
 | 标签页状态管理 | `src/app/services/tabs.ts` | `src/app/types.ts` | 标签页创建/复用/状态写入 |
 | 工作区持久化 | `src/app/services/workspacePersistence.ts` | `src/app/App.svelte`, `src/lib/desktop/tauriStorage.ts` | 工作区 v2 元数据、草稿引用、旧 workspaceTabs 迁移 |
-| 阅读位置持久化 | `src/app/services/readingPosition.ts` | `src/app/App.svelte`, `src/app/services/outlineNavigation.ts` | Markdown 文件按路径保存/恢复语义与源码模式阅读位置 |
+| 阅读位置持久化 | `src/app/services/readingPosition.ts` | `src/app/App.svelte`, `src/app/services/outlineNavigation.ts` | Markdown 文件按路径保存/恢复统一阅读语义锚点 |
 | 恢复草稿 | `src/app/services/recoveryDraft.ts` | `src/app/services/documentActionsController.ts` | 异常退出后草稿写入/恢复 |
 | Markdown 桥接 | `src/lib/markdown/MarkdownBridge.ts` | `src/lib/markdown/frontMatter.ts` | front matter 与正文分离/合并规则变更 |
 | 图片插入协调 | `src/app/services/imageInsertion.ts` | `src/app/services/imageMarkdown.ts`, `src/lib/editor-core/renderers.ts` | 粘贴/拖放图片导入、策略选择、源码插入 |
@@ -1613,7 +1613,8 @@
 
 **Owns:**
 - 按标准化 filePath 维护 Markdown 阅读位置内存缓存
-- 语义模式与源码模式阅读位置分别保存
+- 每个文件保存单一统一阅读语义锚点与锚点来源模式
+- 兼容旧版 `semanticAnchor` / `sourceAnchor` 并按目标模式迁移
 - 滚动停止后防抖写入应用配置，强制 flush 时立即持久化
 - 多窗口配置合并时按 `updatedAt` 保留最新记录
 - 按 `updatedAt` 裁剪最近 300 个文件的阅读位置
@@ -2927,8 +2928,9 @@
 
 **Owns:**
 - 大纲滚动定位：按大纲锚点恢复编辑区视觉焦点
-- 源码与语义视图滚动同步
-- 阅读位置恢复专用滚动：优先使用锚点位置与顶部偏移，失败时回退 scrollTop / 文档进度
+- 源码与语义视图之间基于统一语义锚点滚动同步
+- 源码滚动坐标与 textarea 内容偏移换算
+- 阅读位置恢复专用滚动：同源恢复可使用像素锚点，跨模式恢复使用大纲段落进度 / 文档进度
 
 **Does not own:**
 - 不拥有大纲数据计算（在 outlineService.ts 中）

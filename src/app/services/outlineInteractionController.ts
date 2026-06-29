@@ -96,6 +96,8 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
         options.getOutline(),
         sourcePane.scrollTop,
         getSourceLineHeight(),
+        options.getSourceTextarea(),
+        sourcePane,
       ),
     );
   }

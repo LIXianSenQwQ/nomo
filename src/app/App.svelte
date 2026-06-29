@@ -754,14 +754,20 @@
     );
   }
 
-  function saveCurrentReadingPositionToMemoryOnly(modeToSave: ReadingPositionMode = mode) {
+  function saveCurrentReadingPositionToMemoryOnly(
+    modeToSave: ReadingPositionMode = mode,
+    anchor: OutlineScrollAnchor | null = getCurrentReadingAnchor(modeToSave),
+  ) {
     if (!hasPersistableReadingPositionPath(filePath)) return;
-    saveReadingPositionToMemoryOnly(filePath, modeToSave, getCurrentReadingAnchor(modeToSave));
+    saveReadingPositionToMemoryOnly(filePath, modeToSave, anchor);
   }
 
-  function saveCurrentReadingPositionDebounced(modeToSave: ReadingPositionMode = mode) {
+  function saveCurrentReadingPositionDebounced(
+    modeToSave: ReadingPositionMode = mode,
+    anchor: OutlineScrollAnchor | null = getCurrentReadingAnchor(modeToSave),
+  ) {
     if (!hasPersistableReadingPositionPath(filePath)) return;
-    saveReadingPositionToMemory(filePath, modeToSave, getCurrentReadingAnchor(modeToSave));
+    saveReadingPositionToMemory(filePath, modeToSave, anchor);
   }
 
   async function flushCurrentReadingPosition() {
@@ -808,13 +814,9 @@
       // Windows Chromium 则显示在底部。
       // 有阅读位置的标签页留给 scheduleRestoreReadingPosition 异步恢复，不在此处干预。
       const storedPosition = hasPersistableReadingPositionPath(filePath)
-        ? getReadingPosition(filePath)
+        ? getReadingPosition(filePath, mode)
         : undefined;
-      const hasAnchor =
-        storedPosition != null &&
-        (mode === 'semantic'
-          ? storedPosition.semanticAnchor != null
-          : storedPosition.sourceAnchor != null);
+      const hasAnchor = storedPosition?.anchor != null;
 
       if (!hasAnchor) {
         if (semanticPane) setScrollTop(semanticPane, 0);
@@ -861,13 +863,14 @@
   }
 
   function debounceReadingPositionSave(modeToSave: ReadingPositionMode) {
-    saveCurrentReadingPositionToMemoryOnly(modeToSave);
+    const anchor = getCurrentReadingAnchor(modeToSave);
+    saveCurrentReadingPositionToMemoryOnly(modeToSave, anchor);
     if (scrollDebounceTimer !== null) {
       window.clearTimeout(scrollDebounceTimer);
     }
     scrollDebounceTimer = window.setTimeout(() => {
       scrollDebounceTimer = null;
-      saveCurrentReadingPositionDebounced(modeToSave);
+      saveCurrentReadingPositionDebounced(modeToSave, anchor);
     }, 1500);
   }
 
@@ -886,8 +889,8 @@
     }
     if (!hasPersistableReadingPositionPath(path)) return;
 
-    const position = getReadingPosition(path);
-    const anchor = targetMode === 'semantic' ? position?.semanticAnchor : position?.sourceAnchor;
+    const position = getReadingPosition(path, targetMode);
+    const anchor = position?.anchor;
     if (!anchor) return;
 
     const restoreToken = ++readingPositionRestoreToken;
@@ -916,9 +919,15 @@
       }
 
       if (targetMode === 'semantic') {
-        restoreSemanticReadingPosition(outline, semanticPane, anchor);
+        restoreSemanticReadingPosition(outline, semanticPane, anchor, {
+          anchorMode: position.anchorMode,
+          behavior: 'instant',
+        });
       } else {
-        restoreSourceReadingPosition(outline, sourcePane, sourceTextarea, anchor);
+        restoreSourceReadingPosition(outline, sourcePane, sourceTextarea, anchor, {
+          anchorMode: position.anchorMode,
+          behavior: 'instant',
+        });
       }
     };
 
@@ -1299,15 +1308,13 @@
 
   function setMode(nextMode: EditorMode) {
     const previousMode = mode;
-    saveCurrentReadingPositionToMemoryOnly(previousMode);
+    const anchor = getCurrentReadingAnchor(previousMode);
+    saveCurrentReadingPositionToMemoryOnly(previousMode, anchor);
     editorInteraction
-      .setMode(nextMode)
+      .setMode(nextMode, anchor)
       .then(() => {
         if (!(largeDocumentMode && nextMode === 'semantic')) {
           persistEditorModePreference(nextMode);
-        }
-        if (previousMode !== nextMode && mode === nextMode) {
-          scheduleRestoreReadingPosition(filePath, nextMode);
         }
       })
       .catch(() => undefined);

@@ -23,6 +23,13 @@ export type OutlineScrollAnchor =
       sourceLine: number;
     };
 
+export type OutlineScrollBehavior = 'instant' | 'smooth';
+
+interface ScrollToAnchorOptions {
+  behavior?: OutlineScrollBehavior;
+  anchorMode?: 'semantic' | 'source';
+}
+
 interface LegacyOutlineScrollAnchor {
   outlineId: string;
   sectionProgress: number;
@@ -61,15 +68,62 @@ export function getSourceHeadingSelection(markdown: string, item: OutlineItem) {
   return { start, end: start + lines[item.line - 1].length };
 }
 
+export function getSourceTextTopInPane(
+  sourceTextarea: HTMLTextAreaElement | undefined,
+  sourcePane: HTMLElement | undefined,
+) {
+  if (!sourceTextarea || !sourcePane) {
+    return 0;
+  }
+
+  const paneRect = sourcePane.getBoundingClientRect();
+  const textareaRect = sourceTextarea.getBoundingClientRect();
+  const hasUsableRect =
+    paneRect.top !== 0 ||
+    textareaRect.top !== 0 ||
+    textareaRect.height > 0 ||
+    textareaRect.bottom > 0;
+
+  if (hasUsableRect) {
+    return textareaRect.top - paneRect.top + sourcePane.scrollTop;
+  }
+
+  return sourceTextarea.offsetTop || 0;
+}
+
+function getSourceVisibleLine(
+  scrollTop: number,
+  lineHeight: number,
+  sourceTextarea: HTMLTextAreaElement | undefined,
+  sourcePane: HTMLElement | undefined,
+) {
+  const textScrollTop = Math.max(0, scrollTop - getSourceTextTopInPane(sourceTextarea, sourcePane));
+  return Math.max(1, Math.floor(textScrollTop / lineHeight) + 1);
+}
+
+function getSourceLineTopInPane(
+  sourceLine: number,
+  lineHeight: number,
+  sourceTextarea: HTMLTextAreaElement | undefined,
+  sourcePane: HTMLElement | undefined,
+) {
+  return (
+    getSourceTextTopInPane(sourceTextarea, sourcePane) +
+    Math.max(0, Math.floor(sourceLine) - 1) * lineHeight
+  );
+}
+
 export function getActiveOutlineIdFromSource(
   outline: OutlineItem[],
   scrollTop: number,
   lineHeight: number,
+  sourceTextarea?: HTMLTextAreaElement,
+  sourcePane?: HTMLElement,
 ) {
   if (!outline.length) {
     return '';
   }
-  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
+  const visibleLine = getSourceVisibleLine(scrollTop, lineHeight, sourceTextarea, sourcePane);
   return getOutlineItemAtLine(outline, visibleLine)?.id ?? outline[0]?.id ?? '';
 }
 
@@ -80,7 +134,7 @@ export function getSourceScrollAnchor(
   sourceTextarea?: HTMLTextAreaElement,
   sourcePane?: HTMLElement,
 ): OutlineScrollAnchor | null {
-  const visibleLine = Math.max(1, Math.floor(scrollTop / lineHeight) + 1);
+  const visibleLine = getSourceVisibleLine(scrollTop, lineHeight, sourceTextarea, sourcePane);
   return getSourceScrollAnchorAtLine(
     outline,
     visibleLine,
@@ -102,12 +156,18 @@ export function getSourceScrollAnchorAtLine(
   const anchorLine = Math.max(1, Math.floor(sourceLine));
   const sourceScrollContainer = sourcePane ?? sourceTextarea?.closest<HTMLElement>('.source-pane');
   const documentProgress = getScrollProgress(sourceScrollContainer, scrollTop);
+  const sourceLineTop = getSourceLineTopInPane(
+    anchorLine,
+    lineHeight,
+    sourceTextarea,
+    sourceScrollContainer ?? undefined,
+  );
 
   if (!outline.length) {
     return {
       kind: 'document',
       anchorPos: anchorLine,
-      offsetFromTop: scrollTop - Math.max(0, (anchorLine - 1) * lineHeight),
+      offsetFromTop: scrollTop - sourceLineTop,
       scrollTop,
       sectionProgress: documentProgress,
       documentProgress,
@@ -117,7 +177,13 @@ export function getSourceScrollAnchorAtLine(
 
   const activeOutlineId =
     getOutlineItemAtLine(outline, anchorLine)?.id ??
-    getActiveOutlineIdFromSource(outline, scrollTop, lineHeight);
+    getActiveOutlineIdFromSource(
+      outline,
+      scrollTop,
+      lineHeight,
+      sourceTextarea,
+      sourceScrollContainer ?? undefined,
+    );
   const currentIndex = Math.max(
     0,
     outline.findIndex((item) => item.id === activeOutlineId),
@@ -136,7 +202,7 @@ export function getSourceScrollAnchorAtLine(
     kind: 'outline',
     outlineId: currentItem.id,
     anchorPos: anchorLine,
-    offsetFromTop: scrollTop - Math.max(0, (anchorLine - 1) * lineHeight),
+    offsetFromTop: scrollTop - sourceLineTop,
     scrollTop,
     sectionProgress,
     documentProgress,
@@ -173,7 +239,15 @@ export function scrollSourceToAnchor(
   const targetLine = currentItem.line + Math.round(sectionLineCount * anchor.sectionProgress);
   setScrollTop(
     sourcePane,
-    clampScrollTop(sourcePane, Math.max(0, (targetLine - 1) * getSourceLineHeight(sourceTextarea))),
+    clampScrollTop(
+      sourcePane,
+      getSourceLineTopInPane(
+        targetLine,
+        getSourceLineHeight(sourceTextarea),
+        sourceTextarea,
+        sourcePane,
+      ),
+    ),
   );
 }
 
@@ -182,18 +256,21 @@ export function restoreSourceReadingPosition(
   sourcePane: HTMLElement | undefined,
   sourceTextarea: HTMLTextAreaElement | undefined,
   anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor | null,
+  options: ScrollToAnchorOptions = {},
 ) {
   if (!sourcePane || !anchor) {
     return;
   }
 
-  if (hasPixelAnchor(anchor)) {
+  if (options.anchorMode === 'source' && hasPixelAnchor(anchor)) {
     setScrollTop(
       sourcePane,
-      Math.max(
-        0,
-        (anchor.anchorPos - 1) * getSourceLineHeight(sourceTextarea) + anchor.offsetFromTop,
-      ),
+      getSourceLineTopInPane(
+        anchor.anchorPos,
+        getSourceLineHeight(sourceTextarea),
+        sourceTextarea,
+        sourcePane,
+      ) + anchor.offsetFromTop,
     );
     return;
   }
@@ -352,6 +429,7 @@ export function scrollSemanticToAnchor(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
   anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor | null,
+  options: ScrollToAnchorOptions = {},
 ) {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (!semanticPane || !anchor) {
@@ -359,18 +437,20 @@ export function scrollSemanticToAnchor(
   }
 
   if (isDocumentAnchor(anchor) || headingAnchors.length === 0 || !hasAnchorOutlineId(anchor)) {
-    smoothScrollElementTo(
+    scrollElementTo(
       semanticPane,
       getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
+      options.behavior,
     );
     return;
   }
 
   const currentIndex = headingAnchors.findIndex((item) => item.id === anchor.outlineId);
   if (currentIndex === -1 || !headingAnchors[currentIndex]) {
-    smoothScrollElementTo(
+    scrollElementTo(
       semanticPane,
       getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
+      options.behavior,
     );
     return;
   }
@@ -387,13 +467,14 @@ export function scrollSemanticToAnchor(
     semanticPane,
     currentTop + sectionHeight * anchor.sectionProgress - 32,
   );
-  smoothScrollElementTo(semanticPane, top);
+  scrollElementTo(semanticPane, top, options.behavior);
 }
 
 export function restoreSemanticReadingPosition(
   outline: OutlineItem[],
   semanticPane: HTMLElement | undefined,
   anchor: OutlineScrollAnchor | LegacyOutlineScrollAnchor | null,
+  options: ScrollToAnchorOptions = {},
 ) {
   const headingAnchors = getSemanticHeadingAnchors(semanticPane, outline);
   if (!semanticPane || !anchor) {
@@ -401,13 +482,14 @@ export function restoreSemanticReadingPosition(
   }
 
   if (isDocumentAnchor(anchor) || headingAnchors.length === 0 || !hasAnchorOutlineId(anchor)) {
-    smoothScrollElementTo(
+    scrollElementTo(
       semanticPane,
       getAnchorScrollTopFallback(
         anchor,
         semanticPane,
         getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
       ),
+      options.behavior,
     );
     return;
   }
@@ -421,27 +503,41 @@ export function restoreSemanticReadingPosition(
         : -1;
 
   if (currentIndex === -1 || !headingAnchors[currentIndex]) {
-    smoothScrollElementTo(
+    scrollElementTo(
       semanticPane,
       getAnchorScrollTopFallback(
         anchor,
         semanticPane,
         getScrollTopByProgress(semanticPane, getAnchorDocumentProgress(anchor)),
       ),
+      options.behavior,
     );
     return;
   }
 
-  if (hasPixelAnchor(anchor)) {
-    smoothScrollElementTo(
+  if (options.anchorMode === 'semantic' && hasPixelAnchor(anchor)) {
+    scrollElementTo(
       semanticPane,
       getElementTopInScrollContainer(headingAnchors[currentIndex].element, semanticPane) +
         anchor.offsetFromTop,
+      options.behavior,
     );
     return;
   }
 
-  scrollSemanticToAnchor(outline, semanticPane, anchor);
+  scrollSemanticToAnchor(outline, semanticPane, anchor, options);
+}
+
+function scrollElementTo(
+  scrollContainer: HTMLElement,
+  top: number,
+  behavior: OutlineScrollBehavior = 'smooth',
+) {
+  if (behavior === 'instant') {
+    setScrollTop(scrollContainer, top);
+    return;
+  }
+  smoothScrollElementTo(scrollContainer, top);
 }
 
 export function smoothScrollElementTo(scrollContainer: HTMLElement, top: number) {

@@ -6,6 +6,8 @@ import {
   getSemanticScrollAnchorForBlock,
   getSourceScrollAnchor,
   getSourceScrollAnchorAtLine,
+  restoreSemanticReadingPosition,
+  restoreSourceReadingPosition,
   scrollSemanticToAnchor,
   scrollSourceToAnchor,
 } from './outlineNavigation';
@@ -192,7 +194,7 @@ describe('outlineNavigation', () => {
     expect(semanticPane.scrollTop).toBeLessThan(1560);
   });
 
-  it('uses the visible source cursor line as the mode switch anchor', () => {
+  it('uses the source viewport top line as the mode switch anchor', () => {
     const sourcePane = createScrollableElement('section', {
       className: 'source-pane',
       scrollHeight: 2000,
@@ -213,6 +215,111 @@ describe('outlineNavigation', () => {
     expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('第二章');
     expect(anchor?.sourceLine).toBe(50);
     expect(anchor?.sectionProgress).toBeCloseTo(9 / 60);
+  });
+
+  it('calculates source top line with textarea offset inside the scroll pane', () => {
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 2500,
+      clientHeight: 400,
+      scrollTop: 1024,
+    });
+    const sourceTextarea = createTextarea(100);
+    setOffsetTop(sourceTextarea, 44);
+    sourcePane.append(sourceTextarea);
+
+    const anchor = getSourceScrollAnchor(
+      createOutline(),
+      sourcePane.scrollTop,
+      20,
+      sourceTextarea,
+      sourcePane,
+    );
+
+    expect(anchor?.kind).toBe('outline');
+    expect(anchor && 'outlineId' in anchor ? anchor.outlineId : '').toBe('第二章');
+    expect(anchor?.sourceLine).toBe(50);
+    expect(anchor?.offsetFromTop).toBe(0);
+  });
+
+  it('restores source same-mode pixel anchors with textarea offset', () => {
+    useInstantScroll();
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 2500,
+      clientHeight: 400,
+      scrollTop: 324,
+    });
+    const sourceTextarea = createTextarea(100);
+    setOffsetTop(sourceTextarea, 44);
+    sourcePane.append(sourceTextarea);
+    const anchor = getSourceScrollAnchor([], sourcePane.scrollTop, 20, sourceTextarea, sourcePane);
+    sourcePane.scrollTop = 0;
+
+    restoreSourceReadingPosition([], sourcePane, sourceTextarea, anchor, {
+      anchorMode: 'source',
+      behavior: 'instant',
+    });
+
+    expect(sourcePane.scrollTop).toBe(324);
+  });
+
+  it('ignores source pixel fields when restoring an anchor from semantic mode', () => {
+    useInstantScroll();
+    const sourcePane = createScrollableElement('section', {
+      className: 'source-pane',
+      scrollHeight: 2500,
+      clientHeight: 400,
+      scrollTop: 0,
+    });
+    const sourceTextarea = createTextarea(100);
+    setOffsetTop(sourceTextarea, 44);
+    sourcePane.append(sourceTextarea);
+
+    restoreSourceReadingPosition(
+      createOutline(),
+      sourcePane,
+      sourceTextarea,
+      {
+        kind: 'outline',
+        outlineId: '第二章',
+        anchorPos: 1,
+        offsetFromTop: 999,
+        scrollTop: 999,
+        sectionProgress: 0,
+        documentProgress: 0,
+        sourceLine: 41,
+      },
+      { anchorMode: 'semantic', behavior: 'instant' },
+    );
+
+    expect(sourcePane.scrollTop).toBe(844);
+  });
+
+  it('ignores semantic pixel fields when restoring an anchor from source mode', () => {
+    useInstantScroll();
+    const semanticPane = createSemanticPane([
+      { tag: 'h1', title: '第一章', top: 40 },
+      { tag: 'h2', title: '第二章', top: 440 },
+    ], 1200, 300);
+
+    restoreSemanticReadingPosition(
+      createOutline(),
+      semanticPane,
+      {
+        kind: 'outline',
+        outlineId: '第二章',
+        anchorPos: 1,
+        offsetFromTop: 999,
+        scrollTop: 999,
+        sectionProgress: 0,
+        documentProgress: 0,
+        sourceLine: 41,
+      },
+      { anchorMode: 'source', behavior: 'instant' },
+    );
+
+    expect(semanticPane.scrollTop).toBe(408);
   });
 
   it('uses the semantic cursor block instead of the viewport top when it is visible', () => {
@@ -291,6 +398,13 @@ function createTextarea(lineCount: number) {
   textarea.style.lineHeight = '20px';
   textarea.value = Array.from({ length: lineCount }, (_, index) => `line ${index + 1}`).join('\n');
   return textarea;
+}
+
+function setOffsetTop(element: HTMLElement, offsetTop: number) {
+  Object.defineProperty(element, 'offsetTop', {
+    configurable: true,
+    value: offsetTop,
+  });
 }
 
 function createScrollableElement<K extends keyof HTMLElementTagNameMap>(

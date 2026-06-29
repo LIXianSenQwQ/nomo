@@ -8,16 +8,24 @@ const DEBOUNCE_MS = 1500;
 export type ReadingPositionMode = 'semantic' | 'source';
 
 export interface ReadingPosition {
-  /** 语义模式的阅读位置。 */
-  semanticAnchor: OutlineScrollAnchor | null;
-  /** 源码模式的阅读位置。 */
-  sourceAnchor: OutlineScrollAnchor | null;
+  /** 当前文件唯一的阅读语义锚点。 */
+  anchor: OutlineScrollAnchor | null;
+  /** 锚点来源模式，用于判断像素锚点是否可同源恢复。 */
+  anchorMode: ReadingPositionMode;
   /** 文件级更新时间，用于多窗口最后写入者获胜。 */
   updatedAt: number;
 }
 
+interface LegacyReadingPosition {
+  semanticAnchor: OutlineScrollAnchor | null;
+  sourceAnchor: OutlineScrollAnchor | null;
+  updatedAt: number;
+}
+
+type StoredReadingPosition = ReadingPosition | LegacyReadingPosition;
+
 interface ReadingPositionStore {
-  positions: Map<string, ReadingPosition>;
+  positions: Map<string, StoredReadingPosition>;
   debounceTimer: number | null;
   writePromise: Promise<void> | null;
   loaded: boolean;
@@ -38,11 +46,24 @@ export async function loadReadingPositions(): Promise<Map<string, ReadingPositio
   const loaded = await readPersistedReadingPositions();
   store.positions = mergeReadingPositions(store.positions, loaded);
   store.loaded = true;
-  return new Map(store.positions);
+  return materializeReadingPositionMap(store.positions);
 }
 
-export function getReadingPosition(filePath: string): ReadingPosition | undefined {
-  return store.positions.get(normalizeReadingPositionFilePath(filePath));
+export function getReadingPosition(
+  filePath: string,
+  preferredMode: ReadingPositionMode = 'semantic',
+): ReadingPosition | undefined {
+  const key = normalizeReadingPositionFilePath(filePath);
+  const stored = store.positions.get(key);
+  if (!stored) {
+    return undefined;
+  }
+
+  const position = materializeReadingPosition(stored, preferredMode);
+  if (!isUnifiedReadingPosition(stored)) {
+    store.positions.set(key, position);
+  }
+  return position;
 }
 
 export function saveReadingPositionToMemory(
@@ -78,10 +99,9 @@ function writeReadingPositionToMemory(
   const key = normalizeReadingPositionFilePath(filePath);
   if (!key) return;
 
-  const existing = store.positions.get(key);
   const next: ReadingPosition = {
-    semanticAnchor: mode === 'semantic' ? anchor : (existing?.semanticAnchor ?? null),
-    sourceAnchor: mode === 'source' ? anchor : (existing?.sourceAnchor ?? null),
+    anchor,
+    anchorMode: mode,
     updatedAt: Date.now(),
   };
   store.positions.set(key, next);
@@ -117,13 +137,13 @@ async function persistReadingPositions(): Promise<void> {
   }
 }
 
-async function readPersistedReadingPositions(): Promise<Map<string, ReadingPosition>> {
+async function readPersistedReadingPositions(): Promise<Map<string, StoredReadingPosition>> {
   try {
     const settings = await listAppSettings();
     const setting = settings.find((s) => s.key === READING_POSITIONS_KEY);
     if (!setting) return new Map();
     const record = JSON.parse(setting.valueJson) as Record<string, unknown>;
-    const map = new Map<string, ReadingPosition>();
+    const map = new Map<string, StoredReadingPosition>();
 
     for (const [key, value] of Object.entries(record)) {
       const normalizedKey = normalizeReadingPositionFilePath(key);
@@ -139,17 +159,73 @@ async function readPersistedReadingPositions(): Promise<Map<string, ReadingPosit
   }
 }
 
-function normalizeReadingPosition(value: unknown): ReadingPosition | null {
+function normalizeReadingPosition(value: unknown): StoredReadingPosition | null {
   if (!value || typeof value !== 'object') return null;
-  const position = value as Partial<ReadingPosition>;
+  const position = value as Partial<ReadingPosition & LegacyReadingPosition>;
   if (typeof position.updatedAt !== 'number' || !Number.isFinite(position.updatedAt)) {
     return null;
   }
+
+  if (isReadingPositionMode(position.anchorMode)) {
+    return {
+      anchor: isOutlineScrollAnchor(position.anchor) ? position.anchor : null,
+      anchorMode: position.anchorMode,
+      updatedAt: position.updatedAt,
+    };
+  }
+
+  if ('semanticAnchor' in position || 'sourceAnchor' in position) {
+    return {
+      semanticAnchor: isOutlineScrollAnchor(position.semanticAnchor)
+        ? position.semanticAnchor
+        : null,
+      sourceAnchor: isOutlineScrollAnchor(position.sourceAnchor) ? position.sourceAnchor : null,
+      updatedAt: position.updatedAt,
+    };
+  }
+
+  return null;
+}
+
+function materializeReadingPosition(
+  position: StoredReadingPosition,
+  preferredMode: ReadingPositionMode,
+): ReadingPosition {
+  if (isUnifiedReadingPosition(position)) {
+    return position;
+  }
+
+  const fallbackMode: ReadingPositionMode = preferredMode === 'semantic' ? 'source' : 'semantic';
+  const preferredAnchor =
+    preferredMode === 'semantic' ? position.semanticAnchor : position.sourceAnchor;
+  const fallbackAnchor = fallbackMode === 'semantic' ? position.semanticAnchor : position.sourceAnchor;
+  const anchor = preferredAnchor ?? fallbackAnchor ?? null;
+
   return {
-    semanticAnchor: isOutlineScrollAnchor(position.semanticAnchor) ? position.semanticAnchor : null,
-    sourceAnchor: isOutlineScrollAnchor(position.sourceAnchor) ? position.sourceAnchor : null,
+    anchor,
+    anchorMode: anchor === preferredAnchor ? preferredMode : fallbackMode,
     updatedAt: position.updatedAt,
   };
+}
+
+function materializeReadingPositionMap(
+  map: Map<string, StoredReadingPosition>,
+  preferredMode: ReadingPositionMode = 'semantic',
+): Map<string, ReadingPosition> {
+  return new Map(
+    Array.from(map.entries(), ([key, value]) => [
+      key,
+      materializeReadingPosition(value, preferredMode),
+    ]),
+  );
+}
+
+function isUnifiedReadingPosition(position: StoredReadingPosition): position is ReadingPosition {
+  return 'anchorMode' in position && isReadingPositionMode(position.anchorMode);
+}
+
+function isReadingPositionMode(value: unknown): value is ReadingPositionMode {
+  return value === 'semantic' || value === 'source';
 }
 
 function isOutlineScrollAnchor(value: unknown): value is OutlineScrollAnchor {
@@ -167,9 +243,9 @@ function isOutlineScrollAnchor(value: unknown): value is OutlineScrollAnchor {
 }
 
 function mergeReadingPositions(
-  base: Map<string, ReadingPosition>,
-  incoming: Map<string, ReadingPosition>,
-): Map<string, ReadingPosition> {
+  base: Map<string, StoredReadingPosition>,
+  incoming: Map<string, StoredReadingPosition>,
+): Map<string, StoredReadingPosition> {
   const merged = new Map(base);
   for (const [key, value] of incoming.entries()) {
     const existing = merged.get(key);
@@ -181,9 +257,9 @@ function mergeReadingPositions(
 }
 
 function trimToRecentEntries(
-  map: Map<string, ReadingPosition>,
+  map: Map<string, StoredReadingPosition>,
   limit = MAX_ENTRIES,
-): Map<string, ReadingPosition> {
+): Map<string, StoredReadingPosition> {
   if (map.size <= limit) return new Map(map);
   const entries = Array.from(map.entries()).sort((a, b) => b[1].updatedAt - a[1].updatedAt);
   return new Map(entries.slice(0, limit));
@@ -193,6 +269,7 @@ export const __readingPositionTestUtils = {
   normalizeReadingPositionFilePath,
   trimToRecentEntries,
   mergeReadingPositions,
+  materializeReadingPosition,
   resetStore() {
     if (store.debounceTimer !== null) {
       window.clearTimeout(store.debounceTimer);
