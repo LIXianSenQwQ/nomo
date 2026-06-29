@@ -18,7 +18,13 @@ export interface EditorRuntimeOptions {
 
 export interface SetMarkdownOptions {
   preserveHistory?: boolean;
-  reason?: 'open-file' | 'save-file' | 'switch-tab' | 'restore-snapshot' | 'programmatic-update';
+  reason?:
+    | 'open-file'
+    | 'save-file'
+    | 'switch-tab'
+    | 'restore-snapshot'
+    | 'programmatic-update'
+    | 'source-input';
   dirty?: boolean;
   savedMarkdown?: string;
   sourceInput?: boolean;

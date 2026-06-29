@@ -359,9 +359,12 @@ describe('App outline layout', () => {
       'options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);',
     );
     expect(updateSource).toContain(
-      '.setMarkdown((event.currentTarget as HTMLTextAreaElement).value, { sourceInput: true });',
+      "reason: 'source-input'",
     );
-    expect(editorInteractionSource).toContain('clampPaneScrollTop(sourcePane, restoreScrollTop);');
+    expect(updateSource).toContain('sourceInput: true');
+    expect(appSource).toContain("if (event.reason === 'source-input') {");
+    expect(editorInteractionSource).toContain('getSourceScrollTopWithVisibleCaret(');
+    expect(editorInteractionSource).toContain('clampPaneScrollTop(sourcePane, nextScrollTop);');
     expect(editorInteractionSource).toContain('options.setPendingSourceScrollTop(null);');
   });
 

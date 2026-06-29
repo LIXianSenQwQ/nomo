@@ -28,6 +28,8 @@ interface EditorInteractionOptions {
 }
 
 export function createEditorInteractionController(options: EditorInteractionOptions) {
+  let pendingSourceCaretLine: number | null = null;
+
   async function setMode(nextMode: EditorMode) {
     if (options.getLargeDocumentMode() && nextMode === 'semantic') {
       options.setStatusMessage(t.largeDocumentStayReadonlySource());
@@ -65,10 +67,13 @@ export function createEditorInteractionController(options: EditorInteractionOpti
   }
 
   function updateMarkdown(event: Event) {
+    const sourceTextarea = event.currentTarget as HTMLTextAreaElement;
     options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);
-    options
-      .getEditor()
-      .setMarkdown((event.currentTarget as HTMLTextAreaElement).value, { sourceInput: true });
+    pendingSourceCaretLine = getSourceSelectionLine(sourceTextarea);
+    options.getEditor().setMarkdown(sourceTextarea.value, {
+      reason: 'source-input',
+      sourceInput: true,
+    });
     syncSourceTextareaHeight(options.getPendingSourceScrollTop());
   }
 
@@ -170,8 +175,15 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     }
 
     if (restoreScrollTop !== null && sourcePane) {
-      clampPaneScrollTop(sourcePane, restoreScrollTop);
+      const nextScrollTop = getSourceScrollTopWithVisibleCaret(
+        sourcePane,
+        sourceTextarea,
+        restoreScrollTop,
+        pendingSourceCaretLine,
+      );
+      clampPaneScrollTop(sourcePane, nextScrollTop);
       options.setPendingSourceScrollTop(null);
+      pendingSourceCaretLine = null;
     } else {
       clampPaneScrollTop(sourcePane, scrollTopBeforeMeasure);
     }
@@ -213,6 +225,51 @@ export function createEditorInteractionController(options: EditorInteractionOpti
     if (pane.scrollTop !== nextScrollTop) {
       setScrollTop(pane, nextScrollTop);
     }
+  }
+
+  function getSourceScrollTopWithVisibleCaret(
+    sourcePane: HTMLElement,
+    sourceTextarea: HTMLTextAreaElement | undefined,
+    preferredScrollTop: number,
+    caretLine: number | null,
+  ) {
+    if (!sourceTextarea || caretLine == null) {
+      return preferredScrollTop;
+    }
+
+    const lineHeight = options.getSourceLineHeight();
+    const textareaTop = getSourceTextareaTopInPane(sourcePane, sourceTextarea);
+    const caretTop = textareaTop + Math.max(0, caretLine - 1) * lineHeight;
+    const caretBottom = caretTop + lineHeight;
+    const visibleTop = preferredScrollTop;
+    const visibleBottom = preferredScrollTop + sourcePane.clientHeight;
+
+    if (caretBottom > visibleBottom) {
+      return caretBottom - sourcePane.clientHeight + lineHeight;
+    }
+    if (caretTop < visibleTop) {
+      return Math.max(0, caretTop - lineHeight);
+    }
+    return preferredScrollTop;
+  }
+
+  function getSourceTextareaTopInPane(
+    sourcePane: HTMLElement,
+    sourceTextarea: HTMLTextAreaElement,
+  ) {
+    const paneRect = sourcePane.getBoundingClientRect();
+    const textareaRect = sourceTextarea.getBoundingClientRect();
+    const hasUsableRect =
+      paneRect.top !== 0 ||
+      textareaRect.top !== 0 ||
+      textareaRect.height > 0 ||
+      textareaRect.bottom > 0;
+
+    if (hasUsableRect) {
+      return textareaRect.top - paneRect.top + sourcePane.scrollTop;
+    }
+
+    return sourceTextarea.offsetTop || 0;
   }
 
   function isPaneLayoutVisible(pane: HTMLElement | undefined) {

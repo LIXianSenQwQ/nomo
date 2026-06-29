@@ -2857,6 +2857,10 @@
       documentActions.debouncedAutoSave(event.markdown);
     }
 
+    if (event.reason === 'source-input') {
+      return;
+    }
+
     if (event.markdown.length > largeDocumentLimit) {
       syncSourceTextareaHeight();
       return;

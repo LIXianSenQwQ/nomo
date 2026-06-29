@@ -68,6 +68,38 @@ describe('editorInteractionController viewport layout', () => {
     expect(() => controller.refreshEditorViewportLayout()).not.toThrow();
   });
 
+  it('scrolls the source pane to keep the caret visible after inserting a newline', () => {
+    const sourcePane = createPane({ scrollHeight: 560, clientHeight: 100, scrollTop: 300 });
+    sourcePane.getClientRects = () => [createRect(0)] as unknown as DOMRectList;
+    const semanticPane = createPane({ scrollHeight: 400, clientHeight: 200, scrollTop: 0 });
+    const sourceTextarea = createTextarea({ scrollHeight: 480, clientHeight: 100, lineCount: 20 });
+    sourcePane.append(sourceTextarea);
+    sourceTextarea.value = `${sourceTextarea.value}\nline 21`;
+    sourceTextarea.setSelectionRange(sourceTextarea.value.length, sourceTextarea.value.length);
+    const editor = createEditorCoreStub();
+    const controller = createController({
+      mode: 'source',
+      editor,
+      sourcePane,
+      semanticPane,
+      sourceTextarea,
+      sourceLineHeight: 20,
+    });
+    const event = new InputEvent('input');
+    Object.defineProperty(event, 'currentTarget', {
+      configurable: true,
+      value: sourceTextarea,
+    });
+
+    controller.updateMarkdown(event);
+
+    expect(editor.setMarkdown).toHaveBeenCalledWith(sourceTextarea.value, {
+      reason: 'source-input',
+      sourceInput: true,
+    });
+    expect(sourcePane.scrollTop).toBeGreaterThan(300);
+  });
+
   it.skip('restores semantic scroll after switching mode and waiting for layout frames', async () => {
     const callbacks: FrameRequestCallback[] = [];
     window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
