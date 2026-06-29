@@ -74,6 +74,30 @@ jobs:
           APPLE_CODESIGN_IDENTITY: '-'
         run: pnpm run build:quicklook-extension
 
+      - name: Prepare release body
+        id: release_body
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $notesFile = ".github/release-notes/${{ github.ref_name }}.md"
+          if (Test-Path -LiteralPath $notesFile) {
+            $body = Get-Content -LiteralPath $notesFile -Raw
+          } else {
+            $body = @(
+              'Windows:',
+              '- x64-setup.exe: 安装版',
+              '- x64.zip: 免安装版',
+              '- checksums.md5: MD5 校验清单',
+              '',
+              'macOS:',
+              '- .dmg / .app.tar.gz: arm64'
+            ) -join "`n"
+          }
+
+          'body<<__RELEASE_BODY__' >> $env:GITHUB_OUTPUT
+          $body.TrimEnd() >> $env:GITHUB_OUTPUT
+          '__RELEASE_BODY__' >> $env:GITHUB_OUTPUT
+
       - name: Build and publish release assets
         uses: tauri-apps/tauri-action@v0.6.2
         env:
@@ -82,14 +106,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Nomo ${{ github.ref_name }}
-          releaseBody: |
-            Windows:
-            - x64-setup.exe: 安装版
-            - x64.zip: 免安装版
-            - checksums.md5: MD5 校验清单
-
-            macOS:
-            - .dmg / .app.tar.gz: arm64
+          releaseBody: ${{ steps.release_body.outputs.body }}
           releaseDraft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
