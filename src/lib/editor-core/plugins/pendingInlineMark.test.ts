@@ -414,6 +414,215 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('keeps the cursor outside a code mark when clicking just after the closing backtick', () => {
+    const { target, view } = createCodeTextView(4);
+    view.dispatch(view.state.tr.setStoredMarks([schema.marks.code.create()]));
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    const event = createMouseDown(141, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).not.toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('locks the cursor outside a code mark when already at the closing boundary', () => {
+    const { target, view } = createCodeTextView(4);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    expect(view.state.storedMarks).toBeNull();
+
+    closeWidget.dispatchEvent(createMouseDown(138, 10));
+
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves outside the opening backtick when clicking its outer side from inside code text', () => {
+    const { target, view } = createCodeTextView(2);
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+
+    openWidget.dispatchEvent(createMouseDown(90, 10));
+
+    expect(view.state.selection.from).toBe(1);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves outside the closing backtick when clicking its outer side from inside code text', () => {
+    const { target, view } = createCodeTextView(2);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    closeWidget.dispatchEvent(createMouseDown(138, 10));
+
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('handles a closing backtick edge click even when the paragraph receives the event target', () => {
+    const { target, view } = createCodeTextView(2);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    const event = createMouseDown(137, 10);
+    view.dom.querySelector('p')?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves outside the closing backtick when clicking far outside from inside code text', () => {
+    const { target, view } = createCodeTextView(2);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+    view.posAtCoords = () => ({ pos: 4, inside: -1 });
+
+    const event = createMouseDown(220, 10);
+    view.dom.querySelector('p')?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves outside the opening backtick when clicking far outside from inside code text', () => {
+    const { target, view } = createCodeTextView(2);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+    view.posAtCoords = () => ({ pos: 1, inside: -1 });
+
+    const event = createMouseDown(20, 10);
+    view.dom.querySelector('p')?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(1);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves outside the opening backtick when clicking far before a code mark at textblock start', () => {
+    const { target, view } = createCodeTextView(2);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+    view.posAtCoords = () => null;
+
+    const event = createMouseDown(20, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(1);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not intercept far-left clicks when ordinary text exists before the code mark', () => {
+    const { target, view } = createPrefixedCodeTextView(4);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 110, right: 118 });
+    mockRangeRect(closeWidget, { left: 150, right: 158 });
+    view.posAtCoords = () => null;
+
+    const event = createMouseDown(20, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(view.state.selection.from).toBe(4);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('keeps the cursor inside a code mark when clicking just before the closing backtick', () => {
+    const { target, view } = createCodeTextView(4);
+    view.dispatch(view.state.tr.setStoredMarks([]));
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    const event = createMouseDown(127, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves inside the code mark when clicking the last character from the closing outside boundary', () => {
+    const { target, view } = createCodeTextView(4);
+    view.dispatch(view.state.tr.setStoredMarks([]));
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+    view.posAtCoords = () => ({ pos: 4, inside: -1 });
+
+    const event = createMouseDown(126, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(4);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('moves inside the code mark when clicking the first character from the opening outside boundary', () => {
+    const { target, view } = createCodeTextView(1);
+    view.dispatch(view.state.tr.setStoredMarks([]));
+    const closeWidget = getDelimiterWidget(target, 'close');
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 90, right: 98 });
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+    view.posAtCoords = () => ({ pos: 1, inside: -1 });
+
+    const event = createMouseDown(102, 10);
+    view.dom.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.selection.from).toBe(1);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('does not use editor root coordinates as a fallback for delimiter clicks', () => {
     const { target, view } = createMarkedTextView(9);
     const plugin = pendingInlineMarkPlugin();
@@ -696,6 +905,7 @@ function hasMarkDelimiter(target: HTMLElement, markTypeName: string): boolean {
 const MARK_SYNTAX_MAP: Record<string, { open: string; close: string }> = {
   strong: { open: '**', close: '**' },
   em: { open: '*', close: '*' },
+  code: { open: '`', close: '`' },
   strikethrough: { open: '~~', close: '~~' },
   underline: { open: '<u>', close: '</u>' },
   highlight: { open: '<mark>', close: '</mark>' },
@@ -707,6 +917,45 @@ function createMarkedTextView(selectionPos: number): { target: HTMLElement; view
       schema.text('before '),
       schema.text('bold', [schema.marks.strong.create()]),
       schema.text(' after'),
+    ]),
+  ]);
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+
+  const view = new EditorView(target, {
+    state: EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, selectionPos),
+      plugins: [pendingInlineMarkPlugin()],
+    }),
+  });
+
+  return { target, view };
+}
+
+function createCodeTextView(selectionPos: number): { target: HTMLElement; view: EditorView } {
+  const doc = schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, [schema.text('asd', [schema.marks.code.create()])]),
+  ]);
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+
+  const view = new EditorView(target, {
+    state: EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, selectionPos),
+      plugins: [pendingInlineMarkPlugin()],
+    }),
+  });
+
+  return { target, view };
+}
+
+function createPrefixedCodeTextView(selectionPos: number): { target: HTMLElement; view: EditorView } {
+  const doc = schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, [
+      schema.text('x '),
+      schema.text('asd', [schema.marks.code.create()]),
     ]),
   ]);
   const target = document.createElement('div');

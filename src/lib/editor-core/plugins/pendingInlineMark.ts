@@ -55,6 +55,8 @@ const MARK_SYNTAX: Record<string, { open: string; close: string }> = {
   highlight: { open: '<mark>', close: '</mark>' },
 };
 
+const DELIMITER_CLICK_SLOP_PX = 6;
+
 type MarkEditRange = {
   markTypeName: string;
   from: number;
@@ -65,6 +67,14 @@ type GroupedMarkEditRange = {
   markTypeNames: string[];
   from: number;
   to: number;
+};
+
+type MarkBoundaryMouseView = {
+  state: EditorState;
+  dispatch: (tr: Transaction) => void;
+  focus: () => void;
+  dom: HTMLElement;
+  posAtCoords: (coords: { left: number; top: number }) => { pos: number; inside: number } | null;
 };
 
 export const pendingInlineMarkKey = new PluginKey<PendingMarkState>('pendingInlineMark');
@@ -592,10 +602,11 @@ function createDelimiterWidget(
 }
 
 /**
- * 处理灰色语法提示边界点击。
+ * 处理行内 mark 的边界点击。
  *
- * 灰色标签是不可编辑的整体占位节点。点击标签左半边表示落到标签前，
- * 点击右半边表示落到标签后，从而区分 `b后 / 1前`、`6后 / c前`。
+ * 语法提示标签是不可编辑的整体占位节点。点击标签左半边表示落到标签前，
+ * 点击右半边表示落到标签后；如果用户点击标签外侧空白或边界正文字符，
+ * 也需要显式设置 storedMarks 来区分同一文档位置的“mark 内侧/外侧”。
  *
  * 内/外判定镜像方向键逻辑（见 handleMarkBoundaryArrowKey）：
  * - 目标位置由 widget 物理半边决定（open→from，close→to）。
@@ -608,16 +619,16 @@ function createDelimiterWidget(
  *   保证从别处点过来进入 mark 的正常路径不受影响。
  */
 function handleEditRangeBoundaryMouseDown(
-  view: {
-    state: EditorState;
-    dispatch: (tr: Transaction) => void;
-    focus: () => void;
-    dom: HTMLElement;
-  },
+  view: MarkBoundaryMouseView,
   event: MouseEvent,
 ): boolean {
-  const rangeHit = findDelimiterWidgetHit(event);
-  if (!rangeHit) return false;
+  const rangeHit = findDelimiterWidgetHit(view.dom, event);
+  if (!rangeHit) {
+    return (
+      handleMarkedTextBoundaryMouseDown(view, event) ||
+      handleOutsideMarkBoundaryMouseDown(view, event)
+    );
+  }
 
   const { edge, widgetElement } = rangeHit;
   const markTypeNames = widgetElement.dataset.marks?.split(/\s+/).filter(Boolean) ?? [
@@ -631,6 +642,7 @@ function handleEditRangeBoundaryMouseDown(
   if (markTypes.length === 0 || !Number.isFinite(from) || !Number.isFinite(to)) return false;
 
   event.preventDefault();
+  event.stopPropagation();
 
   const target = resolveBoundaryTarget(edge, from, to);
   const cursorPos = view.state.selection.from;
@@ -645,11 +657,10 @@ function handleEditRangeBoundaryMouseDown(
     const currentlyInside = isCursorOnMarkedSide(view.state, cursorPos, markTypeNames);
     // 当前侧与点击的目标侧一致：保持当前 storedMarks，只挪光标位置（避免反向跳）。
     if (currentlyInside === target.wantInside) {
-      if (cursorPos === target.pos) {
-        view.focus();
-        return true;
-      }
-      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, target.pos));
+      const marks = target.wantInside ? markTypes.map((markType) => markType.create()) : [];
+      const tr = view.state.tr
+        .setSelection(TextSelection.create(view.state.doc, target.pos))
+        .setStoredMarks(marks);
       view.dispatch(tr);
       view.focus();
       return true;
@@ -665,6 +676,124 @@ function handleEditRangeBoundaryMouseDown(
   view.dispatch(tr);
   view.focus();
   return true;
+}
+
+function handleMarkedTextBoundaryMouseDown(
+  view: MarkBoundaryMouseView,
+  event: MouseEvent,
+): boolean {
+  if (!view.state.selection.empty) return false;
+
+  let coords: { pos: number; inside: number } | null = null;
+  try {
+    coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+  } catch {
+    return false;
+  }
+  if (!coords) return false;
+
+  for (const range of groupMarkEditRanges(findMarkEditRangesAtCursor(view.state))) {
+    if (isCursorOnMarkedSide(view.state, view.state.selection.from, range.markTypeNames)) {
+      continue;
+    }
+
+    const markTypes = range.markTypeNames
+      .map((markTypeName) => view.state.schema.marks[markTypeName])
+      .filter((markType): markType is MarkType => Boolean(markType));
+    if (markTypes.length === 0) continue;
+
+    const openWidget = findDelimiterWidgetForRange(view.dom, 'open', range);
+    const closeWidget = findDelimiterWidgetForRange(view.dom, 'close', range);
+    if (!openWidget || !closeWidget) continue;
+
+    const openRect = openWidget.getBoundingClientRect();
+    const closeRect = closeWidget.getBoundingClientRect();
+    if (!isSameDelimiterLine(event.clientY, openRect, closeRect)) continue;
+
+    const clickedInMarkedText =
+      event.clientX > openRect.right && event.clientX < closeRect.left;
+    const clickedOpeningTextBoundary = coords.pos === range.from && clickedInMarkedText;
+    const clickedClosingTextBoundary = coords.pos === range.to && clickedInMarkedText;
+    if (!clickedOpeningTextBoundary && !clickedClosingTextBoundary) continue;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const pos = clickedOpeningTextBoundary ? range.from : range.to;
+    const tr = view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, pos))
+      .setStoredMarks(markTypes.map((markType) => markType.create()));
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  }
+
+  return false;
+}
+
+function handleOutsideMarkBoundaryMouseDown(
+  view: MarkBoundaryMouseView,
+  event: MouseEvent,
+): boolean {
+  if (!view.state.selection.empty) return false;
+
+  let coords: { pos: number; inside: number } | null = null;
+  try {
+    coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+  } catch {
+    coords = null;
+  }
+
+  for (const range of groupMarkEditRanges(findMarkEditRangesAtCursor(view.state))) {
+    const markTypes = range.markTypeNames
+      .map((markTypeName) => view.state.schema.marks[markTypeName])
+      .filter((markType): markType is MarkType => Boolean(markType));
+    if (markTypes.length === 0) continue;
+
+    const openWidget = findDelimiterWidgetForRange(view.dom, 'open', range);
+    const closeWidget = findDelimiterWidgetForRange(view.dom, 'close', range);
+    if (!openWidget || !closeWidget) continue;
+
+    const openRect = openWidget.getBoundingClientRect();
+    const closeRect = closeWidget.getBoundingClientRect();
+    if (!isSameDelimiterLine(event.clientY, openRect, closeRect)) continue;
+
+    const clickedBeforeOpening =
+      event.clientX < openRect.left &&
+      (coords?.pos === range.from ||
+        (!coords && isTextblockBoundary(view.state, range.from, 'start')));
+    const clickedAfterClosing =
+      event.clientX > closeRect.right &&
+      (coords?.pos === range.to ||
+        (!coords && isTextblockBoundary(view.state, range.to, 'end')));
+    if (!clickedBeforeOpening && !clickedAfterClosing) continue;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const pos = clickedBeforeOpening ? range.from : range.to;
+    const tr = view.state.tr
+      .setSelection(TextSelection.create(view.state.doc, pos))
+      .setStoredMarks([]);
+    view.dispatch(tr);
+    view.focus();
+    return true;
+  }
+
+  return false;
+}
+
+function isTextblockBoundary(
+  state: EditorState,
+  pos: number,
+  boundary: 'start' | 'end',
+): boolean {
+  if (pos < 0 || pos > state.doc.content.size) return false;
+  const $pos = state.doc.resolve(pos);
+  if (!$pos.parent.isTextblock) return false;
+  return boundary === 'start'
+    ? $pos.parentOffset === 0
+    : $pos.parentOffset === $pos.parent.content.size;
 }
 
 /**
@@ -691,12 +820,13 @@ function resolveBoundaryTarget(
 }
 
 function findDelimiterWidgetHit(
+  root: HTMLElement,
   event: MouseEvent,
 ): { edge: MarkBoundaryEdge; widgetElement: HTMLElement } | null {
-  const target = event.target;
-  const widgetElement =
-    target instanceof Element ? target.closest<HTMLElement>('.pm-mark-delimiter-widget') : null;
-  if (!widgetElement) return null;
+  const widgetElement = findDelimiterWidgetFromTarget(event.target);
+  if (!widgetElement) {
+    return findDelimiterWidgetNearPointer(root, event);
+  }
 
   const rect = widgetElement.getBoundingClientRect();
   const middle = rect.left + rect.width / 2;
@@ -719,6 +849,96 @@ function findDelimiterWidgetHit(
 }
 
 type MarkBoundaryEdge = 'open-before' | 'open-after' | 'close-before' | 'close-after';
+
+function findDelimiterWidgetForRange(
+  root: HTMLElement,
+  edge: 'open' | 'close',
+  range: GroupedMarkEditRange,
+): HTMLElement | null {
+  const widgets = Array.from(
+    root.querySelectorAll<HTMLElement>(`.pm-mark-delimiter-widget[data-edge="${edge}"]`),
+  );
+  return (
+    widgets.find(
+      (widget) =>
+        Number(widget.dataset.from) === range.from &&
+        Number(widget.dataset.to) === range.to &&
+        widget.dataset.marks === range.markTypeNames.join(' '),
+    ) ?? null
+  );
+}
+
+function isSameDelimiterLine(clientY: number, openRect: DOMRect, closeRect: DOMRect): boolean {
+  const top = Math.min(openRect.top, closeRect.top) - DELIMITER_CLICK_SLOP_PX;
+  const bottom = Math.max(openRect.bottom, closeRect.bottom) + DELIMITER_CLICK_SLOP_PX;
+  return clientY >= top && clientY <= bottom;
+}
+
+function findDelimiterWidgetFromTarget(target: EventTarget | null): HTMLElement | null {
+  if (target instanceof Element) {
+    return target.closest<HTMLElement>('.pm-mark-delimiter-widget');
+  }
+
+  if (target instanceof Node && target.parentElement) {
+    return target.parentElement.closest<HTMLElement>('.pm-mark-delimiter-widget');
+  }
+
+  return null;
+}
+
+function findDelimiterWidgetNearPointer(
+  root: HTMLElement,
+  event: MouseEvent,
+): { edge: MarkBoundaryEdge; widgetElement: HTMLElement } | null {
+  const target = event.target;
+  if (!(target instanceof Node) || !root.contains(target)) return null;
+
+  const widgets = Array.from(root.querySelectorAll<HTMLElement>('.pm-mark-delimiter-widget'));
+  let nearest: { edge: MarkBoundaryEdge; widgetElement: HTMLElement; distance: number } | null =
+    null;
+
+  for (const widgetElement of widgets) {
+    const rect = widgetElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    if (
+      event.clientY < rect.top - DELIMITER_CLICK_SLOP_PX ||
+      event.clientY > rect.bottom + DELIMITER_CLICK_SLOP_PX
+    ) {
+      continue;
+    }
+
+    const widgetEdge = widgetElement.dataset.edge;
+    const beforeDistance = rect.left - event.clientX;
+    const afterDistance = event.clientX - rect.right;
+    let edge: MarkBoundaryEdge | null = null;
+    let distance = Number.POSITIVE_INFINITY;
+
+    // 步骤1：真实浏览器在点击 widget 视觉边缘时，事件 target 可能是外层段落。
+    // 因此这里按坐标补判 widget 内部和两侧极小空隙，避免原生 pointer selection 抢回光标。
+    if (event.clientX >= rect.left && event.clientX <= rect.right) {
+      const middle = rect.left + rect.width / 2;
+      if (widgetEdge === 'open') {
+        edge = event.clientX < middle ? 'open-before' : 'open-after';
+      } else if (widgetEdge === 'close') {
+        edge = event.clientX < middle ? 'close-before' : 'close-after';
+      }
+      distance = 0;
+    } else if (beforeDistance >= 0 && beforeDistance <= DELIMITER_CLICK_SLOP_PX) {
+      edge = widgetEdge === 'open' ? 'open-before' : widgetEdge === 'close' ? 'close-before' : null;
+      distance = beforeDistance;
+    } else if (afterDistance >= 0 && afterDistance <= DELIMITER_CLICK_SLOP_PX) {
+      edge = widgetEdge === 'open' ? 'open-after' : widgetEdge === 'close' ? 'close-after' : null;
+      distance = afterDistance;
+    }
+
+    if (!edge) continue;
+    if (!nearest || distance < nearest.distance) {
+      nearest = { edge, widgetElement, distance };
+    }
+  }
+
+  return nearest ? { edge: nearest.edge, widgetElement: nearest.widgetElement } : null;
+}
 
 function groupMarkEditRanges(ranges: readonly MarkEditRange[]): GroupedMarkEditRange[] {
   const groups = new Map<string, GroupedMarkEditRange>();
