@@ -989,7 +989,6 @@ export function createMarkdownInputRules() {
     textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading, (match) => ({
       level: match[1].length,
     })),
-    wrappingInputRule(/^\s*>\s$/, schema.nodes.blockquote),
     wrappingInputRule(/^\s*([-+*])\s$/, schema.nodes.bullet_list),
     wrappingInputRule(/^(\d+)\.\s$/, schema.nodes.ordered_list, (match) => ({
       order: Number(match[1]),

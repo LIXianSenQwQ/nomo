@@ -36,6 +36,7 @@ import {
   toggleTaskListAtCursor,
 } from './editorCommands';
 import { findActiveLinkRange } from './editorCommands';
+import { blockquoteInputPlugin } from './plugins/blockquoteInput';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
@@ -465,6 +466,7 @@ export class ProseMirrorEditorCore implements EditorCore {
         inputRules({
           rules: createMarkdownInputRules(),
         }),
+        blockquoteInputPlugin(),
         history(),
         taskListPlugin(),
         mathInlineInputPlugin(),
