@@ -207,12 +207,40 @@ describe('markdown serialization', () => {
     expect(serializeMarkdown(doc).trim()).toBe(input);
   });
 
+  it('keeps an inline-only comment as comment_inline after reopening', () => {
+    const doc = schema.node('doc', null, [
+      schema.nodes.paragraph.create(null, [
+        schema.nodes.comment_inline.create({ content: '这里是行内注释' }),
+      ]),
+    ]);
+    const serialized = serializeMarkdown(doc).trim();
+    const reopened = parseMarkdown(serialized);
+    const paragraph = reopened.child(0);
+
+    expect(serialized).toBe('<!-- 这里是行内注释 -->');
+    expect(paragraph.type.name).toBe('paragraph');
+    expect(paragraph.child(0).type.name).toBe('comment_inline');
+    expect(paragraph.child(0).attrs.content).toBe('这里是行内注释');
+  });
+
+  it('serializes block comments in multiline form so they reopen as comment_block nodes', () => {
+    const doc = schema.node('doc', null, [
+      schema.nodes.comment_block.create({ content: '这里是一段注释' }),
+    ]);
+    const serialized = serializeMarkdown(doc).trim();
+    const reopened = parseMarkdown(serialized);
+
+    expect(serialized).toBe('<!--\n这里是一段注释\n-->');
+    expect(reopened.child(0).type.name).toBe('comment_block');
+    expect(reopened.child(0).attrs.content).toBe('这里是一段注释');
+  });
+
   it('keeps HTML blocks separate from Markdown comments', () => {
-    const doc = parseMarkdown('<section>HTML</section>\n\n<!-- 注释 -->');
+    const doc = parseMarkdown('<section>HTML</section>\n\n<!--\n注释\n-->');
 
     expect(doc.child(0).type.name).toBe('html_block');
     expect(doc.child(1).type.name).toBe('comment_block');
-    expect(serializeMarkdown(doc).trim()).toBe('<section>HTML</section>\n\n<!-- 注释 -->');
+    expect(serializeMarkdown(doc).trim()).toBe('<section>HTML</section>\n\n<!--\n注释\n-->');
   });
 
   it('still reserves toc comments for toc_block parsing', () => {

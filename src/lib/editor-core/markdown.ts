@@ -359,10 +359,16 @@ tableMarkdownParserWithHandlers.tokenHandlers = {
   },
   html_block: (state: HtmlMarkdownParseState, tok: Token) => {
     if (isMarkdownComment(tok.content) && !isReservedTocComment(tok.content)) {
-      state.openNode(schema.nodes.comment_block, {
-        content: readMarkdownCommentContent(tok.content),
-      });
-      state.closeNode();
+      const content = readMarkdownCommentContent(tok.content);
+      if (isSingleLineMarkdownComment(tok.content)) {
+        state.openNode(schema.nodes.paragraph);
+        state.openNode(schema.nodes.comment_inline, { content });
+        state.closeNode();
+        state.closeNode();
+      } else {
+        state.openNode(schema.nodes.comment_block, { content });
+        state.closeNode();
+      }
       return;
     }
 
@@ -1104,6 +1110,10 @@ function isReservedTocComment(content: string): boolean {
   return /^<!--\s*toc\s*-->\s*$/i.test(trimmed) || /^<!--\s*\/toc\s*-->\s*$/i.test(trimmed);
 }
 
+function isSingleLineMarkdownComment(content: string): boolean {
+  return !content.trim().includes('\n');
+}
+
 function readMarkdownCommentContent(rawComment: string): string {
   const match = COMMENT_RE.exec(rawComment.trim());
   if (!match) return rawComment;
@@ -1118,9 +1128,10 @@ function readMarkdownCommentContent(rawComment: string): string {
 
 function serializeMarkdownComment(content: string, block: boolean): string {
   const safeContent = content.replace(/-->/g, '-- >').replace(/\r\n/g, '\n');
-  if (block && safeContent.includes('\n')) {
+  if (block) {
     return `<!--\n${safeContent}\n-->`;
   }
 
-  return safeContent.trim() ? `<!-- ${safeContent} -->` : block ? '<!-- -->' : '<!---->';
+  const inlineContent = safeContent.replace(/\n+/g, ' ').trim();
+  return inlineContent ? `<!-- ${inlineContent} -->` : '<!---->';
 }

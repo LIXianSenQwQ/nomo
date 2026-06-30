@@ -1411,8 +1411,7 @@
   outline-offset: 2px;
 }
 
-.comment-block-label,
-.comment-inline-label {
+.comment-block-label {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
@@ -2207,10 +2206,20 @@
 .comment-inline {
   display: inline-flex;
   align-items: center;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
   max-width: min(34ch, 72vw);
-  min-height: 24px;
   margin: 0 2px;
+  padding: 3px 7px;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--md-editor-radius-sm);
+  background: #f0fdf4;
+  color: #166534;
+  font-family: var(--md-editor-font-mono);
+  font-size: 0.9em;
+  line-height: 1.15;
   vertical-align: baseline;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -2219,7 +2228,15 @@
   max-width: min(34ch, 72vw);
   overflow: hidden;
   text-overflow: ellipsis;
+  color: inherit;
+  line-height: inherit;
   vertical-align: middle;
+}
+
+:root[data-theme='dark'] .comment-inline {
+  border-color: color-mix(in srgb, #22c55e 40%, var(--md-editor-code-border));
+  background: color-mix(in srgb, #22c55e 16%, var(--md-editor-surface));
+  color: #86efac;
 }
 
 .comment-inline:focus-visible,
@@ -2238,19 +2255,19 @@
 .comment-inline-input {
   display: inline;
   width: auto;
-  min-width: min(24ch, 84vw);
+  min-width: 2ch;
   max-width: min(64ch, 84vw);
-  padding: 4px 9px;
-  border: 1px solid var(--md-editor-accent);
-  border-radius: var(--md-editor-radius-sm);
-  background: var(--md-editor-surface);
-  color: var(--md-editor-fg);
-  font-family: var(--md-editor-font-mono);
-  font-size: 0.9em;
-  line-height: 1.35;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
   vertical-align: baseline;
   outline: none;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+  caret-color: currentColor;
 }
 
 /* 轻量语法提示 token 样式 */

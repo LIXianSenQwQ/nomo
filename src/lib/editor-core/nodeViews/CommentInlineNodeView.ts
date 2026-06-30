@@ -5,10 +5,11 @@ import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { registerActiveEdit, unregisterActiveEdit } from './activeEditRegistry';
 
 const COMMENT_INLINE_PREVIEW_LENGTH = 12;
-const COMMENT_INLINE_MIN_EDIT_WIDTH = 24;
-const COMMENT_INLINE_MAX_EDIT_WIDTH = 64;
+const COMMENT_INLINE_MIN_EDIT_WIDTH_PX = 16;
+const COMMENT_INLINE_MAX_EDIT_WIDTH_PX = 640;
+const COMMENT_INLINE_EDIT_CARET_PADDING_PX = 6;
 
-/** 行内 Markdown 注释 NodeView：展示为灰色标签，点击后原位编辑注释内容。 */
+/** 行内 Markdown 注释 NodeView：展示为正文内的注释标签，点击后原位编辑注释内容。 */
 export class CommentInlineNodeView {
   private static nextKeyboardCursorSide: 'start' | 'end' | null = null;
   private static instantEditMode = false;
@@ -229,12 +230,15 @@ export class CommentInlineNodeView {
 
   private updateInputWidth(): void {
     if (!this.input) return;
-    const contentWidth = Array.from(this.input.value).length + 4;
+    const contentWidth = measureInputContentWidth(this.input);
     const nextWidth = Math.min(
-      COMMENT_INLINE_MAX_EDIT_WIDTH,
-      Math.max(COMMENT_INLINE_MIN_EDIT_WIDTH, contentWidth),
+      COMMENT_INLINE_MAX_EDIT_WIDTH_PX,
+      Math.max(
+        COMMENT_INLINE_MIN_EDIT_WIDTH_PX,
+        contentWidth + COMMENT_INLINE_EDIT_CARET_PADDING_PX,
+      ),
     );
-    this.input.style.width = `${nextWidth}ch`;
+    this.input.style.width = `${nextWidth}px`;
   }
 
   private getContent(): string {
@@ -262,7 +266,23 @@ function createCommentPreviewText(content: string): string {
 
   const chars = Array.from(normalized);
   const preview = chars.slice(0, COMMENT_INLINE_PREVIEW_LENGTH).join('');
-  return t.commentPreview({
-    preview: `${preview}${chars.length > COMMENT_INLINE_PREVIEW_LENGTH ? '…' : ''}`,
-  });
+  return `${preview}${chars.length > COMMENT_INLINE_PREVIEW_LENGTH ? '…' : ''}`;
+}
+
+function measureInputContentWidth(input: HTMLInputElement): number {
+  const computed = window.getComputedStyle(input);
+  const measure = document.createElement('span');
+  measure.className = 'comment-inline-measure';
+  measure.textContent = input.value || ' ';
+  measure.style.position = 'absolute';
+  measure.style.visibility = 'hidden';
+  measure.style.pointerEvents = 'none';
+  measure.style.whiteSpace = 'pre';
+  measure.style.font = computed.font;
+  measure.style.letterSpacing = computed.letterSpacing;
+  measure.style.textTransform = computed.textTransform;
+  document.body.appendChild(measure);
+  const width = Math.ceil(measure.getBoundingClientRect().width);
+  measure.remove();
+  return width;
 }

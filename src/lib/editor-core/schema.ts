@@ -125,10 +125,11 @@ export const schema = new Schema({
           content: { default: '' },
         },
         toDOM(node) {
+          const content = String(node.attrs.content ?? '');
           return [
             'span',
-            { class: 'comment-inline', 'data-comment': node.attrs.content },
-            ['span', { class: 'comment-inline-label' }, t.comment()],
+            { class: 'comment-inline', 'data-comment': content },
+            ['span', { class: 'comment-inline-label' }, content || t.emptyComment()],
           ];
         },
         parseDOM: [

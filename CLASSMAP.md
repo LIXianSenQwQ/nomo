@@ -2428,7 +2428,7 @@
 **Kind:** nodeView
 
 **Owns:**
-- 行内 Markdown 注释 NodeView：灰色标签展示、原位 input 编辑
+- 行内 Markdown 注释 NodeView：正文内注释标签展示、原位 input 编辑
 
 **Does not own:**
 - 不拥有注释解析（在 markdown.ts 中）

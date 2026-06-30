@@ -20,7 +20,7 @@ describe('CommentInlineNodeView', () => {
   it('renders short inline comments with the full preview text', () => {
     const nodeView = createNodeView('短内容');
 
-    expect(nodeView.dom.textContent).toBe('Comment: 短内容');
+    expect(nodeView.dom.textContent).toBe('短内容');
     expect(nodeView.dom.title).toBe('短内容');
     expect(nodeView.dom.getAttribute('aria-label')).toBe('Inline comment: 短内容');
   });
@@ -29,23 +29,42 @@ describe('CommentInlineNodeView', () => {
     const content = '这里解释为什么这样写以及后续原因';
     const nodeView = createNodeView(content);
 
-    expect(nodeView.dom.textContent).toBe('Comment: 这里解释为什么这样写以及…');
+    expect(nodeView.dom.textContent).toBe('这里解释为什么这样写以及…');
     expect(nodeView.dom.title).toBe(content);
     expect(nodeView.dom.getAttribute('aria-label')).toBe(`Inline comment: ${content}`);
   });
 
-  it('uses a comfortable minimum width while editing', () => {
+  it('sizes the editing input from measured content width without forcing a long field', () => {
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
     });
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function getBoundingClientRectMock(this: HTMLElement) {
+        const width = this.classList.contains('comment-inline-measure') ? 58 : 0;
+        return {
+          x: 0,
+          y: 0,
+          width,
+          height: 0,
+          top: 0,
+          right: width,
+          bottom: 0,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
 
-    const nodeView = createNodeView('');
+    const nodeView = createNodeView('短内容');
     (nodeView as unknown as { enterEdit(): void }).enterEdit();
 
     const input = nodeView.dom.querySelector<HTMLInputElement>('.comment-inline-input');
+    if (!input) throw new Error('Expected inline comment input to exist');
+    (nodeView as unknown as { updateInputWidth(): void }).updateInputWidth();
 
-    expect(input?.style.width).toBe('24ch');
+    expect(input.style.width).toBe('64px');
+    rectSpy.mockRestore();
   });
 });
 
