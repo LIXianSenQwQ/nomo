@@ -1646,22 +1646,24 @@
 - 确认对话框 Promise 式状态管理
 - 二按钮模式（确认/取消）和三按钮模式（保存/放弃/取消）
 - `confirmDialogStore` Svelte store
+- 默认按钮文案的本地化兜底
 
 **Does not own:**
 - 不拥有确认对话框 UI（在 ConfirmDialog.svelte 中）
 
 **Called by:** `src/app/App.svelte`, `src/app/services/documentActionsController.ts`
 
-**Depends on:** `svelte/store`
+**Depends on:** `svelte/store`, `src/app/i18n.ts`
 
 **Change this when:**
 - 修改确认对话框交互模式
 - 添加新的确认对话框类型
+- 修改确认对话框默认按钮文案
 
 **Do not change this when:**
 - 修改对话框 UI 样式
 
-**Related tests:** —
+**Related tests:** `src/app/services/confirmAction.test.ts`
 
 **Confidence:** high
 

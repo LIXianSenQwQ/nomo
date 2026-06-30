@@ -350,8 +350,8 @@
     open: false,
     title: '',
     message: '',
-    confirmLabel: 'Discard',
-    cancelLabel: 'Cancel',
+    confirmLabel: t.discardChanges(),
+    cancelLabel: t.cancel(),
     saveLabel: '',
   };
   const _unsubConfirmStore = confirmDialogStore.subscribe((v) => {

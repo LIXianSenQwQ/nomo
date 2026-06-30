@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { t } from '../i18n';
 
 export interface ConfirmActionOptions {
   title?: string;
@@ -25,8 +26,8 @@ export const confirmDialogStore = writable<ConfirmDialogState>({
   open: false,
   title: '',
   message: '',
-  confirmLabel: 'Discard',
-  cancelLabel: 'Cancel',
+  confirmLabel: t.discardChanges(),
+  cancelLabel: t.cancel(),
   saveLabel: '',
 });
 
@@ -54,8 +55,8 @@ export async function confirmAction(
       open: true,
       title: options.title ?? 'Nomo',
       message,
-      confirmLabel: options.okLabel ?? 'Discard',
-      cancelLabel: options.cancelLabel ?? 'Cancel',
+      confirmLabel: options.okLabel ?? t.discardChanges(),
+      cancelLabel: options.cancelLabel ?? t.cancel(),
       saveLabel: options.saveLabel ?? '',
     });
   });
