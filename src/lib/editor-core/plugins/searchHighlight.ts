@@ -12,6 +12,7 @@ import type { EditorSearchMatch } from '../types';
  */
 
 const SEARCH_HIGHLIGHT_KEY = 'searchHighlight';
+const SEARCH_HIGHLIGHT_DECORATION_LIMIT = 1000;
 
 export interface SearchHighlightMeta {
   matches: EditorSearchMatch[];
@@ -52,7 +53,7 @@ function buildSearchDecorations(
 ): DecorationSet {
   const decorations: Decoration[] = [];
 
-  for (const match of matches) {
+  for (const match of getVisibleSearchMatches(matches, activeIndex)) {
     const isActive = match.index === activeIndex;
     const className = isActive ? 'search-match-active' : 'search-match';
     decorations.push(
@@ -63,4 +64,24 @@ function buildSearchDecorations(
   }
 
   return DecorationSet.create(doc, decorations);
+}
+
+function getVisibleSearchMatches(
+  matches: EditorSearchMatch[],
+  activeIndex: number,
+): EditorSearchMatch[] {
+  if (matches.length <= SEARCH_HIGHLIGHT_DECORATION_LIMIT) {
+    return matches;
+  }
+
+  if (activeIndex < 0 || activeIndex >= matches.length) {
+    return matches.slice(0, SEARCH_HIGHLIGHT_DECORATION_LIMIT);
+  }
+
+  const halfWindow = Math.floor(SEARCH_HIGHLIGHT_DECORATION_LIMIT / 2);
+  const start = Math.min(
+    Math.max(0, activeIndex - halfWindow),
+    matches.length - SEARCH_HIGHLIGHT_DECORATION_LIMIT,
+  );
+  return matches.slice(start, start + SEARCH_HIGHLIGHT_DECORATION_LIMIT);
 }

@@ -81,7 +81,7 @@ export interface EditorChangeEvent {
   dirty: boolean;
   mode: EditorMode;
   readonly: boolean;
-  reason: string;
+  reason: 'content-pending' | 'content-sync' | string;
   pendingInlineMarks: InlinePendingMarks;
 }
 
@@ -183,6 +183,7 @@ export interface EditorCore {
   mount(target: HTMLElement): void;
   destroy(): void;
   getMarkdown(): string;
+  flushMarkdown(): string;
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void;
   setDirty(dirty: boolean): void;
   getSnapshot(): EditorSnapshot;

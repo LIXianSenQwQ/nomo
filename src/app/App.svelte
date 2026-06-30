@@ -290,6 +290,7 @@
   let frontMatterEditing = false;
   let frontMatterFocusRequest = 0;
   let scrollDebounceTimer: number | null = null;
+  let contentAnalysisTimer: number | null = null;
   let readingPositionRestoreToken = 0;
   let skipNextReadingPositionRestore = false;
   let skipReadingPositionRestoreUntil = 0;
@@ -304,6 +305,10 @@
   let searchActiveIndex = 0;
   let searchMatchCount = 0;
   let lastSearchSignature = '';
+  let searchDebounceTimer: number | null = null;
+
+  const CONTENT_ANALYSIS_DEBOUNCE_MS = 120;
+  const SEARCH_DEBOUNCE_MS = 150;
 
   // 上下文菜单状态
   let contextMenuX = 0;
@@ -393,6 +398,7 @@
 
   /** 立即刷新待持久化的工作区状态（用于关闭窗口/退出应用等场景） */
   async function flushPersistWorkspaceState() {
+    syncActiveTabMarkdownFromEditor();
     if (_persistTimer !== null) {
       window.clearTimeout(_persistTimer);
       _persistTimer = null;
@@ -404,6 +410,7 @@
 
   async function persistWorkspaceStateNow(options?: { ensureDraftIds?: boolean }) {
     if (!desktopEnabled || !windowLabel) return;
+    syncActiveTabMarkdownFromEditor();
     if (options?.ensureDraftIds !== false) {
       await persistWorkspaceDraftsNow('missing-only');
     }
@@ -459,6 +466,7 @@
   }
 
   async function persistWorkspaceDraftsNow(policy: 'changed' | 'missing-only') {
+    syncActiveTabMarkdownFromEditor();
     if (policy === 'changed' && _workspaceDraftTimer !== null) {
       window.clearTimeout(_workspaceDraftTimer);
       _workspaceDraftTimer = null;
@@ -714,15 +722,25 @@
     await saveMarkdownFile(true);
   }
 
+  function syncActiveTabMarkdownFromEditor() {
+    if (!activeTabId) return markdown;
+    const currentMarkdown = editor.flushMarkdown();
+    if (currentMarkdown !== markdown) {
+      markdown = currentMarkdown;
+    }
+    return currentMarkdown;
+  }
+
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
     if (!activeTabId) return;
 
+    const currentMarkdown = syncActiveTabMarkdownFromEditor();
     saveCurrentReadingPositionToMemoryOnly();
 
     tabs = writeActiveTabState(tabs, activeTabId, {
-      markdown,
-      savedMarkdown,
+      markdown: currentMarkdown,
+      savedMarkdown: dirty ? savedMarkdown : currentMarkdown,
       dirty,
       version,
       fileName,
@@ -1507,13 +1525,20 @@
 
   function closeSearchPanel() {
     searchPanelOpen = false;
+    clearSearchDebounceTimer();
+    refreshSearchMatches({ preserveActive: false, selectActive: false });
     editor.focus();
   }
 
   function updateSearchQuery(event: Event) {
     searchQuery = (event.currentTarget as HTMLInputElement).value;
     searchActiveIndex = 0;
-    refreshSearchMatches({ preserveActive: false, selectActive: false });
+    if (!searchQuery) {
+      clearSearchDebounceTimer();
+      refreshSearchMatches({ preserveActive: false, selectActive: false });
+      return;
+    }
+    scheduleSearchRefresh({ preserveActive: false, selectActive: false });
   }
 
   function updateSearchReplacement(event: Event) {
@@ -1523,6 +1548,7 @@
   function toggleSearchCaseSensitive() {
     searchCaseSensitive = !searchCaseSensitive;
     searchActiveIndex = 0;
+    clearSearchDebounceTimer();
     refreshSearchMatches({ preserveActive: false, selectActive: false });
   }
 
@@ -1586,6 +1612,7 @@
   }
 
   function refreshSearchMatches(options?: { preserveActive?: boolean; selectActive?: boolean }) {
+    clearSearchDebounceTimer();
     if (!searchPanelOpen) {
       searchMatches = [];
       searchMatchCount = 0;
@@ -1624,6 +1651,21 @@
 
     if (options?.selectActive) {
       selectActiveSearchMatch();
+    }
+  }
+
+  function scheduleSearchRefresh(options?: { preserveActive?: boolean; selectActive?: boolean }) {
+    clearSearchDebounceTimer();
+    searchDebounceTimer = window.setTimeout(() => {
+      searchDebounceTimer = null;
+      refreshSearchMatches(options);
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  function clearSearchDebounceTimer() {
+    if (searchDebounceTimer !== null) {
+      window.clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
     }
   }
 
@@ -2796,6 +2838,8 @@
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
     if (toastTimer !== null) window.clearTimeout(toastTimer);
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
+    clearContentAnalysisTimer();
+    clearSearchDebounceTimer();
     window.removeEventListener('keydown', handleGlobalShortcut);
     window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
     detachMountedEditorHostEvents();
@@ -2843,12 +2887,11 @@
     }
 
     markdown = event.markdown;
-    const analysis = analyzeMarkdown(event.markdown);
-    outline = analysis.outline;
-    if (!outline.some((item) => item.id === activeOutlineId))
-      activeOutlineId = outline[0]?.id ?? '';
-    pruneCollapsedOutlineIds();
-    stats = analysis.stats;
+    if (event.reason === 'source-input') {
+      scheduleMarkdownAnalysis(event.markdown);
+    } else {
+      applyMarkdownAnalysis(event.markdown);
+    }
 
     if (activeTab) {
       activeTab.markdown = markdown;
@@ -2873,6 +2916,33 @@
       return;
     }
     syncSourceTextareaHeight();
+  }
+
+  function applyMarkdownAnalysis(markdownToAnalyze: string) {
+    clearContentAnalysisTimer();
+    const analysis = analyzeMarkdown(markdownToAnalyze);
+    outline = analysis.outline;
+    if (!outline.some((item) => item.id === activeOutlineId))
+      activeOutlineId = outline[0]?.id ?? '';
+    pruneCollapsedOutlineIds();
+    stats = analysis.stats;
+  }
+
+  function scheduleMarkdownAnalysis(markdownToAnalyze: string) {
+    clearContentAnalysisTimer();
+    contentAnalysisTimer = window.setTimeout(() => {
+      contentAnalysisTimer = null;
+      if (markdownToAnalyze === markdown) {
+        applyMarkdownAnalysis(markdownToAnalyze);
+      }
+    }, CONTENT_ANALYSIS_DEBOUNCE_MS);
+  }
+
+  function clearContentAnalysisTimer() {
+    if (contentAnalysisTimer !== null) {
+      window.clearTimeout(contentAnalysisTimer);
+      contentAnalysisTimer = null;
+    }
   }
 
   function openTablePicker() {
@@ -3114,7 +3184,7 @@
     frontMatterFocusTarget = 'default';
   }
   $: {
-    const signature = `${searchPanelOpen}|${mode}|${searchQuery}|${searchCaseSensitive}|${markdown}|${version}`;
+    const signature = `${searchPanelOpen}|${mode}|${searchCaseSensitive}|${markdown}`;
     if (signature !== lastSearchSignature) {
       lastSearchSignature = signature;
       refreshSearchMatches({ preserveActive: true, selectActive: false });

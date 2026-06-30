@@ -1,15 +1,15 @@
 import type { DiagramRenderer } from './render';
 
+type MermaidApi = typeof import('mermaid').default;
+
+let mermaidPromise: Promise<MermaidApi> | null = null;
+let initializedTheme: 'default' | 'dark' | null = null;
+
 export function createMermaidDiagramRenderer(): DiagramRenderer {
   return {
     async renderMermaid(code, options) {
       try {
-        const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: options.theme === 'dark' ? 'dark' : 'default',
-        });
+        const mermaid = await loadMermaid(options.theme === 'dark' ? 'dark' : 'default');
         const id = `nomo-${hashText(code)}`;
         const result = await mermaid.render(id, code);
         return { svg: result.svg };
@@ -21,6 +21,20 @@ export function createMermaidDiagramRenderer(): DiagramRenderer {
       }
     },
   };
+}
+
+async function loadMermaid(theme: 'default' | 'dark'): Promise<MermaidApi> {
+  mermaidPromise ??= import('mermaid').then((module) => module.default);
+  const mermaid = await mermaidPromise;
+  if (initializedTheme !== theme) {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme,
+    });
+    initializedTheme = theme;
+  }
+  return mermaid;
 }
 
 function hashText(text: string): string {

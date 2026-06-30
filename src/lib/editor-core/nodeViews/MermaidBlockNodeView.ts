@@ -14,6 +14,7 @@ import { getDiagramRenderer } from '../renderers';
  */
 export class MermaidBlockNodeView {
   private static instances = new Set<MermaidBlockNodeView>();
+  private static readonly PREVIEW_DEBOUNCE_MS = 250;
   private static readonly FULLSCREEN_DEFAULT_SCALE = 1.25;
   private static readonly FULLSCREEN_MIN_SCALE = 0.5;
   private static readonly FULLSCREEN_MAX_SCALE = 3;
@@ -26,6 +27,7 @@ export class MermaidBlockNodeView {
   private getPos: () => number;
   private renderId = 0;
   private previewRenderId = 0;
+  private previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private editing = false;
   private originalCode = '';
   private textarea: HTMLTextAreaElement | null = null;
@@ -215,7 +217,7 @@ export class MermaidBlockNodeView {
 
     this.textarea.addEventListener('input', () => {
       this.autoResizeTextarea();
-      void this.updatePreview();
+      this.schedulePreviewUpdate();
     });
     this.textarea.addEventListener('keydown', (event) => this.handleKeyDown(event));
     this.textarea.addEventListener('blur', () => {
@@ -261,6 +263,7 @@ export class MermaidBlockNodeView {
 
   private cleanupEdit(): void {
     this.editing = false;
+    this.clearPreviewDebounce();
     this.previewRenderId += 1;
     this.dom.classList.remove('is-editing');
     this.textarea = null;
@@ -390,6 +393,22 @@ export class MermaidBlockNodeView {
         error: true,
         renderId: id,
       });
+    }
+  }
+
+  private schedulePreviewUpdate(): void {
+    this.clearPreviewDebounce();
+    this.previewRenderId += 1;
+    this.previewDebounceTimer = setTimeout(() => {
+      this.previewDebounceTimer = null;
+      void this.updatePreview();
+    }, MermaidBlockNodeView.PREVIEW_DEBOUNCE_MS);
+  }
+
+  private clearPreviewDebounce(): void {
+    if (this.previewDebounceTimer !== null) {
+      clearTimeout(this.previewDebounceTimer);
+      this.previewDebounceTimer = null;
     }
   }
 

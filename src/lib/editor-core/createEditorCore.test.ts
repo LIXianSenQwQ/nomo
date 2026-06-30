@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createEditorCore } from './createEditorCore';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function findFirstNode(
   doc: ProseMirrorNode,
@@ -690,6 +694,66 @@ describe('createEditorCore', () => {
 
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)));
     expect(dirtyEvents.at(-1)).toBe(false);
+  });
+
+  it('defers semantic markdown serialization until the content sync debounce fires', () => {
+    vi.useFakeTimers();
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const events: Array<{ reason: string; markdown: string; dirty: boolean }> = [];
+    editor.subscribe((event) =>
+      events.push({ reason: event.reason, markdown: event.markdown, dirty: event.dirty }),
+    );
+
+    view.dispatch(view.state.tr.insertText('编辑'));
+
+    expect(events.at(-1)).toEqual({
+      reason: 'content-pending',
+      markdown: '正文',
+      dirty: true,
+    });
+
+    vi.advanceTimersByTime(119);
+    expect(events.at(-1)?.reason).toBe('content-pending');
+
+    vi.advanceTimersByTime(1);
+    expect(events.at(-1)?.reason).toBe('content-sync');
+    expect(events.at(-1)?.markdown).toBe('编辑正文');
+    expect(editor.getMarkdown()).toBe('编辑正文');
+  });
+
+  it('flushes pending semantic markdown synchronously through getMarkdown', () => {
+    vi.useFakeTimers();
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const events: string[] = [];
+    editor.subscribe((event) => events.push(event.reason));
+
+    view.dispatch(view.state.tr.insertText('同步'));
+    expect(events.at(-1)).toBe('content-pending');
+
+    expect(editor.getMarkdown()).toBe('同步正文');
+    expect(events.at(-1)).toBe('content-sync');
+
+    const syncCount = events.filter((reason) => reason === 'content-sync').length;
+    vi.advanceTimersByTime(120);
+    expect(events.filter((reason) => reason === 'content-sync')).toHaveLength(syncCount);
+  });
+
+  it('limits search highlight decorations while keeping the active match visible', () => {
+    const markdown = Array.from({ length: 1505 }, () => 'x').join(' ');
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown, target });
+    const matches = editor.findSearchMatches('x', { caseSensitive: true });
+
+    expect(matches).toHaveLength(1505);
+
+    editor.setSearchHighlights(matches, 1500);
+
+    expect(target.querySelectorAll('.search-match, .search-match-active')).toHaveLength(1000);
+    expect(target.querySelectorAll('.search-match-active')).toHaveLength(1);
   });
 
   it('setDirty(false) makes the current markdown the clean baseline', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -8,6 +8,10 @@ import { executeEditorCommand } from './editorCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { MermaidBlockNodeView } from './nodeViews/MermaidBlockNodeView';
 import { schema } from './schema';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('mermaid_block markdown', () => {
   it('parses mermaid fenced code block as mermaid_block node', () => {
@@ -236,6 +240,53 @@ describe('MermaidBlockNodeView', () => {
 
     expect(target.querySelector('.mermaid-block-textarea')).not.toBeNull();
     expect(target.querySelector('[data-stale-display-render="true"]')).toBeNull();
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('debounces edit-mode Mermaid preview rendering and uses the latest source', async () => {
+    vi.useFakeTimers();
+    const renderCalls: string[] = [];
+    setCodeBlockDiagramRenderer({
+      async renderMermaid(code) {
+        renderCalls.push(code);
+        return { svg: `<svg data-code="${code}"></svg>` };
+      },
+    });
+
+    const node = schema.nodes.mermaid_block.create({ code: 'flowchart TD\n  A --> B' });
+    const doc = schema.nodes.doc.create(null, [node]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc }),
+      nodeViews: {
+        mermaid_block: (node, view, getPos) =>
+          new MermaidBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    await Promise.resolve();
+    expect(renderCalls).toHaveLength(1);
+
+    target.querySelector<HTMLElement>('.mermaid-block')?.click();
+    const textarea = target.querySelector<HTMLTextAreaElement>('.mermaid-block-textarea');
+    expect(textarea).not.toBeNull();
+
+    textarea!.value = 'flowchart TD\n  A --> C';
+    textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea!.value = 'flowchart TD\n  A --> D';
+    textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+
+    vi.advanceTimersByTime(249);
+    expect(renderCalls).toHaveLength(1);
+
+    vi.advanceTimersByTime(1);
+    await Promise.resolve();
+
+    expect(renderCalls).toEqual(['flowchart TD\n  A --> B', 'flowchart TD\n  A --> D']);
 
     view.destroy();
     target.remove();

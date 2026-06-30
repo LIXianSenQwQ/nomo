@@ -88,6 +88,7 @@ import type {
 } from './types';
 
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
+const MARKDOWN_SYNC_DEBOUNCE_MS = 120;
 
 export class ProseMirrorEditorCore implements EditorCore {
   private target: HTMLElement | null;
@@ -96,6 +97,10 @@ export class ProseMirrorEditorCore implements EditorCore {
   private originalMarkdown: string;
   private semanticViewDirty = false;
   private frontMatter = '';
+  private originalDoc: ProseMirrorNode;
+  private pendingMarkdownDoc: ProseMirrorNode | null = null;
+  private pendingMarkdownSelection: { anchor: number; head: number } | null = null;
+  private markdownSyncTimer: ReturnType<typeof setTimeout> | null = null;
   private version = 0;
   private dirty = false;
   private destroyed = false;
@@ -107,6 +112,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.markdown = updateTocBlocks(options.markdown);
     this.originalMarkdown = this.markdown;
     this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
+    this.originalDoc = parseMarkdown(this.markdown);
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
@@ -154,6 +160,7 @@ export class ProseMirrorEditorCore implements EditorCore {
   }
 
   destroy(): void {
+    this.clearMarkdownSyncTimer();
     this.listeners.clear();
     this.view?.destroy();
     this.view = null;
@@ -163,19 +170,29 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   getMarkdown(): string {
     this.assertActive();
+    this.flushPendingMarkdownSync();
+    return this.markdown;
+  }
+
+  flushMarkdown(): string {
+    this.assertActive();
+    this.flushPendingMarkdownSync();
     return this.markdown;
   }
 
   setDirty(dirty: boolean): void {
     this.assertActive();
+    this.flushPendingMarkdownSync();
     this.dirty = dirty;
     if (!dirty) {
       this.originalMarkdown = this.markdown;
+      this.originalDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
     }
   }
 
   setMarkdown(markdown: string, options?: SetMarkdownOptions): void {
     this.assertActive();
+    this.flushPendingMarkdownSync();
     const previousMarkdown = this.markdown;
     const delaySemanticSync = options?.sourceInput === true && this.runtime.mode === 'source';
     const previousDoc = delaySemanticSync
@@ -189,10 +206,13 @@ export class ProseMirrorEditorCore implements EditorCore {
       options?.savedMarkdown === undefined ? undefined : updateTocBlocks(options.savedMarkdown);
     if (savedMarkdown !== undefined) {
       this.originalMarkdown = savedMarkdown;
+      this.originalDoc = parseMarkdown(savedMarkdown);
     } else if (options?.reason === 'open-file' || options?.reason === 'save-file') {
       this.originalMarkdown = this.markdown;
+      this.originalDoc = parseMarkdown(this.markdown);
     } else if (options?.reason === 'switch-tab' && options?.dirty !== true) {
       this.originalMarkdown = this.markdown;
+      this.originalDoc = parseMarkdown(this.markdown);
     }
 
     this.dirty = options?.dirty ?? this.markdown !== this.originalMarkdown;
@@ -217,6 +237,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   getSnapshot(): EditorSnapshot {
     this.assertActive();
+    this.flushPendingMarkdownSync();
     return {
       markdown: this.markdown,
       version: this.version,
@@ -228,8 +249,10 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   restoreSnapshot(snapshot: EditorSnapshot): void {
     this.assertActive();
+    this.clearPendingMarkdownSync();
     this.markdown = updateTocBlocks(snapshot.markdown);
     this.originalMarkdown = this.markdown;
+    this.originalDoc = parseMarkdown(this.markdown);
     this.version = snapshot.version;
     this.dirty = true;
     this.replaceViewState(this.markdown);
@@ -364,6 +387,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   execute(command: EditorCommand): boolean {
     this.assertActive();
+    this.flushPendingMarkdownSync();
 
     if (!this.canExecute(command)) {
       return false;
@@ -406,6 +430,9 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   updateOptions(options: Partial<EditorRuntimeOptions>): void {
     this.assertActive();
+    if (options.mode && options.mode !== this.runtime.mode) {
+      this.flushPendingMarkdownSync();
+    }
     this.runtime = {
       ...this.runtime,
       ...options,
@@ -689,24 +716,67 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.view.updateState(nextState);
 
     if (transaction.docChanged) {
-      const serializedMarkdown = `${this.frontMatter}${serializeMarkdown(nextState.doc)}`;
-      this.markdown = updateTocBlocks(serializedMarkdown);
-      // 脏状态应基于当前内容与原始基准值的比较，而非仅判断事务是否改变了文档
-      this.dirty = this.markdown !== this.originalMarkdown;
-      if (this.markdown !== serializedMarkdown) {
-        this.replaceViewState(this.markdown, {
-          anchor: nextState.selection.anchor,
-          head: nextState.selection.head,
-        });
-      } else {
-        this.semanticViewDirty = false;
-      }
+      this.pendingMarkdownDoc = nextState.doc;
+      this.pendingMarkdownSelection = {
+        anchor: nextState.selection.anchor,
+        head: nextState.selection.head,
+      };
+      this.dirty = !nextState.doc.eq(this.originalDoc);
+      this.scheduleMarkdownSync();
       this.notifyDeletedImages(previousDoc, nextState.doc);
+    } else if (this.pendingMarkdownDoc) {
+      this.pendingMarkdownSelection = {
+        anchor: nextState.selection.anchor,
+        head: nextState.selection.head,
+      };
     }
 
     // 每次事务都递增版本并通知（pending mark 状态切换、选区变化等需要及时反映到 UI）
     this.version += 1;
-    this.emit('transaction');
+    this.emit(transaction.docChanged ? 'content-pending' : 'transaction');
+  }
+
+  private scheduleMarkdownSync(): void {
+    this.clearMarkdownSyncTimer();
+    this.markdownSyncTimer = setTimeout(() => {
+      this.markdownSyncTimer = null;
+      this.flushPendingMarkdownSync();
+    }, MARKDOWN_SYNC_DEBOUNCE_MS);
+  }
+
+  private clearMarkdownSyncTimer(): void {
+    if (this.markdownSyncTimer !== null) {
+      clearTimeout(this.markdownSyncTimer);
+      this.markdownSyncTimer = null;
+    }
+  }
+
+  private clearPendingMarkdownSync(): void {
+    this.clearMarkdownSyncTimer();
+    this.pendingMarkdownDoc = null;
+    this.pendingMarkdownSelection = null;
+  }
+
+  private flushPendingMarkdownSync(): boolean {
+    const pendingDoc = this.pendingMarkdownDoc;
+    if (!pendingDoc) {
+      return false;
+    }
+
+    const selection = this.pendingMarkdownSelection;
+    this.clearPendingMarkdownSync();
+
+    const serializedMarkdown = `${this.frontMatter}${serializeMarkdown(pendingDoc)}`;
+    this.markdown = updateTocBlocks(serializedMarkdown);
+    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
+    this.dirty = this.markdown !== this.originalMarkdown;
+    if (this.markdown !== serializedMarkdown) {
+      this.replaceViewState(this.markdown, selection ?? undefined);
+    } else {
+      this.semanticViewDirty = false;
+    }
+    this.emit('content-sync');
+    return true;
   }
 
   private replaceViewState(markdown: string, selection?: { anchor: number; head: number }): void {
