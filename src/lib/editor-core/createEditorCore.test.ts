@@ -22,9 +22,29 @@ function findFirstNode(
   return found;
 }
 
-function pressEditorKey(view: EditorView, key: string): boolean {
+function findNodeByText(
+  doc: ProseMirrorNode,
+  typeName: string,
+  text: string,
+): { node: ProseMirrorNode; pos: number } {
+  let found: { node: ProseMirrorNode; pos: number } | null = null;
+  doc.descendants((node, pos) => {
+    if (node.type.name === typeName && node.textContent === text) {
+      found = { node, pos };
+      return false;
+    }
+    return true;
+  });
+  if (!found) {
+    throw new Error(`Node ${typeName} with text ${text} not found`);
+  }
+  return found;
+}
+
+function pressEditorKey(view: EditorView, key: string, init?: KeyboardEventInit): boolean {
   const event = new KeyboardEvent('keydown', {
     key,
+    ...init,
     bubbles: true,
     cancelable: true,
   });
@@ -47,6 +67,96 @@ describe('createEditorCore', () => {
       markdown: '# Nomo\n\n阶段0',
       version: 1,
     });
+  });
+
+  it('renders source soft line breaks as visible semantic line breaks', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '1\n2\n3', target });
+
+    expect(target.querySelectorAll('.ProseMirror p br')).toHaveLength(2);
+    expect(editor.getMarkdown()).toBe('1\n2\n3');
+
+    editor.destroy();
+  });
+
+  it('inserts a source soft line break with Shift+Enter in semantic paragraphs', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '1', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findFirstNode(view.state.doc, 'paragraph');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, paragraph.pos + paragraph.node.nodeSize - 1),
+      ),
+    );
+
+    expect(pressEditorKey(view, 'Enter', { shiftKey: true })).toBe(true);
+    view.dispatch(view.state.tr.insertText('2'));
+
+    expect(target.querySelectorAll('.ProseMirror p br')).toHaveLength(1);
+    expect(editor.getMarkdown()).toBe('1\n2');
+
+    editor.destroy();
+  });
+
+  it('replaces a paragraph selection with a soft line break on Shift+Enter', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: 'abcd', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findFirstNode(view.state.doc, 'paragraph');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, paragraph.pos + 2, paragraph.pos + 4),
+      ),
+    );
+
+    expect(pressEditorKey(view, 'Enter', { shiftKey: true })).toBe(true);
+
+    expect(target.querySelectorAll('.ProseMirror p br')).toHaveLength(1);
+    expect(editor.getMarkdown()).toBe('a\nd');
+
+    editor.destroy();
+  });
+
+  it('falls back to heading split behavior on Shift+Enter in headings', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# 一二三', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
+
+    expect(pressEditorKey(view, 'Enter', { shiftKey: true })).toBe(true);
+
+    expect(view.state.doc.childCount).toBe(2);
+    expect(view.state.doc.child(0).type.name).toBe('heading');
+    expect(view.state.doc.child(0).textContent).toBe('一');
+    expect(view.state.doc.child(1).type.name).toBe('paragraph');
+    expect(view.state.doc.child(1).textContent).toBe('二三');
+    expect(editor.getMarkdown()).toBe('# 一\n\n二三');
+
+    editor.destroy();
+  });
+
+  it('serializes Shift+Enter inside table cells as br to keep pipe tables valid', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '| A |\n| :--- |', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const cellParagraph = findNodeByText(view.state.doc, 'paragraph', 'A');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, cellParagraph.pos + cellParagraph.node.nodeSize - 1),
+      ),
+    );
+
+    expect(pressEditorKey(view, 'Enter', { shiftKey: true })).toBe(true);
+    view.dispatch(view.state.tr.insertText('B'));
+
+    expect(editor.getMarkdown()).toBe('| A<br>B |\n| :--- |');
+
+    editor.destroy();
   });
 
   it('emits immutable change events through subscribe', () => {

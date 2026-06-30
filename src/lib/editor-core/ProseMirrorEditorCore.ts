@@ -31,6 +31,7 @@ import { HorizontalRuleNodeView } from './nodeViews/HorizontalRuleNodeView';
 import { TocBlockNodeView } from './nodeViews/TocBlockNodeView';
 import {
   executeEditorCommand,
+  insertSoftLineBreak,
   splitBlockExitHeading,
   toggleList,
   toggleTaskListAtCursor,
@@ -546,6 +547,15 @@ export class ProseMirrorEditorCore implements EditorCore {
             }
             return true;
           },
+          'Shift-Enter': chainCommands(
+            insertSoftLineBreak,
+            newlineInCode,
+            splitTaskListItem(schema.nodes.list_item),
+            splitListItem(schema.nodes.list_item),
+            createParagraphNear,
+            liftEmptyBlock,
+            splitBlockExitHeading,
+          ),
           Enter: chainCommands(
             // $$ 回车自动补全：段落内只有 $$ 时按回车，生成空 math_block 并自动进入编辑态
             (state, dispatch) => {

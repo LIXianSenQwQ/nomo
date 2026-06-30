@@ -1,4 +1,4 @@
-import { Schema } from 'prosemirror-model';
+import { Schema, type DOMOutputSpec } from 'prosemirror-model';
 import { schema as markdownSchema } from 'prosemirror-markdown';
 import { tableNodes } from 'prosemirror-tables';
 import { calloutNodeSpec } from './callout/calloutSchema';
@@ -8,6 +8,24 @@ import { t } from '../../app/i18n';
 export type TableColumnAlignment = 'left' | 'center' | 'right';
 
 const markdownImageNodeSpec = markdownSchema.spec.nodes.get('image')!;
+const markdownHardBreakNodeSpec = markdownSchema.spec.nodes.get('hard_break')!;
+const hardBreakNodeSpec = {
+  ...markdownHardBreakNodeSpec,
+  attrs: {
+    ...(markdownHardBreakNodeSpec.attrs ?? {}),
+    /** true 表示源码里的普通单换行；视觉换行但保存回普通换行。 */
+    soft: { default: false },
+  },
+  parseDOM: [
+    {
+      tag: 'br',
+      getAttrs: () => ({ soft: false }),
+    },
+  ],
+  toDOM(): DOMOutputSpec {
+    return ['br'];
+  },
+};
 const imageNodeSpec = {
   ...markdownImageNodeSpec,
   selectable: false,
@@ -28,6 +46,7 @@ function readCellAlignment(dom: HTMLElement): TableColumnAlignment | null {
 
 export const schema = new Schema({
   nodes: markdownSchema.spec.nodes
+    .update('hard_break', hardBreakNodeSpec)
     .update('image', imageNodeSpec)
     .append(
       tableNodes({

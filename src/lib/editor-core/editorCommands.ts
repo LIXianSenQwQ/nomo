@@ -192,6 +192,30 @@ export function splitBlockExitHeading(
   })(state, dispatch);
 }
 
+/**
+ * 在当前段落内插入软换行。
+ * 软换行用于语义模式的 Shift+Enter：视觉上换行，保存为源码普通单换行。
+ */
+export function insertSoftLineBreak(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { selection } = state;
+  const { $from, $to } = selection;
+
+  // 步骤1：只处理同一个 paragraph 内的选择，标题等块交给 Enter 回退逻辑。
+  if ($from.parent !== $to.parent || $from.parent.type !== schema.nodes.paragraph) {
+    return false;
+  }
+
+  const softBreak = schema.nodes.hard_break.create({ soft: true });
+  if (dispatch) {
+    // 步骤2：选区存在时直接用软换行替换选区，保持“段内换行”语义。
+    dispatch(state.tr.replaceSelectionWith(softBreak).scrollIntoView());
+  }
+  return true;
+}
+
 // 查找光标所在位置的父列表（bullet_list 或 ordered_list）
 function findParentList($pos: ResolvedPos): { listPos: number; listType: NodeType } | null {
   for (let d = $pos.depth; d >= 0; d--) {

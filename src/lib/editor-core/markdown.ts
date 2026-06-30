@@ -347,6 +347,10 @@ const defaultFenceTokenHandler = tableMarkdownParserWithHandlers.tokenHandlers.f
 // 覆盖 html_block token handler — 分类 HTML 后决定走可编辑节点还是 fallback paragraph
 tableMarkdownParserWithHandlers.tokenHandlers = {
   ...tableMarkdownParserWithHandlers.tokenHandlers,
+  softbreak: (state: HtmlMarkdownParseState) => {
+    state.openNode(schema.nodes.hard_break, { soft: true });
+    state.closeNode();
+  },
   fence: (state: HtmlMarkdownParseState, tok: Token) => {
     const language = tok.info.trim().split(/\s+/)[0]?.toLowerCase();
     if (language === 'mermaid') {
@@ -521,6 +525,16 @@ const tableMarkdownSerializer = new MarkdownSerializer(
         state.renderInline(node);
       }
       state.closeBlock(node);
+    },
+    hard_break(state, node, parent, index) {
+      if (node.attrs.soft === true) {
+        if (hasFollowingInlineContent(parent, index)) {
+          state.write('\n');
+        }
+        return;
+      }
+
+      defaultMarkdownSerializer.nodes.hard_break(state, node, parent, index);
     },
     bullet_list(state, node) {
       state.renderList(node, '  ', () => '- ');
@@ -698,6 +712,15 @@ function preprocessImageHtml(markdown: string): string {
   );
 
   return result;
+}
+
+function hasFollowingInlineContent(parent: ProseMirrorNode, index: number): boolean {
+  for (let i = index + 1; i < parent.childCount; i++) {
+    if (parent.child(i).type.name !== 'hard_break') {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function parseMarkdown(markdown: string): ProseMirrorNode {

@@ -39,6 +39,30 @@ describe('markdown serialization', () => {
     expect(serializeMarkdown(parseMarkdown(input))).toBe(input);
   });
 
+  it('renders source soft line breaks as in-paragraph breaks and preserves them on save', () => {
+    const input = '1\n2\n3';
+    const doc = parseMarkdown(input);
+    const paragraph = doc.child(0);
+
+    expect(doc.childCount).toBe(1);
+    expect(paragraph.type.name).toBe('paragraph');
+    expect(paragraph.child(1).type.name).toBe('hard_break');
+    expect(paragraph.child(1).attrs.soft).toBe(true);
+    expect(paragraph.child(3).type.name).toBe('hard_break');
+    expect(paragraph.child(3).attrs.soft).toBe(true);
+    expect(serializeMarkdown(doc)).toBe(input);
+  });
+
+  it('keeps Markdown hard breaks distinct from source soft line breaks', () => {
+    const input = ['1\\', '2'].join('\n');
+    const doc = parseMarkdown(input);
+    const breakNode = doc.child(0).child(1);
+
+    expect(breakNode.type.name).toBe('hard_break');
+    expect(breakNode.attrs.soft).toBe(false);
+    expect(serializeMarkdown(doc)).toBe(input);
+  });
+
   it('does not escape manual inline mark trigger characters in plain text', () => {
     const serialized = serializeMarkdown(parseMarkdown('use * and ~ manually')).trim();
 

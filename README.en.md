@@ -98,6 +98,7 @@ Download the installer for your system from [GitHub Releases](https://github.com
 | `Ctrl + Shift + T` | Insert table |
 | `Ctrl + Shift + K` | Insert code block |
 | `Ctrl + Shift + M` | Insert math block |
+| `Shift + Enter` | Line break within paragraph |
 | `Ctrl + Shift + Q` | Toggle blockquote |
 | `Ctrl + Shift + [` | Ordered list |
 | `Ctrl + Shift + ]` | Unordered list |
