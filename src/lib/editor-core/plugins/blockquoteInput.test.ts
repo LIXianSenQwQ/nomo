@@ -78,9 +78,40 @@ describe('blockquoteInputPlugin', () => {
     expect(nextState.doc.textContent).toBe('');
   });
 
+  it('converts a > shortcut after up to three leading spaces', () => {
+    for (const text of [' >', '  >', '   >']) {
+      const state = createShortcutState(text);
+      const tr = createBlockquoteInputTransaction(state);
+
+      expect(tr).not.toBeNull();
+
+      const { state: nextState } = state.applyTransaction(tr!);
+      expect(topLevelNodeNames(nextState)).toEqual(['blockquote']);
+      expect(nextState.doc.textContent).toBe('');
+    }
+  });
+
   it('does not convert partial or non-leading > text', () => {
-    expect(createBlockquoteInputTransaction(createShortcutState(' >'))).toBeNull();
     expect(createBlockquoteInputTransaction(createShortcutState('a>'))).toBeNull();
+    expect(createBlockquoteInputTransaction(createShortcutState('    >'))).toBeNull();
+  });
+
+  it('does not handle modified Space keyboard shortcuts', () => {
+    const { plugin, view } = createPluginView();
+    const event = new KeyboardEvent('keydown', {
+      key: ' ',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    const handled = plugin.props.handleDOMEvents?.keydown?.call(plugin, view, event) ?? false;
+
+    expect(handled).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(view.state.doc.textContent).toBe('>');
+
+    destroyPluginView(view);
   });
 
   it('ignores composing space input events', () => {

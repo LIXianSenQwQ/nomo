@@ -95,7 +95,13 @@ function isPlainSpaceInput(event: Event): event is InputEvent {
 
 function isPlainSpaceKey(event: Event): event is KeyboardEvent {
   if (typeof KeyboardEvent === 'undefined' || !(event instanceof KeyboardEvent)) return false;
-  return event.key === ' ' || event.key === 'Spacebar';
+  return (
+    (event.key === ' ' || event.key === 'Spacebar') &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey
+  );
 }
 
 function readEventData(event: Event): string {
@@ -128,7 +134,8 @@ export function createBlockquoteInputTransaction(state: EditorState): Transactio
   const { $from } = selection;
   if ($from.parent.type !== schema.nodes.paragraph) return null;
   if ($from.parentOffset !== $from.parent.content.size) return null;
-  if ($from.parent.textBetween(0, $from.parentOffset) !== '>') return null;
+  const shortcutText = $from.parent.textBetween(0, $from.parentOffset);
+  if (!/^\s{0,3}>$/.test(shortcutText)) return null;
 
   const tr = state.tr.delete($from.start(), $from.pos);
   let capturedTr: Transaction | null = null;
