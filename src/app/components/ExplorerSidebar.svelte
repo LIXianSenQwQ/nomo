@@ -172,7 +172,11 @@
   let flattenedRows: ExplorerTreeRow[] = [];
   let virtualRows: ExplorerTreeRow[] = [];
   let virtualTreeHeight = 0;
+  let visibleExplorerRowsSignature = '';
   let lastAutoScrolledExplorerPath = '';
+  let lastRenderedFolderPath = currentFolderPath;
+  let activeExplorerScrollToken = 0;
+  let pendingActiveExplorerScrollSignature = '';
 
   $: flattenedRows = buildVisibleExplorerRows(
     folderTree,
@@ -181,8 +185,13 @@
     TREE_ROW_HEIGHT,
   );
   $: virtualTreeHeight = flattenedRows.length * TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING;
+  $: visibleExplorerRowsSignature = flattenedRows.map((row) => row.key).join('\u001f');
   $: hasStandaloneFile = fileName.trim().length > 0 && filePath.trim().length > 0;
   $: activeExplorerPath = nativePath ?? previewNativePath;
+  $: if (currentFolderPath !== lastRenderedFolderPath) {
+    lastRenderedFolderPath = currentFolderPath;
+    resetFileTreeScrollState();
+  }
   $: {
     const start = Math.max(0, Math.floor(fileTreeScrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN);
     const visibleCount =
@@ -190,21 +199,71 @@
       TREE_OVERSCAN * 2;
     virtualRows = flattenedRows.slice(start, start + visibleCount);
   }
-  $: if (
-    activeExplorerPath &&
-    activeExplorerPath !== lastAutoScrolledExplorerPath &&
-    flattenedRows.length > 0
-  ) {
-    scrollActiveExplorerRowIntoView(activeExplorerPath);
+  $: {
+    const autoScrollSignature = [
+      currentFolderPath,
+      activeExplorerPath ?? '',
+      rootFolderExpanded ? 'open' : 'closed',
+      String(fileTreeViewportHeight),
+      visibleExplorerRowsSignature,
+    ].join('\u001e');
+    if (
+      rootFolderExpanded &&
+      activeExplorerPath &&
+      activeExplorerPath !== lastAutoScrolledExplorerPath &&
+      flattenedRows.length > 0
+    ) {
+      scheduleActiveExplorerScroll(activeExplorerPath, autoScrollSignature);
+    }
   }
 
   function handleFileTreeScroll(event: Event) {
-    fileTreeScrollTop = (event.currentTarget as HTMLElement).scrollTop;
+    const scrollContainer = event.currentTarget as HTMLElement;
+    fileTreeScrollTop = Math.max(0, scrollContainer.scrollTop);
   }
 
-  async function scrollActiveExplorerRowIntoView(path: string) {
+  function resetFileTreeScrollState() {
+    activeExplorerScrollToken += 1;
+    pendingActiveExplorerScrollSignature = '';
+    lastAutoScrolledExplorerPath = '';
+    fileTreeScrollTop = 0;
+    if (fileTreeElement) {
+      fileTreeElement.scrollTop = 0;
+    }
+  }
+
+  function syncFileTreeScrollTopFromDom() {
+    fileTreeScrollTop = Math.max(0, fileTreeElement?.scrollTop ?? 0);
+  }
+
+  function scheduleActiveExplorerScroll(path: string, signature: string) {
+    if (pendingActiveExplorerScrollSignature === signature) {
+      return;
+    }
+
+    pendingActiveExplorerScrollSignature = signature;
+    const token = ++activeExplorerScrollToken;
+    scrollActiveExplorerRowIntoView(path, signature, token);
+  }
+
+  async function scrollActiveExplorerRowIntoView(
+    path: string,
+    signature: string,
+    token: number,
+  ) {
     await tick();
-    if (!fileTreeElement || path !== activeExplorerPath) {
+    await waitForAnimationFrame();
+    if (token !== activeExplorerScrollToken) {
+      return;
+    }
+    if (!fileTreeElement || path !== activeExplorerPath || !rootFolderExpanded) {
+      clearPendingActiveExplorerScroll(signature);
+      return;
+    }
+
+    if (fileTreeViewportHeight <= 0) {
+      syncFileTreeScrollTopFromDom();
+      clearPendingActiveExplorerScroll(signature);
       return;
     }
 
@@ -212,16 +271,17 @@
       (row) => row.type === 'file' && sameExplorerPath(row.node.path, path),
     );
     if (!activeRow) {
+      clearPendingActiveExplorerScroll(signature);
       return;
     }
 
-    lastAutoScrolledExplorerPath = path;
-    const viewportTop = fileTreeScrollTop;
-    const viewportBottom = viewportTop + fileTreeViewportHeight;
+    const viewportTop = Math.max(0, fileTreeElement.scrollTop);
     const rowTop = activeRow.top;
-    const rowBottom = rowTop + TREE_ROW_HEIGHT;
-    const rowBottomWithPadding = rowBottom + TREE_BOTTOM_PADDING;
-    if (rowTop >= viewportTop && rowBottomWithPadding <= viewportBottom) {
+    const rowBottomWithPadding = rowTop + TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING;
+    if (isExplorerRowVisible(activeRow, viewportTop)) {
+      syncFileTreeScrollTopFromDom();
+      lastAutoScrolledExplorerPath = path;
+      clearPendingActiveExplorerScroll(signature);
       return;
     }
 
@@ -230,7 +290,43 @@
         ? rowTop
         : Math.max(0, rowBottomWithPadding - Math.max(fileTreeViewportHeight, TREE_ROW_HEIGHT));
     fileTreeElement.scrollTop = nextScrollTop;
-    fileTreeScrollTop = nextScrollTop;
+    await waitForAnimationFrame();
+    if (token !== activeExplorerScrollToken) {
+      return;
+    }
+    if (!fileTreeElement || path !== activeExplorerPath || !rootFolderExpanded) {
+      clearPendingActiveExplorerScroll(signature);
+      return;
+    }
+    syncFileTreeScrollTopFromDom();
+    if (isExplorerRowVisible(activeRow, Math.max(0, fileTreeElement.scrollTop))) {
+      lastAutoScrolledExplorerPath = path;
+    }
+    clearPendingActiveExplorerScroll(signature);
+  }
+
+  function isExplorerRowVisible(row: ExplorerTreeRow, viewportTop: number) {
+    const viewportBottom = viewportTop + fileTreeViewportHeight;
+    return (
+      row.top >= viewportTop &&
+      row.top + TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING <= viewportBottom
+    );
+  }
+
+  function clearPendingActiveExplorerScroll(signature: string) {
+    if (pendingActiveExplorerScrollSignature === signature) {
+      pendingActiveExplorerScrollSignature = '';
+    }
+  }
+
+  function waitForAnimationFrame() {
+    return new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => resolve());
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
   }
 
   function sameExplorerPath(left: string, right: string) {
