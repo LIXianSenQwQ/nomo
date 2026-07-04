@@ -56,6 +56,13 @@ const MARK_SYNTAX: Record<string, { open: string; close: string }> = {
 };
 
 const DELIMITER_CLICK_SLOP_PX = 6;
+const BOUNDARY_INPUT_DEDUPE_MS = 50;
+
+type BoundaryTextInput = {
+  from: number;
+  to: number;
+  text: string;
+};
 
 type MarkEditRange = {
   markTypeName: string;
@@ -93,6 +100,53 @@ export function isPendingMarkActive(state: EditorState, markType: MarkType): boo
 }
 
 export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
+  let lastBoundaryTextInput: BoundaryTextInput | null = null;
+  let clearBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const rememberBoundaryTextInput = (input: BoundaryTextInput): void => {
+    if (clearBoundaryTextInputTimer) {
+      clearTimeout(clearBoundaryTextInputTimer);
+    }
+
+    lastBoundaryTextInput = input;
+    clearBoundaryTextInputTimer = setTimeout(() => {
+      if (lastBoundaryTextInput === input) {
+        lastBoundaryTextInput = null;
+      }
+      clearBoundaryTextInputTimer = null;
+    }, BOUNDARY_INPUT_DEDUPE_MS);
+  };
+
+  const consumeBoundaryTextInput = (input: BoundaryTextInput): boolean => {
+    if (
+      !lastBoundaryTextInput ||
+      lastBoundaryTextInput.from !== input.from ||
+      lastBoundaryTextInput.to !== input.to ||
+      lastBoundaryTextInput.text !== input.text
+    ) {
+      return false;
+    }
+
+    lastBoundaryTextInput = null;
+    if (clearBoundaryTextInputTimer) {
+      clearTimeout(clearBoundaryTextInputTimer);
+      clearBoundaryTextInputTimer = null;
+    }
+    return true;
+  };
+
+  const insertBoundaryTextInput = (
+    view: { state: EditorState; dispatch: (tr: Transaction) => void },
+    input: BoundaryTextInput,
+  ): boolean => {
+    const tr = createBoundaryTextInputTransaction(view.state, input.from, input.to, input.text);
+    if (!tr) return false;
+
+    rememberBoundaryTextInput(input);
+    view.dispatch(tr);
+    return true;
+  };
+
   return new Plugin<PendingMarkState>({
     key: pendingInlineMarkKey,
 
@@ -160,6 +214,22 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
           return handleEditRangeBoundaryMouseDown(view, event);
         },
 
+        beforeinput(view, event) {
+          const text = getPlainBeforeInputText(event);
+          if (!text || event.isComposing || view.composing) return false;
+
+          const input = {
+            from: view.state.selection.from,
+            to: view.state.selection.to,
+            text,
+          };
+
+          if (!insertBoundaryTextInput(view, input)) return false;
+
+          event.preventDefault();
+          return true;
+        },
+
         blur(view) {
           if (!getPendingState(view.state).active) return false;
 
@@ -196,37 +266,10 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       },
 
       handleTextInput(view, from, to, text) {
-        if (from !== to || !view.state.selection.empty) return false;
+        const input = { from, to, text };
+        if (consumeBoundaryTextInput(input)) return true;
 
-        const starting = getMarkTypeNamesStartingAtCursor(view.state);
-        const ending = getMarkTypeNamesEndingAtCursor(view.state);
-
-        const markTypeNames =
-          starting?.length
-            ? starting
-            : ending?.length
-              ? ending
-              : null;
-
-        if (!markTypeNames || markTypeNames.length === 0) {
-          return false;
-        }
-
-        // 如果当前是在 mark 内侧，说明用户就是想继续输入 code / strong / em
-        if (isCursorOnMarkedSide(view.state, from, markTypeNames)) {
-          return false;
-        }
-
-        // 如果当前是在 mark 外侧，则强制插入无 mark 文本。
-        // 不能使用 insertText 后再 setStoredMarks([])，因为边界位置会先沿用左侧 mark。
-        const tr = view.state.tr.replaceRangeWith(from, to, view.state.schema.text(text));
-        view.dispatch(
-          tr
-            .setSelection(TextSelection.create(tr.doc, from + text.length))
-            .setStoredMarks([]),
-        );
-
-        return true;
+        return insertBoundaryTextInput(view, input);
       },
     },
 
@@ -248,6 +291,46 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       return newState.tr.setStoredMarks(createMarks(newState, markTypeNames));
     },
   });
+}
+
+function getPlainBeforeInputText(event: InputEvent): string | null {
+  if (event.inputType !== 'insertText') return null;
+  return event.data && event.data.length > 0 ? event.data : null;
+}
+
+function createBoundaryTextInputTransaction(
+  state: EditorState,
+  from: number,
+  to: number,
+  text: string,
+): Transaction | null {
+  if (from !== to || !state.selection.empty || text.length === 0) return null;
+
+  const starting = getMarkTypeNamesStartingAtCursor(state);
+  const ending = getMarkTypeNamesEndingAtCursor(state);
+
+  const markTypeNames =
+    starting?.length
+      ? starting
+      : ending?.length
+        ? ending
+        : null;
+
+  if (!markTypeNames || markTypeNames.length === 0) {
+    return null;
+  }
+
+  // 如果当前是在 mark 内侧，说明用户就是想继续输入 code / strong / em。
+  if (isCursorOnMarkedSide(state, from, markTypeNames)) {
+    return null;
+  }
+
+  // 如果当前是在 mark 外侧，则强制插入无 mark 文本。
+  // 不能使用 insertText 后再 setStoredMarks([])，因为边界位置会先沿用左侧 mark。
+  const tr = state.tr.replaceRangeWith(from, to, state.schema.text(text));
+  return tr
+    .setSelection(TextSelection.create(tr.doc, from + text.length))
+    .setStoredMarks([]);
 }
 
 /** 退出 pending mark 状态，清除 storedMarks */

@@ -777,6 +777,49 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('handles beforeinput at the outer closing delimiter before native DOM insertion', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createMarkedTextView(12, [plugin]);
+    const event = createBeforeInput('.');
+
+    const handled = plugin.props.handleDOMEvents?.beforeinput?.call(plugin, view, event) ?? false;
+
+    expect(handled).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('before bold. after');
+    expect(hasTextMarkForText(view.state, '.', 'strong')).toBe(false);
+    expect(view.state.selection.from).toBe(13);
+    expect(view.state.storedMarks).toEqual([]);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('deduplicates handleTextInput after beforeinput handles the same boundary symbol', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createMarkedTextView(12, [plugin]);
+
+    const beforeInputHandled =
+      plugin.props.handleDOMEvents?.beforeinput?.call(plugin, view, createBeforeInput('.')) ?? false;
+    const textInputHandled =
+      plugin.props.handleTextInput?.call(
+        plugin,
+        view,
+        12,
+        12,
+        '.',
+        () => view.state.tr,
+      ) ?? false;
+
+    expect(beforeInputHandled).toBe(true);
+    expect(textInputHandled).toBe(true);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('before bold. after');
+    expect(view.state.selection.from).toBe(13);
+
+    view.destroy();
+    target.remove();
+  });
+
   describe('mousedown boundary click mirrors arrow keys (current side aware)', () => {
     // 场景：光标已在 mark 内侧（storedMarks 带 strong），点击 close widget 右半（目标=外）。
     // 旧逻辑硬塞 strong，导致光标看起来没动/反向跳；新逻辑应清空 storedMarks 正常出到外侧。
@@ -911,7 +954,10 @@ const MARK_SYNTAX_MAP: Record<string, { open: string; close: string }> = {
   highlight: { open: '<mark>', close: '</mark>' },
 };
 
-function createMarkedTextView(selectionPos: number): { target: HTMLElement; view: EditorView } {
+function createMarkedTextView(
+  selectionPos: number,
+  plugins = [pendingInlineMarkPlugin()],
+): { target: HTMLElement; view: EditorView } {
   const doc = schema.nodes.doc.create(null, [
     schema.nodes.paragraph.create(null, [
       schema.text('before '),
@@ -926,7 +972,7 @@ function createMarkedTextView(selectionPos: number): { target: HTMLElement; view
     state: EditorState.create({
       doc,
       selection: TextSelection.create(doc, selectionPos),
-      plugins: [pendingInlineMarkPlugin()],
+      plugins,
     }),
   });
 
@@ -1029,5 +1075,14 @@ function createKeyDown(key: 'ArrowLeft' | 'ArrowRight'): KeyboardEvent {
     bubbles: true,
     cancelable: true,
     key,
+  });
+}
+
+function createBeforeInput(text: string): InputEvent {
+  return new InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    data: text,
+    inputType: 'insertText',
   });
 }
