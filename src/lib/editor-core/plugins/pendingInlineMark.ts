@@ -64,6 +64,11 @@ type BoundaryTextInput = {
   text: string;
 };
 
+type BoundaryTextInputRecord = BoundaryTextInput & {
+  insertedTo: number;
+  allowInsertedCaretFollowup: boolean;
+};
+
 type MarkEditRange = {
   markTypeName: string;
   from: number;
@@ -100,17 +105,26 @@ export function isPendingMarkActive(state: EditorState, markType: MarkType): boo
 }
 
 export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
-  let lastBoundaryTextInput: BoundaryTextInput | null = null;
+  let lastBoundaryTextInput: BoundaryTextInputRecord | null = null;
   let clearBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const rememberBoundaryTextInput = (input: BoundaryTextInput): void => {
+  const rememberBoundaryTextInput = (
+    input: BoundaryTextInput,
+    options: { allowInsertedCaretFollowup?: boolean } = {},
+  ): void => {
     if (clearBoundaryTextInputTimer) {
       clearTimeout(clearBoundaryTextInputTimer);
     }
 
-    lastBoundaryTextInput = input;
+    const record: BoundaryTextInputRecord = {
+      ...input,
+      insertedTo: input.from + input.text.length,
+      allowInsertedCaretFollowup: options.allowInsertedCaretFollowup ?? false,
+    };
+
+    lastBoundaryTextInput = record;
     clearBoundaryTextInputTimer = setTimeout(() => {
-      if (lastBoundaryTextInput === input) {
+      if (lastBoundaryTextInput === record) {
         lastBoundaryTextInput = null;
       }
       clearBoundaryTextInputTimer = null;
@@ -118,12 +132,21 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   };
 
   const consumeBoundaryTextInput = (input: BoundaryTextInput): boolean => {
-    if (
-      !lastBoundaryTextInput ||
-      lastBoundaryTextInput.from !== input.from ||
-      lastBoundaryTextInput.to !== input.to ||
-      lastBoundaryTextInput.text !== input.text
-    ) {
+    if (!lastBoundaryTextInput) {
+      return false;
+    }
+
+    const sameOriginalInput =
+      lastBoundaryTextInput.from === input.from &&
+      lastBoundaryTextInput.to === input.to &&
+      lastBoundaryTextInput.text === input.text;
+    const sameInsertedCaretFollowup =
+      lastBoundaryTextInput.allowInsertedCaretFollowup &&
+      lastBoundaryTextInput.text === input.text &&
+      lastBoundaryTextInput.insertedTo === input.from &&
+      lastBoundaryTextInput.insertedTo === input.to;
+
+    if (!sameOriginalInput && !sameInsertedCaretFollowup) {
       return false;
     }
 
@@ -138,11 +161,12 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   const insertBoundaryTextInput = (
     view: { state: EditorState; dispatch: (tr: Transaction) => void },
     input: BoundaryTextInput,
+    options: { allowInsertedCaretFollowup?: boolean } = {},
   ): boolean => {
     const tr = createBoundaryTextInputTransaction(view.state, input.from, input.to, input.text);
     if (!tr) return false;
 
-    rememberBoundaryTextInput(input);
+    rememberBoundaryTextInput(input, options);
     view.dispatch(tr);
     return true;
   };
@@ -224,7 +248,13 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
             text,
           };
 
-          if (!insertBoundaryTextInput(view, input)) return false;
+          if (
+            !insertBoundaryTextInput(view, input, {
+              allowInsertedCaretFollowup: isPunctuationLikeText(text),
+            })
+          ) {
+            return false;
+          }
 
           event.preventDefault();
           return true;
@@ -268,6 +298,7 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       handleTextInput(view, from, to, text) {
         const input = { from, to, text };
         if (consumeBoundaryTextInput(input)) return true;
+        if (view.composing) return false;
 
         return insertBoundaryTextInput(view, input);
       },
@@ -296,6 +327,10 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
 function getPlainBeforeInputText(event: InputEvent): string | null {
   if (event.inputType !== 'insertText') return null;
   return event.data && event.data.length > 0 ? event.data : null;
+}
+
+function isPunctuationLikeText(text: string): boolean {
+  return /^[\p{P}\p{S}\s]+$/u.test(text);
 }
 
 function createBoundaryTextInputTransaction(

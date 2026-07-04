@@ -820,6 +820,63 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('deduplicates Chinese IME punctuation reported at the updated caret after a code boundary beforeinput', () => {
+    for (const punctuation of ['、', '，']) {
+      const plugin = pendingInlineMarkPlugin();
+      const { target, view } = createCodeTextView(4, [plugin]);
+
+      const beforeInputHandled =
+        plugin.props.handleDOMEvents?.beforeinput?.call(
+          plugin,
+          view,
+          createBeforeInput(punctuation),
+        ) ?? false;
+      const textInputHandled =
+        plugin.props.handleTextInput?.call(
+          plugin,
+          view,
+          5,
+          5,
+          punctuation,
+          () => view.state.tr.insertText(punctuation, 5, 5),
+        ) ?? false;
+
+      expect(beforeInputHandled).toBe(true);
+      expect(textInputHandled).toBe(true);
+      expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe(
+        `asd${punctuation}`,
+      );
+      expect(hasTextMarkForText(view.state, punctuation, 'code')).toBe(false);
+      expect(view.state.selection.from).toBe(5);
+
+      view.destroy();
+      target.remove();
+    }
+  });
+
+  it('lets ProseMirror own composing text input when no boundary beforeinput was handled', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createCodeTextView(4, [plugin]);
+    setViewComposing(view, true);
+
+    const handled =
+      plugin.props.handleTextInput?.call(
+        plugin,
+        view,
+        4,
+        4,
+        '，',
+        () => view.state.tr.insertText('，', 4, 4),
+      ) ?? false;
+
+    expect(handled).toBe(false);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('asd');
+
+    setViewComposing(view, false);
+    view.destroy();
+    target.remove();
+  });
+
   describe('mousedown boundary click mirrors arrow keys (current side aware)', () => {
     // 场景：光标已在 mark 内侧（storedMarks 带 strong），点击 close widget 右半（目标=外）。
     // 旧逻辑硬塞 strong，导致光标看起来没动/反向跳；新逻辑应清空 storedMarks 正常出到外侧。
@@ -979,7 +1036,10 @@ function createMarkedTextView(
   return { target, view };
 }
 
-function createCodeTextView(selectionPos: number): { target: HTMLElement; view: EditorView } {
+function createCodeTextView(
+  selectionPos: number,
+  plugins = [pendingInlineMarkPlugin()],
+): { target: HTMLElement; view: EditorView } {
   const doc = schema.nodes.doc.create(null, [
     schema.nodes.paragraph.create(null, [schema.text('asd', [schema.marks.code.create()])]),
   ]);
@@ -990,7 +1050,7 @@ function createCodeTextView(selectionPos: number): { target: HTMLElement; view: 
     state: EditorState.create({
       doc,
       selection: TextSelection.create(doc, selectionPos),
-      plugins: [pendingInlineMarkPlugin()],
+      plugins,
     }),
   });
 
@@ -1085,4 +1145,8 @@ function createBeforeInput(text: string): InputEvent {
     data: text,
     inputType: 'insertText',
   });
+}
+
+function setViewComposing(view: EditorView, composing: boolean): void {
+  (view as unknown as { input: { composing: boolean } }).input.composing = composing;
 }
