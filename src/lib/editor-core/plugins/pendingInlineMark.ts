@@ -240,7 +240,8 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
 
         beforeinput(view, event) {
           const text = getPlainBeforeInputText(event);
-          if (!text || event.isComposing || view.composing) return false;
+          if (!text) return false;
+          if ((event.isComposing || view.composing) && !isPunctuationLikeText(text)) return false;
 
           const input = {
             from: view.state.selection.from,
@@ -250,7 +251,7 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
 
           if (
             !insertBoundaryTextInput(view, input, {
-              allowInsertedCaretFollowup: isPunctuationLikeText(text),
+              allowInsertedCaretFollowup: true,
             })
           ) {
             return false;
@@ -330,7 +331,7 @@ function getPlainBeforeInputText(event: InputEvent): string | null {
 }
 
 function isPunctuationLikeText(text: string): boolean {
-  return /^[\p{P}\p{S}\s]+$/u.test(text);
+  return /^[\p{P}\p{S}]+$/u.test(text);
 }
 
 function createBoundaryTextInputTransaction(
@@ -355,17 +356,16 @@ function createBoundaryTextInputTransaction(
     return null;
   }
 
-  // 如果当前是在 mark 内侧，说明用户就是想继续输入 code / strong / em。
-  if (isCursorOnMarkedSide(state, from, markTypeNames)) {
-    return null;
-  }
+  const insideMarkedSide = isCursorOnMarkedSide(state, from, markTypeNames);
+  const marks = insideMarkedSide ? createMarks(state, markTypeNames) : [];
 
-  // 如果当前是在 mark 外侧，则强制插入无 mark 文本。
-  // 不能使用 insertText 后再 setStoredMarks([])，因为边界位置会先沿用左侧 mark。
-  const tr = state.tr.replaceRangeWith(from, to, state.schema.text(text));
+  // 边界位置不能依赖浏览器原生输入再让 ProseMirror 同步：
+  // 中文输入法标点可能会在 beforeinput 之后继续报告同一次输入，导致视觉上出现两份。
+  // 这里直接用事务落文档，并在内侧保留 mark、外侧清空 mark。
+  const tr = state.tr.replaceRangeWith(from, to, state.schema.text(text, marks));
   return tr
     .setSelection(TextSelection.create(tr.doc, from + text.length))
-    .setStoredMarks([]);
+    .setStoredMarks(marks);
 }
 
 /** 退出 pending mark 状态，清除 storedMarks */

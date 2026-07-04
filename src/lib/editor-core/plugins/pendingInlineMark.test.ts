@@ -854,6 +854,36 @@ describe('pendingInlineMarkPlugin', () => {
     }
   });
 
+  it('keeps Chinese IME punctuation single and marked at the inner code closing delimiter', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createCodeTextView(4, [plugin]);
+    view.dispatch(view.state.tr.setStoredMarks([schema.marks.code.create()]));
+
+    const event = createBeforeInput('、', { isComposing: true });
+    const beforeInputHandled =
+      plugin.props.handleDOMEvents?.beforeinput?.call(plugin, view, event) ?? false;
+    const textInputHandled =
+      plugin.props.handleTextInput?.call(
+        plugin,
+        view,
+        5,
+        5,
+        '、',
+        () => view.state.tr.insertText('、', 5, 5),
+      ) ?? false;
+
+    expect(beforeInputHandled).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(textInputHandled).toBe(true);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('asd、');
+    expect(hasTextMarkForText(view.state, '、', 'code')).toBe(true);
+    expect(view.state.selection.from).toBe(5);
+    expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('lets ProseMirror own composing text input when no boundary beforeinput was handled', () => {
     const plugin = pendingInlineMarkPlugin();
     const { target, view } = createCodeTextView(4, [plugin]);
@@ -1138,13 +1168,20 @@ function createKeyDown(key: 'ArrowLeft' | 'ArrowRight'): KeyboardEvent {
   });
 }
 
-function createBeforeInput(text: string): InputEvent {
-  return new InputEvent('beforeinput', {
+function createBeforeInput(text: string, init: { isComposing?: boolean } = {}): InputEvent {
+  const event = new InputEvent('beforeinput', {
     bubbles: true,
     cancelable: true,
     data: text,
     inputType: 'insertText',
   });
+  if (init.isComposing !== undefined) {
+    Object.defineProperty(event, 'isComposing', {
+      configurable: true,
+      value: init.isComposing,
+    });
+  }
+  return event;
 }
 
 function setViewComposing(view: EditorView, composing: boolean): void {
