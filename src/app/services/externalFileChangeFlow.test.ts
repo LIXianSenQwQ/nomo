@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('external file change flow', () => {
   const actionsSource = readFileSync(resolve(__dirname, 'documentActionsController.ts'), 'utf-8');
+  const appSource = readFileSync(resolve(__dirname, '../App.svelte'), 'utf-8');
   const workspaceSource = readFileSync(
     resolve(__dirname, '../components/EditorWorkspace.svelte'),
     'utf-8',
@@ -23,6 +24,14 @@ describe('external file change flow', () => {
 
     expect(autosaveSource.match(/hasExternalFileChange\(\)/g)).toHaveLength(2);
     expect(autosaveSource).toContain('t.externalChangeAutoSavePaused()');
+  });
+
+  it('supports a persisted default action before opening the external change dialog', () => {
+    expect(appSource).toContain('externalFileChangeBehavior');
+    expect(appSource).toContain('tryHandleExternalFileChangeByPreference');
+    expect(appSource).toContain("case 'reload-external'");
+    expect(appSource).toContain("case 'ignore'");
+    expect(appSource).toContain("case 'overwrite-external'");
   });
 
   it.skip('exposes explicit reload, save-as and overwrite actions in the editor alert', () => {

@@ -43,6 +43,7 @@
     type CloseWindowBehavior,
     type CodeBlockIndentPreference,
     type EditorModePreference,
+    type ExternalFileChangeBehavior,
     type FolderOpenDefaultBehavior,
     type InterfaceLanguagePreference,
     type RenderModePreference,
@@ -785,6 +786,10 @@
 
   function setCloseWindowBehavior(closeWindowBehavior: CloseWindowBehavior) {
     updateDraft({ closeWindowBehavior });
+  }
+
+  function setExternalFileChangeBehavior(externalFileChangeBehavior: ExternalFileChangeBehavior) {
+    updateDraft({ externalFileChangeBehavior });
   }
 
   function setStatsMetric(writingStatsMetric: WritingStatsMetric) {
@@ -1753,6 +1758,36 @@
                     aria-pressed={draftSettings.closeWindowBehavior === 'close-to-tray'}
                     on:click={() => setCloseWindowBehavior('close-to-tray')}
                     >{t.closeWindowBehaviorCloseToTray()}</button
+                  >
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div>
+                  <span class="setting-label">{t.externalFileChangeBehavior()}</span>
+                  <p>{t.externalFileChangeBehaviorDescription()}</p>
+                </div>
+                <div class="triple-control" role="group" aria-label={t.externalFileChangeBehavior()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.externalFileChangeBehavior === 'reload-external'}
+                    aria-pressed={draftSettings.externalFileChangeBehavior === 'reload-external'}
+                    on:click={() => setExternalFileChangeBehavior('reload-external')}
+                    >{t.externalFileChangeBehaviorReload()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.externalFileChangeBehavior === 'overwrite-external'}
+                    aria-pressed={draftSettings.externalFileChangeBehavior === 'overwrite-external'}
+                    on:click={() => setExternalFileChangeBehavior('overwrite-external')}
+                    >{t.externalFileChangeBehaviorOverwrite()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.externalFileChangeBehavior === 'ignore'}
+                    aria-pressed={draftSettings.externalFileChangeBehavior === 'ignore'}
+                    on:click={() => setExternalFileChangeBehavior('ignore')}
+                    >{t.externalFileChangeBehaviorIgnore()}</button
                   >
                 </div>
               </div>

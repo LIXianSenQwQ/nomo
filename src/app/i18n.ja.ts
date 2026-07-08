@@ -179,6 +179,12 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   outlineDefaultExpandLevelDescription:
     'ドキュメントを開いたり切り替えたりするときに表示されるデフォルトの見出しレベル。',
   defaultInsertBehavior: 'デフォルトの挿入動作',
+  externalFileChangeBehavior: 'ファイル変更時のデフォルト動作',
+  externalFileChangeBehaviorDescription:
+    '外部変更が検出されたときの既定の動作です。削除や移動は引き続き確認します。',
+  externalFileChangeBehaviorReload: '再読み込み',
+  externalFileChangeBehaviorIgnore: '無視',
+  externalFileChangeBehaviorOverwrite: '外部を上書き',
   defaultCodeBlockLanguage: 'デフォルトのコードブロック言語',
   defaultCodeBlockLanguageDescription:
     'メニューまたはショートカットからコード ブロックを挿入するときに使用されます。',
@@ -455,6 +461,7 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   reloadedExternalVersion: '外部バージョンをリロードしました',
   noExternalChangeToOverwrite: '上書きする外部変更はありません',
   overwrittenExternalVersion: '外部バージョンを上書きしました',
+  externalChangeKeptCurrent: '現在の内容を保持し、今回の外部変更は無視しました',
   externalChangeAutoSavePaused:
     '外部ファイルの変更が検出されました。自動保存が一時停止されました。',
   autoSaveFailed: '自動保存に失敗しました: {error}',

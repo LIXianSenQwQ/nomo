@@ -25,6 +25,7 @@ export type EditorModePreference = 'semantic' | 'source';
 export type BlockStylePreference = 'classic' | 'modern';
 export type FolderOpenDefaultBehavior = 'current-window' | 'new-window' | 'ask-every-time';
 export type CloseWindowBehavior = 'ask-every-time' | 'close-window' | 'close-to-tray';
+export type ExternalFileChangeBehavior = 'reload-external' | 'overwrite-external' | 'ignore';
 export type WritingStatsMetric = 'lines' | 'words' | 'chars';
 export type ImageDefaultAlignPreference = ImageDefaultAlign;
 export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
@@ -71,6 +72,7 @@ export interface AppPreferences {
   folderOpenDefaultBehavior: FolderOpenDefaultBehavior;
   filePreviewEnabled: boolean;
   closeWindowBehavior: CloseWindowBehavior;
+  externalFileChangeBehavior: ExternalFileChangeBehavior;
   sidebarHidden: boolean;
   outlineVisible: boolean;
   writingStatsVisible: boolean;
@@ -129,6 +131,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   folderOpenDefaultBehavior: 'ask-every-time',
   filePreviewEnabled: true,
   closeWindowBehavior: 'ask-every-time',
+  externalFileChangeBehavior: 'reload-external',
   sidebarHidden: false,
   outlineVisible: true,
   writingStatsVisible: true,
@@ -246,6 +249,7 @@ export async function loadAppPreferences(
     closeWindowBehavior:
       parseSetting<unknown>(settings, 'closeWindowBehavior') ??
       resolveLegacyCloseWindowBehavior(settings),
+    externalFileChangeBehavior: parseSetting<unknown>(settings, 'externalFileChangeBehavior'),
     sidebarHidden: parseSetting<unknown>(settings, 'sidebarHidden'),
     outlineVisible: parseSetting<unknown>(settings, 'outlineVisible'),
     writingStatsVisible: parseSetting<unknown>(settings, 'writingStatsVisible'),
@@ -355,6 +359,9 @@ export function normalizeAppPreferences(
     closeWindowBehavior: isCloseWindowBehavior(value.closeWindowBehavior)
       ? value.closeWindowBehavior
       : DEFAULT_APP_PREFERENCES.closeWindowBehavior,
+    externalFileChangeBehavior: isExternalFileChangeBehavior(value.externalFileChangeBehavior)
+      ? value.externalFileChangeBehavior
+      : DEFAULT_APP_PREFERENCES.externalFileChangeBehavior,
     sidebarHidden:
       typeof value.sidebarHidden === 'boolean'
         ? value.sidebarHidden
@@ -543,6 +550,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     folderOpenDefaultBehavior: preferences.folderOpenDefaultBehavior,
     filePreviewEnabled: preferences.filePreviewEnabled,
     closeWindowBehavior: preferences.closeWindowBehavior,
+    externalFileChangeBehavior: preferences.externalFileChangeBehavior,
     sidebarHidden: preferences.sidebarHidden,
     outlineVisible: preferences.outlineVisible,
     writingStatsVisible: preferences.writingStatsVisible,
@@ -800,6 +808,10 @@ function isFolderOpenDefaultBehavior(value: unknown): value is FolderOpenDefault
 
 function isCloseWindowBehavior(value: unknown): value is CloseWindowBehavior {
   return value === 'ask-every-time' || value === 'close-window' || value === 'close-to-tray';
+}
+
+function isExternalFileChangeBehavior(value: unknown): value is ExternalFileChangeBehavior {
+  return value === 'reload-external' || value === 'overwrite-external' || value === 'ignore';
 }
 
 function resolveLegacyCloseWindowBehavior(

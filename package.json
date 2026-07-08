@@ -1,6 +1,6 @@
 {
   "name": "nomo",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "packageManager": "pnpm@11.5.1",
   "type": "module",

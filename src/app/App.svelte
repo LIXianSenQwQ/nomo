@@ -132,6 +132,7 @@
     type AppPreferencesPatch,
     type CloseWindowBehavior,
     type CodeBlockIndentPreference,
+    type ExternalFileChangeBehavior,
     type InterfaceLanguagePreference,
     type SettingsUpdatedPayload,
     type ShortcutPreferences,
@@ -367,6 +368,7 @@
   let filePreviewEnabled = DEFAULT_APP_PREFERENCES.filePreviewEnabled;
   let autoSaveEnabled = DEFAULT_APP_PREFERENCES.autoSaveEnabled;
   let closeWindowBehavior = DEFAULT_APP_PREFERENCES.closeWindowBehavior;
+  let externalFileChangeBehavior = DEFAULT_APP_PREFERENCES.externalFileChangeBehavior;
   let windowLabel = '';
   let developerMode = DEFAULT_APP_PREFERENCES.developerMode;
 
@@ -1286,13 +1288,58 @@
 
   // 外部文件变更弹框 —— 忽略（保留当前内容，关闭弹框）
   function handleExternalChangeDismiss() {
+    dismissExternalChange(externalChangeDialogState);
+  }
+
+  function dismissExternalChange(
+    change: ExternalFileChangeState | null,
+    options?: { statusMessage?: string },
+  ) {
     // 更新 lastKnownModifiedAt 为磁盘时间，避免下次轮询重复弹框
-    if (externalChangeDialogState && externalChangeDialogState.modifiedAt > 0) {
-      lastKnownModifiedAt = externalChangeDialogState.modifiedAt;
+    if (change && change.modifiedAt > 0) {
+      lastKnownModifiedAt = change.modifiedAt;
     }
-    externalFileChange = createEmptyExternalFileChange();
+    setExternalFileChangeState(createEmptyExternalFileChange());
     externalChangeDialogOpen = false;
     externalChangeDialogState = null;
+    if (options?.statusMessage) {
+      statusMessage = options.statusMessage;
+    }
+  }
+
+  function setExternalFileChangeState(value: ExternalFileChangeState) {
+    const changed = externalFileChange.type !== value.type;
+    externalFileChange = value;
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (activeTab && changed) {
+      activeTab.externalFileChange = value;
+      tabs = [...tabs];
+      persistWorkspaceState();
+    }
+  }
+
+  function tryHandleExternalFileChangeByPreference(change: ExternalFileChangeState) {
+    if (change.type !== 'modified') {
+      return false;
+    }
+
+    switch (externalFileChangeBehavior as ExternalFileChangeBehavior) {
+      case 'reload-external':
+        externalChangeDialogOpen = false;
+        externalChangeDialogState = null;
+        reloadExternalFile().catch(() => undefined);
+        return true;
+      case 'ignore':
+        dismissExternalChange(change, { statusMessage: t.externalChangeKeptCurrent() });
+        return true;
+      case 'overwrite-external':
+        externalChangeDialogOpen = false;
+        externalChangeDialogState = null;
+        overwriteExternalFile().catch(() => undefined);
+        return true;
+    }
+
+    return false;
   }
 
   async function requestExitApp() {
@@ -1958,18 +2005,13 @@
     },
     getExternalFileChange: () => externalFileChange,
     setExternalFileChange: (value) => {
-      const changed = externalFileChange.type !== value.type;
-      externalFileChange = value;
-      const activeTab = tabs.find((tab) => tab.id === activeTabId);
-      if (activeTab && changed) {
-        activeTab.externalFileChange = value;
-        tabs = [...tabs];
-        persistWorkspaceState();
-      }
-      // 检测到外部变更且弹框未打开时，弹出模态对话框
+      setExternalFileChangeState(value);
+      // 检测到外部变更时，优先按偏好设置中的默认行为处理。
       if (value.type !== 'none' && !externalChangeDialogOpen) {
-        externalChangeDialogState = value;
-        externalChangeDialogOpen = true;
+        if (!tryHandleExternalFileChangeByPreference(value)) {
+          externalChangeDialogState = value;
+          externalChangeDialogOpen = true;
+        }
       }
     },
     getCurrentFolderPath: () => currentFolderPath,
@@ -2467,6 +2509,7 @@
     folderOpenDefaultBehavior = preferences.folderOpenDefaultBehavior;
     filePreviewEnabled = preferences.filePreviewEnabled;
     closeWindowBehavior = preferences.closeWindowBehavior;
+    externalFileChangeBehavior = preferences.externalFileChangeBehavior;
     focusMode = preferences.sidebarHidden;
     outlineVisible = preferences.outlineVisible;
     writingStatsVisible = preferences.writingStatsVisible;
@@ -2547,6 +2590,7 @@
       folderOpenDefaultBehavior,
       filePreviewEnabled,
       closeWindowBehavior,
+      externalFileChangeBehavior,
       sidebarHidden: focusMode,
       outlineVisible,
       writingStatsVisible,

@@ -72,6 +72,9 @@ describe('settings', () => {
     expect(settingsWindowSource).toContain('t.hideExplorerOnLaunch()');
     expect(settingsWindowSource).toContain('t.showDocumentOutline()');
     expect(settingsWindowSource).toContain('setEditorMode');
+    expect(settingsWindowSource).toContain('externalFileChangeBehavior');
+    expect(settingsWindowSource).toContain('setExternalFileChangeBehavior');
+    expect(settingsWindowSource).toContain("activeCategory === 'files'");
     expect(settingsWindowSource).toContain('sidebarHidden');
     expect(settingsWindowSource).toContain('outlineVisible');
     expect(appSource).toContain("updateAppSetting('editorMode', nextMode)");
@@ -302,6 +305,19 @@ describe('settings', () => {
     expect(
       normalizeAppPreferences({ closeWindowBehavior: 'close-to-tray' }).closeWindowBehavior,
     ).toBe('close-to-tray');
+  });
+
+  it('defaults external file change behavior to reload and normalizes invalid values', () => {
+    expect(DEFAULT_APP_PREFERENCES.externalFileChangeBehavior).toBe('reload-external');
+    expect(normalizeAppPreferences({}).externalFileChangeBehavior).toBe('reload-external');
+    expect(
+      normalizeAppPreferences({ externalFileChangeBehavior: 'ignore' })
+        .externalFileChangeBehavior,
+    ).toBe('ignore');
+    expect(
+      normalizeAppPreferences({ externalFileChangeBehavior: 'invalid' as never })
+        .externalFileChangeBehavior,
+    ).toBe('reload-external');
   });
 
   it('defaults developer mode to false and preserves explicit value', () => {
