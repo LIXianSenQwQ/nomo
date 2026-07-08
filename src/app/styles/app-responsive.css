@@ -303,12 +303,6 @@
   color: var(--md-editor-muted-fg);
 }
 
-.titlebar.is-mac .sidebar-toggle-btn {
-  width: 28px;
-  height: 28px;
-  transform: translateY(-8px);
-}
-
 .sidebar-toggle-btn:hover,
 .sidebar-toggle-btn[aria-pressed='true'] {
   color: var(--md-editor-accent-strong);

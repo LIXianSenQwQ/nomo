@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 42px;
+  min-height: 40px;
   padding: 0 14px 0 12px;
   border-bottom: 1px solid var(--md-editor-border);
   color: var(--md-editor-heading-fg);
