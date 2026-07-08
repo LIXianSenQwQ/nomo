@@ -10,7 +10,7 @@ function getNewWindowChromeOptions() {
     return {
       decorations: true,
       titleBarStyle: 'overlay' as const,
-      trafficLightPosition: new LogicalPosition(16, 14),
+      trafficLightPosition: new LogicalPosition(16, 24),
       hiddenTitle: true,
     };
   }

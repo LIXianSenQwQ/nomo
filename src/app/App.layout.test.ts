@@ -793,11 +793,11 @@ describe('App outline layout', () => {
     expect(desktopWindowSource).toContain('} - Nomo');
     expect(desktopWindowSource).toContain('getNewWindowChromeOptions');
     expect(desktopWindowSource).toContain("titleBarStyle: 'overlay'");
-    expect(desktopWindowSource).toContain('trafficLightPosition: new LogicalPosition(16, 14)');
+    expect(desktopWindowSource).toContain('trafficLightPosition: new LogicalPosition(16, 24)');
     expect(desktopWindowSource).toContain('hiddenTitle: true');
     expect(tauriMacosSource).toContain('uses_overlay_titlebar(window.label())');
     expect(tauriMacosSource).toContain('label != "window-settings"');
-    expect(tauriConfigSource).toContain('"y": 14');
+    expect(tauriConfigSource).toContain('"y": 24');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).not.toContain('border-bottom: 1px solid var(--md-titlebar-border);');
     expect(styles).toContain('padding-left: 78px;');

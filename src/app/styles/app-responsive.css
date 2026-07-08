@@ -74,7 +74,7 @@
 }
 
 .titlebar.is-mac:not(.is-fullscreen) .titlebar-row.top-row {
-  padding-left: 78px; /* 为 macOS 原生红绿灯留出空间，让侧边栏按钮出现在其右侧 */
+  padding-left: 88px; /* 为 macOS 原生红绿灯留出空间，让侧边栏按钮出现在其右侧 */
 }
 
 .titlebar-row.bottom-row {
