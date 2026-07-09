@@ -331,7 +331,7 @@ describe('pendingInlineMarkPlugin', () => {
     const openWidget = getDelimiterWidget(target, 'open');
     mockRangeRect(openWidget, { left: 100, right: 116 });
 
-    openWidget.dispatchEvent(createMouseDown(104, 10));
+    openWidget.dispatchEvent(createClick(104, 10));
 
     expect(view.state.selection.from).toBe(8);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
@@ -347,7 +347,7 @@ describe('pendingInlineMarkPlugin', () => {
     const openWidget = getDelimiterWidget(target, 'open');
     mockRangeRect(openWidget, { left: 100, right: 116 });
 
-    openWidget.dispatchEvent(createMouseDown(112, 10));
+    openWidget.dispatchEvent(createClick(112, 10));
 
     expect(view.state.selection.from).toBe(8);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -361,7 +361,7 @@ describe('pendingInlineMarkPlugin', () => {
     const openWidget = getDelimiterWidget(target, 'open');
     mockRangeRect(openWidget, { left: 100, right: 116 });
 
-    openWidget.dispatchEvent(createMouseDown(116, 10));
+    openWidget.dispatchEvent(createClick(116, 10));
 
     expect(view.state.selection.from).toBe(8);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -375,7 +375,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 164, right: 180 });
 
-    closeWidget.dispatchEvent(createMouseDown(168, 10));
+    closeWidget.dispatchEvent(createClick(168, 10));
 
     expect(view.state.selection.from).toBe(12);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -389,7 +389,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 164, right: 180 });
 
-    closeWidget.dispatchEvent(createMouseDown(164, 10));
+    closeWidget.dispatchEvent(createClick(164, 10));
 
     expect(view.state.selection.from).toBe(12);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -403,7 +403,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 164, right: 180 });
 
-    closeWidget.dispatchEvent(createMouseDown(176, 10));
+    closeWidget.dispatchEvent(createClick(176, 10));
 
     expect(view.state.selection.from).toBe(12);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
@@ -420,7 +420,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
 
-    const event = createMouseDown(141, 10);
+    const event = createClick(141, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -438,7 +438,7 @@ describe('pendingInlineMarkPlugin', () => {
 
     expect(view.state.storedMarks).toBeNull();
 
-    closeWidget.dispatchEvent(createMouseDown(138, 10));
+    closeWidget.dispatchEvent(createClick(138, 10));
 
     expect(view.state.selection.from).toBe(4);
     expect(view.state.storedMarks).toEqual([]);
@@ -452,7 +452,7 @@ describe('pendingInlineMarkPlugin', () => {
     const openWidget = getDelimiterWidget(target, 'open');
     mockRangeRect(openWidget, { left: 90, right: 98 });
 
-    openWidget.dispatchEvent(createMouseDown(90, 10));
+    openWidget.dispatchEvent(createClick(90, 10));
 
     expect(view.state.selection.from).toBe(1);
     expect(view.state.storedMarks).toEqual([]);
@@ -466,7 +466,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
 
-    closeWidget.dispatchEvent(createMouseDown(138, 10));
+    closeWidget.dispatchEvent(createClick(138, 10));
 
     expect(view.state.selection.from).toBe(4);
     expect(view.state.storedMarks).toEqual([]);
@@ -480,7 +480,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
 
-    const event = createMouseDown(137, 10);
+    const event = createClick(137, 10);
     view.dom.querySelector('p')?.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -499,7 +499,7 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 130, right: 138 });
     view.posAtCoords = () => ({ pos: 4, inside: -1 });
 
-    const event = createMouseDown(220, 10);
+    const event = createClick(220, 10);
     view.dom.querySelector('p')?.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -518,7 +518,7 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 130, right: 138 });
     view.posAtCoords = () => ({ pos: 1, inside: -1 });
 
-    const event = createMouseDown(20, 10);
+    const event = createClick(20, 10);
     view.dom.querySelector('p')?.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -537,7 +537,7 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 130, right: 138 });
     view.posAtCoords = () => null;
 
-    const event = createMouseDown(20, 10);
+    const event = createClick(20, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -556,7 +556,7 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 150, right: 158 });
     view.posAtCoords = () => null;
 
-    const event = createMouseDown(20, 10);
+    const event = createClick(20, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(false);
@@ -572,7 +572,7 @@ describe('pendingInlineMarkPlugin', () => {
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
 
-    const event = createMouseDown(127, 10);
+    const event = createClick(127, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -592,7 +592,7 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 130, right: 138 });
     view.posAtCoords = () => ({ pos: 4, inside: -1 });
 
-    const event = createMouseDown(126, 10);
+    const event = createClick(126, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
@@ -612,12 +612,29 @@ describe('pendingInlineMarkPlugin', () => {
     mockRangeRect(closeWidget, { left: 130, right: 138 });
     view.posAtCoords = () => ({ pos: 1, inside: -1 });
 
-    const event = createMouseDown(102, 10);
+    const event = createClick(102, 10);
     view.dom.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
     expect(view.state.selection.from).toBe(1);
     expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.code)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not intercept mousedown near a code delimiter so drag selection can start', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createCodeTextView(4, [plugin]);
+    const closeWidget = getDelimiterWidget(target, 'close');
+    mockRangeRect(closeWidget, { left: 130, right: 138 });
+
+    const event = createMouseDown(141, 10);
+    const handled = plugin.props.handleDOMEvents?.mousedown?.call(plugin, view, event) ?? false;
+
+    expect(handled).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(view.state.selection.from).toBe(4);
 
     view.destroy();
     target.remove();
@@ -907,7 +924,7 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
-  describe('mousedown boundary click mirrors arrow keys (current side aware)', () => {
+  describe('boundary click mirrors arrow keys (current side aware)', () => {
     // 场景：光标已在 mark 内侧（storedMarks 带 strong），点击 close widget 右半（目标=外）。
     // 旧逻辑硬塞 strong，导致光标看起来没动/反向跳；新逻辑应清空 storedMarks 正常出到外侧。
     it('clears storedMarks when clicking the outer half of the close delimiter while inside the mark', () => {
@@ -917,7 +934,7 @@ describe('pendingInlineMarkPlugin', () => {
       const closeWidget = getDelimiterWidget(target, 'close');
       mockRangeRect(closeWidget, { left: 164, right: 180 });
 
-      closeWidget.dispatchEvent(createMouseDown(176, 10));
+      closeWidget.dispatchEvent(createClick(176, 10));
 
       expect(view.state.selection.from).toBe(12);
       expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
@@ -936,7 +953,7 @@ describe('pendingInlineMarkPlugin', () => {
       const openWidget = getDelimiterWidget(target, 'open');
       mockRangeRect(openWidget, { left: 100, right: 116 });
 
-      openWidget.dispatchEvent(createMouseDown(112, 10));
+      openWidget.dispatchEvent(createClick(112, 10));
 
       expect(view.state.selection.from).toBe(8);
       expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -954,7 +971,7 @@ describe('pendingInlineMarkPlugin', () => {
       const closeWidget = getDelimiterWidget(target, 'close');
       mockRangeRect(closeWidget, { left: 164, right: 180 });
 
-      closeWidget.dispatchEvent(createMouseDown(168, 10));
+      closeWidget.dispatchEvent(createClick(168, 10));
 
       expect(view.state.selection.from).toBe(12);
       expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -971,7 +988,7 @@ describe('pendingInlineMarkPlugin', () => {
       const openWidget = getDelimiterWidget(target, 'open');
       mockRangeRect(openWidget, { left: 100, right: 116 });
 
-      openWidget.dispatchEvent(createMouseDown(104, 10));
+      openWidget.dispatchEvent(createClick(104, 10));
 
       expect(view.state.selection.from).toBe(8);
       expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).not.toBe(
@@ -991,7 +1008,7 @@ describe('pendingInlineMarkPlugin', () => {
       const openWidget = getDelimiterWidget(target, 'open');
       mockRangeRect(openWidget, { left: 100, right: 116 });
 
-      openWidget.dispatchEvent(createMouseDown(112, 10));
+      openWidget.dispatchEvent(createClick(112, 10));
 
       expect(view.state.selection.from).toBe(8);
       expect(view.state.storedMarks?.some((mark) => mark.type === schema.marks.strong)).toBe(true);
@@ -1153,6 +1170,15 @@ function mockRangeRect(element: HTMLElement, rect: { left: number; right: number
 
 function createMouseDown(clientX: number, clientY = 0): MouseEvent {
   return new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+    clientX,
+    clientY,
+  });
+}
+
+function createClick(clientX: number, clientY = 0): MouseEvent {
+  return new MouseEvent('click', {
     bubbles: true,
     cancelable: true,
     clientX,

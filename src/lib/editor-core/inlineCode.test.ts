@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
 import { parseMarkdown, serializeMarkdown } from './markdown';
 import { schema } from './schema';
 import { inlineMarkdownMarkInputPlugin } from './plugins/inlineMarkdownMarkInput';
 import { pendingInlineMarkKey, pendingInlineMarkPlugin } from './plugins/pendingInlineMark';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
+import { inlineCodeSelectionBridgePlugin } from './plugins/inlineCodeSelectionBridge';
 
 function hasCodeMark(node: ReturnType<typeof schema.node>): boolean {
   let found = false;
@@ -223,3 +225,95 @@ describe('code mark syntax highlight decoration', () => {
     expect(decorations).toBeDefined();
   });
 });
+
+describe('code mark selection bridge decoration', () => {
+  it('bridges selection from ordinary text into inline code', () => {
+    const { target, view } = createInlineCodeSelectionView(3, 8);
+
+    expect(hasInlineSelectionBridge(target)).toBe(true);
+    expect(hasInlineCodeSelectionBridge(target)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('bridges selection from inline code into ordinary text', () => {
+    const { target, view } = createInlineCodeSelectionView(8, 17);
+
+    expect(hasInlineSelectionBridge(target)).toBe(true);
+    expect(hasInlineCodeSelectionBridge(target)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('bridges selection that fully covers inline code', () => {
+    const { target, view } = createInlineCodeSelectionView(5, 15);
+
+    expect(hasInlineSelectionBridge(target)).toBe(true);
+    expect(hasInlineCodeSelectionBridge(target)).toBe(true);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not bridge a collapsed cursor inside inline code', () => {
+    const { target, view } = createInlineCodeSelectionView(8, 8);
+
+    expect(hasInlineSelectionBridge(target)).toBe(false);
+    expect(hasInlineCodeSelectionBridge(target)).toBe(false);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('keeps inline-code bridge limited to the actually selected characters', () => {
+    const { target, view } = createInlineCodeSelectionView(7, 10);
+
+    expect(hasInlineSelectionBridge(target)).toBe(true);
+    expect(hasInlineCodeSelectionBridge(target)).toBe(true);
+    expect(getInlineCodeSelectionBridgeText(target)).toBe('_lv');
+
+    view.destroy();
+    target.remove();
+  });
+});
+
+function createInlineCodeSelectionView(
+  selectionFrom: number,
+  selectionTo: number,
+): { target: HTMLElement; view: EditorView } {
+  const doc = schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, [
+      schema.text('old '),
+      schema.text('vm_lvm_log', [schema.marks.code.create()]),
+      schema.text(' new'),
+    ]),
+  ]);
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+
+  const view = new EditorView(target, {
+    state: EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, selectionFrom, selectionTo),
+      plugins: [inlineCodeSelectionBridgePlugin()],
+    }),
+  });
+
+  return { target, view };
+}
+
+function hasInlineCodeSelectionBridge(target: HTMLElement): boolean {
+  return Boolean(target.querySelector('.pm-inline-code-selection-bridge'));
+}
+
+function hasInlineSelectionBridge(target: HTMLElement): boolean {
+  return Boolean(target.querySelector('.pm-inline-selection-bridge'));
+}
+
+function getInlineCodeSelectionBridgeText(target: HTMLElement): string {
+  return Array.from(target.querySelectorAll('.pm-inline-code-selection-bridge'))
+    .map((node) => node.textContent ?? '')
+    .join('');
+}

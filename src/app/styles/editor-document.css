@@ -2201,6 +2201,72 @@
   -webkit-box-decoration-break: clone;
 }
 
+.prosemirror-host .ProseMirror {
+  --md-editor-text-selection-bg: color-mix(in srgb, var(--md-editor-accent) 70%, transparent);
+}
+
+.prosemirror-host .ProseMirror ::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.prosemirror-host .ProseMirror .pm-inline-selection-bridge {
+  background: var(--md-editor-text-selection-bg);
+  color: inherit;
+  line-height: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.prosemirror-host .ProseMirror code.inline-code:has(.pm-inline-code-selection-bridge) {
+  padding-block: 0;
+  padding-inline: 0;
+  border-color: transparent;
+  border-block-width: 0;
+  border-inline-width: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--md-editor-fg);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.prosemirror-host
+  .ProseMirror
+  code.inline-code:has(.pm-inline-code-selection-bridge)
+  .pm-inline-code-selection-bridge,
+.prosemirror-host
+  .ProseMirror
+  code.inline-code:has(.pm-inline-code-selection-bridge)
+  .inline-code-token {
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.prosemirror-host
+  .ProseMirror
+  code.inline-code:has(.pm-inline-code-selection-bridge)
+  .pm-inline-selection-bridge {
+  background: var(--md-editor-text-selection-bg);
+}
+
+.prosemirror-host
+  .ProseMirror
+  code.inline-code:has(.pm-inline-code-selection-bridge)
+  .pm-inline-code-selection-bridge::selection,
+.prosemirror-host
+  .ProseMirror
+  code.inline-code:has(.pm-inline-code-selection-bridge)
+  .inline-code-token::selection {
+  background: transparent;
+  color: inherit;
+}
+
 /* ---- Markdown 注释 comment_inline ---- */
 
 .comment-inline {

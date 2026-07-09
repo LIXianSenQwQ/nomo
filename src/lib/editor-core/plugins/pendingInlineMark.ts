@@ -273,8 +273,13 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       },
 
       handleDOMEvents: {
-        mousedown(view, event) {
-          return handleEditRangeBoundaryMouseDown(view, event);
+        mousedown(_view, _event) {
+          // 边界单击定位放到 click 阶段处理，mousedown 必须留给浏览器启动拖选。
+          return false;
+        },
+
+        click(view, event) {
+          return handleEditRangeBoundaryClick(view, event);
         },
 
         compositionstart(view, event) {
@@ -909,7 +914,7 @@ function createDelimiterWidget(
 }
 
 /**
- * 处理行内 mark 的边界点击。
+ * 处理行内 mark 的边界单击。
  *
  * 语法提示标签是不可编辑的整体占位节点。点击标签左半边表示落到标签前，
  * 点击右半边表示落到标签后；如果用户点击标签外侧空白或边界正文字符，
@@ -925,10 +930,12 @@ function createDelimiterWidget(
  * - 光标不在边界（mark 内部、跨段、选区非空等无法判定当前侧）时退回物理半边硬编码，
  *   保证从别处点过来进入 mark 的正常路径不受影响。
  */
-function handleEditRangeBoundaryMouseDown(
+function handleEditRangeBoundaryClick(
   view: MarkBoundaryMouseView,
   event: MouseEvent,
 ): boolean {
+  if (!view.state.selection.empty) return false;
+
   const rangeHit = findDelimiterWidgetHit(view.dom, event);
   if (!rangeHit) {
     return (
