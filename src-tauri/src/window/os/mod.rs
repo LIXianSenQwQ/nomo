@@ -16,7 +16,7 @@ pub(crate) fn window_decorations() -> bool {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn setup_window<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) {}
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn system_theme() -> &'static str {
     "light"
 }
