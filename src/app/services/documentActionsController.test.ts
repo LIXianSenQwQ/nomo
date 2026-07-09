@@ -40,6 +40,7 @@ function createTab(overrides: Partial<Tab> = {}): Tab {
     lastKnownModifiedAt: 1,
     largeDocumentMode: false,
     readonlyDocumentMode: false,
+    diskReadonly: false,
     externalFileChange: createEmptyExternalFileChange(),
     version: 1,
     ...overrides,
@@ -55,6 +56,9 @@ function createOptions(initialTabs: Tab[]) {
   let filePath = tabs[0]?.filePath ?? 'C:/docs/old.md';
   let savedMarkdown = tabs[0]?.savedMarkdown ?? '';
   let lastKnownModifiedAt = tabs[0]?.lastKnownModifiedAt ?? 0;
+  let largeDocumentMode = tabs[0]?.largeDocumentMode ?? false;
+  let readonlyDocumentMode = tabs[0]?.readonlyDocumentMode ?? false;
+  let diskReadonly = tabs[0]?.diskReadonly ?? false;
   let dirty = tabs[0]?.dirty ?? false;
 
   return {
@@ -91,8 +95,15 @@ function createOptions(initialTabs: Tab[]) {
       setDirty: (value: boolean) => {
         dirty = value;
       },
-      setLargeDocumentMode: vi.fn(),
-      setReadonlyDocumentMode: vi.fn(),
+      setLargeDocumentMode: (value: boolean) => {
+        largeDocumentMode = value;
+      },
+      setReadonlyDocumentMode: (value: boolean) => {
+        readonlyDocumentMode = value;
+      },
+      setDiskReadonly: (value: boolean) => {
+        diskReadonly = value;
+      },
       getCurrentFolderPath: () => '',
       getFileInput: () => document.createElement('input'),
       getEditor: () => ({
@@ -114,11 +125,22 @@ function createOptions(initialTabs: Tab[]) {
       },
       setRecentFiles: vi.fn(),
       saveActiveTabState: vi.fn(),
-      loadTabState: vi.fn(),
+      loadTabState: (tab: Tab) => {
+        activeTabId = tab.id;
+        nativePath = tab.nativePath;
+        fileName = tab.fileName;
+        filePath = tab.filePath;
+        savedMarkdown = tab.savedMarkdown;
+        lastKnownModifiedAt = tab.lastKnownModifiedAt;
+        largeDocumentMode = tab.largeDocumentMode;
+        readonlyDocumentMode = tab.readonlyDocumentMode;
+        diskReadonly = tab.diskReadonly;
+        dirty = tab.dirty;
+      },
       switchTab: vi.fn(),
       writeRecoveryDraft: vi.fn(),
       updateWindowTitle: vi.fn(),
-      loadFolder: vi.fn(),
+      loadFolder: vi.fn().mockResolvedValue(undefined),
       expandAncestors: vi.fn(),
     },
     getState: () => ({
@@ -129,6 +151,9 @@ function createOptions(initialTabs: Tab[]) {
       nativePath,
       savedMarkdown,
       lastKnownModifiedAt,
+      largeDocumentMode,
+      readonlyDocumentMode,
+      diskReadonly,
       dirty,
       statusMessage,
     }),
@@ -187,5 +212,105 @@ describe('documentActionsController', () => {
     expect(getState().tabs[0].fileName).toBe('old.md');
     expect(getState().nativePath).toBe('C:/docs/old.md');
     expect(getState().fileName).toBe('old.md');
+  });
+
+  it('打开小型只读磁盘文件时保持编辑器可编辑并记录磁盘只读', async () => {
+    const tab = createTab({
+      dirty: false,
+      nativePath: null,
+      fileName: 'untitled.md',
+      filePath: '未命名 Markdown',
+    });
+    const { options, getState } = createOptions([tab]);
+    const document: NativeDocument = {
+      path: 'C:/docs/readonly.md',
+      fileName: 'readonly.md',
+      markdown: '# Readonly\n\ncontent',
+      modifiedAt: 2,
+      sizeBytes: 20,
+      readonly: true,
+    };
+
+    const controller = createDocumentActionsController(options as any);
+    await controller.applyNativeDocument(document, 'opened');
+
+    const activeTab = getState().tabs.find((tab) => tab.id === getState().activeTabId);
+    expect(activeTab).toMatchObject({
+      nativePath: 'C:/docs/readonly.md',
+      diskReadonly: true,
+      largeDocumentMode: false,
+      readonlyDocumentMode: false,
+    });
+    expect(getState().diskReadonly).toBe(true);
+    expect(getState().readonlyDocumentMode).toBe(false);
+  });
+
+  it('普通保存只读源文件时走另存为，不写回原路径', async () => {
+    const tab = createTab({ diskReadonly: true });
+    const { options, getState } = createOptions([tab]);
+    const document: NativeDocument = {
+      path: 'C:/docs/new.md',
+      fileName: 'new.md',
+      markdown: '# New Title\n\nchanged\n\n',
+      modifiedAt: 2,
+      sizeBytes: 23,
+      readonly: false,
+    };
+    vi.mocked(saveNativeMarkdownFile).mockResolvedValue({ document, error: '' });
+
+    const controller = createDocumentActionsController(options as any);
+    const saved = await controller.saveMarkdownFile(false);
+
+    expect(saved).toBe(true);
+    expect(saveNativeMarkdownFile).toHaveBeenCalledWith(
+      null,
+      '# New Title\n\nchanged\n\n',
+      'New Title.md',
+      null,
+    );
+    expect(getState().nativePath).toBe('C:/docs/new.md');
+    expect(getState().fileName).toBe('new.md');
+    expect(getState().dirty).toBe(false);
+    expect(getState().diskReadonly).toBe(false);
+    expect(getState().tabs[0].diskReadonly).toBe(false);
+  });
+
+  it('只读源文件另存为取消后保留 dirty、原路径和 diskReadonly', async () => {
+    const tab = createTab({ diskReadonly: true });
+    const { options, getState } = createOptions([tab]);
+    vi.mocked(saveNativeMarkdownFile).mockResolvedValue({ document: null, error: '' });
+
+    const controller = createDocumentActionsController(options as any);
+    const saved = await controller.saveMarkdownFile(false);
+
+    expect(saved).toBe(false);
+    expect(saveNativeMarkdownFile).toHaveBeenCalledWith(
+      null,
+      '# New Title\n\nchanged\n\n',
+      'New Title.md',
+      null,
+    );
+    expect(getState().nativePath).toBe('C:/docs/old.md');
+    expect(getState().fileName).toBe('old.md');
+    expect(getState().dirty).toBe(true);
+    expect(getState().diskReadonly).toBe(true);
+    expect(getState().tabs[0].diskReadonly).toBe(true);
+  });
+
+  it('自动保存只读源文件时不写磁盘且保持 dirty', async () => {
+    vi.useFakeTimers();
+    const tab = createTab({ diskReadonly: true });
+    const { options, getState } = createOptions([tab]);
+
+    const controller = createDocumentActionsController(options as any);
+    controller.debouncedAutoSave('# New Title\n\nchanged');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
+    expect(getState().dirty).toBe(true);
+    expect(getState().tabs[0].dirty).toBe(true);
+    expect(getState().statusMessage).toBe(
+      'Auto-save is paused because the source file is read-only. Use Save as to keep the current content.',
+    );
   });
 });

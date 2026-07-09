@@ -468,6 +468,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     localBrowserFile: '本地浏览器文件：{name}',
     markdownFileOpened: '已打开 Markdown 文件',
     largeDocumentReadonlySaveBlocked: '大文件处于只读源码模式，请使用另存为或缩小文件后再继续编辑',
+    readonlySourceSaveAsRequired: '源文件为只读，正在通过另存为保存当前内容',
     externalChangeChooseAction: '检测到外部文件变更，请先选择重新载入、另存为或覆盖外部版本',
     savedByTauri: '已通过 Tauri 保存 Markdown 文件',
     markdownExported: '已导出 Markdown 文件',
@@ -483,6 +484,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     overwrittenExternalVersion: '已覆盖外部版本',
     externalChangeKeptCurrent: '已保留当前内容，并忽略本次外部修改',
     externalChangeAutoSavePaused: '检测到外部文件变更，已暂停自动保存',
+    readonlySourceAutoSavePaused: '源文件为只读，已暂停自动保存；请使用另存为保存当前内容',
     autoSaveFailed: '自动保存失败: {error}',
     saved: '已保存',
     openFileFailed: '打开文件失败',
@@ -926,6 +928,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     localBrowserFile: '本機瀏覽器檔案：{name}',
     markdownFileOpened: '已開啟 Markdown 檔案',
     largeDocumentReadonlySaveBlocked: '大檔案處於唯讀原始碼模式，請另存新檔或縮小檔案後再繼續編輯',
+    readonlySourceSaveAsRequired: '來源檔案為唯讀，正在透過另存新檔儲存目前內容',
     externalChangeChooseAction: '偵測到外部檔案變更，請先選擇重新載入、另存新檔或覆蓋外部版本',
     savedByTauri: '已透過 Tauri 儲存 Markdown 檔案',
     markdownExported: '已匯出 Markdown 檔案',
@@ -941,6 +944,7 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     overwrittenExternalVersion: '已覆蓋外部版本',
     externalChangeKeptCurrent: '已保留目前內容，並忽略這次外部修改',
     externalChangeAutoSavePaused: '偵測到外部檔案變更，已暫停自動儲存',
+    readonlySourceAutoSavePaused: '來源檔案為唯讀，已暫停自動儲存；請使用另存新檔儲存目前內容',
     autoSaveFailed: '自動儲存失敗: {error}',
     saved: '已儲存',
     openFileFailed: '開啟檔案失敗',
@@ -1423,6 +1427,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     markdownFileOpened: 'Opened Markdown file',
     largeDocumentReadonlySaveBlocked:
       'This large document is in read-only source mode. Use Save as or reduce the file before editing.',
+    readonlySourceSaveAsRequired:
+      'The source file is read-only. Save as to keep the current content.',
     externalChangeChooseAction:
       'External file changes detected. Reload, Save as, or overwrite the external version first.',
     savedByTauri: 'Saved Markdown file with Tauri',
@@ -1441,6 +1447,8 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     overwrittenExternalVersion: 'Overwrote external version',
     externalChangeKeptCurrent: 'Kept the current content and ignored this external change',
     externalChangeAutoSavePaused: 'External file changes detected. Autosave paused.',
+    readonlySourceAutoSavePaused:
+      'Auto-save is paused because the source file is read-only. Use Save as to keep the current content.',
     autoSaveFailed: 'Autosave failed: {error}',
     saved: 'Saved',
     openFileFailed: 'Failed to open file',

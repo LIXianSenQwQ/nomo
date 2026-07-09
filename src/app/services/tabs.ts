@@ -11,6 +11,7 @@ export interface ActiveTabState {
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
+  diskReadonly: boolean;
   externalFileChange: ExternalFileChangeState;
   version: number;
 }
@@ -28,6 +29,7 @@ export function createBlankTab(fileName = 'untitled.md', filePath = t.untitledMa
     lastKnownModifiedAt: 0,
     largeDocumentMode: false,
     readonlyDocumentMode: false,
+    diskReadonly: false,
     externalFileChange: createEmptyExternalFileChange(),
     version: 0,
   };
@@ -58,8 +60,8 @@ export function getNativeDocumentTargetTab(
       return { tabs, activeTabId, targetTab: existingTab };
     }
     const activeTabForSave = tabs.find((tab) => tab.id === activeTabId);
-    // 保存未命名文件时，当前标签页即目标标签页，避免重复创建
-    if (activeTabForSave && !activeTabForSave.nativePath) {
+    // 保存或另存为成功后，当前保存源标签页绑定到返回的磁盘路径，避免重复创建标签页。
+    if (activeTabForSave) {
       return { tabs, activeTabId, targetTab: activeTabForSave };
     }
   }

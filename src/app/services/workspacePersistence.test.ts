@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tab } from '../types';
 import {
   createPersistedWorkspaceState,
+  createRuntimeTabFromPersisted,
   migrateWorkspaceSetting,
   persistWorkspaceDrafts,
   type WorkspaceDraftPersistenceCache,
@@ -176,6 +177,29 @@ describe('workspacePersistence', () => {
     expect(writeWorkspaceDraft).toHaveBeenNthCalledWith(2, '# dirty changed', 'draft-created');
   });
 
+  it('persists diskReadonly and defaults old workspace tabs to writable disk state', async () => {
+    const readonlyTab = createTab({
+      nativePath: 'D:\\docs\\readonly.md',
+      diskReadonly: true,
+    });
+
+    const state = await createPersistedWorkspaceState({
+      tabs: [readonlyTab],
+      activeTabId: readonlyTab.id,
+      currentFolderPath: 'D:\\docs',
+      desktopEnabled: true,
+    });
+
+    expect(state.tabs[0].diskReadonly).toBe(true);
+
+    const legacyPersistedTab = { ...state.tabs[0] } as Record<string, unknown>;
+    delete legacyPersistedTab.diskReadonly;
+
+    const runtimeTab = createRuntimeTabFromPersisted(legacyPersistedTab as any, '# restored');
+
+    expect(runtimeTab.diskReadonly).toBe(false);
+  });
+
   it('preserves pending conflict drafts without rewriting or deleting them', async () => {
     const conflictTab = createTab({
       id: 'conflict-native',
@@ -260,6 +284,7 @@ function createTab(overrides: Partial<Tab> = {}): Tab {
     lastKnownModifiedAt: 100,
     largeDocumentMode: false,
     readonlyDocumentMode: false,
+    diskReadonly: false,
     externalFileChange: {
       type: 'none',
       path: null,

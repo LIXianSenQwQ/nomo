@@ -445,6 +445,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   markdownFileOpened: '開いたマークダウンファイル',
   largeDocumentReadonlySaveBlocked:
     'この大きなドキュメントは読み取り専用ソース モードです。編集する前に、「名前を付けて保存」を使用するか、ファイルを縮小します。',
+  readonlySourceSaveAsRequired:
+    '元のファイルは読み取り専用です。現在の内容を保存するには名前を付けて保存してください。',
   externalChangeChooseAction:
     '外部ファイルの変更が検出されました。最初に外部バージョンを再ロード、名前を付けて保存、または上書きします。',
   savedByTauri: 'Tauri で保存された Markdown ファイル',
@@ -464,6 +466,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   externalChangeKeptCurrent: '現在の内容を保持し、今回の外部変更は無視しました',
   externalChangeAutoSavePaused:
     '外部ファイルの変更が検出されました。自動保存が一時停止されました。',
+  readonlySourceAutoSavePaused:
+    '元のファイルが読み取り専用のため自動保存を一時停止しました。現在の内容は名前を付けて保存してください。',
   autoSaveFailed: '自動保存に失敗しました: {error}',
   saved: '保存されました',
   openFileFailed: 'ファイルを開けませんでした',

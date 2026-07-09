@@ -263,6 +263,7 @@
   let refreshEditorViewportLayout: () => void = () => undefined;
   let largeDocumentMode = false,
     readonlyDocumentMode = false,
+    diskReadonly = false,
     externalFileChange: ExternalFileChangeState = createEmptyExternalFileChange(),
     lastKnownModifiedAt = 0;
   let desktopUnlisteners: Array<() => void> = [];
@@ -582,6 +583,7 @@
           lastKnownModifiedAt: 0,
           largeDocumentMode: false,
           readonlyDocumentMode: false,
+          diskReadonly: false,
         });
       }
       return createRuntimeTabFromPersisted(persistedTab, draft.markdown, {
@@ -590,6 +592,7 @@
         lastKnownModifiedAt: 0,
         largeDocumentMode: draft.markdown.length > largeDocumentLimit,
         readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
+        diskReadonly: false,
       });
     }
 
@@ -605,6 +608,7 @@
           dirty: true,
           largeDocumentMode: draft.markdown.length > largeDocumentLimit,
           readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
+          diskReadonly: false,
         });
       }
       statusMessage = error || t.openRecentFailed();
@@ -613,6 +617,7 @@
         dirty: false,
         largeDocumentMode: false,
         readonlyDocumentMode: true,
+        diskReadonly: false,
       });
     }
 
@@ -624,7 +629,8 @@
         dirty: false,
         lastKnownModifiedAt: document.modifiedAt,
         largeDocumentMode: diskLargeDocument,
-        readonlyDocumentMode: diskLargeDocument || document.readonly,
+        readonlyDocumentMode: diskLargeDocument,
+        diskReadonly: document.readonly,
       });
     }
 
@@ -637,7 +643,8 @@
         dirty: false,
         lastKnownModifiedAt: document.modifiedAt,
         largeDocumentMode: diskLargeDocument,
-        readonlyDocumentMode: diskLargeDocument || document.readonly,
+        readonlyDocumentMode: diskLargeDocument,
+        diskReadonly: document.readonly,
       });
       queueStartupDraftConflict({
         tabId: persistedTab.id,
@@ -659,7 +666,8 @@
       dirty: true,
       lastKnownModifiedAt: document.modifiedAt,
       largeDocumentMode: draft.markdown.length > largeDocumentLimit,
-      readonlyDocumentMode: draft.markdown.length > largeDocumentLimit || document.readonly,
+      readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
+      diskReadonly: document.readonly,
     });
   }
 
@@ -685,8 +693,8 @@
       draftId: conflict.draftId,
       lastKnownModifiedAt: conflict.diskModifiedAt,
       largeDocumentMode: conflict.draftMarkdown.length > largeDocumentLimit,
-      readonlyDocumentMode:
-        conflict.draftMarkdown.length > largeDocumentLimit || conflict.diskReadonly,
+      readonlyDocumentMode: conflict.draftMarkdown.length > largeDocumentLimit,
+      diskReadonly: conflict.diskReadonly,
     });
     tabs = [...tabs];
     switchTab(conflict.tabId);
@@ -706,7 +714,8 @@
         draftId: null,
         lastKnownModifiedAt: conflict.diskModifiedAt,
         largeDocumentMode: conflict.diskLargeDocumentMode,
-        readonlyDocumentMode: conflict.diskLargeDocumentMode || conflict.diskReadonly,
+        readonlyDocumentMode: conflict.diskLargeDocumentMode,
+        diskReadonly: conflict.diskReadonly,
       });
       tabs = [...tabs];
       loadTabState(targetTab);
@@ -750,6 +759,7 @@
       nativePath,
       largeDocumentMode,
       readonlyDocumentMode,
+      diskReadonly,
       externalFileChange,
       lastKnownModifiedAt,
     });
@@ -810,6 +820,7 @@
       nativePath = tab.nativePath;
       largeDocumentMode = tab.largeDocumentMode;
       readonlyDocumentMode = tab.readonlyDocumentMode;
+      diskReadonly = tab.diskReadonly;
       externalFileChange = normalizeExternalFileChange(tab.externalFileChange);
       tab.externalFileChange = externalFileChange;
       lastKnownModifiedAt = tab.lastKnownModifiedAt;
@@ -1056,6 +1067,7 @@
       lastKnownModifiedAt = 0;
       largeDocumentMode = false;
       readonlyDocumentMode = false;
+      diskReadonly = false;
       externalFileChange = createEmptyExternalFileChange();
       outline = [];
       if (editor) {
@@ -1884,7 +1896,8 @@
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
-    targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
+    targetTab.readonlyDocumentMode = isLargeDocument;
+    targetTab.diskReadonly = document.readonly;
     targetTab.externalFileChange = createEmptyExternalFileChange();
     targetTab.version = 0;
 
@@ -1986,6 +1999,9 @@
     },
     setReadonlyDocumentMode: (value) => {
       readonlyDocumentMode = value;
+    },
+    setDiskReadonly: (value) => {
+      diskReadonly = value;
     },
     getNativePath: () => nativePath,
     setNativePath: (value) => {
@@ -2241,6 +2257,7 @@
           lastKnownModifiedAt = 0;
           largeDocumentMode = false;
           readonlyDocumentMode = false;
+          diskReadonly = false;
           externalFileChange = createEmptyExternalFileChange();
           outline = [];
           isSwitchingTab = true;
@@ -2275,6 +2292,7 @@
       lastKnownModifiedAt = 0;
       largeDocumentMode = false;
       readonlyDocumentMode = false;
+      diskReadonly = false;
       externalFileChange = createEmptyExternalFileChange();
       outline = [];
       isSwitchingTab = true;
@@ -2372,6 +2390,7 @@
         lastKnownModifiedAt = 0;
         largeDocumentMode = false;
         readonlyDocumentMode = false;
+        diskReadonly = false;
         externalFileChange = createEmptyExternalFileChange();
         outline = [];
         isSwitchingTab = true;

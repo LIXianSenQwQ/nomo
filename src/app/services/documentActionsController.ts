@@ -59,6 +59,7 @@ interface DocumentActionsOptions {
   setDirty(value: boolean): void;
   setLargeDocumentMode(value: boolean): void;
   setReadonlyDocumentMode(value: boolean): void;
+  setDiskReadonly(value: boolean): void;
   getCurrentFolderPath(): string;
   getFileInput(): HTMLInputElement;
   getEditor(): EditorCore;
@@ -144,6 +145,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.lastKnownModifiedAt = 0;
     targetTab.largeDocumentMode = text.length > options.getLargeDocumentLimit();
     targetTab.readonlyDocumentMode = targetTab.largeDocumentMode;
+    targetTab.diskReadonly = false;
     targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setTabs([...options.getTabs()]);
@@ -163,17 +165,21 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
 
     if (options.getDesktopEnabled()) {
-      if (!saveAs && hasExternalFileChange()) {
+      const saveAsTarget = saveAs || Boolean(activeTab?.diskReadonly);
+      if (!saveAsTarget && hasExternalFileChange()) {
         options.setStatusMessage(t.externalChangeChooseAction());
         return false;
       }
+      if (!saveAs && activeTab?.diskReadonly) {
+        options.setStatusMessage(t.readonlySourceSaveAsRequired());
+      }
 
-      const path = saveAs ? null : options.getNativePath();
+      const path = saveAsTarget ? null : options.getNativePath();
       // 步骤1：新文件保存时，尝试用文档第一个 H1 标题作为建议文件名
       const fileName = path
         ? options.getFileName()
         : suggestFileNameFromH1(markdownToSave, options.getFileName());
-      options.writeRecoveryDraft(saveAs ? 'before-save-as' : 'before-save');
+      options.writeRecoveryDraft(saveAsTarget ? 'before-save-as' : 'before-save');
       const { document, error } = await saveNativeMarkdownFile(
         path,
         markdownToSave,
@@ -263,7 +269,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
-    targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
+    targetTab.readonlyDocumentMode = isLargeDocument;
+    targetTab.diskReadonly = document.readonly;
     targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setActiveTabId(targetTab.id);
@@ -313,7 +320,8 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
-    targetTab.readonlyDocumentMode = isLargeDocument || document.readonly;
+    targetTab.readonlyDocumentMode = isLargeDocument;
+    targetTab.diskReadonly = document.readonly;
     targetTab.externalFileChange = createEmptyExternalFileChange();
 
     options.setFileName(targetTab.fileName);
@@ -326,6 +334,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setLastKnownModifiedAt(targetTab.lastKnownModifiedAt);
     options.setLargeDocumentMode(targetTab.largeDocumentMode);
     options.setReadonlyDocumentMode(targetTab.readonlyDocumentMode);
+    options.setDiskReadonly(targetTab.diskReadonly);
     options.setExternalFileChange(targetTab.externalFileChange);
     options.setTabs([...options.getTabs()]);
 
@@ -501,6 +510,15 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const fileName = options.getFileName();
 
     if (!tabId || !path) return;
+    const activeTab = options.getTabs().find((tab) => tab.id === tabId);
+    if (activeTab?.diskReadonly) {
+      if (saveTimers[tabId] !== undefined) {
+        clearTimeout(saveTimers[tabId]);
+        delete saveTimers[tabId];
+      }
+      options.setStatusMessage(t.readonlySourceAutoSavePaused());
+      return;
+    }
     if (hasExternalFileChange()) {
       options.setStatusMessage(t.externalChangeAutoSavePaused());
       return;

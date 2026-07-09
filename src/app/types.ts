@@ -10,6 +10,7 @@ export interface Tab {
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
+  diskReadonly: boolean;
   externalFileChange: ExternalFileChangeState;
   version: number;
 }
@@ -79,6 +80,7 @@ export interface PersistedWorkspaceTab {
   lastKnownModifiedAt: number;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
+  diskReadonly: boolean;
   version: number;
 }
 

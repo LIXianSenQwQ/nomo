@@ -188,6 +188,7 @@ export async function migrateWorkspaceSetting(
         lastKnownModifiedAt: legacyTab.lastKnownModifiedAt,
         largeDocumentMode: legacyTab.largeDocumentMode,
         readonlyDocumentMode: legacyTab.readonlyDocumentMode,
+        diskReadonly: legacyTab.diskReadonly,
         version: legacyTab.version,
       }),
     );
@@ -215,6 +216,7 @@ export function createRuntimeTabFromPersisted(
     lastKnownModifiedAt?: number;
     largeDocumentMode?: boolean;
     readonlyDocumentMode?: boolean;
+    diskReadonly?: boolean;
     externalFileChange?: ExternalFileChangeState;
   },
 ): Tab {
@@ -230,6 +232,7 @@ export function createRuntimeTabFromPersisted(
     lastKnownModifiedAt: options?.lastKnownModifiedAt ?? tab.lastKnownModifiedAt,
     largeDocumentMode: options?.largeDocumentMode ?? tab.largeDocumentMode,
     readonlyDocumentMode: options?.readonlyDocumentMode ?? tab.readonlyDocumentMode,
+    diskReadonly: options?.diskReadonly ?? tab.diskReadonly ?? false,
     externalFileChange: options?.externalFileChange ?? {
       type: 'none',
       path: null,
@@ -269,6 +272,7 @@ function toPersistedWorkspaceTab(tab: Tab, draftId: string | null): PersistedWor
     lastKnownModifiedAt: tab.lastKnownModifiedAt,
     largeDocumentMode: tab.largeDocumentMode,
     readonlyDocumentMode: tab.readonlyDocumentMode,
+    diskReadonly: tab.diskReadonly,
     version: tab.version,
   });
 }
@@ -297,6 +301,7 @@ function normalizePersistedWorkspaceTab(
     lastKnownModifiedAt: typeof tab.lastKnownModifiedAt === 'number' ? tab.lastKnownModifiedAt : 0,
     largeDocumentMode: Boolean(tab.largeDocumentMode),
     readonlyDocumentMode: Boolean(tab.readonlyDocumentMode),
+    diskReadonly: Boolean(tab.diskReadonly),
     version: typeof tab.version === 'number' ? tab.version : 0,
   };
 }

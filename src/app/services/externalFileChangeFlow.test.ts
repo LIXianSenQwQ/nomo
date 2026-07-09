@@ -15,7 +15,7 @@ describe('external file change flow', () => {
     const saveEnd = actionsSource.indexOf('async function openRecentFile');
     const saveSource = actionsSource.slice(saveStart, saveEnd);
 
-    expect(saveSource).toContain('!saveAs && hasExternalFileChange()');
+    expect(saveSource).toContain('!saveAsTarget && hasExternalFileChange()');
     expect(saveSource).toContain('t.externalChangeChooseAction()');
 
     const autosaveStart = actionsSource.indexOf('function debouncedAutoSave');
