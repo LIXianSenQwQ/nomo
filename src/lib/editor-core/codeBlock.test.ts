@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorState, TextSelection, type Transaction } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
 import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
 import { parseMarkdown, serializeMarkdown } from './markdown';
+import { CodeBlockNodeView } from './nodeViews/CodeBlockNodeView';
+import { setCodeBlockTokenizer } from './renderers';
 import { schema } from './schema';
 
 function createDocWithCodeBlockAndParagraph(paragraphText = ''): {
@@ -62,6 +65,61 @@ describe('code_block markdown 解析', () => {
       return true;
     });
     expect(content).toBe(code);
+  });
+
+  it('解析 XML fenced code 时不把标签内容额外渲染成段落', () => {
+    const code = [
+      '<dependency>',
+      '    <groupId>com.example</groupId>',
+      '    <artifactId>access-control</artifactId>',
+      '    <version>${component.version}</version>',
+      '</dependency>',
+    ].join('\n');
+    const doc = parseMarkdown(`\`\`\`xml\n${code}\n\`\`\``);
+
+    expect(doc.childCount).toBe(1);
+    expect(doc.child(0).type.name).toBe('code_block');
+    expect(doc.child(0).attrs.params).toBe('xml');
+    expect(doc.child(0).textContent).toBe(code);
+  });
+
+  it('渲染 XML fenced code 时不在代码块外重复显示标签内容', async () => {
+    const code = [
+      '<dependency>',
+      '    <groupId>com.example</groupId>',
+      '    <artifactId>access-control</artifactId>',
+      '    <version>${component.version}</version>',
+      '</dependency>',
+    ].join('\n');
+    setCodeBlockTokenizer({
+      async tokenize(input) {
+        return {
+          language: input.language,
+          tokens: input.code.split('\n').map((line) => ({ tokens: [{ content: line }] })),
+        };
+      },
+    });
+
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const view = new EditorView(target, {
+      state: EditorState.create({ doc: parseMarkdown(`\`\`\`xml\n${code}\n\`\`\``) }),
+      nodeViews: {
+        code_block: (node, view, getPos) =>
+          new CodeBlockNodeView(node, view, getPos as () => number),
+      },
+    });
+
+    await Promise.resolve();
+
+    const codeCards = target.querySelectorAll('.code-card');
+    const bodyText = target.textContent ?? '';
+    expect(codeCards).toHaveLength(1);
+    expect((bodyText.match(/com\.example/g) ?? []).length).toBe(1);
+    expect(bodyText.trim().startsWith('com.example')).toBe(false);
+
+    view.destroy();
+    target.remove();
   });
 
   it('解析空代码块', () => {
