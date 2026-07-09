@@ -2,6 +2,7 @@
   import { ChevronDown } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import type { EditorMode } from '../../lib/editor-core';
+  import { createSourceTextareaImePunctuationFallback } from '../../lib/input/windowsImePunctuationFallback';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
   import {
@@ -47,6 +48,8 @@
   export let onSourceScroll: (() => void) | undefined = undefined;
   export let onSemanticScroll: (() => void) | undefined = undefined;
 
+  const sourceImeFallback = createSourceTextareaImePunctuationFallback();
+
   function handleOutlineToggle(event: MouseEvent, item: OutlineItem) {
     event.preventDefault();
     event.stopPropagation();
@@ -81,7 +84,16 @@
           class="source-editor"
           value={markdown}
           readonly={readonlyDocumentMode}
-          on:input={updateMarkdown}
+          on:keydown={sourceImeFallback.handleKeydown}
+          on:keyup={sourceImeFallback.handleKeyup}
+          on:beforeinput={sourceImeFallback.handleBeforeInput}
+          on:input={(event) => {
+            sourceImeFallback.handleInput();
+            updateMarkdown(event);
+          }}
+          on:compositionstart={sourceImeFallback.handleCompositionStart}
+          on:compositionupdate={sourceImeFallback.handleCompositionUpdate}
+          on:compositionend={sourceImeFallback.handleCompositionEnd}
           on:paste={handleEditorPaste}
           on:drop={handleEditorDrop}
           spellcheck="false"

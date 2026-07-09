@@ -57,6 +57,8 @@ const MARK_SYNTAX: Record<string, { open: string; close: string }> = {
 
 const DELIMITER_CLICK_SLOP_PX = 6;
 const BOUNDARY_INPUT_DEDUPE_MS = 50;
+const IME_PUNCTUATION_BOUNDARY_INPUT_DEDUPE_MS = 300;
+const DEBUG_STORAGE_KEY = 'newmd:debug:pendingInlineMark';
 
 type BoundaryTextInput = {
   from: number;
@@ -106,11 +108,16 @@ export function isPendingMarkActive(state: EditorState, markType: MarkType): boo
 
 export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   let lastBoundaryTextInput: BoundaryTextInputRecord | null = null;
+  let lastImePunctuationBoundaryTextInput: BoundaryTextInputRecord | null = null;
   let clearBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
+  let clearImePunctuationBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
 
   const rememberBoundaryTextInput = (
     input: BoundaryTextInput,
-    options: { allowInsertedCaretFollowup?: boolean } = {},
+    options: {
+      allowInsertedCaretFollowup?: boolean;
+      allowImePunctuationInsertedCaretFollowup?: boolean;
+    } = {},
   ): void => {
     if (clearBoundaryTextInputTimer) {
       clearTimeout(clearBoundaryTextInputTimer);
@@ -129,44 +136,76 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       }
       clearBoundaryTextInputTimer = null;
     }, BOUNDARY_INPUT_DEDUPE_MS);
+
+    debugPendingInlineMark('remember', { input, options, record });
+
+    if (!options.allowImePunctuationInsertedCaretFollowup) return;
+
+    if (clearImePunctuationBoundaryTextInputTimer) {
+      clearTimeout(clearImePunctuationBoundaryTextInputTimer);
+    }
+
+    lastImePunctuationBoundaryTextInput = record;
+    clearImePunctuationBoundaryTextInputTimer = setTimeout(() => {
+      if (lastImePunctuationBoundaryTextInput === record) {
+        debugPendingInlineMark('expire-ime-punctuation-record', { record });
+        lastImePunctuationBoundaryTextInput = null;
+      }
+      clearImePunctuationBoundaryTextInputTimer = null;
+    }, IME_PUNCTUATION_BOUNDARY_INPUT_DEDUPE_MS);
   };
 
   const consumeBoundaryTextInput = (input: BoundaryTextInput): boolean => {
-    if (!lastBoundaryTextInput) {
-      return false;
+    if (lastBoundaryTextInput && matchesBoundaryTextInputRecord(lastBoundaryTextInput, input)) {
+      debugPendingInlineMark('consume-short-record', { input, record: lastBoundaryTextInput });
+      lastBoundaryTextInput = null;
+      if (clearBoundaryTextInputTimer) {
+        clearTimeout(clearBoundaryTextInputTimer);
+        clearBoundaryTextInputTimer = null;
+      }
+      return true;
     }
 
-    const sameOriginalInput =
-      lastBoundaryTextInput.from === input.from &&
-      lastBoundaryTextInput.to === input.to &&
-      lastBoundaryTextInput.text === input.text;
-    const sameInsertedCaretFollowup =
-      lastBoundaryTextInput.allowInsertedCaretFollowup &&
-      lastBoundaryTextInput.text === input.text &&
-      lastBoundaryTextInput.insertedTo === input.from &&
-      lastBoundaryTextInput.insertedTo === input.to;
-
-    if (!sameOriginalInput && !sameInsertedCaretFollowup) {
-      return false;
+    if (
+      lastImePunctuationBoundaryTextInput &&
+      matchesInsertedCaretFollowup(lastImePunctuationBoundaryTextInput, input)
+    ) {
+      debugPendingInlineMark('consume-ime-punctuation-record', {
+        input,
+        record: lastImePunctuationBoundaryTextInput,
+      });
+      lastImePunctuationBoundaryTextInput = null;
+      if (clearImePunctuationBoundaryTextInputTimer) {
+        clearTimeout(clearImePunctuationBoundaryTextInputTimer);
+        clearImePunctuationBoundaryTextInputTimer = null;
+      }
+      return true;
     }
 
-    lastBoundaryTextInput = null;
-    if (clearBoundaryTextInputTimer) {
-      clearTimeout(clearBoundaryTextInputTimer);
-      clearBoundaryTextInputTimer = null;
-    }
-    return true;
+    return false;
   };
 
   const insertBoundaryTextInput = (
     view: { state: EditorState; dispatch: (tr: Transaction) => void },
     input: BoundaryTextInput,
-    options: { allowInsertedCaretFollowup?: boolean } = {},
+    options: {
+      allowInsertedCaretFollowup?: boolean;
+      allowImePunctuationInsertedCaretFollowup?: boolean;
+    } = {},
   ): boolean => {
     const tr = createBoundaryTextInputTransaction(view.state, input.from, input.to, input.text);
-    if (!tr) return false;
+    if (!tr) {
+      debugPendingInlineMark('skip-insert-not-boundary', { input });
+      return false;
+    }
 
     rememberBoundaryTextInput(input, options);
+    debugPendingInlineMark('dispatch-insert', {
+      input,
+      options,
+      nextSelection: tr.selection.from,
+      nextText: tr.doc.textBetween(0, tr.doc.content.size),
+    });
     view.dispatch(tr);
     return true;
   };
@@ -238,10 +277,47 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
           return handleEditRangeBoundaryMouseDown(view, event);
         },
 
+        compositionstart(view, event) {
+          debugPendingInlineMark('compositionstart', {
+            data: event.data,
+            selection: getSelectionDebug(view.state),
+            viewComposing: view.composing,
+          });
+          return false;
+        },
+
+        compositionupdate(view, event) {
+          debugPendingInlineMark('compositionupdate', {
+            data: event.data,
+            selection: getSelectionDebug(view.state),
+            viewComposing: view.composing,
+          });
+          return false;
+        },
+
+        compositionend(view, event) {
+          debugPendingInlineMark('compositionend', {
+            data: event.data,
+            selection: getSelectionDebug(view.state),
+            viewComposing: view.composing,
+          });
+          return false;
+        },
+
+        input(view, event) {
+          debugPendingInlineMark('input', {
+            inputType: event instanceof InputEvent ? event.inputType : undefined,
+            data: event instanceof InputEvent ? event.data : undefined,
+            selection: getSelectionDebug(view.state),
+            viewComposing: view.composing,
+            text: view.state.doc.textBetween(0, view.state.doc.content.size),
+          });
+          return false;
+        },
+
         beforeinput(view, event) {
           const text = getPlainBeforeInputText(event);
           if (!text) return false;
-          if ((event.isComposing || view.composing) && !isPunctuationLikeText(text)) return false;
 
           const input = {
             from: view.state.selection.from,
@@ -249,9 +325,32 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
             text,
           };
 
+          debugPendingInlineMark('beforeinput', {
+            input,
+            inputType: event.inputType,
+            isComposing: event.isComposing,
+            viewComposing: view.composing,
+            storedMarks: view.state.storedMarks?.map((mark) => mark.type.name) ?? null,
+          });
+
+          if (consumeBoundaryTextInput(input)) {
+            event.preventDefault();
+            return true;
+          }
+
+          if ((event.isComposing || view.composing) && !isPunctuationLikeText(text)) {
+            debugPendingInlineMark('pass-composing-text-beforeinput', { input });
+            return false;
+          }
+
           if (
             !insertBoundaryTextInput(view, input, {
               allowInsertedCaretFollowup: true,
+              allowImePunctuationInsertedCaretFollowup: shouldDedupeImePunctuationBoundaryTextInput(
+                view,
+                event,
+                text,
+              ),
             })
           ) {
             return false;
@@ -298,10 +397,18 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
 
       handleTextInput(view, from, to, text) {
         const input = { from, to, text };
+        debugPendingInlineMark('handleTextInput', {
+          input,
+          viewComposing: view.composing,
+          storedMarks: view.state.storedMarks?.map((mark) => mark.type.name) ?? null,
+        });
         if (consumeBoundaryTextInput(input)) return true;
         if (view.composing) return false;
 
-        return insertBoundaryTextInput(view, input);
+        return insertBoundaryTextInput(view, input, {
+          allowInsertedCaretFollowup: isImePunctuationText(text),
+          allowImePunctuationInsertedCaretFollowup: isImePunctuationText(text),
+        });
       },
     },
 
@@ -325,13 +432,95 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   });
 }
 
+function matchesBoundaryTextInputRecord(
+  record: BoundaryTextInputRecord,
+  input: BoundaryTextInput,
+): boolean {
+  const sameOriginalInput =
+    record.from === input.from && record.to === input.to && record.text === input.text;
+
+  return sameOriginalInput || matchesInsertedCaretFollowup(record, input);
+}
+
+function matchesInsertedCaretFollowup(
+  record: BoundaryTextInputRecord,
+  input: BoundaryTextInput,
+): boolean {
+  return (
+    record.allowInsertedCaretFollowup &&
+    record.text === input.text &&
+    record.insertedTo === input.from &&
+    record.insertedTo === input.to
+  );
+}
+
 function getPlainBeforeInputText(event: InputEvent): string | null {
-  if (event.inputType !== 'insertText') return null;
+  if (event.inputType !== 'insertText' && event.inputType !== 'insertCompositionText') {
+    return null;
+  }
   return event.data && event.data.length > 0 ? event.data : null;
 }
 
 function isPunctuationLikeText(text: string): boolean {
   return /^[\p{P}\p{S}]+$/u.test(text);
+}
+
+function shouldDedupeImePunctuationBoundaryTextInput(
+  view: { composing: boolean },
+  event: InputEvent,
+  text: string,
+): boolean {
+  return isImePunctuationText(text) && (event.isComposing || view.composing || hasNonAsciiText(text));
+}
+
+function isImePunctuationText(text: string): boolean {
+  return isPunctuationLikeText(text) && hasNonAsciiText(text);
+}
+
+function hasNonAsciiText(text: string): boolean {
+  return /[^\x00-\x7F]/.test(text);
+}
+
+function debugPendingInlineMark(
+  stage: string,
+  payload: Record<string, unknown> = {},
+): void {
+  if (!isPendingInlineMarkDebugEnabled()) return;
+
+  const entry = {
+    at: new Date().toISOString(),
+    stage,
+    ...payload,
+  };
+
+  const debugWindow = window as Window & {
+    __newmdPendingInlineMarkLogs?: unknown[];
+  };
+  debugWindow.__newmdPendingInlineMarkLogs = [
+    ...(debugWindow.__newmdPendingInlineMarkLogs ?? []),
+    entry,
+  ].slice(-200);
+
+  console.info('[pendingInlineMark]', entry);
+}
+
+function getSelectionDebug(state: EditorState): Record<string, unknown> {
+  return {
+    from: state.selection.from,
+    to: state.selection.to,
+    empty: state.selection.empty,
+    storedMarks: state.storedMarks?.map((mark) => mark.type.name) ?? null,
+  };
+}
+
+function isPendingInlineMarkDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.localStorage.getItem(DEBUG_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 function createBoundaryTextInputTransaction(

@@ -59,6 +59,7 @@ import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
 import { trailingParagraphPlugin } from './plugins/trailingParagraph';
 import { contextMenuPlugin } from './plugins/contextMenu';
 import { searchHighlightPlugin } from './plugins/searchHighlight';
+import { windowsImePunctuationFallbackPlugin } from './plugins/windowsImePunctuationFallback';
 import {
   createMarkdownInputRules,
   parseMarkdown,
@@ -491,6 +492,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     return EditorState.create({
       doc: parseMarkdown(markdown),
       plugins: [
+        windowsImePunctuationFallbackPlugin(),
         inputRules({
           rules: createMarkdownInputRules(),
         }),
