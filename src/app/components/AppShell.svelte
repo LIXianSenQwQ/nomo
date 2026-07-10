@@ -13,6 +13,7 @@
   import LinkQuickEditor from './LinkQuickEditor.svelte';
   import SearchReplacePanel from './SearchReplacePanel.svelte';
   import StatusBar from './StatusBar.svelte';
+  import SegmentedTextEditorWorkspace from './SegmentedTextEditorWorkspace.svelte';
   import { workspaceSidebarMotion } from '../actions/motion';
   import { t } from '../i18n';
 
@@ -77,6 +78,9 @@
   export let searchCaseSensitive: boolean;
   export let searchActiveIndex: number;
   export let searchMatchCount: number;
+  export let autoSaveEnabled: boolean;
+  export let autoSaveDelayMs: number;
+  export let segmentedWorkspace: SegmentedTextEditorWorkspace | null = null;
 
   export let getCompactPath: (path: string) => string;
   export let getFolderName: (path: string) => string;
@@ -156,6 +160,7 @@
   export let onSemanticScroll: (() => void) | undefined = undefined;
 
   $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
+  $: activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 </script>
 
 <div
@@ -168,7 +173,7 @@
     bind:this={fileInput}
     class="file-input"
     type="file"
-    accept=".md,.markdown,text/markdown,text/plain"
+    accept=".md,.markdown,text/markdown"
     on:change={openMarkdownFile}
   />
 
@@ -273,102 +278,116 @@
           on:closeAllTabs
         />
 
-        <EditorToolbar
-          {interfaceLocale}
-          {mode}
-          {contentWidthPercent}
-          {outlineVisible}
-          {runCommand}
-          {pendingInlineMarks}
-          {tablePickerOpen}
-          {openTablePicker}
-          {closeTablePicker}
-          {openLinkPicker}
-          {insertTableWithSize}
-          {updateContentWidth}
-          {setMode}
-          {toggleOutlineVisible}
-          openSearchPanel={() => openSearchPanel(false)}
-        />
-
-        <div data-search-panel>
-          <SearchReplacePanel
+        {#if activeTab?.documentKind === 'markdown'}
+          <EditorToolbar
             {interfaceLocale}
-            open={searchPanelOpen}
-            replaceVisible={searchReplaceVisible}
-            query={searchQuery}
-            replacement={searchReplacement}
-            caseSensitive={searchCaseSensitive}
-            activeIndex={searchActiveIndex}
-            matchCount={searchMatchCount}
-            readonly={readonlyDocumentMode}
-            updateQuery={updateSearchQuery}
-            updateReplacement={updateSearchReplacement}
-            toggleCaseSensitive={toggleSearchCaseSensitive}
-            toggleReplaceVisible={toggleSearchReplaceVisible}
-            findPrevious={findPreviousSearchMatch}
-            findNext={findNextSearchMatch}
-            replaceCurrent={replaceCurrentSearchMatch}
-            replaceAll={replaceAllSearchMatches}
-            close={closeSearchPanel}
+            {mode}
+            {contentWidthPercent}
+            {outlineVisible}
+            {runCommand}
+            {pendingInlineMarks}
+            {tablePickerOpen}
+            {openTablePicker}
+            {closeTablePicker}
+            {openLinkPicker}
+            {insertTableWithSize}
+            {updateContentWidth}
+            {setMode}
+            {toggleOutlineVisible}
+            openSearchPanel={() => openSearchPanel(false)}
           />
-        </div>
 
-        <EditorWorkspace
-          {interfaceLocale}
-          bind:sourcePane
-          bind:semanticPane
-          bind:sourceTextarea
-          bind:editorHost
-          {mode}
-          {markdown}
-          {largeDocumentMode}
-          {frontMatter}
-          {frontMatterEditing}
-          {frontMatterFocusRequest}
-          {frontMatterFocusTarget}
-          {readonlyDocumentMode}
-          {outlineVisible}
-          {outline}
-          {activeOutlineId}
-          {collapsedOutlineIds}
-          {visibleOutlineIds}
-          {updateMarkdown}
-          {enterFrontMatterEdit}
-          {leaveFrontMatterEdit}
-          {updateFrontMatterContent}
-          {deleteFrontMatter}
-          {updateActiveOutlineFromSourceScroll}
-          {updateActiveOutlineFromSemanticScroll}
-          {onSourceScroll}
-          {onSemanticScroll}
-          {handleEditorPaste}
-          {handleEditorDrop}
-          {isOutlineItemExpandable}
-          {toggleOutlineItemExpanded}
-          {jumpToOutlineItem}
-        />
+          <div data-search-panel>
+            <SearchReplacePanel
+              {interfaceLocale}
+              open={searchPanelOpen}
+              replaceVisible={searchReplaceVisible}
+              query={searchQuery}
+              replacement={searchReplacement}
+              caseSensitive={searchCaseSensitive}
+              activeIndex={searchActiveIndex}
+              matchCount={searchMatchCount}
+              readonly={readonlyDocumentMode}
+              updateQuery={updateSearchQuery}
+              updateReplacement={updateSearchReplacement}
+              toggleCaseSensitive={toggleSearchCaseSensitive}
+              toggleReplaceVisible={toggleSearchReplaceVisible}
+              findPrevious={findPreviousSearchMatch}
+              findNext={findNextSearchMatch}
+              replaceCurrent={replaceCurrentSearchMatch}
+              replaceAll={replaceAllSearchMatches}
+              close={closeSearchPanel}
+            />
+          </div>
 
-        <LinkQuickEditor
-          {interfaceLocale}
-          open={linkPickerOpen}
-          text={linkText}
-          href={linkHref}
-          error={linkError}
-          canRemove={linkCanRemove}
-          positionStyle={linkPickerPositionStyle}
-          updateText={updateLinkText}
-          updateHref={updateLinkHref}
-          {applyLink}
-          {removeLink}
-          {closeLinkPicker}
-        />
+          <EditorWorkspace
+            {interfaceLocale}
+            bind:sourcePane
+            bind:semanticPane
+            bind:sourceTextarea
+            bind:editorHost
+            {mode}
+            {markdown}
+            {largeDocumentMode}
+            {frontMatter}
+            {frontMatterEditing}
+            {frontMatterFocusRequest}
+            {frontMatterFocusTarget}
+            {readonlyDocumentMode}
+            {outlineVisible}
+            {outline}
+            {activeOutlineId}
+            {collapsedOutlineIds}
+            {visibleOutlineIds}
+            {updateMarkdown}
+            {enterFrontMatterEdit}
+            {leaveFrontMatterEdit}
+            {updateFrontMatterContent}
+            {deleteFrontMatter}
+            {updateActiveOutlineFromSourceScroll}
+            {updateActiveOutlineFromSemanticScroll}
+            {onSourceScroll}
+            {onSemanticScroll}
+            {handleEditorPaste}
+            {handleEditorDrop}
+            {isOutlineItemExpandable}
+            {toggleOutlineItemExpanded}
+            {jumpToOutlineItem}
+          />
+
+          <LinkQuickEditor
+            {interfaceLocale}
+            open={linkPickerOpen}
+            text={linkText}
+            href={linkHref}
+            error={linkError}
+            canRemove={linkCanRemove}
+            positionStyle={linkPickerPositionStyle}
+            updateText={updateLinkText}
+            updateHref={updateLinkHref}
+            {applyLink}
+            {removeLink}
+            {closeLinkPicker}
+          />
+        {:else if activeTab?.documentKind === 'text' || activeTab?.documentKind === 'json'}
+          {#key activeTab.sessionId}
+            <SegmentedTextEditorWorkspace
+              bind:this={segmentedWorkspace}
+              {interfaceLocale}
+              tab={activeTab}
+              {autoSaveEnabled}
+              {autoSaveDelayMs}
+              on:stateChange
+              on:status
+            />
+          {/key}
+        {/if}
       {:else}
         <EmptyWorkspace {interfaceLocale} {createNewFile} {openFileDialog} {openFolderDialog} />
       {/if}
     </section>
 
-    {#if hasOpenDocument && writingStatsVisible}
+    {#if hasOpenDocument && activeTab?.documentKind === 'markdown' && writingStatsVisible}
       <StatusBar
         {interfaceLocale}
         {stats}

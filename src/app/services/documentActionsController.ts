@@ -16,7 +16,13 @@ import {
 import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { logInfo } from '../../lib/services/logger';
 import { confirmAction } from './confirmAction';
-import { createBlankTab, getNativeDocumentTargetTab, getOrCreateReusableTab } from './tabs';
+import {
+  createBlankTab,
+  getNativeDocumentTargetTab,
+  getDocumentKindFromPath,
+  getOrCreateReusableTab,
+  isMarkdownTab,
+} from './tabs';
 import { t } from '../i18n';
 
 // 从 Markdown 中提取第一个 H1 标题，生成建议文件名（清理非法字符）
@@ -126,6 +132,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!file) {
       return;
     }
+    if (getDocumentKindFromPath(file.name) !== 'markdown') {
+      // 浏览器模式没有 Rust session，宁可拒绝也不能把 TXT/JSON 全文读入 WebView。
+      options.setStatusMessage(t.unsupported());
+      input.value = '';
+      return;
+    }
 
     const text = await file.text();
     options.saveActiveTabState();
@@ -157,7 +169,11 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
   async function saveMarkdownFile(saveAs = false): Promise<boolean> {
     const activeTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
-    if (activeTab?.largeDocumentMode && !saveAs) {
+    if (!isMarkdownTab(activeTab)) {
+      // TXT/JSON 由分段会话保存，绝不能回退到 EditorCore 的 Markdown 全量保存链路。
+      return false;
+    }
+    if (activeTab.largeDocumentMode && !saveAs) {
       options.setStatusMessage(t.largeDocumentReadonlySaveBlocked());
       return false;
     }
@@ -165,12 +181,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
 
     if (options.getDesktopEnabled()) {
-      const saveAsTarget = saveAs || Boolean(activeTab?.diskReadonly);
+      const saveAsTarget = saveAs || activeTab.diskReadonly;
       if (!saveAsTarget && hasExternalFileChange()) {
         options.setStatusMessage(t.externalChangeChooseAction());
         return false;
       }
-      if (!saveAs && activeTab?.diskReadonly) {
+      if (!saveAs && activeTab.diskReadonly) {
         options.setStatusMessage(t.readonlySourceSaveAsRequired());
       }
 
@@ -207,7 +223,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.setDirty(false);
     options.getEditor().setDirty(false);
     const browserSavedTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
-    if (browserSavedTab) {
+    if (isMarkdownTab(browserSavedTab)) {
       browserSavedTab.markdown = markdownToSave;
       browserSavedTab.savedMarkdown = markdownToSave;
       browserSavedTab.dirty = false;
@@ -237,7 +253,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       document.sizeBytes > options.getLargeDocumentLimit();
     const existingTab = options
       .getTabs()
-      .find((tab) => tab.nativePath && sameNativePath(tab.nativePath, document.path));
+      .find(
+        (tab) =>
+          isMarkdownTab(tab) && tab.nativePath && sameNativePath(tab.nativePath, document.path),
+      );
     if (existingTab && !saved) {
       // 预览标签再次通过“正式打开”路径打开时，升级为固定标签。
       if (existingTab.id === options.getPreviewTabId()) {
@@ -297,7 +316,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       document.sizeBytes > options.getLargeDocumentLimit();
     const existingTab = options
       .getTabs()
-      .find((tab) => tab.nativePath && sameNativePath(tab.nativePath, document.path));
+      .find(
+        (tab) =>
+          isMarkdownTab(tab) && tab.nativePath && sameNativePath(tab.nativePath, document.path),
+      );
 
     options.saveActiveTabState();
 
@@ -389,6 +411,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       });
       return;
     }
+    if (!isMarkdownTab(tabToClose)) {
+      // 分段会话关闭前需要 flush journal/close session，由其工作区统一编排。
+      return;
+    }
 
     logCloseDiagnostics('documentActions.closeTab: 进入关闭流程', {
       tabId,
@@ -458,6 +484,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   }
 
   async function reloadExternalFile() {
+    const activeTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
+    if (!isMarkdownTab(activeTab)) {
+      return;
+    }
     const path = options.getNativePath();
     if (!options.getDesktopEnabled() || !path || !hasExternalFileChange()) {
       return;
@@ -474,6 +504,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
   }
 
   async function overwriteExternalFile() {
+    const activeTab = options.getTabs().find((tab) => tab.id === options.getActiveTabId());
+    if (!isMarkdownTab(activeTab)) {
+      return;
+    }
     const path = options.getNativePath();
     if (!options.getDesktopEnabled() || !path) {
       return;
@@ -506,12 +540,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!options.getAutoSaveEnabled()) return;
 
     const tabId = options.getActiveTabId();
-    const path = options.getNativePath();
-    const fileName = options.getFileName();
+    const activeTab = options.getTabs().find((tab) => tab.id === tabId);
+    if (!isMarkdownTab(activeTab)) return;
+    const path = activeTab.nativePath;
+    const fileName = activeTab.fileName;
 
     if (!tabId || !path) return;
-    const activeTab = options.getTabs().find((tab) => tab.id === tabId);
-    if (activeTab?.diskReadonly) {
+    if (activeTab.diskReadonly) {
       if (saveTimers[tabId] !== undefined) {
         clearTimeout(saveTimers[tabId]);
         delete saveTimers[tabId];
@@ -560,7 +595,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
         const tabs = options.getTabs();
         const savedTab = tabs.find((tab) => tab.id === tabId);
-        if (savedTab) {
+        if (isMarkdownTab(savedTab)) {
           savedTab.markdown = markdownToSave;
           savedTab.savedMarkdown = markdownToSave;
           savedTab.dirty = false;

@@ -106,7 +106,7 @@ pub(crate) fn stat_markdown_file(path: String) -> FileStatus {
 #[tauri::command]
 pub(crate) fn list_folder_markdown_files(path: String) -> Result<Vec<FolderFileInfo>, String> {
     let timer = std::time::Instant::now();
-    crate::app_logger::info("FileSystem", &format!("列出目录 Markdown 文件：{path}"));
+    crate::app_logger::info("FileSystem", &format!("列出目录支持的文档：{path}"));
     let dir = Path::new(&path);
     if !dir.is_dir() {
         return Err(format!("不是一个有效的目录：{path}"));
@@ -115,22 +115,17 @@ pub(crate) fn list_folder_markdown_files(path: String) -> Result<Vec<FolderFileI
     for entry in fs::read_dir(dir).map_err(|error| format!("读取目录失败：{error}"))? {
         let entry = entry.map_err(|error| format!("读取目录项失败：{error}"))?;
         let path_buf = entry.path();
-        if path_buf.is_file() {
-            if let Some(extension) = path_buf.extension().and_then(|ext| ext.to_str()) {
-                let ext = extension.to_lowercase();
-                if ext == "md" || ext == "markdown" || ext == "txt" {
-                    if let Some(name) = path_buf.file_name().and_then(|n| n.to_str()) {
-                        files.push(FolderFileInfo {
-                            name: name.to_string(),
-                            path: path_buf.to_string_lossy().to_string(),
-                        });
-                    }
-                }
+        if path_buf.is_file() && is_supported_document_file(&path_buf) {
+            if let Some(name) = path_buf.file_name().and_then(|n| n.to_str()) {
+                files.push(FolderFileInfo {
+                    name: name.to_string(),
+                    path: path_buf.to_string_lossy().to_string(),
+                });
             }
         }
     }
     files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    crate::app_logger::perf("FileSystem", "列出目录 Markdown 文件", timer.elapsed());
+    crate::app_logger::perf("FileSystem", "列出目录支持的文档", timer.elapsed());
     Ok(files)
 }
 
@@ -403,20 +398,15 @@ fn read_dir_children(
                 children_loaded: false,
                 children: Vec::new(),
             });
-        } else if path_buf.is_file() {
-            if let Some(extension) = path_buf.extension().and_then(|ext| ext.to_str()) {
-                let ext = extension.to_lowercase();
-                if ext == "md" || ext == "markdown" || ext == "txt" {
-                    entries.push(FileTreeEntry {
-                        name,
-                        path: path_buf.to_string_lossy().to_string(),
-                        is_dir: false,
-                        has_children: false,
-                        children_loaded: true,
-                        children: Vec::new(),
-                    });
-                }
-            }
+        } else if path_buf.is_file() && is_supported_document_file(&path_buf) {
+            entries.push(FileTreeEntry {
+                name,
+                path: path_buf.to_string_lossy().to_string(),
+                is_dir: false,
+                has_children: false,
+                children_loaded: true,
+                children: Vec::new(),
+            });
         }
     }
 
@@ -470,7 +460,7 @@ fn index_folder_in_background(app: AppHandle, root: PathBuf) {
                     children_loaded: false,
                     children: Vec::new(),
                 });
-            } else if path_buf.is_file() && is_markdown_like_file(&path_buf) {
+            } else if path_buf.is_file() && is_supported_document_file(&path_buf) {
                 scanned_files += 1;
             }
 
@@ -534,7 +524,7 @@ fn has_visible_children(dir: &Path, root: &Path, ignore_rules: &IgnoreRules) -> 
         if ignore_rules.is_ignored(root, &path_buf, name, is_dir) {
             continue;
         }
-        if is_dir || (path_buf.is_file() && is_markdown_like_file(&path_buf)) {
+        if is_dir || (path_buf.is_file() && is_supported_document_file(&path_buf)) {
             return true;
         }
     }
@@ -542,12 +532,13 @@ fn has_visible_children(dir: &Path, root: &Path, ignore_rules: &IgnoreRules) -> 
     false
 }
 
-fn is_markdown_like_file(path: &Path) -> bool {
+// 文件夹树和外部目录入口必须共享同一扩展名契约，避免某个入口静默隐藏分段文档。
+fn is_supported_document_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| {
             let ext = ext.to_lowercase();
-            ext == "md" || ext == "markdown" || ext == "txt"
+            matches!(ext.as_str(), "md" | "markdown" | "txt" | "json")
         })
         .unwrap_or(false)
 }
@@ -695,7 +686,7 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_sample_document, write_markdown_file};
+    use super::{list_folder_markdown_files, read_sample_document, write_markdown_file};
     use std::{
         fs,
         path::PathBuf,
@@ -770,6 +761,23 @@ mod tests {
             .collect();
         assert!(temp_files.is_empty());
 
+        cleanup(root);
+    }
+
+    #[test]
+    fn folder_listing_includes_segmented_text_and_json_documents() {
+        let root = unique_test_dir("folder-list-segmented");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(root.join("note.md"), "# note").expect("write markdown");
+        fs::write(root.join("large.txt"), "plain text").expect("write text");
+        fs::write(root.join("data.json"), "{}").expect("write json");
+        fs::write(root.join("ignored.bin"), [0_u8]).expect("write binary");
+
+        let files = list_folder_markdown_files(root.to_string_lossy().to_string())
+            .expect("list supported documents");
+        let names = files.into_iter().map(|file| file.name).collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["data.json", "large.txt", "note.md"]);
         cleanup(root);
     }
 

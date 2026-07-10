@@ -30,6 +30,14 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/DocumentTabs.svelte'),
     'utf-8',
   );
+  const externalChangeDialogSource = readFileSync(
+    resolve(__dirname, 'components/ExternalChangeDialog.svelte'),
+    'utf-8',
+  );
+  const segmentedEditorCssSource = readFileSync(
+    resolve(__dirname, 'styles/editor-segmented.css'),
+    'utf-8',
+  );
   const explorerSidebarSource = readFileSync(
     resolve(__dirname, 'components/ExplorerSidebar.svelte'),
     'utf-8',
@@ -358,9 +366,7 @@ describe('App outline layout', () => {
     expect(updateSource).toContain(
       'options.setPendingSourceScrollTop(options.getSourcePane()?.scrollTop ?? null);',
     );
-    expect(updateSource).toContain(
-      "reason: 'source-input'",
-    );
+    expect(updateSource).toContain("reason: 'source-input'");
     expect(updateSource).toContain('sourceInput: true');
     expect(appSource).toContain("if (event.reason === 'source-input') {");
     expect(editorInteractionSource).toContain('getSourceScrollTopWithVisibleCaret(');
@@ -735,6 +741,25 @@ describe('App outline layout', () => {
     expect(frontMatterCardSource).toContain('frontMatter.fields.parseWarning');
   });
 
+  it('keeps hidden Markdown editor events out of segmented documents', () => {
+    expect(appSource).toMatch(
+      /function syncFromEditor\(event: EditorChangeEvent\)[\s\S]*?const activeTab = tabs\.find\(\(tab\) => tab\.id === activeTabId\);[\s\S]*?if \(!isMarkdownTab\(activeTab\)\) \{[\s\S]*?return;/,
+    );
+    expect(appSource).toMatch(
+      /const activeDocument = tabs\.find\(\(tab\) => tab\.id === activeTabId\);\s*if \(isMarkdownTab\(activeDocument\)\) \{[\s\S]*?refreshSearchMatches/,
+    );
+  });
+
+  it('mounts exactly one workspace implementation for each document kind', () => {
+    expect(appShellSource).toContain("{#if activeTab?.documentKind === 'markdown'}");
+    expect(appShellSource).toContain('<EditorWorkspace');
+    expect(appShellSource).toContain(
+      "{:else if activeTab?.documentKind === 'text' || activeTab?.documentKind === 'json'}",
+    );
+    expect(appShellSource).toContain('{#key activeTab.sessionId}');
+    expect(appShellSource).toContain('<SegmentedTextEditorWorkspace');
+  });
+
   it('keeps the editor toolbar focused on editing and view controls', () => {
     expect(toolbarSource).not.toContain('FolderOpen');
     expect(toolbarSource).not.toContain('PanelLeftClose');
@@ -800,11 +825,12 @@ describe('App outline layout', () => {
     expect(tauriConfigSource).toContain('"y": 24');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
     expect(styles).not.toContain('border-bottom: 1px solid var(--md-titlebar-border);');
-    expect(styles).toContain('padding-left: 78px;');
-    const macSidebarToggleStyles =
-      styles.match(/\.titlebar\.is-mac \.sidebar-toggle-btn\s*\{[^}]*\}/)?.[0] ?? '';
-    expect(macSidebarToggleStyles).toContain('height: 28px;');
-    expect(macSidebarToggleStyles).toContain('transform: translateY(-8px);');
+    expect(styles).toMatch(
+      /\.titlebar\.is-mac:not\(\.is-fullscreen\) \.titlebar-row\.top-row\s*\{[\s\S]*?padding-left:\s*88px;/,
+    );
+    const titlebarIconStyles = styles.match(/\.titlebar \.icon-btn\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(titlebarIconStyles).toContain('height: 32px;');
+    expect(styles).toMatch(/\.sidebar-toggle-btn\s*\{[\s\S]*?flex-shrink:\s*0;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).not.toContain('.app-logo');
     expect(styles).toMatch(/\.app-name\s*\{[\s\S]*?font-size:\s*13px;/);
@@ -823,7 +849,7 @@ describe('App outline layout', () => {
       'flattenedRows.length * TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING',
     );
     expect(explorerSidebarSource).toContain(
-      'const rowBottomWithPadding = rowBottom + TREE_BOTTOM_PADDING;',
+      'const rowBottomWithPadding = rowTop + TREE_ROW_HEIGHT + TREE_BOTTOM_PADDING;',
     );
     expect(styles).toMatch(
       /\.rail:not\(:hover\) \.file-tree\s*\{[\s\S]*?scrollbar-color:\s*var\(--md-scrollbar-thumb-idle\) var\(--md-scrollbar-track\);/,
@@ -895,7 +921,7 @@ describe('App outline layout', () => {
   });
 
   it('places the new tab button after the last visible tab and hides it when tabs overflow', () => {
-    const containerStart = documentTabsSource.indexOf('<div class="tabs-container"');
+    const containerStart = documentTabsSource.indexOf('class="tabs-container"');
     const addButtonIndex = documentTabsSource.indexOf('class="tab-add"');
     const containerEnd = documentTabsSource.indexOf('</div>', addButtonIndex);
 
@@ -1183,6 +1209,160 @@ describe('App outline layout', () => {
     expect(documentActionsSource).toContain('options.setPreviewTabId(null)');
     expect(appSource).toContain('getPreviewTabId: () => previewTabId');
     expect(appSource).toContain('setPreviewTabId: (value) => {');
+  });
+
+  it('offers Save As as an explicit external-change resolution path', () => {
+    expect(externalChangeDialogSource).toContain('export let onSaveAs: () => void;');
+    expect(externalChangeDialogSource).toContain('on:click={onSaveAs}');
+    expect(appSource).toContain('onSaveAs={handleExternalChangeSaveAs}');
+  });
+
+  it('does not surface the app own in-flight segmented save as an external conflict', () => {
+    expect(appSource).toContain('if (result.saveInProgress) return;');
+  });
+
+  it('never applies an automatic external-change preference to dirty content', () => {
+    expect(appSource).toContain("if (change.type !== 'modified' || change.dirtyAtDetection)");
+  });
+
+  it('binds segmented save and external-check results to their originating session', () => {
+    expect(appSource).toContain('const preparedSave = await segmentedWorkspace?.prepareSave();');
+    expect(appSource).not.toContain(
+      'await segmentedDocumentPort.flushJournal(savingSessionId, frozenRevision);',
+    );
+    expect(appSource).toContain('const savingSessionId = activeTab.sessionId;');
+    expect(appSource).toContain('segmentedWorkspace?.applySaveResult(savingSessionId, result)');
+    expect(appSource).toContain('const checkingSessionId = activeTab.sessionId;');
+    expect(appSource).toContain('if (result.sessionId !== savingSessionId)');
+    expect(appSource).toContain('if (result.sessionId !== checkingSessionId) return;');
+    expect(appSource).toContain('reconcileSegmentedExternalChangeCheck(result, {');
+    expect(appSource).toContain('segmentedWorkspace?.hasPendingEdits()');
+    expect(appSource).toContain('const { dirtyAtDetection } = reconciledCheck;');
+    expect(appSource).toContain('if (activeTabId !== checkingTabId)');
+  });
+
+  it('restores the active segmented tab before opening inactive segmented sessions', () => {
+    expect(appSource).toContain('partitionPersistedWorkspaceTabsForRestore(');
+    expect(appSource).not.toContain(
+      "(tab) => tab.documentKind === 'markdown' || tab.id === state.activeTabId",
+    );
+    expect(appSource).toContain('restoreDeferredWorkspaceTabs(deferredTabs, order, generation)');
+    expect(appSource).toContain('if (workspaceRestorePreparation || deferredWorkspaceRestore)');
+    expect(appSource).toContain('opened.documentKind !== persistedTab.documentKind');
+  });
+
+  it('guards the whole workspace restore against partial persistence and cleans stale sessions', () => {
+    expect(appSource).toContain('let workspaceRestorePreparation: Promise<void> | null = null;');
+    expect(appSource).toContain('await workspaceRestorePreparation;');
+    expect(appSource).toMatch(
+      /async function openFolderInCurrentWindow[\s\S]*?beginWorkspaceRestorePreparation\(\)[\s\S]*?await loadFolder\(folderPath\)[\s\S]*?await restoreFolderWorkspaceState\(folderPath\)/,
+    );
+    expect(appSource).toContain('const restoreBarrier = new Promise<void>');
+    expect(appSource.indexOf('deferredWorkspaceRestore = restoreBarrier;')).toBeLessThan(
+      appSource.indexOf('for (const persistedTab of immediateTabs)'),
+    );
+    expect(appSource).toContain('await discardRestoredSegmentedTabs(restoredTabs);');
+    expect(appSource).toContain(
+      'finishWorkspaceRestore(restoreBarrier, resolveRestore, generation)',
+    );
+  });
+
+  it('cancels deferred restores before closing sessions and invalidates every preview teardown', () => {
+    expect(appSource).toContain('async function cancelDeferredWorkspaceRestore()');
+    expect(appSource).toMatch(
+      /async function closeCurrentWindow\(\)[\s\S]*?await cancelDeferredWorkspaceRestore\(\);[\s\S]*?await closeAllSegmentedSessions/,
+    );
+    expect(appSource).toMatch(
+      /async function closeAllTabsWithConfirmation[\s\S]*?invalidatePendingPreviewOpen\(\);/,
+    );
+    expect(appSource).toMatch(
+      /function pinPreviewTab\(\)[\s\S]*?invalidatePendingPreviewOpen\(\);/,
+    );
+    expect(appSource).toMatch(
+      /async function closeTab\(tabId: string, event\?: Event\)[\s\S]*?invalidatePendingPreviewOpen\(\);/,
+    );
+  });
+
+  it('closes restored segmented sessions before replacing a workspace with a pending folder', () => {
+    const switchStart = appSource.indexOf('// 若待打开文件夹与恢复的工作区不同');
+    const cancelRestore = appSource.indexOf('await cancelDeferredWorkspaceRestore();', switchStart);
+    const closeSessions = appSource.indexOf('await closeAllSegmentedSessions(false);', switchStart);
+    const clearTabs = appSource.indexOf('clearAllTabsWithoutCreatingBlank();', switchStart);
+
+    expect(switchStart).toBeGreaterThan(-1);
+    expect(cancelRestore).toBeGreaterThan(switchStart);
+    expect(closeSessions).toBeGreaterThan(cancelRestore);
+    expect(clearTabs).toBeGreaterThan(closeSessions);
+  });
+
+  it('binds every external-change dialog action to the originating tab and session', () => {
+    expect(appSource).toContain('function openExternalChangeDialog(');
+    expect(appSource).toContain('function getValidExternalChangeDialogTarget()');
+    expect(appSource).toContain('externalChangeDialogTargetSessionId');
+    expect(appSource).toContain('const target = getValidExternalChangeDialogTarget();');
+  });
+
+  it('suppresses only the exact segmented external identity the user ignored', () => {
+    expect(appSource).toContain(
+      'const ignoredSegmentedExternalChanges = new Map<string, string>()',
+    );
+    expect(appSource).toContain('getSegmentedExternalChangeToken(result)');
+    expect(appSource).toContain(
+      'ignoredSegmentedExternalChanges.get(checkingSessionId) === changeToken',
+    );
+    expect(appSource).toContain('ignoredSegmentedExternalChanges.set(sessionId, changeToken)');
+    expect(appSource).toContain(
+      'ignoreSegmentedExternalChange(target.sessionId, target.changeToken)',
+    );
+    expect(appSource).toContain('openExternalChangeDialog(change, changeToken)');
+    expect(appSource).toContain('保留 tab 上的冲突状态以继续暂停自动保存');
+    expect(appSource).toContain('同一磁盘身份只是不再弹框');
+  });
+
+  it('keeps a segmented tab open and surfaces flush, save and close failures', () => {
+    const closeStart = appSource.indexOf('async function closeSegmentedTab(');
+    const closeEnd = appSource.indexOf('// 包装 closeTab', closeStart);
+    const closeSource = appSource.slice(closeStart, closeEnd);
+
+    expect(closeSource).toContain(
+      'await segmentedDocumentPort.flushJournal(tabToClose.sessionId, tabToClose.revision);',
+    );
+    expect(closeSource).not.toContain('.catch(() => undefined)');
+    expect(closeSource).toContain('.catch((error) => {');
+    expect(closeSource).toContain(
+      'await segmentedDocumentPort.closeSession(tabToClose.sessionId, discardChanges);',
+    );
+    expect(closeSource.match(/showVisibleError\(error, t\.saveFileFailed\(\)\)/g)?.length).toBe(3);
+    expect(appSource).toMatch(/function showVisibleError[\s\S]*?showToast\(message, 3500\)/);
+  });
+
+  it('drops stale preview opens and closes their segmented sessions', () => {
+    expect(appSource).toContain('const requestGeneration = invalidatePendingPreviewOpen();');
+    expect(appSource).toContain('requestGeneration !== previewOpenGeneration');
+    expect(appSource).toContain('segmentedDocumentPort.closeSession(opened.sessionId, false)');
+  });
+
+  it('reloads segmented external changes through the atomic backend seam', () => {
+    expect(appSource).toContain('segmentedDocumentPort.reloadSession(oldSessionId)');
+    expect(appSource).not.toContain(
+      'await segmentedDocumentPort.closeSession(oldSessionId, true);',
+    );
+  });
+
+  it('pins conditional segmented rows so the editor viewport cannot collapse when notices are absent', () => {
+    expect(segmentedEditorCssSource).toContain('.segmented-toolbar {\n  grid-row: 1;');
+    expect(segmentedEditorCssSource).toContain('.segmented-search {\n  grid-row: 2;');
+    expect(segmentedEditorCssSource).toContain('.readonly-notice {\n  grid-row: 3;');
+    expect(segmentedEditorCssSource).toContain('.segmented-scroll {\n  grid-row: 4;');
+    expect(segmentedEditorCssSource).toContain('.segmented-status {\n  grid-row: 5;');
+  });
+
+  it('does not leave open sessions pointing at stale paths after explorer renames', () => {
+    expect(appSource).toContain('getOpenDocumentRenameBlock(tabs, path, targetPath)');
+    expect(appSource).toContain('statusMessage = t.renameOpenDocumentBlocked();');
+    expect(appSource).toMatch(
+      /try \{\s*await renameFile\(path, targetPath\);\s*\} catch \(err\) \{\s*statusMessage = t\.renameFailed\(\{ error: err \}\);\s*return;/,
+    );
   });
 
   it('removes application-level workspace storage path configuration', () => {

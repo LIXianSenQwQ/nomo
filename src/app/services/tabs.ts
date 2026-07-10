@@ -1,4 +1,15 @@
-import { createEmptyExternalFileChange, type ExternalFileChangeState, type Tab } from '../types';
+import {
+  createEmptyExternalFileChange,
+  normalizeRecoveryConflictPath,
+  type DocumentKind,
+  type ExternalFileChangeState,
+  type GlobalScrollAnchor,
+  type GlobalSelection,
+  type MarkdownTabState,
+  type SegmentedSessionOpenData,
+  type SegmentedTextTabState,
+  type Tab,
+} from '../types';
 import { t } from '../i18n';
 
 export interface ActiveTabState {
@@ -16,23 +27,161 @@ export interface ActiveTabState {
   version: number;
 }
 
-export function createBlankTab(fileName = 'untitled.md', filePath = t.untitledMarkdown()): Tab {
+export interface MarkdownTabInput {
+  id?: string;
+  fileName?: string;
+  filePath?: string;
+  nativePath?: string | null;
+  draftId?: string | null;
+  markdown?: string;
+  savedMarkdown?: string;
+  dirty?: boolean;
+  lastKnownModifiedAt?: number;
+  largeDocumentMode?: boolean;
+  readonlyDocumentMode?: boolean;
+  diskReadonly?: boolean;
+  externalFileChange?: ExternalFileChangeState;
+  version?: number;
+}
+
+export interface SegmentedTextTabInput {
+  id?: string;
+  documentKind: 'text' | 'json';
+  fileName: string;
+  filePath: string;
+  nativePath: string | null;
+  sessionId: string;
+  revision: number;
+  persistedRevision: number;
+  indexProgress: number;
+  recoveryConflictPath?: string | null;
+  dirty?: boolean;
+  lastKnownModifiedAt?: number;
+  diskReadonly?: boolean;
+  externalFileChange?: ExternalFileChangeState;
+  selection?: GlobalSelection | null;
+  scrollAnchor?: GlobalScrollAnchor | null;
+}
+
+export interface CreateTabForDocumentInput {
+  id?: string;
+  fileName: string;
+  filePath: string;
+  nativePath: string | null;
+  segmentedSession?: SegmentedSessionOpenData;
+  markdown?: string;
+  savedMarkdown?: string;
+  dirty?: boolean;
+  lastKnownModifiedAt?: number;
+  diskReadonly?: boolean;
+}
+
+export function isMarkdownTab(tab: Tab | null | undefined): tab is MarkdownTabState {
+  return tab?.documentKind === 'markdown';
+}
+
+export function isSegmentedTextTab(tab: Tab | null | undefined): tab is SegmentedTextTabState {
+  return tab?.documentKind === 'text' || tab?.documentKind === 'json';
+}
+
+export function getDocumentKindFromPath(path: string): DocumentKind | null {
+  const normalized = path.trim().toLowerCase();
+  if (normalized.endsWith('.md') || normalized.endsWith('.markdown')) return 'markdown';
+  if (normalized.endsWith('.txt')) return 'text';
+  if (normalized.endsWith('.json')) return 'json';
+  return null;
+}
+
+export function createMarkdownTab(input: MarkdownTabInput = {}): MarkdownTabState {
+  const markdown = input.markdown ?? '';
   return {
-    id: createTabId(),
-    fileName,
-    filePath,
-    nativePath: null,
-    draftId: null,
-    markdown: '',
-    savedMarkdown: '',
-    dirty: false,
-    lastKnownModifiedAt: 0,
-    largeDocumentMode: false,
-    readonlyDocumentMode: false,
-    diskReadonly: false,
-    externalFileChange: createEmptyExternalFileChange(),
-    version: 0,
+    id: input.id ?? createTabId(),
+    documentKind: 'markdown',
+    fileName: input.fileName ?? 'untitled.md',
+    filePath: input.filePath ?? t.untitledMarkdown(),
+    nativePath: input.nativePath ?? null,
+    draftId: input.draftId ?? null,
+    markdown,
+    savedMarkdown: input.savedMarkdown ?? markdown,
+    dirty: input.dirty ?? false,
+    lastKnownModifiedAt: input.lastKnownModifiedAt ?? 0,
+    largeDocumentMode: input.largeDocumentMode ?? false,
+    readonlyDocumentMode: input.readonlyDocumentMode ?? false,
+    diskReadonly: input.diskReadonly ?? false,
+    externalFileChange: input.externalFileChange ?? createEmptyExternalFileChange(),
+    version: input.version ?? 0,
   };
+}
+
+export function createSegmentedTextTab(input: SegmentedTextTabInput): SegmentedTextTabState {
+  return {
+    id: input.id ?? createTabId(),
+    documentKind: input.documentKind,
+    fileName: input.fileName,
+    filePath: input.filePath,
+    nativePath: input.nativePath,
+    sessionId: input.sessionId,
+    revision: input.revision,
+    persistedRevision: input.persistedRevision,
+    recoveryConflictPath: normalizeRecoveryConflictPath(input.recoveryConflictPath),
+    selection: input.selection ?? null,
+    scrollAnchor: input.scrollAnchor ?? null,
+    indexProgress: normalizeIndexProgress(input.indexProgress),
+    dirty: input.dirty ?? input.revision !== input.persistedRevision,
+    lastKnownModifiedAt: input.lastKnownModifiedAt ?? 0,
+    diskReadonly: input.diskReadonly ?? false,
+    externalFileChange: input.externalFileChange ?? createEmptyExternalFileChange(),
+  };
+}
+
+export function createTabForDocument(input: CreateTabForDocumentInput): Tab {
+  const documentKind =
+    getDocumentKindFromPath(input.fileName) ?? getDocumentKindFromPath(input.filePath);
+  if (!documentKind) {
+    throw new Error(`Unsupported document type: ${input.fileName}`);
+  }
+
+  if (documentKind === 'markdown') {
+    return createMarkdownTab({
+      id: input.id,
+      fileName: input.fileName,
+      filePath: input.filePath,
+      nativePath: input.nativePath,
+      markdown: input.markdown,
+      savedMarkdown: input.savedMarkdown,
+      dirty: input.dirty,
+      lastKnownModifiedAt: input.lastKnownModifiedAt,
+      diskReadonly: input.diskReadonly,
+    });
+  }
+
+  if (!input.segmentedSession) {
+    // TXT/JSON 的正文只能由 Rust 分段会话提供，禁止缺少会话时回退到 Markdown 全量读取。
+    throw new Error(`Segmented document requires an open session: ${input.fileName}`);
+  }
+
+  return createSegmentedTextTab({
+    id: input.id,
+    documentKind,
+    fileName: input.fileName,
+    filePath: input.filePath,
+    nativePath: input.nativePath,
+    sessionId: input.segmentedSession.sessionId,
+    revision: input.segmentedSession.revision,
+    persistedRevision: input.segmentedSession.persistedRevision,
+    indexProgress: input.segmentedSession.indexProgress,
+    recoveryConflictPath: input.segmentedSession.recoveryConflictPath,
+    dirty: input.dirty,
+    lastKnownModifiedAt: input.lastKnownModifiedAt,
+    diskReadonly: input.diskReadonly ?? input.segmentedSession.readonly,
+  });
+}
+
+export function createBlankTab(
+  fileName = 'untitled.md',
+  filePath = t.untitledMarkdown(),
+): MarkdownTabState {
+  return createMarkdownTab({ fileName, filePath });
 }
 
 export function getOrCreateReusableTab(tabs: Tab[], activeTabId: string) {
@@ -56,12 +205,12 @@ export function getNativeDocumentTargetTab(
     return { tabs, activeTabId, targetTab: activeTab };
   }
   if (saved) {
-    if (existingTab) {
+    if (isMarkdownTab(existingTab)) {
       return { tabs, activeTabId, targetTab: existingTab };
     }
     const activeTabForSave = tabs.find((tab) => tab.id === activeTabId);
-    // 保存或另存为成功后，当前保存源标签页绑定到返回的磁盘路径，避免重复创建标签页。
-    if (activeTabForSave) {
+    // Markdown 保存只能复用 Markdown 标签，避免把正文状态写进 TXT/JSON 分段标签。
+    if (isMarkdownTab(activeTabForSave)) {
       return { tabs, activeTabId, targetTab: activeTabForSave };
     }
   }
@@ -70,9 +219,9 @@ export function getNativeDocumentTargetTab(
   return { tabs: [...tabs, newTab], activeTabId: newTab.id, targetTab: newTab };
 }
 
-export function isReusableUntitledTab(tab: Tab | undefined): tab is Tab {
+export function isReusableUntitledTab(tab: Tab | undefined): tab is MarkdownTabState {
   return Boolean(
-    tab &&
+    isMarkdownTab(tab) &&
     tab.fileName === 'untitled.md' &&
     !tab.dirty &&
     tab.markdown.trim() === '' &&
@@ -82,12 +231,17 @@ export function isReusableUntitledTab(tab: Tab | undefined): tab is Tab {
 
 export function writeActiveTabState(tabs: Tab[], activeTabId: string, state: ActiveTabState) {
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
-  if (!activeTab) {
+  if (!isMarkdownTab(activeTab)) {
     return tabs;
   }
 
   Object.assign(activeTab, state);
   return [...tabs];
+}
+
+function normalizeIndexProgress(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
 }
 
 function createTabId() {

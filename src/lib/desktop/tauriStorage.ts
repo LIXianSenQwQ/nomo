@@ -170,18 +170,9 @@ export function isTauriRuntime(): boolean {
 export async function openMarkdownWithDialog(): Promise<NativeDocument | null> {
   const timer = createPerfTimer('tauriStorage', '打开文件对话框');
   logInfo('tauriStorage', '打开 Markdown 文件选择对话框');
-  const { open } = await import('@tauri-apps/plugin-dialog');
-  const selected = await open({
-    multiple: false,
-    filters: [
-      {
-        name: 'Markdown',
-        extensions: ['md', 'markdown', 'txt'],
-      },
-    ],
-  });
+  const selected = await pickPathWithDialog('Markdown', ['md', 'markdown']);
 
-  if (typeof selected !== 'string') {
+  if (!selected) {
     timer.end({ cancelled: true });
     logInfo('tauriStorage', '用户取消打开 Markdown 文件');
     return null;
@@ -190,6 +181,27 @@ export async function openMarkdownWithDialog(): Promise<NativeDocument | null> {
   const document = await readMarkdownFile(selected);
   timer.end({ path: selected });
   return document;
+}
+
+/**
+ * 只选择文档路径，不读取正文。TXT/JSON 必须先经过类型路由，避免误入 Markdown 全量读取链路。
+ */
+export async function pickDocumentPathWithDialog(): Promise<string | null> {
+  return pickPathWithDialog('Documents', ['md', 'markdown', 'txt', 'json']);
+}
+
+async function pickPathWithDialog(name: string, extensions: string[]): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const selected = await open({
+    multiple: false,
+    filters: [
+      {
+        name,
+        extensions,
+      },
+    ],
+  });
+  return typeof selected === 'string' ? selected : null;
 }
 
 export async function openFolderWithDialog(): Promise<string | null> {

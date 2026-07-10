@@ -6,6 +6,7 @@ mod file_system;
 mod i18n;
 mod models;
 mod software_update;
+mod text_document;
 mod window;
 
 #[cfg(target_os = "windows")]
@@ -100,6 +101,15 @@ pub fn run() {
             let config = crate::config::ConfigManager::load_or_default(app.handle())
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             app.manage(config);
+            let segmented_root = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?
+                .join("segmented-documents");
+            let segmented_manager =
+                crate::text_document::DocumentSessionManager::new(segmented_root)
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            app.manage(segmented_manager);
 
             if let Some(window) = app.get_webview_window("main") {
                 crate::app_logger::info("Window", "初始化主窗口系统适配和菜单");
@@ -157,6 +167,19 @@ pub fn run() {
             crate::export::read_file_as_base64,
             crate::file_system::read_markdown_file,
             crate::file_system::write_markdown_file,
+            crate::text_document::commands::open_segmented_document,
+            crate::text_document::commands::reload_segmented_session,
+            crate::text_document::commands::read_segmented_window,
+            crate::text_document::commands::apply_segmented_edits,
+            crate::text_document::commands::undo_segmented_revision,
+            crate::text_document::commands::redo_segmented_revision,
+            crate::text_document::commands::flush_segmented_journal,
+            crate::text_document::commands::save_segmented_revision,
+            crate::text_document::commands::start_segmented_task,
+            crate::text_document::commands::cancel_segmented_task,
+            crate::text_document::commands::close_segmented_session,
+            crate::text_document::commands::check_segmented_external_change,
+            crate::text_document::commands::get_segmented_session_status,
             crate::file_system::install_sample_document,
             crate::file_system::stat_markdown_file,
             crate::config::commands::remember_recent_entry,

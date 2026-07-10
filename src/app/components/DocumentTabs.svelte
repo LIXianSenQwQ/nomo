@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, FileText, Plus, X } from '@lucide/svelte';
+  import { ChevronDown, FileJson2, FileText, FileType2, Plus, X } from '@lucide/svelte';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { motionIn, pulseOnChange, tabIndicator } from '../actions/motion';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
@@ -248,110 +248,150 @@
 <svelte:window on:click={handleWindowClick} />
 
 {#key interfaceLocale}
-<!-- 隐藏的测量区域：渲染所有标签以测量宽度 -->
-<div class="tab-measure-area" bind:this={measureArea}>
-  {#each tabs as tab (tab.id)}
-    <button type="button" class="doc-tab" class:preview={previewTabId === tab.id} title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}>
-      <FileText size={13} />
-      <span class="tab-title">{tab.fileName}</span>
-      {#if tab.dirty}
-        <span class="dirty-indicator"></span>
-      {/if}
-      <span class="close-tab-btn"><X size={12} /></span>
-    </button>
-  {/each}
-</div>
-
-<header class="topbar" aria-label={t.documentTabs()} data-interface-locale={interfaceLocale}>
-  <div class="tabs-container" bind:this={tabsContainer}
-    use:tabIndicator={{ activeTabId, visibleStart: visibleRange.start, visibleEnd: visibleRange.end }}
-  >
-    {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
+  <!-- 隐藏的测量区域：渲染所有标签以测量宽度 -->
+  <div class="tab-measure-area" bind:this={measureArea}>
+    {#each tabs as tab (tab.id)}
       <button
         type="button"
         class="doc-tab"
-        class:active={activeTabId === tab.id}
         class:preview={previewTabId === tab.id}
         title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
-        use:motionIn={{ kind: 'row', y: 5 }}
-        on:click={() => switchTab(tab.id)}
-        on:dblclick={() => {
-          if (previewTabId === tab.id) pinPreviewTab();
-        }}
-        on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
       >
-        <FileText size={13} />
+        {#if tab.documentKind === 'json'}
+          <FileJson2 size={13} />
+        {:else if tab.documentKind === 'text'}
+          <FileType2 size={13} />
+        {:else}
+          <FileText size={13} />
+        {/if}
         <span class="tab-title">{tab.fileName}</span>
         {#if tab.dirty}
-          <span
-            class="dirty-indicator"
-            title={t.unsavedChanges()}
-            use:motionIn={{ kind: 'micro', y: 0, scale: 0.8 }}
-            use:pulseOnChange={tab.dirty}
-          ></span>
+          <span class="dirty-indicator"></span>
         {/if}
-        <span
-          class="close-tab-btn"
-          role="button"
-          tabindex="0"
-          title={t.closeTab()}
-          on:click|stopPropagation={(event) => closeTab(tab.id, event)}
-          on:keydown|stopPropagation={(event) => {
-            if (event.key === 'Enter') closeTab(tab.id, event);
-          }}
-        >
-          <X size={12} />
-        </span>
+        <span class="close-tab-btn"><X size={12} /></span>
       </button>
     {/each}
-    {#if overflowState}
-      <div class="tab-overflow-dropdown">
+  </div>
+
+  <header class="topbar" aria-label={t.documentTabs()} data-interface-locale={interfaceLocale}>
+    <div
+      class="tabs-container"
+      bind:this={tabsContainer}
+      use:tabIndicator={{
+        activeTabId,
+        visibleStart: visibleRange.start,
+        visibleEnd: visibleRange.end,
+      }}
+    >
+      {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
         <button
           type="button"
-          class="tab-dropdown-btn"
-          title={t.showHiddenTabs()}
-          aria-label={t.showHiddenTabs()}
-          bind:this={dropdownBtnEl}
-          on:click={toggleDropdown}
+          class="doc-tab"
+          class:active={activeTabId === tab.id}
+          class:preview={previewTabId === tab.id}
+          title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
+          use:motionIn={{ kind: 'row', y: 5 }}
+          on:click={() => switchTab(tab.id)}
+          on:dblclick={() => {
+            if (previewTabId === tab.id) pinPreviewTab();
+          }}
+          on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
         >
-          <ChevronDown size={14} />
+          {#if tab.documentKind === 'json'}
+            <FileJson2 size={13} />
+          {:else if tab.documentKind === 'text'}
+            <FileType2 size={13} />
+          {:else}
+            <FileText size={13} />
+          {/if}
+          <span class="tab-title">{tab.fileName}</span>
+          {#if tab.dirty}
+            <span
+              class="dirty-indicator"
+              title={t.unsavedChanges()}
+              use:motionIn={{ kind: 'micro', y: 0, scale: 0.8 }}
+              use:pulseOnChange={tab.dirty}
+            ></span>
+          {/if}
+          <span
+            class="close-tab-btn"
+            role="button"
+            tabindex="0"
+            title={t.closeTab()}
+            on:click|stopPropagation={(event) => closeTab(tab.id, event)}
+            on:keydown|stopPropagation={(event) => {
+              if (event.key === 'Enter') closeTab(tab.id, event);
+            }}
+          >
+            <X size={12} />
+          </span>
         </button>
-      </div>
-    {/if}
-    {#if showAddButton}
-      <button type="button" class="tab-add" title={t.newFile()} aria-label={t.newFile()} on:click={createNewFile}>
-        <Plus size={16} />
-      </button>
-    {/if}
-  </div>
-</header>
+      {/each}
+      {#if overflowState}
+        <div class="tab-overflow-dropdown">
+          <button
+            type="button"
+            class="tab-dropdown-btn"
+            title={t.showHiddenTabs()}
+            aria-label={t.showHiddenTabs()}
+            bind:this={dropdownBtnEl}
+            on:click={toggleDropdown}
+          >
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      {/if}
+      {#if showAddButton}
+        <button
+          type="button"
+          class="tab-add"
+          title={t.newFile()}
+          aria-label={t.newFile()}
+          on:click={createNewFile}
+        >
+          <Plus size={16} />
+        </button>
+      {/if}
+    </div>
+  </header>
 
-<!-- Portal 下拉菜单：渲染到 body 避免被 overflow:hidden 裁剪 -->
-{#if showDropdown && hiddenTabs.length > 0}
-  <div class="tab-dropdown-menu tab-dropdown-menu-portal" style={dropdownMenuStyle} role="menu">
-    {#each hiddenTabs as tab (tab.id)}
-      <button
-        type="button"
-        class="tab-dropdown-item"
-        class:active={activeTabId === tab.id}
-        class:preview={previewTabId === tab.id}
-        role="menuitem"
-        title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
-        use:motionIn={{ kind: 'row', y: -3 }}
-        on:click={() => selectHiddenTab(tab.id)}
-        on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
-      >
-        <FileText size={13} />
-        <span class="tab-dropdown-item-name">{tab.fileName}</span>
-        {#if tab.dirty}
-          <span class="dirty-indicator" title={t.unsavedChanges()}></span>
-        {/if}
-      </button>
-    {/each}
-  </div>
-{/if}
+  <!-- Portal 下拉菜单：渲染到 body 避免被 overflow:hidden 裁剪 -->
+  {#if showDropdown && hiddenTabs.length > 0}
+    <div class="tab-dropdown-menu tab-dropdown-menu-portal" style={dropdownMenuStyle} role="menu">
+      {#each hiddenTabs as tab (tab.id)}
+        <button
+          type="button"
+          class="tab-dropdown-item"
+          class:active={activeTabId === tab.id}
+          class:preview={previewTabId === tab.id}
+          role="menuitem"
+          title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
+          use:motionIn={{ kind: 'row', y: -3 }}
+          on:click={() => selectHiddenTab(tab.id)}
+          on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
+        >
+          {#if tab.documentKind === 'json'}
+            <FileJson2 size={13} />
+          {:else if tab.documentKind === 'text'}
+            <FileType2 size={13} />
+          {:else}
+            <FileText size={13} />
+          {/if}
+          <span class="tab-dropdown-item-name">{tab.fileName}</span>
+          {#if tab.dirty}
+            <span class="dirty-indicator" title={t.unsavedChanges()}></span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 
-{#if tabContextMenuOpen}
-  <ContextMenu x={tabContextMenuX} y={tabContextMenuY} items={tabContextMenuItems} onClose={closeTabContextMenu} />
-{/if}
+  {#if tabContextMenuOpen}
+    <ContextMenu
+      x={tabContextMenuX}
+      y={tabContextMenuY}
+      items={tabContextMenuItems}
+      onClose={closeTabContextMenu}
+    />
+  {/if}
 {/key}

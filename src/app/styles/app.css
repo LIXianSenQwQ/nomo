@@ -5,6 +5,7 @@
 @import './editor-source.css';
 @import './editor-toc.css';
 @import './editor-outline.css';
+@import './editor-segmented.css';
 @import './app-responsive.css';
 
 @media (prefers-reduced-motion: reduce) {

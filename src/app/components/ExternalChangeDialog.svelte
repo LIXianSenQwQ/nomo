@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { AlertTriangle, Download, Upload, X } from '@lucide/svelte';
+  import { AlertTriangle, Download, Save, Upload, X } from '@lucide/svelte';
   import { motionIn } from '../actions/motion';
   import { t } from '../i18n';
   import type { ExternalFileChangeState } from '../types';
@@ -10,6 +10,7 @@
 
   export let onReload: () => void;
   export let onOverwrite: () => void;
+  export let onSaveAs: () => void;
   export let onDismiss: () => void;
 
   function handleKeydown(event: KeyboardEvent) {
@@ -50,6 +51,10 @@
           <Download size={15} />
           {t.reloadExternalShort()}
         </button>
+        <button type="button" class="btn save-as" on:click={onSaveAs}>
+          <Save size={15} />
+          {t.saveAs()}
+        </button>
         <button type="button" class="btn overwrite" on:click={onOverwrite}>
           <Upload size={15} />
           {t.overwriteExternalShort()}
@@ -76,7 +81,7 @@
   }
 
   .dialog {
-    width: 460px;
+    width: 560px;
     max-width: calc(100% - 32px);
     padding: 18px;
     color: var(--md-editor-fg);
@@ -121,7 +126,7 @@
 
   .actions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-top: 18px;
   }
@@ -172,6 +177,10 @@
     background: color-mix(in srgb, var(--md-editor-accent) 16%, var(--md-editor-surface));
   }
 
+  .btn.save-as {
+    color: var(--md-editor-accent-strong, var(--md-editor-accent));
+  }
+
   .btn.overwrite {
     background: var(--md-editor-danger);
     border-color: var(--md-editor-danger);
@@ -187,7 +196,13 @@
     outline-offset: 2px;
   }
 
-  @media (max-width: 500px) {
+  @media (max-width: 650px) {
+    .actions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 400px) {
     .actions {
       grid-template-columns: minmax(0, 1fr);
     }

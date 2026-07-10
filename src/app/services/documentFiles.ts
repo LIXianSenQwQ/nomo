@@ -33,8 +33,13 @@ export interface FolderIndexFinished {
   scanned_files: number;
 }
 
+export function findDroppedDocumentPath(paths: string[]) {
+  return paths.find((path) => /\.(md|markdown|txt|json)$/i.test(path)) ?? null;
+}
+
+/** @deprecated 使用 findDroppedDocumentPath，旧名称只保留给现有 Markdown 调用方迁移。 */
 export function findDroppedMarkdownPath(paths: string[]) {
-  return paths.find((path) => /\.(md|markdown|txt)$/i.test(path)) ?? null;
+  return findDroppedDocumentPath(paths);
 }
 
 export async function openMarkdownFromDialog() {

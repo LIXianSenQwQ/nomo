@@ -15,6 +15,8 @@
     deleteWorkspaceDraft,
     rememberRecentEntry,
     checkPathsExist,
+    statMarkdownFile,
+    pickDocumentPathWithDialog,
     deleteFile,
     revealInExplorer,
     type RecentEntry,
@@ -48,6 +50,7 @@
     type FrontMatterBlock,
   } from '../lib/markdown/frontMatter';
   import AppShell from './components/AppShell.svelte';
+  import type SegmentedTextEditorWorkspaceComponent from './components/SegmentedTextEditorWorkspace.svelte';
   import FolderOpenDialog from './components/FolderOpenDialog.svelte';
   import {
     createEmptyExternalFileChange,
@@ -56,6 +59,7 @@
     type FileTreeNode,
     type PersistedWorkspaceState,
     type PersistedWorkspaceTab,
+    type MarkdownTabState,
     type Tab,
   } from './types';
   import {
@@ -86,17 +90,27 @@
   import { createDesktopImageLoader } from './services/desktopImageLoader';
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
-  import { createBlankTab, writeActiveTabState } from './services/tabs';
+  import {
+    createBlankTab,
+    createTabForDocument,
+    getDocumentKindFromPath,
+    isMarkdownTab,
+    isReusableUntitledTab,
+    isSegmentedTextTab,
+    writeActiveTabState,
+  } from './services/tabs';
   import {
     createPersistedWorkspaceState,
     createRuntimeTabFromPersisted,
     migrateWorkspaceSetting,
+    partitionPersistedWorkspaceTabsForRestore,
     persistWorkspaceDrafts,
     type WorkspaceDraftPersistenceCache,
   } from './services/workspacePersistence';
   import {
     listenFolderIndexBatches,
     listenFolderIndexFinished,
+    findDroppedDocumentPath,
     readMarkdownFromPath,
     rememberNativeFolder,
     pickFolderPath,
@@ -187,8 +201,21 @@
     type ImageHandlingSettings,
   } from '../lib/services/render';
   import { disableLogger, enableLogger, logInfo } from '../lib/services/logger';
+  import { createTauriSegmentedDocumentPort } from '../lib/text-editor/tauriPort';
+  import type {
+    OpenSegmentedDocumentResult,
+    SegmentedExternalChangeResult,
+  } from '../lib/text-editor/protocol';
+  import type { SegmentedEditorMetadata } from '../lib/text-editor/SegmentedTextEditorCore';
+  import { segmentedSessionRegistry } from '../lib/text-editor/sessionRegistry';
+  import { openDocumentByPath } from './services/documentRouter';
+  import { flushSegmentedDocumentBeforeTransition } from './services/segmentedDocumentLifecycle';
+  import { reconcileSegmentedExternalChangeCheck } from './services/segmentedExternalChangeReconciliation';
+  import { reconcileSegmentedSaveState } from './services/segmentedSaveReconciliation';
+  import { getOpenDocumentRenameBlock } from './services/documentRenameGuard';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
+  const segmentedDocumentPort = createTauriSegmentedDocumentPort();
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
   type CloseWindowAction = Exclude<CloseWindowBehavior, 'ask-every-time'>;
   type CloseWindowChoiceResult = { behavior: CloseWindowAction; remember: boolean } | null;
@@ -258,6 +285,7 @@
     sourceTextarea: HTMLTextAreaElement,
     semanticPane: HTMLElement,
     sourcePane: HTMLElement;
+  let segmentedWorkspace: SegmentedTextEditorWorkspaceComponent | null = null;
   let mountedEditorHost: HTMLDivElement | null = null;
   let pendingSourceScrollTop: number | null = null;
   let refreshEditorViewportLayout: () => void = () => undefined;
@@ -288,6 +316,14 @@
   let linkOpeningToken = 0;
   let toastMessage = '';
   let toastTimer: number | null = null;
+
+  /** 后台/非活动标签没有自己的状态栏，错误必须同时进入全局 toast 才对用户可见。 */
+  function showVisibleError(error: unknown, fallback: string) {
+    const message = error instanceof Error ? error.message : fallback;
+    statusMessage = message;
+    showToast(message, 3500);
+  }
+
   let pendingInlineMarks: InlinePendingMarks = createEmptyPendingInlineMarks();
   let frontMatterEditing = false;
   let frontMatterFocusRequest = 0;
@@ -326,6 +362,11 @@
   // 外部文件变更弹框状态
   let externalChangeDialogOpen = false;
   let externalChangeDialogState: ExternalFileChangeState | null = null;
+  let externalChangeDialogTargetTabId: string | null = null;
+  let externalChangeDialogTargetSessionId: string | null = null;
+  let externalChangeDialogToken: string | null = null;
+  // “忽略”只对当前会话中的同一次磁盘身份生效；新身份仍必须重新提示。
+  const ignoredSegmentedExternalChanges = new Map<string, string>();
 
   let closeWindowChoiceDialogOpen = false;
   let rememberCloseWindowChoice = true;
@@ -363,6 +404,13 @@
   let tabs: Tab[] = [];
   let activeTabId = '';
   let previewTabId: string | null = null;
+  let previewOpenGeneration = 0;
+
+  /** 任何离开当前导航上下文的动作都必须让迟到的预览请求自行丢弃。 */
+  function invalidatePendingPreviewOpen() {
+    previewOpenGeneration += 1;
+    return previewOpenGeneration;
+  }
 
   type AppBootState = 'booting' | 'restoring-workspace' | 'opening-file' | 'ready';
   let appBootState: AppBootState = 'booting';
@@ -385,9 +433,18 @@
   const WORKSPACE_DRAFT_PERSIST_DEBOUNCE_MS = 2000;
   const workspaceDraftPersistenceCache: WorkspaceDraftPersistenceCache = new Map();
   const lastPersistedWorkspaceJsonByKey = new Map<string, string>();
+  let workspaceRestoreGeneration = 0;
+  let workspaceRestorePreparation: Promise<void> | null = null;
+  let deferredWorkspaceRestore: Promise<void> | null = null;
+  let persistAfterWorkspaceRestore = false;
 
   function persistWorkspaceState() {
     if (!desktopEnabled || !windowLabel) return;
+    // 延迟会话尚未加入 tabs 时不得写回残缺工作区；完成后会统一触发一次持久化。
+    if (workspaceRestorePreparation || deferredWorkspaceRestore) {
+      persistAfterWorkspaceRestore = true;
+      return;
+    }
 
     if (_persistTimer !== null) {
       window.clearTimeout(_persistTimer);
@@ -401,6 +458,8 @@
 
   /** 立即刷新待持久化的工作区状态（用于关闭窗口/退出应用等场景） */
   async function flushPersistWorkspaceState() {
+    await workspaceRestorePreparation;
+    await deferredWorkspaceRestore;
     syncActiveTabMarkdownFromEditor();
     if (_persistTimer !== null) {
       window.clearTimeout(_persistTimer);
@@ -413,6 +472,8 @@
 
   async function persistWorkspaceStateNow(options?: { ensureDraftIds?: boolean }) {
     if (!desktopEnabled || !windowLabel) return;
+    await workspaceRestorePreparation;
+    await deferredWorkspaceRestore;
     syncActiveTabMarkdownFromEditor();
     if (options?.ensureDraftIds !== false) {
       await persistWorkspaceDraftsNow('missing-only');
@@ -552,25 +613,178 @@
     }
     if (state.tabs.length === 0) return;
 
+    const generation = ++workspaceRestoreGeneration;
+    let resolveRestore: () => void = () => undefined;
+    // 门禁必须在首个磁盘读取前建立，避免 500ms 持久化定时器写回半恢复状态。
+    const restoreBarrier = new Promise<void>((resolve) => {
+      resolveRestore = resolve;
+    });
+    deferredWorkspaceRestore = restoreBarrier;
+    let deferredRestoreStarted = false;
+    const { immediateTabs, deferredTabs } = partitionPersistedWorkspaceTabsForRestore(
+      state.tabs,
+      state.activeTabId,
+    );
     const restoredTabs: Tab[] = [];
-    for (const persistedTab of state.tabs) {
-      const restoredTab = await restorePersistedWorkspaceTab(persistedTab);
-      if (restoredTab) {
-        restoredTabs.push(restoredTab);
+    try {
+      for (const persistedTab of immediateTabs) {
+        const restoredTab = await restorePersistedWorkspaceTab(persistedTab);
+        if (restoredTab) {
+          restoredTabs.push(restoredTab);
+        }
+        if (generation !== workspaceRestoreGeneration) {
+          await discardRestoredSegmentedTabs(restoredTabs);
+          return;
+        }
+      }
+
+      if (restoredTabs.length === 0 && deferredTabs.length > 0) {
+        const fallback = deferredTabs.shift()!;
+        const restoredFallback = await restorePersistedWorkspaceTab(fallback);
+        if (restoredFallback) restoredTabs.push(restoredFallback);
+      }
+      if (generation !== workspaceRestoreGeneration || restoredTabs.length === 0) {
+        await discardRestoredSegmentedTabs(restoredTabs);
+        return;
+      }
+      const order = new Map(state.tabs.map((tab, index) => [tab.id, index]));
+      restoredTabs.sort((left, right) => order.get(left.id)! - order.get(right.id)!);
+      tabs = restoredTabs;
+      activeTabId = tabs.some((tab) => tab.id === state.activeTabId)
+        ? state.activeTabId
+        : tabs[0].id;
+      const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
+      activeTabId = activeTab.id;
+      loadTabState(activeTab);
+
+      if (deferredTabs.length > 0) {
+        deferredRestoreStarted = true;
+        void restoreDeferredWorkspaceTabs(deferredTabs, order, generation)
+          .catch((error) => {
+            if (generation === workspaceRestoreGeneration) {
+              statusMessage = error instanceof Error ? error.message : t.openRecentFailed();
+            }
+          })
+          .finally(() => {
+            finishWorkspaceRestore(restoreBarrier, resolveRestore, generation);
+          });
+      }
+    } finally {
+      if (!deferredRestoreStarted) {
+        finishWorkspaceRestore(restoreBarrier, resolveRestore, generation);
       }
     }
+  }
 
-    if (restoredTabs.length === 0) return;
-    tabs = restoredTabs;
-    activeTabId = tabs.some((tab) => tab.id === state.activeTabId) ? state.activeTabId : tabs[0].id;
-    const activeTab = tabs.find((tab) => tab.id === activeTabId) || tabs[0];
-    activeTabId = activeTab.id;
-    loadTabState(activeTab);
+  function finishWorkspaceRestore(
+    restoreBarrier: Promise<void>,
+    resolveRestore: () => void,
+    generation: number,
+  ) {
+    resolveRestore();
+    if (deferredWorkspaceRestore !== restoreBarrier) return;
+    deferredWorkspaceRestore = null;
+    if (generation === workspaceRestoreGeneration || persistAfterWorkspaceRestore) {
+      persistAfterWorkspaceRestore = false;
+      // 即使没有 deferred tab，也要以完整恢复结果纠正恢复期间被请求的持久化。
+      persistWorkspaceState();
+    }
+  }
+
+  async function discardRestoredSegmentedTabs(restoredTabs: Array<Tab | null>) {
+    for (const restoredTab of restoredTabs) {
+      if (!isSegmentedTextTab(restoredTab)) continue;
+      // 导航取消不等于用户放弃恢复内容；关闭会话但保留 durable recovery。
+      await segmentedDocumentPort.closeSession(restoredTab.sessionId, false).catch(() => undefined);
+      segmentedSessionRegistry.delete(restoredTab.sessionId);
+    }
+  }
+
+  async function cancelDeferredWorkspaceRestore() {
+    await workspaceRestorePreparation;
+    workspaceRestoreGeneration += 1;
+    const pendingRestore = deferredWorkspaceRestore;
+    if (pendingRestore) {
+      await pendingRestore;
+    }
+  }
+
+  function beginWorkspaceRestorePreparation() {
+    let resolvePreparation: () => void = () => undefined;
+    const preparation = new Promise<void>((resolve) => {
+      resolvePreparation = resolve;
+    });
+    workspaceRestorePreparation = preparation;
+    return () => {
+      if (workspaceRestorePreparation === preparation) {
+        workspaceRestorePreparation = null;
+      }
+      resolvePreparation();
+      if (
+        !workspaceRestorePreparation &&
+        !deferredWorkspaceRestore &&
+        persistAfterWorkspaceRestore
+      ) {
+        persistAfterWorkspaceRestore = false;
+        persistWorkspaceState();
+      }
+    };
+  }
+
+  async function restoreDeferredWorkspaceTabs(
+    persistedTabs: PersistedWorkspaceTab[],
+    order: Map<string, number>,
+    generation: number,
+  ) {
+    for (const persistedTab of persistedTabs) {
+      const restoredTab = await restorePersistedWorkspaceTab(persistedTab);
+      if (generation !== workspaceRestoreGeneration) {
+        await discardRestoredSegmentedTabs([restoredTab]);
+        return;
+      }
+      if (!restoredTab || tabs.some((tab) => tab.id === restoredTab.id)) continue;
+      tabs = [...tabs, restoredTab].sort(
+        (left, right) =>
+          (order.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+          (order.get(right.id) ?? Number.MAX_SAFE_INTEGER),
+      );
+      // 每次让出事件循环，确保活动文档可先完成挂载和首屏绘制。
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    }
   }
 
   async function restorePersistedWorkspaceTab(
     persistedTab: PersistedWorkspaceTab,
   ): Promise<Tab | null> {
+    if (persistedTab.documentKind !== 'markdown') {
+      if (!desktopEnabled || !persistedTab.nativePath) {
+        return null;
+      }
+      try {
+        const opened = await segmentedDocumentPort.open(persistedTab.nativePath);
+        if (opened.documentKind !== persistedTab.documentKind) {
+          await segmentedDocumentPort.closeSession(opened.sessionId, false).catch(() => undefined);
+          statusMessage = t.openRecentFailed();
+          return null;
+        }
+        segmentedSessionRegistry.register(opened);
+        if (opened.recoveryConflictPath) {
+          statusMessage = t.segmentedRecoveryConflict({ path: opened.recoveryConflictPath });
+        }
+        return createRuntimeTabFromPersisted(persistedTab, {
+          sessionId: opened.sessionId,
+          revision: opened.revision,
+          persistedRevision: opened.persistedRevision,
+          indexProgress: opened.firstWindow.indexProgress,
+          readonly: opened.readonly,
+          recoveryConflictPath: opened.recoveryConflictPath ?? null,
+        });
+      } catch (error) {
+        showVisibleError(error, t.openRecentFailed());
+        return null;
+      }
+    }
+
     const draft = persistedTab.draftId
       ? await readWorkspaceDraft(persistedTab.draftId).catch(() => null)
       : null;
@@ -735,6 +949,11 @@
 
   function syncActiveTabMarkdownFromEditor() {
     if (!activeTabId) return markdown;
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isMarkdownTab(activeTab)) {
+      // 分段标签的正文只存在于 Rust session 与局部 CodeMirror window，禁止触发 Markdown flush。
+      return markdown;
+    }
     const currentMarkdown = editor.flushMarkdown();
     if (currentMarkdown !== markdown) {
       markdown = currentMarkdown;
@@ -745,6 +964,17 @@
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
     if (!activeTabId) return;
+
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (isSegmentedTextTab(activeTab)) {
+      activeTab.dirty = dirty;
+      activeTab.lastKnownModifiedAt = lastKnownModifiedAt;
+      activeTab.diskReadonly = diskReadonly;
+      activeTab.externalFileChange = externalFileChange;
+      tabs = [...tabs];
+      persistWorkspaceState();
+      return;
+    }
 
     const currentMarkdown = syncActiveTabMarkdownFromEditor();
     saveCurrentReadingPositionToMemoryOnly();
@@ -811,19 +1041,35 @@
   function loadTabState(tab: Tab) {
     isSwitchingTab = true;
     try {
-      markdown = tab.markdown;
-      savedMarkdown = tab.savedMarkdown ?? tab.markdown;
       dirty = tab.dirty;
-      version = tab.version;
       fileName = tab.fileName;
       filePath = tab.filePath;
       nativePath = tab.nativePath;
-      largeDocumentMode = tab.largeDocumentMode;
-      readonlyDocumentMode = tab.readonlyDocumentMode;
       diskReadonly = tab.diskReadonly;
       externalFileChange = normalizeExternalFileChange(tab.externalFileChange);
       tab.externalFileChange = externalFileChange;
       lastKnownModifiedAt = tab.lastKnownModifiedAt;
+
+      if (isSegmentedTextTab(tab)) {
+        // 只重置 Markdown 派生 UI，不读取或分析 TXT/JSON 正文；实际窗口由分段工作区按需加载。
+        markdown = '';
+        savedMarkdown = '';
+        version = 0;
+        largeDocumentMode = false;
+        readonlyDocumentMode = tab.diskReadonly;
+        outline = [];
+        activeOutlineId = '';
+        if (tab.recoveryConflictPath) {
+          statusMessage = t.segmentedRecoveryConflict({ path: tab.recoveryConflictPath });
+        }
+        return;
+      }
+
+      markdown = tab.markdown;
+      savedMarkdown = tab.savedMarkdown ?? tab.markdown;
+      version = tab.version;
+      largeDocumentMode = tab.largeDocumentMode;
+      readonlyDocumentMode = tab.readonlyDocumentMode;
 
       if (editor) {
         const nextMode = largeDocumentMode ? 'source' : mode;
@@ -868,20 +1114,42 @@
   }
 
   // 切换活动标签页
-  function switchTab(tabId: string) {
+  let tabSwitchInProgress = false;
+
+  async function switchTab(tabId: string) {
+    invalidatePendingPreviewOpen();
     if (!tabId || activeTabId === tabId) return;
-    saveActiveTabState();
-    void flushReadingPositions();
-    const targetTab = tabs.find((t) => t.id === tabId);
-    if (targetTab) {
-      activeTabId = tabId;
-      persistWorkspaceState();
-      loadTabState(targetTab);
-      updateWindowTitle();
-      // 切换后若标签关联了本地文件，展开资源管理器中对应的文件夹路径
-      if (targetTab.nativePath && currentFolderPath) {
-        expandAncestors(targetTab.nativePath, currentFolderPath);
+    if (tabSwitchInProgress) return;
+    // 冲突对话框只属于发起检查的活动标签，切换后不能让操作落到另一文档。
+    closeExternalChangeDialog();
+    tabSwitchInProgress = true;
+    try {
+      const currentTab = tabs.find((tab) => tab.id === activeTabId);
+      // 切换前必须把当前 CodeMirror 增量和恢复日志都落到 Rust，不能让隐藏组件持有未提交正文。
+      await flushSegmentedDocumentBeforeTransition(
+        currentTab,
+        segmentedWorkspace,
+        segmentedDocumentPort,
+      );
+      saveActiveTabState();
+      if (isMarkdownTab(currentTab)) {
+        void flushReadingPositions();
       }
+      const targetTab = tabs.find((tab) => tab.id === tabId);
+      if (targetTab) {
+        activeTabId = tabId;
+        persistWorkspaceState();
+        loadTabState(targetTab);
+        updateWindowTitle();
+        // 切换后若标签关联了本地文件，展开资源管理器中对应的文件夹路径
+        if (targetTab.nativePath && currentFolderPath) {
+          expandAncestors(targetTab.nativePath, currentFolderPath);
+        }
+      }
+    } catch (error) {
+      showVisibleError(error, t.saveFileFailed());
+    } finally {
+      tabSwitchInProgress = false;
     }
   }
 
@@ -1040,18 +1308,61 @@
 
   // 步骤：关闭全部标签页前统一确认未保存内容，确认后不自动创建空白标签。
   async function closeAllTabsWithConfirmation(options?: { skipPersist?: boolean }) {
+    invalidatePendingPreviewOpen();
     const dirtyTabs = getDirtyTabs(tabs);
+    let discardChanges = false;
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
       const ok = await confirmAction(t.unsavedChangesCloseTabs({ names }));
       if (ok === false) return false;
+      discardChanges = true;
     }
 
+    invalidatePendingPreviewOpen();
+    // 先让在途恢复 open 收口并清理，再取最终 tabs 快照关闭会话。
+    await cancelDeferredWorkspaceRestore();
+    await closeAllSegmentedSessions(discardChanges);
     clearAllTabsWithoutCreatingBlank(options);
     return true;
   }
 
+  async function flushAllSegmentedSessions() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (isSegmentedTextTab(activeTab)) {
+      await segmentedWorkspace?.flushPendingEdits();
+    }
+    for (const tab of tabs) {
+      if (isSegmentedTextTab(tab)) {
+        await segmentedDocumentPort.flushJournal(tab.sessionId, tab.revision);
+      }
+    }
+  }
+
+  async function closeAllSegmentedSessions(discardDirty: boolean) {
+    await closeSegmentedSessions(tabs, discardDirty);
+  }
+
+  async function closeSegmentedSessions(candidateTabs: Tab[], discardDirty: boolean) {
+    const activeCandidate = candidateTabs.find((tab) => tab.id === activeTabId);
+    if (isSegmentedTextTab(activeCandidate)) {
+      await segmentedWorkspace?.flushPendingEdits();
+    }
+    for (const tab of candidateTabs) {
+      if (!isSegmentedTextTab(tab)) continue;
+      await segmentedDocumentPort.flushJournal(tab.sessionId, tab.revision);
+      await segmentedDocumentPort.closeSession(tab.sessionId, discardDirty && tab.dirty);
+      if (discardDirty && tab.dirty) {
+        tab.dirty = false;
+        tab.revision = tab.persistedRevision;
+      }
+      segmentedSessionRegistry.delete(tab.sessionId);
+    }
+  }
+
   function clearAllTabsWithoutCreatingBlank(options?: { skipPersist?: boolean }) {
+    invalidatePendingPreviewOpen();
+    closeExternalChangeDialog();
+    workspaceRestoreGeneration += 1;
     isSwitchingTab = true;
     try {
       tabs = [];
@@ -1094,11 +1405,16 @@
         return;
       }
     }
-    currentFolderPath = folderPath;
-    await loadFolder(folderPath);
-    await restoreFolderWorkspaceState(folderPath);
-    await rememberNativeFolder(folderPath);
-    await refreshRecentFiles();
+    const finishRestorePreparation = beginWorkspaceRestorePreparation();
+    try {
+      currentFolderPath = folderPath;
+      await loadFolder(folderPath);
+      await restoreFolderWorkspaceState(folderPath);
+      await rememberNativeFolder(folderPath);
+      await refreshRecentFiles();
+    } finally {
+      finishRestorePreparation();
+    }
   }
 
   async function openFolderInNewWindow(folderPath: string) {
@@ -1207,6 +1523,7 @@
     }
 
     // 步骤：关闭窗口前检查未保存的脏标签，弹出确认对话框（三按钮模式，与关闭标签页 UI 一致）
+    let discardDirtySegmented = false;
     if (closeBehavior === 'close-window') {
       const dirtyTabs = getDirtyTabs(tabs);
       if (dirtyTabs.length > 0) {
@@ -1220,12 +1537,23 @@
         if (result === false) return;
         // 用户选择保存：保存当前活动文件后继续关闭
         if (result === 'save') {
-          await saveMarkdownFile(false);
+          if (!(await saveMarkdownFile(false))) return;
+        } else {
+          discardDirtySegmented = true;
         }
       }
     }
 
-    // 关闭窗口前立即持久化工作区状态和阅读位置
+    // 关闭窗口前先收口延迟恢复；否则在途 open 会在会话快照之后泄漏。
+    if (closeBehavior === 'close-window') {
+      invalidatePendingPreviewOpen();
+      await cancelDeferredWorkspaceRestore();
+      await closeAllSegmentedSessions(discardDirtySegmented);
+    } else {
+      await workspaceRestorePreparation;
+      await deferredWorkspaceRestore;
+      await flushAllSegmentedSessions();
+    }
     await flushPersistWorkspaceState();
     await flushCurrentReadingPosition();
     const shouldHideToTray = closeBehavior === 'close-to-tray';
@@ -1284,23 +1612,106 @@
     resolver?.(null);
   }
 
-  // 外部文件变更弹框 —— 重新载入外部版本
-  function handleExternalChangeReload() {
+  function openExternalChangeDialog(
+    change: ExternalFileChangeState,
+    changeToken: string | null = null,
+  ) {
+    const targetTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!targetTab) return;
+    externalChangeDialogTargetTabId = targetTab.id;
+    externalChangeDialogTargetSessionId = isSegmentedTextTab(targetTab)
+      ? targetTab.sessionId
+      : null;
+    externalChangeDialogToken = changeToken;
+    externalChangeDialogState = change;
+    externalChangeDialogOpen = true;
+  }
+
+  function closeExternalChangeDialog() {
     externalChangeDialogOpen = false;
     externalChangeDialogState = null;
-    reloadExternalFile().catch(() => undefined);
+    externalChangeDialogTargetTabId = null;
+    externalChangeDialogTargetSessionId = null;
+    externalChangeDialogToken = null;
+  }
+
+  function isExternalChangeDialogTargetActive(tabId: string, sessionId: string | null) {
+    if (activeTabId !== tabId) return false;
+    const targetTab = tabs.find((tab) => tab.id === tabId);
+    if (!targetTab) return false;
+    return (isSegmentedTextTab(targetTab) ? targetTab.sessionId : null) === sessionId;
+  }
+
+  function getValidExternalChangeDialogTarget() {
+    const change = externalChangeDialogState;
+    const tabId = externalChangeDialogTargetTabId;
+    const sessionId = externalChangeDialogTargetSessionId;
+    const changeToken = externalChangeDialogToken;
+    if (!change || !tabId || !isExternalChangeDialogTargetActive(tabId, sessionId)) {
+      closeExternalChangeDialog();
+      return null;
+    }
+    return { change, tabId, sessionId, changeToken };
+  }
+
+  // 外部文件变更弹框 —— 重新载入外部版本
+  async function handleExternalChangeReload() {
+    const target = getValidExternalChangeDialogTarget();
+    if (!target) return;
+    closeExternalChangeDialog();
+    try {
+      await reloadExternalFile();
+    } catch (error) {
+      statusMessage = error instanceof Error ? error.message : t.openFileFailed();
+      if (isExternalChangeDialogTargetActive(target.tabId, target.sessionId)) {
+        openExternalChangeDialog(target.change, target.changeToken);
+      }
+    }
   }
 
   // 外部文件变更弹框 —— 覆盖外部版本
   function handleExternalChangeOverwrite() {
-    externalChangeDialogOpen = false;
-    externalChangeDialogState = null;
+    const target = getValidExternalChangeDialogTarget();
+    if (!target) return;
+    closeExternalChangeDialog();
     overwriteExternalFile().catch(() => undefined);
+  }
+
+  // 外部版本冲突时另存为当前冻结 revision；取消文件对话框后恢复冲突选择。
+  async function handleExternalChangeSaveAs() {
+    const target = getValidExternalChangeDialogTarget();
+    if (!target) return;
+    closeExternalChangeDialog();
+    if (await saveMarkdownFile(true)) {
+      return;
+    }
+    if (isExternalChangeDialogTargetActive(target.tabId, target.sessionId)) {
+      openExternalChangeDialog(target.change, target.changeToken);
+    }
   }
 
   // 外部文件变更弹框 —— 忽略（保留当前内容，关闭弹框）
   function handleExternalChangeDismiss() {
-    dismissExternalChange(externalChangeDialogState);
+    const target = getValidExternalChangeDialogTarget();
+    if (!target) return;
+    if (target.sessionId && target.changeToken) {
+      ignoreSegmentedExternalChange(target.sessionId, target.changeToken);
+      return;
+    }
+    dismissExternalChange(target.change);
+  }
+
+  function ignoreSegmentedExternalChange(
+    sessionId: string,
+    changeToken: string,
+    options?: { statusMessage?: string },
+  ) {
+    ignoredSegmentedExternalChanges.set(sessionId, changeToken);
+    // 保留 tab 上的冲突状态以继续暂停自动保存；token 只抑制同一磁盘身份的重复提示。
+    closeExternalChangeDialog();
+    if (options?.statusMessage) {
+      statusMessage = options.statusMessage;
+    }
   }
 
   function dismissExternalChange(
@@ -1312,11 +1723,16 @@
       lastKnownModifiedAt = change.modifiedAt;
     }
     setExternalFileChangeState(createEmptyExternalFileChange());
-    externalChangeDialogOpen = false;
-    externalChangeDialogState = null;
+    closeExternalChangeDialog();
     if (options?.statusMessage) {
       statusMessage = options.statusMessage;
     }
+  }
+
+  function getSegmentedExternalChangeToken(result: SegmentedExternalChangeResult) {
+    if (result.type === 'none') return null;
+    // 兼容旧后端；新后端使用完整文件身份生成 token，避免秒级 mtime 碰撞。
+    return result.changeToken || `${result.type}:${result.modifiedAt}`;
   }
 
   function setExternalFileChangeState(value: ExternalFileChangeState) {
@@ -1330,23 +1746,35 @@
     }
   }
 
-  function tryHandleExternalFileChangeByPreference(change: ExternalFileChangeState) {
-    if (change.type !== 'modified') {
+  function tryHandleExternalFileChangeByPreference(
+    change: ExternalFileChangeState,
+    segmentedIgnoreTarget?: { sessionId: string; changeToken: string },
+  ) {
+    // 有本地补丁时任何自动 reload/overwrite 都可能丢数据，必须回到显式冲突选择。
+    if (change.type !== 'modified' || change.dirtyAtDetection) {
       return false;
     }
 
     switch (externalFileChangeBehavior as ExternalFileChangeBehavior) {
       case 'reload-external':
-        externalChangeDialogOpen = false;
-        externalChangeDialogState = null;
-        reloadExternalFile().catch(() => undefined);
+        closeExternalChangeDialog();
+        reloadExternalFile().catch((error) => {
+          statusMessage = error instanceof Error ? error.message : t.openFileFailed();
+        });
         return true;
       case 'ignore':
-        dismissExternalChange(change, { statusMessage: t.externalChangeKeptCurrent() });
+        if (segmentedIgnoreTarget) {
+          ignoreSegmentedExternalChange(
+            segmentedIgnoreTarget.sessionId,
+            segmentedIgnoreTarget.changeToken,
+            { statusMessage: t.externalChangeKeptCurrent() },
+          );
+        } else {
+          dismissExternalChange(change, { statusMessage: t.externalChangeKeptCurrent() });
+        }
         return true;
       case 'overwrite-external':
-        externalChangeDialogOpen = false;
-        externalChangeDialogState = null;
+        closeExternalChangeDialog();
         overwriteExternalFile().catch(() => undefined);
         return true;
     }
@@ -1356,12 +1784,17 @@
 
   async function requestExitApp() {
     const dirtyTabs = getDirtyTabs(tabs);
+    let discardDirtySegmented = false;
     if (dirtyTabs.length > 0) {
       const names = dirtyTabs.map((t) => t.fileName).join('、');
       const ok = await confirmAction(t.unsavedChangesExitApp({ names }));
       if (ok === false) return;
+      discardDirtySegmented = true;
     }
-    // 退出应用前立即持久化工作区状态和阅读位置
+    // 退出与关闭窗口共享相同的恢复收口边界，确保没有迟到 session 留在后端。
+    invalidatePendingPreviewOpen();
+    await cancelDeferredWorkspaceRestore();
+    await closeAllSegmentedSessions(discardDirtySegmented);
     await flushPersistWorkspaceState();
     await flushCurrentReadingPosition();
     await exitDesktopApp(desktopEnabled);
@@ -1384,6 +1817,9 @@
   }
 
   function setMode(nextMode: EditorMode) {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      return;
+    }
     const previousMode = mode;
     const anchor = getCurrentReadingAnchor(previousMode);
     saveCurrentReadingPositionToMemoryOnly(previousMode, anchor);
@@ -1439,7 +1875,10 @@
     openLinkPicker: () => openLinkPicker(),
     openSearchPanel: (replaceVisible) => openSearchPanel(replaceVisible),
     closeSearchPanel: () => closeSearchPanel(),
-    getSearchState: () => ({ open: searchPanelOpen, replaceVisible: searchReplaceVisible }),
+    getSearchState: () =>
+      isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))
+        ? (segmentedWorkspace?.getSearchState() ?? { open: false, replaceVisible: false })
+        : { open: searchPanelOpen, replaceVisible: searchReplaceVisible },
     openSettings: () => openSettings(),
     editFrontMatter: () => editFrontMatter(),
     showUnavailableFeature: (featureName) => showUnavailableFeature(featureName),
@@ -1574,6 +2013,10 @@
   });
 
   function openSearchPanel(replaceVisible = false) {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      segmentedWorkspace?.openSearch(replaceVisible);
+      return;
+    }
     if (!hasOpenDocument()) return;
     searchPanelOpen = true;
     searchReplaceVisible = replaceVisible;
@@ -1583,6 +2026,10 @@
   }
 
   function closeSearchPanel() {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      segmentedWorkspace?.closeSearch();
+      return;
+    }
     searchPanelOpen = false;
     clearSearchDebounceTimer();
     refreshSearchMatches({ preserveActive: false, selectActive: false });
@@ -1839,23 +2286,67 @@
   // 打开预览标签页（文件树单击）
   async function openPreviewFile(path: string) {
     if (!desktopEnabled) return;
+    const requestGeneration = invalidatePendingPreviewOpen();
     if (!(await ensureExplorerPathExists(path, t.fileMissing()))) {
       return;
     }
+    if (requestGeneration !== previewOpenGeneration) return;
 
     // 已有固定标签页打开此文件 → 切换到它
     const existingFixedTab = tabs.find(
       (t) => t.nativePath && sameNativePath(t.nativePath, path) && t.id !== previewTabId,
     );
     if (existingFixedTab) {
-      if (activeTabId !== previewTabId) {
-        saveActiveTabState();
-      }
-      switchTab(existingFixedTab.id);
+      await switchTab(existingFixedTab.id);
       return;
     }
 
+    // 打开新预览会卸载当前工作区，必须在任何磁盘读取或 session 替换前完成增量刷新。
+    try {
+      await flushSegmentedDocumentBeforeTransition(
+        tabs.find((tab) => tab.id === activeTabId),
+        segmentedWorkspace,
+        segmentedDocumentPort,
+      );
+      if (requestGeneration !== previewOpenGeneration) return;
+    } catch (error) {
+      showVisibleError(error, t.saveFileFailed());
+      return;
+    }
+
+    const documentKind = getDocumentKindFromPath(path);
+    if (documentKind === 'text' || documentKind === 'json') {
+      try {
+        const opened = await segmentedDocumentPort.open(path);
+        if (requestGeneration !== previewOpenGeneration) {
+          await segmentedDocumentPort.closeSession(opened.sessionId, false).catch(() => undefined);
+          return;
+        }
+        await applyOpenedSegmentedDocument(path, opened, {
+          preview: true,
+          previewGeneration: requestGeneration,
+        });
+        if (requestGeneration !== previewOpenGeneration) return;
+        if (opened.recoveryConflictPath) {
+          statusMessage = t.segmentedRecoveryConflict({ path: opened.recoveryConflictPath });
+        }
+      } catch (error) {
+        showVisibleError(error, t.previewOpenFailed());
+      }
+      return;
+    }
+
+    const segmentedPreview = previewTabId
+      ? tabs.find((tab) => tab.id === previewTabId && isSegmentedTextTab(tab))
+      : undefined;
+    if (isSegmentedTextTab(segmentedPreview)) {
+      await closeSegmentedTab(segmentedPreview);
+      if (requestGeneration !== previewOpenGeneration) return;
+      if (tabs.some((tab) => tab.id === segmentedPreview.id)) return;
+    }
+
     const { document, error } = await readMarkdownFromPath(path, t.previewOpenFailed());
+    if (requestGeneration !== previewOpenGeneration) return;
     if (error) {
       statusMessage = error;
       if (isMissingPathError(error)) {
@@ -1872,9 +2363,11 @@
     }
 
     // 复用现有预览标签页或按设置直接创建固定标签页
-    let targetTab: Tab;
+    let targetTab: MarkdownTabState;
     const existingPreview =
-      filePreviewEnabled && previewTabId ? tabs.find((t) => t.id === previewTabId) : undefined;
+      filePreviewEnabled && previewTabId
+        ? tabs.find((t): t is MarkdownTabState => t.id === previewTabId && isMarkdownTab(t))
+        : undefined;
 
     if (existingPreview) {
       targetTab = existingPreview;
@@ -1915,8 +2408,85 @@
     }
   }
 
+  async function applyOpenedSegmentedDocument(
+    path: string,
+    opened: OpenSegmentedDocumentResult,
+    options: { preview: boolean; previewGeneration?: number },
+  ) {
+    const fileName = path.replace(/\\/g, '/').split('/').pop() || path;
+    const status = await statMarkdownFile(path).catch(() => null);
+    if (
+      options.previewGeneration !== undefined &&
+      options.previewGeneration !== previewOpenGeneration
+    ) {
+      await segmentedDocumentPort.closeSession(opened.sessionId, false).catch(() => undefined);
+      return;
+    }
+    segmentedSessionRegistry.register(opened);
+
+    if (activeTabId !== previewTabId) {
+      saveActiveTabState();
+    }
+
+    const reusableBlank = tabs.find((tab) => tab.id === activeTabId && isReusableUntitledTab(tab));
+    const existingPreview =
+      options.preview && filePreviewEnabled && previewTabId
+        ? tabs.find((tab) => tab.id === previewTabId)
+        : !options.preview && previewTabId === activeTabId
+          ? tabs.find((tab) => tab.id === previewTabId && !tab.dirty)
+          : undefined;
+    const replacedTab = existingPreview ?? reusableBlank;
+
+    if (isSegmentedTextTab(existingPreview)) {
+      // 预览标签被另一文件复用前先关闭旧 session，避免后台索引和日志继续占用资源。
+      void segmentedDocumentPort.closeSession(existingPreview.sessionId).catch(() => undefined);
+      segmentedSessionRegistry.delete(existingPreview.sessionId);
+    }
+
+    const targetTab = createTabForDocument({
+      id: replacedTab?.id,
+      fileName,
+      filePath: path,
+      nativePath: path,
+      segmentedSession: {
+        sessionId: opened.sessionId,
+        revision: opened.revision,
+        persistedRevision: opened.persistedRevision,
+        indexProgress: opened.firstWindow.indexProgress,
+        readonly: opened.readonly,
+        recoveryConflictPath: opened.recoveryConflictPath ?? null,
+      },
+      lastKnownModifiedAt: status?.modifiedAt ?? 0,
+      diskReadonly: Boolean(status?.readonly || opened.readonly),
+    });
+
+    tabs = replacedTab
+      ? tabs.map((tab) => (tab.id === replacedTab.id ? targetTab : tab))
+      : [...tabs, targetTab];
+    activeTabId = targetTab.id;
+    previewTabId =
+      options.preview && filePreviewEnabled
+        ? targetTab.id
+        : replacedTab?.id === previewTabId
+          ? null
+          : previewTabId;
+    loadTabState(targetTab);
+    persistWorkspaceState();
+    updateWindowTitle();
+
+    const parentDir = getDirectoryLabel(path);
+    if (parentDir && parentDir !== t.currentFolder()) {
+      if (!currentFolderPath) {
+        loadFolder(parentDir).catch(() => undefined);
+      } else {
+        expandAncestors(path, currentFolderPath);
+      }
+    }
+  }
+
   // 手动固定当前预览标签页（双击标签页标题）
   function pinPreviewTab() {
+    invalidatePendingPreviewOpen();
     if (previewTabId && previewTabId === activeTabId) {
       previewTabId = null;
     }
@@ -1924,6 +2494,8 @@
 
   // 步骤：关闭除指定标签外的所有标签页（保留标签自动固定）
   async function handleCloseOtherTabs(event: CustomEvent<{ tabId: string }>) {
+    invalidatePendingPreviewOpen();
+    closeExternalChangeDialog();
     const keepTabId = event.detail.tabId;
     const keepTab = tabs.find((t) => t.id === keepTabId);
     if (!keepTab) return;
@@ -1935,6 +2507,9 @@
       if (ok === false) return;
     }
 
+    invalidatePendingPreviewOpen();
+    const tabsToClose = tabs.filter((tab) => tab.id !== keepTabId);
+    await closeSegmentedSessions(tabsToClose, true);
     tabs = [keepTab];
     activeTabId = keepTabId;
     // 无论保留的是否是预览标签，都固定它（只剩一个标签不需要预览机制）
@@ -1946,6 +2521,8 @@
 
   // 步骤：关闭指定标签页右侧的所有标签页
   async function handleCloseTabsToRight(event: CustomEvent<{ tabId: string }>) {
+    invalidatePendingPreviewOpen();
+    closeExternalChangeDialog();
     const tabId = event.detail.tabId;
     const tabIndex = tabs.findIndex((t) => t.id === tabId);
     if (tabIndex < 0) return;
@@ -1958,6 +2535,8 @@
       if (ok === false) return;
     }
 
+    invalidatePendingPreviewOpen();
+    await closeSegmentedSessions(rightTabs, true);
     const remaining = tabs.slice(0, tabIndex + 1);
     tabs = remaining;
     if (previewTabId && !remaining.find((t) => t.id === previewTabId)) {
@@ -2025,8 +2604,7 @@
       // 检测到外部变更时，优先按偏好设置中的默认行为处理。
       if (value.type !== 'none' && !externalChangeDialogOpen) {
         if (!tryHandleExternalFileChangeByPreference(value)) {
-          externalChangeDialogState = value;
-          externalChangeDialogOpen = true;
+          openExternalChangeDialog(value);
         }
       }
     },
@@ -2123,7 +2701,16 @@
   const handleEditorDrop = imageInsertion.handleEditorDrop;
   const handleEditorPaste = imageInsertion.handleEditorPaste;
   const updateMarkdown = editorInteraction.updateMarkdown;
-  const runCommand = editorInteraction.runCommand;
+  const runMarkdownCommand = editorInteraction.runCommand;
+  function runCommand(command: EditorCommand) {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (isSegmentedTextTab(activeTab)) {
+      if (command.type === 'undo') segmentedWorkspace?.undo();
+      if (command.type === 'redo') segmentedWorkspace?.redo();
+      return;
+    }
+    runMarkdownCommand(command);
+  }
   refreshEditorViewportLayout = editorInteraction.refreshEditorViewportLayout;
   async function getDesktopEffectiveSystemTheme() {
     return (await getDesktopSystemTheme(desktopEnabled)) ?? resolveThemePreference('system');
@@ -2166,21 +2753,478 @@
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
   const pruneCollapsedOutlineIds = outlineInteraction.pruneCollapsedOutlineIds;
   const syncSourceTextareaHeight = editorInteraction.syncSourceTextareaHeight;
-  const openDroppedMarkdown = documentActions.openDroppedMarkdown;
-  const openFileDialog = documentActions.openFileDialog;
   const openMarkdownFile = documentActions.openMarkdownFile;
-  const saveMarkdownFile = documentActions.saveMarkdownFile;
-  const openRecentFile = documentActions.openRecentFile;
-  const createNewFile = documentActions.createNewFile;
+  const saveMarkdownDocument = documentActions.saveMarkdownFile;
+  const createMarkdownFile = documentActions.createNewFile;
   const _documentCloseTab = documentActions.closeTab;
   const refreshRecentFiles = documentActions.refreshRecentFiles;
-  const reloadExternalFile = documentActions.reloadExternalFile;
-  const overwriteExternalFile = documentActions.overwriteExternalFile;
-  const checkExternalFileChange = documentActions.checkExternalFileChange;
+  const reloadMarkdownExternalFile = documentActions.reloadExternalFile;
+  const overwriteMarkdownExternalFile = documentActions.overwriteExternalFile;
+  const checkMarkdownExternalFileChange = documentActions.checkExternalFileChange;
+
+  async function createNewFile() {
+    try {
+      await flushSegmentedDocumentBeforeTransition(
+        tabs.find((tab) => tab.id === activeTabId),
+        segmentedWorkspace,
+        segmentedDocumentPort,
+      );
+      createMarkdownFile();
+    } catch (error) {
+      statusMessage = error instanceof Error ? error.message : t.saveFileFailed();
+    }
+  }
+
+  async function openDocumentPath(
+    path: string,
+    options: { message: string; fallbackMessage: string },
+  ) {
+    invalidatePendingPreviewOpen();
+    const existingTab = tabs.find(
+      (tab) => tab.nativePath != null && sameNativePath(tab.nativePath, path),
+    );
+    if (existingTab) {
+      await switchTab(existingTab.id);
+      if (existingTab.id === previewTabId) previewTabId = null;
+      statusMessage = t.switchedToOpenedTab();
+      return;
+    }
+
+    // 新文档挂载会销毁当前分段 Core；刷新必须发生在路由读取及活动标签替换之前。
+    await flushSegmentedDocumentBeforeTransition(
+      tabs.find((tab) => tab.id === activeTabId),
+      segmentedWorkspace,
+      segmentedDocumentPort,
+    );
+
+    const routed = await openDocumentByPath(path, {
+      openMarkdown: (markdownPath) => readMarkdownFromPath(markdownPath, options.fallbackMessage),
+      openSegmented: (segmentedPath) => segmentedDocumentPort.open(segmentedPath),
+    });
+
+    if (routed.documentKind === 'markdown') {
+      if (routed.value.error) {
+        statusMessage = routed.value.error;
+        return;
+      }
+      if (routed.value.document) {
+        await documentActions.applyNativeDocument(routed.value.document, options.message);
+      }
+      return;
+    }
+
+    if (routed.value.documentKind !== routed.documentKind) {
+      await segmentedDocumentPort.closeSession(routed.value.sessionId).catch(() => undefined);
+      throw new Error(`Segmented document kind mismatch: ${routed.value.documentKind}`);
+    }
+    await applyOpenedSegmentedDocument(path, routed.value, { preview: false });
+    statusMessage = routed.value.recoveryConflictPath
+      ? t.segmentedRecoveryConflict({ path: routed.value.recoveryConflictPath })
+      : options.message;
+    const openedFileName = path.replace(/\\/g, '/').split('/').pop() || path;
+    await rememberRecentEntry(path, 'file', openedFileName, 0).catch(() => undefined);
+    await refreshRecentFiles();
+  }
+
+  async function openDroppedMarkdown(paths: string[]) {
+    const target = findDroppedDocumentPath(paths);
+    if (!target) {
+      statusMessage = t.dragDropNoMarkdown();
+      return;
+    }
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (isMarkdownTab(activeTab) && activeTab.dirty) {
+      writeRecoveryDraft('drag-open-blocked');
+      statusMessage = t.dragOpenBlockedUnsaved();
+      return;
+    }
+    await openDocumentPath(target, {
+      message: t.openedByDragDrop(),
+      fallbackMessage: t.dragOpenFailed(),
+    }).catch((error) => {
+      showVisibleError(error, t.dragOpenFailed());
+    });
+  }
+
+  async function openFileDialog() {
+    if (!desktopEnabled) {
+      fileInput.click();
+      return;
+    }
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (isMarkdownTab(activeTab) && activeTab.dirty) {
+      writeRecoveryDraft('open-dialog');
+    }
+    const path = await pickDocumentPathWithDialog();
+    if (!path) return;
+    await openDocumentPath(path, {
+      message: t.openedByTauri(),
+      fallbackMessage: t.openFileFailed(),
+    }).catch((error) => {
+      showVisibleError(error, t.openFileFailed());
+    });
+  }
+
+  async function openRecentFile(path: string) {
+    if (!desktopEnabled) return;
+    await openDocumentPath(path, {
+      message: t.recentFileOpened(),
+      fallbackMessage: t.openRecentFailed(),
+    }).catch((error) => {
+      showVisibleError(error, t.openRecentFailed());
+    });
+  }
+
+  async function saveMarkdownFile(saveAs = false): Promise<boolean> {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isSegmentedTextTab(activeTab)) {
+      return saveMarkdownDocument(saveAs);
+    }
+
+    const savingTabId = activeTab.id;
+    const savingSessionId = activeTab.sessionId;
+    const preparedSave = await segmentedWorkspace?.prepareSave();
+    const frozenRevision = preparedSave?.revision ?? activeTab.revision;
+
+    const requiresSaveAs = saveAs || activeTab.diskReadonly;
+    let targetPath: string | undefined;
+    if (requiresSaveAs) {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const selected = await save({
+        defaultPath: activeTab.fileName,
+        filters: [
+          {
+            name: activeTab.documentKind === 'json' ? 'JSON' : 'Text',
+            extensions: [activeTab.documentKind === 'json' ? 'json' : 'txt'],
+          },
+        ],
+      });
+      if (!selected) return false;
+      targetPath = selected;
+    }
+
+    try {
+      const result = await segmentedDocumentPort.saveRevision({
+        sessionId: savingSessionId,
+        revision: frozenRevision,
+        targetPath,
+      });
+      if (result.sessionId !== savingSessionId) {
+        throw new Error(`Segmented save returned another session: ${result.sessionId}`);
+      }
+      const targetTab = tabs.find((tab) => tab.id === savingTabId);
+      if (!isSegmentedTextTab(targetTab) || targetTab.sessionId !== savingSessionId) return true;
+      const observedState =
+        activeTabId === savingTabId
+          ? segmentedWorkspace?.applySaveResult(savingSessionId, result)
+          : null;
+      const nextState = reconcileSegmentedSaveState(result, observedState);
+      targetTab.persistedRevision = nextState.persistedRevision;
+      targetTab.revision = nextState.revision;
+      targetTab.dirty = nextState.dirty;
+      targetTab.lastKnownModifiedAt = result.modifiedAt;
+      targetTab.diskReadonly = nextState.readonly;
+      if (targetPath) {
+        targetTab.nativePath = targetPath;
+        targetTab.filePath = targetPath;
+        targetTab.fileName = targetPath.replace(/\\/g, '/').split('/').pop() || targetPath;
+        targetTab.externalFileChange = createEmptyExternalFileChange();
+      }
+      segmentedSessionRegistry.update(savingSessionId, {
+        revision: nextState.revision,
+        persistedRevision: nextState.persistedRevision,
+        readonly: nextState.readonly,
+      });
+      ignoredSegmentedExternalChanges.delete(savingSessionId);
+      if (activeTabId === savingTabId) {
+        dirty = targetTab.dirty;
+        nativePath = targetTab.nativePath;
+        filePath = targetTab.filePath;
+        fileName = targetTab.fileName;
+        lastKnownModifiedAt = targetTab.lastKnownModifiedAt;
+        diskReadonly = targetTab.diskReadonly;
+        externalFileChange = targetTab.externalFileChange;
+      }
+      tabs = [...tabs];
+      persistWorkspaceState();
+      if (activeTabId === savingTabId) statusMessage = t.saved();
+      if (targetTab.nativePath) {
+        await rememberRecentEntry(targetTab.nativePath, 'file', targetTab.fileName, 0).catch(
+          () => undefined,
+        );
+        await refreshRecentFiles();
+      }
+      return true;
+    } catch (error) {
+      if (activeTabId === savingTabId) {
+        showVisibleError(error, t.saveFileFailed());
+      }
+      return false;
+    }
+  }
+
+  async function checkExternalFileChange() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isSegmentedTextTab(activeTab)) {
+      await checkMarkdownExternalFileChange();
+      return;
+    }
+    const checkingTabId = activeTab.id;
+    const checkingSessionId = activeTab.sessionId;
+    try {
+      const result = await segmentedDocumentPort.checkExternalChange(checkingSessionId);
+      if (result.sessionId !== checkingSessionId) return;
+      // 原子保存窗口内的临时身份变化由保存结果收口，轮询不得把自身写入误报为外部冲突。
+      if (result.saveInProgress) return;
+      const targetTab = tabs.find(
+        (tab) =>
+          tab.id === checkingTabId &&
+          isSegmentedTextTab(tab) &&
+          tab.sessionId === checkingSessionId,
+      );
+      if (!isSegmentedTextTab(targetTab)) return;
+      const reconciledCheck = reconcileSegmentedExternalChangeCheck(result, {
+        sessionId: targetTab.sessionId,
+        revision: targetTab.revision,
+        dirty: targetTab.dirty,
+        hasPendingEdits:
+          activeTabId === checkingTabId && Boolean(segmentedWorkspace?.hasPendingEdits()),
+      });
+      if (!reconciledCheck) return;
+      const { dirtyAtDetection } = reconciledCheck;
+      const changeToken = getSegmentedExternalChangeToken(result);
+      if (result.type === 'none') {
+        ignoredSegmentedExternalChanges.delete(checkingSessionId);
+      } else if (
+        changeToken &&
+        ignoredSegmentedExternalChanges.get(checkingSessionId) === changeToken
+      ) {
+        // 保留冲突状态以暂停自动保存；同一磁盘身份只是不再弹框，新身份仍走正常流程。
+        if (activeTabId === checkingTabId) {
+          closeExternalChangeDialog();
+        }
+        return;
+      } else {
+        ignoredSegmentedExternalChanges.delete(checkingSessionId);
+      }
+      const change: ExternalFileChangeState =
+        result.type === 'none'
+          ? createEmptyExternalFileChange()
+          : {
+              type: result.type,
+              path: targetTab.nativePath,
+              modifiedAt: result.modifiedAt,
+              dirtyAtDetection,
+              message:
+                result.type === 'deleted'
+                  ? t.externalFileDeleted()
+                  : dirtyAtDetection
+                    ? t.externalFileModifiedDirty()
+                    : t.externalFileModifiedClean(),
+            };
+      if (activeTabId !== checkingTabId) {
+        // IPC 返回后标签可能已切换；只更新发起检查的标签，绝不驱动当前标签的 reload/overwrite。
+        targetTab.externalFileChange = change;
+        tabs = [...tabs];
+        persistWorkspaceState();
+        return;
+      }
+      setExternalFileChangeState(change);
+      const segmentedIgnoreTarget = changeToken
+        ? { sessionId: checkingSessionId, changeToken }
+        : undefined;
+      if (
+        change.type !== 'none' &&
+        !tryHandleExternalFileChangeByPreference(change, segmentedIgnoreTarget)
+      ) {
+        openExternalChangeDialog(change, changeToken);
+      }
+    } catch (error) {
+      const stillCurrent = tabs.some(
+        (tab) =>
+          tab.id === checkingTabId &&
+          isSegmentedTextTab(tab) &&
+          tab.sessionId === checkingSessionId &&
+          tab.id === activeTabId,
+      );
+      if (stillCurrent) {
+        statusMessage = error instanceof Error ? error.message : t.fileStatusCheckFailed();
+      }
+    }
+  }
+
+  async function reloadExternalFile() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isSegmentedTextTab(activeTab)) {
+      await reloadMarkdownExternalFile();
+      return;
+    }
+    if (!activeTab.nativePath) return;
+
+    const reloadingTabId = activeTab.id;
+    const oldSessionId = activeTab.sessionId;
+    await segmentedWorkspace?.flushPendingEdits();
+    // Rust 先完整构造候选会话再原子替换；失败时旧 session 与 recovery 保持可用。
+    const opened = await segmentedDocumentPort.reloadSession(oldSessionId);
+    const targetTab = tabs.find((tab) => tab.id === reloadingTabId);
+    if (!isSegmentedTextTab(targetTab) || targetTab.sessionId !== oldSessionId) {
+      await segmentedDocumentPort.closeSession(opened.sessionId, true).catch(() => undefined);
+      return;
+    }
+    segmentedSessionRegistry.delete(oldSessionId);
+    ignoredSegmentedExternalChanges.delete(oldSessionId);
+    segmentedSessionRegistry.register(opened);
+    targetTab.sessionId = opened.sessionId;
+    targetTab.revision = opened.revision;
+    targetTab.persistedRevision = opened.persistedRevision;
+    targetTab.recoveryConflictPath = opened.recoveryConflictPath ?? null;
+    targetTab.indexProgress = opened.firstWindow.indexProgress;
+    targetTab.dirty = false;
+    targetTab.selection = null;
+    targetTab.scrollAnchor = null;
+    targetTab.diskReadonly = opened.readonly;
+    targetTab.externalFileChange = createEmptyExternalFileChange();
+    tabs = [...tabs];
+    if (activeTabId === reloadingTabId) {
+      loadTabState(targetTab);
+      statusMessage = t.reloadedExternalVersion();
+    }
+    persistWorkspaceState();
+  }
+
+  async function overwriteExternalFile() {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isSegmentedTextTab(activeTab)) {
+      await overwriteMarkdownExternalFile();
+      return;
+    }
+    const savingTabId = activeTab.id;
+    const savingSessionId = activeTab.sessionId;
+    const preparedSave = await segmentedWorkspace?.prepareSave();
+    const frozenRevision = preparedSave?.revision ?? activeTab.revision;
+    try {
+      const result = await segmentedDocumentPort.saveRevision({
+        sessionId: savingSessionId,
+        revision: frozenRevision,
+        overwriteExternal: true,
+      });
+      if (result.sessionId !== savingSessionId) {
+        throw new Error(`Segmented save returned another session: ${result.sessionId}`);
+      }
+      const targetTab = tabs.find((tab) => tab.id === savingTabId);
+      if (!isSegmentedTextTab(targetTab) || targetTab.sessionId !== savingSessionId) return;
+      const observedState =
+        activeTabId === savingTabId
+          ? segmentedWorkspace?.applySaveResult(savingSessionId, result)
+          : null;
+      const nextState = reconcileSegmentedSaveState(result, observedState);
+      targetTab.persistedRevision = nextState.persistedRevision;
+      targetTab.revision = nextState.revision;
+      targetTab.dirty = nextState.dirty;
+      targetTab.lastKnownModifiedAt = result.modifiedAt;
+      targetTab.diskReadonly = nextState.readonly;
+      targetTab.externalFileChange = createEmptyExternalFileChange();
+      ignoredSegmentedExternalChanges.delete(savingSessionId);
+      if (activeTabId === savingTabId) {
+        setExternalFileChangeState(targetTab.externalFileChange);
+      }
+      tabs = [...tabs];
+      persistWorkspaceState();
+      if (activeTabId === savingTabId) statusMessage = t.overwrittenExternalVersion();
+    } catch (error) {
+      if (activeTabId === savingTabId) {
+        showVisibleError(error, t.saveFileFailed());
+      }
+    }
+  }
+
+  async function closeSegmentedTab(tabToClose: Extract<Tab, { documentKind: 'text' | 'json' }>) {
+    const wasActive = tabToClose.id === activeTabId;
+    try {
+      if (wasActive) {
+        await segmentedWorkspace?.flushPendingEdits();
+      }
+      await segmentedDocumentPort.flushJournal(tabToClose.sessionId, tabToClose.revision);
+    } catch (error) {
+      // 恢复日志未确认落盘时保持标签打开，并把具体失败原因暴露给用户。
+      showVisibleError(error, t.saveFileFailed());
+      return;
+    }
+
+    let discardChanges = false;
+    if (tabToClose.dirty) {
+      const choice = await confirmAction(t.confirmCloseModifiedFile(), {
+        title: tabToClose.fileName,
+        okLabel: t.discardChanges(),
+        cancelLabel: t.cancel(),
+        saveLabel: tabToClose.nativePath ? t.save() : undefined,
+      });
+      if (choice === false) return;
+      if (choice === 'save') {
+        const saved = wasActive
+          ? await saveMarkdownFile(false)
+          : await segmentedDocumentPort
+              .saveRevision({
+                sessionId: tabToClose.sessionId,
+                revision: tabToClose.revision,
+              })
+              .then((result) => {
+                if (result.sessionId !== tabToClose.sessionId) {
+                  throw new Error(`Segmented save returned another session: ${result.sessionId}`);
+                }
+                tabToClose.persistedRevision = result.persistedRevision;
+                tabToClose.revision = result.currentRevision;
+                tabToClose.dirty = result.dirty;
+                tabToClose.lastKnownModifiedAt = result.modifiedAt;
+                tabToClose.diskReadonly = result.readonly;
+                return true;
+              })
+              .catch((error) => {
+                showVisibleError(error, t.saveFileFailed());
+                return false;
+              });
+        if (!saved) return;
+      } else {
+        discardChanges = true;
+      }
+    }
+
+    try {
+      await segmentedDocumentPort.closeSession(tabToClose.sessionId, discardChanges);
+    } catch (error) {
+      showVisibleError(error, t.saveFileFailed());
+      return;
+    }
+    segmentedSessionRegistry.delete(tabToClose.sessionId);
+    const index = tabs.findIndex((tab) => tab.id === tabToClose.id);
+    tabs = tabs.filter((tab) => tab.id !== tabToClose.id);
+    if (previewTabId === tabToClose.id) previewTabId = null;
+
+    if (wasActive) {
+      if (tabs.length > 0) {
+        const nextTab = tabs[Math.min(index, tabs.length - 1)];
+        activeTabId = nextTab.id;
+        loadTabState(nextTab);
+      } else {
+        activeTabId = '';
+        dirty = false;
+        fileName = '';
+        filePath = '';
+        nativePath = null;
+        externalFileChange = createEmptyExternalFileChange();
+      }
+      updateWindowTitle();
+    }
+    persistWorkspaceState();
+  }
 
   // 包装 closeTab：预览标签页直接关闭无需确认
   async function closeTab(tabId: string, event?: Event) {
     event?.stopPropagation();
+    invalidatePendingPreviewOpen();
+    if (externalChangeDialogTargetTabId === tabId) {
+      closeExternalChangeDialog();
+    }
 
     // 关闭前保存阅读位置
     if (activeTabId === tabId) {
@@ -2198,6 +3242,11 @@
       return;
     }
 
+    if (isSegmentedTextTab(tabToClose)) {
+      await closeSegmentedTab(tabToClose);
+      return;
+    }
+
     logCloseDiagnostics('closeTab: 收到关闭请求', {
       tabId,
       activeTabId,
@@ -2205,11 +3254,11 @@
       targetDirty: tabToClose.dirty,
       appDirty: dirty,
       isActiveTarget: tabId === activeTabId,
-      targetVersion: tabToClose.version,
+      targetRevision: tabToClose.version,
       appVersion: version,
-      targetMarkdownLength: tabToClose.markdown.length,
+      targetMarkdownLength: isMarkdownTab(tabToClose) ? tabToClose.markdown.length : null,
       appMarkdownLength: markdown.length,
-      targetSavedMarkdownLength: tabToClose.savedMarkdown?.length ?? null,
+      targetSavedMarkdownLength: isMarkdownTab(tabToClose) ? tabToClose.savedMarkdown.length : null,
       appSavedMarkdownLength: savedMarkdown.length,
     });
 
@@ -2219,9 +3268,13 @@
       hasDirtyTabToClose: Boolean(dirtyTabToClose),
       targetDirtyAfterCheck: tabToClose.dirty,
       appDirty: dirty,
-      dirtyTabVersion: dirtyTabToClose?.version ?? null,
-      dirtyMarkdownLength: dirtyTabToClose?.markdown.length ?? null,
-      dirtySavedMarkdownLength: dirtyTabToClose?.savedMarkdown.length ?? null,
+      dirtyTabRevision: isMarkdownTab(dirtyTabToClose)
+        ? dirtyTabToClose.version
+        : dirtyTabToClose?.revision,
+      dirtyMarkdownLength: isMarkdownTab(dirtyTabToClose) ? dirtyTabToClose.markdown.length : null,
+      dirtySavedMarkdownLength: isMarkdownTab(dirtyTabToClose)
+        ? dirtyTabToClose.savedMarkdown.length
+        : null,
     });
 
     if (dirtyTabToClose && !tabToClose.dirty) {
@@ -2230,7 +3283,7 @@
       logCloseDiagnostics('closeTab: 已把活动标签 dirty 状态写回 tabs', {
         tabId,
         targetDirty: tabToClose.dirty,
-        targetVersion: tabToClose.version,
+        targetRevision: tabToClose.version,
       });
     }
 
@@ -2310,7 +3363,7 @@
   function getDirtyTabs(candidateTabs: Tab[]) {
     const dirtyTabs = candidateTabs.filter((tab) => tab.dirty);
     const activeTab = candidateTabs.find((tab) => tab.id === activeTabId);
-    if (dirty && activeTab && !dirtyTabs.some((tab) => tab.id === activeTab.id)) {
+    if (dirty && isMarkdownTab(activeTab) && !dirtyTabs.some((tab) => tab.id === activeTab.id)) {
       return [
         ...dirtyTabs,
         {
@@ -2372,10 +3425,14 @@
       for (const tab of affectedTabs) {
         if (tab.id === previewTabId) {
           // 预览标签直接移除
+          if (isSegmentedTextTab(tab)) {
+            await segmentedDocumentPort.closeSession(tab.sessionId, true).catch(() => undefined);
+            segmentedSessionRegistry.delete(tab.sessionId);
+          }
           tabs = tabs.filter((t) => t.id !== tab.id);
           previewTabId = null;
         } else {
-          closeTab(tab.id);
+          await closeTab(tab.id);
         }
       }
       // 如果删光了所有标签，清空状态不自动创建标签
@@ -2476,10 +3533,19 @@
 
     if (path === targetPath) return;
 
+    const renameBlock = getOpenDocumentRenameBlock(tabs, path, targetPath);
+    if (renameBlock) {
+      statusMessage = t.renameOpenDocumentBlocked();
+      return;
+    }
+
     const { renameFile } = await import('../lib/desktop/tauriStorage');
-    await renameFile(path, targetPath).catch((err) => {
+    try {
+      await renameFile(path, targetPath);
+    } catch (err) {
       statusMessage = t.renameFailed({ error: err });
-    });
+      return;
+    }
 
     await loadFolder(currentFolderPath);
 
@@ -2549,6 +3615,7 @@
     developerMode = preferences.developerMode;
 
     if (!filePreviewEnabled) {
+      invalidatePendingPreviewOpen();
       previewTabId = null;
     }
     if (autoSaveEnabled && !preferences.autoSaveEnabled) {
@@ -2840,8 +3907,18 @@
             currentFolderPath &&
             !sameFileSystemPath(currentFolderPath, pendingFolderPath)
           ) {
-            clearAllTabsWithoutCreatingBlank();
-            restoredWorkspaceTabs = false;
+            try {
+              // 恢复可能仍在后台打开非活动分段标签；先收口并关闭全部 Rust session，
+              // 再清空前端标签，避免 by_path 留下不可达的会话所有权。
+              await cancelDeferredWorkspaceRestore();
+              await closeAllSegmentedSessions(false);
+              clearAllTabsWithoutCreatingBlank();
+              restoredWorkspaceTabs = false;
+            } catch (error) {
+              showVisibleError(error, t.saveFileFailed());
+              pendingFolderPath = '';
+              hasPendingFolder = false;
+            }
           }
           if (pendingFolderPath) {
             currentFolderPath = pendingFolderPath;
@@ -2893,6 +3970,7 @@
 
   onDestroy(() => {
     // 组件销毁前立即持久化工作区状态和阅读位置
+    void flushAllSegmentedSessions().catch(() => undefined);
     void flushPersistWorkspaceState();
     saveCurrentReadingPositionToMemoryOnly();
     void flushReadingPositions();
@@ -2917,6 +3995,12 @@
   function syncFromEditor(event: EditorChangeEvent) {
     if (isSwitchingTab) return;
 
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isMarkdownTab(activeTab)) {
+      // 隐藏的 Markdown EditorCore 仍可能在主题或布局更新时发事件；分段标签必须彻底忽略。
+      return;
+    }
+
     const markdownChanged = event.markdown !== markdown;
 
     // 预览标签页开始编辑 → 自动固定
@@ -2932,20 +4016,15 @@
     mode = event.mode;
     pendingInlineMarks = event.pendingInlineMarks;
 
-    const activeTab = tabs.find((t) => t.id === activeTabId);
-    if (activeTab) {
-      activeTab.dirty = dirty;
-      activeTab.version = version;
-      if (!dirty) {
-        activeTab.savedMarkdown = event.markdown;
-      }
+    activeTab.dirty = dirty;
+    activeTab.version = version;
+    if (!dirty) {
+      activeTab.savedMarkdown = event.markdown;
     }
 
     if (!markdownChanged) {
-      if (activeTab) {
-        tabs = [...tabs];
-        persistWorkspaceState();
-      }
+      tabs = [...tabs];
+      persistWorkspaceState();
       return;
     }
 
@@ -2956,15 +4035,13 @@
       applyMarkdownAnalysis(event.markdown);
     }
 
-    if (activeTab) {
-      activeTab.markdown = markdown;
-      if (!dirty) {
-        activeTab.savedMarkdown = markdown;
-      }
-      tabs = [...tabs];
-      schedulePersistWorkspaceDrafts();
-      persistWorkspaceState();
+    activeTab.markdown = markdown;
+    if (!dirty) {
+      activeTab.savedMarkdown = markdown;
     }
+    tabs = [...tabs];
+    schedulePersistWorkspaceDrafts();
+    persistWorkspaceState();
 
     if (autoSaveEnabled && desktopEnabled && dirty && nativePath) {
       documentActions.debouncedAutoSave(event.markdown);
@@ -2979,6 +4056,34 @@
       return;
     }
     syncSourceTextareaHeight();
+  }
+
+  function handleSegmentedStateChange(event: CustomEvent<SegmentedEditorMetadata>) {
+    const next = event.detail;
+    const targetTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isSegmentedTextTab(targetTab) || targetTab.sessionId !== next.sessionId) return;
+
+    targetTab.revision = next.revision;
+    targetTab.persistedRevision = next.persistedRevision;
+    targetTab.dirty = next.dirty;
+    targetTab.indexProgress = next.indexProgress;
+    targetTab.diskReadonly = next.readonly;
+    targetTab.selection = next.selection;
+    targetTab.scrollAnchor = next.scrollAnchor;
+    if (targetTab.id === previewTabId && next.dirty) {
+      previewTabId = null;
+    }
+    if (targetTab.id === activeTabId) {
+      dirty = next.dirty;
+      diskReadonly = next.readonly;
+    }
+    tabs = [...tabs];
+    persistWorkspaceState();
+    void updateWindowTitle();
+  }
+
+  function handleSegmentedStatus(event: CustomEvent<{ message: string }>) {
+    statusMessage = event.detail.message;
   }
 
   function applyMarkdownAnalysis(markdownToAnalyze: string) {
@@ -3009,6 +4114,9 @@
   }
 
   function openTablePicker() {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      return;
+    }
     tablePickerOpen = true;
   }
 
@@ -3017,6 +4125,10 @@
   }
 
   function openLinkPicker() {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      // 分段文档不读取隐藏的 Markdown EditorCore 选区或链接状态。
+      return;
+    }
     if (readonlyDocumentMode) {
       statusMessage = t.readonlyCannotEditLink();
       return;
@@ -3134,6 +4246,10 @@
   }
 
   function editFrontMatter() {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      // TXT/JSON 不能通过标题栏或原生菜单进入 Markdown Front Matter 链路。
+      return;
+    }
     if (readonlyDocumentMode) {
       statusMessage = t.readonlyCannotEditMetadata();
       return;
@@ -3194,6 +4310,10 @@
   }
 
   async function handleExport(format: 'html' | 'pdf') {
+    if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
+      // TXT/JSON 不进入 Markdown HTML/PDF 导出链路。
+      return;
+    }
     if (!nativePath && !markdown.trim()) {
       showToast(t.noOpenDocumentForExport(), 2000);
       return;
@@ -3247,10 +4367,13 @@
     frontMatterFocusTarget = 'default';
   }
   $: {
-    const signature = `${searchPanelOpen}|${mode}|${searchCaseSensitive}|${markdown}`;
-    if (signature !== lastSearchSignature) {
-      lastSearchSignature = signature;
-      refreshSearchMatches({ preserveActive: true, selectActive: false });
+    const activeDocument = tabs.find((tab) => tab.id === activeTabId);
+    if (isMarkdownTab(activeDocument)) {
+      const signature = `${searchPanelOpen}|${mode}|${searchCaseSensitive}|${markdown}`;
+      if (signature !== lastSearchSignature) {
+        lastSearchSignature = signature;
+        refreshSearchMatches({ preserveActive: true, selectActive: false });
+      }
     }
   }
 
@@ -3356,7 +4479,7 @@
       return;
     }
 
-    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt)$/i.test(path));
+    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt|json)$/i.test(path));
     for (const path of supportedPaths) {
       await openRecentEntry(path, 'file');
     }
@@ -3368,7 +4491,7 @@
       return;
     }
 
-    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt)$/i.test(path));
+    const supportedPaths = paths.filter((path) => /\.(md|markdown|txt|json)$/i.test(path));
     if (supportedPaths.length === 0) {
       return;
     }
@@ -3548,6 +4671,10 @@
   }
 
   function writeRecoveryDraft(reason: string) {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isMarkdownTab(activeTab)) {
+      return;
+    }
     writeRecoveryDraftToStorage(RECOVERY_KEY, {
       reason,
       fileName,
@@ -3576,6 +4703,7 @@
 <AppShell
   {interfaceLocale}
   {appBootState}
+  bind:segmentedWorkspace
   bind:fileInput
   bind:sourcePane
   bind:semanticPane
@@ -3633,6 +4761,8 @@
   {searchCaseSensitive}
   {searchActiveIndex}
   {searchMatchCount}
+  {autoSaveEnabled}
+  {autoSaveDelayMs}
   {getCompactPath}
   {getFolderName}
   {getDirectoryLabel}
@@ -3716,6 +4846,8 @@
   on:closeTabsToRight={handleCloseTabsToRight}
   on:closeAllTabs={handleCloseAllTabs}
   on:deleteNode={handleDeleteNode}
+  on:stateChange={handleSegmentedStateChange}
+  on:status={handleSegmentedStatus}
 />
 
 <div class="app-toast" class:visible={toastMessage} role="status">{toastMessage}</div>
@@ -3806,5 +4938,6 @@
   change={externalChangeDialogState}
   onReload={handleExternalChangeReload}
   onOverwrite={handleExternalChangeOverwrite}
+  onSaveAs={handleExternalChangeSaveAs}
   onDismiss={handleExternalChangeDismiss}
 />

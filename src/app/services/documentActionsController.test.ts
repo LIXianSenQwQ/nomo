@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import type { NativeDocument } from '../../lib/desktop/tauriStorage';
-import type { Tab } from '../types';
+import type { MarkdownTabState, Tab } from '../types';
 import { createEmptyExternalFileChange } from '../types';
 import { createDocumentActionsController } from './documentActionsController';
 import { confirmAction } from './confirmAction';
 import { saveNativeMarkdownFile } from './documentFiles';
+import { createMarkdownTab, createSegmentedTextTab, isMarkdownTab } from './tabs';
 
 vi.mock('./confirmAction', () => ({
   confirmAction: vi.fn(),
@@ -27,8 +28,10 @@ vi.mock('./documentFiles', () => ({
   saveNativeMarkdownFile: vi.fn(),
 }));
 
-function createTab(overrides: Partial<Tab> = {}): Tab {
-  return {
+function createTab(
+  overrides: Omit<Partial<MarkdownTabState>, 'documentKind'> = {},
+): MarkdownTabState {
+  return createMarkdownTab({
     id: 'tab-1',
     fileName: 'old.md',
     filePath: 'C:/docs/old.md',
@@ -44,22 +47,24 @@ function createTab(overrides: Partial<Tab> = {}): Tab {
     externalFileChange: createEmptyExternalFileChange(),
     version: 1,
     ...overrides,
-  };
+  });
 }
 
 function createOptions(initialTabs: Tab[]) {
   let tabs = initialTabs;
+  const initialMarkdownTab = isMarkdownTab(tabs[0]) ? tabs[0] : null;
   let activeTabId = tabs[0]?.id ?? '';
   let statusMessage = '';
   let nativePath = tabs[0]?.nativePath ?? null;
   let fileName = tabs[0]?.fileName ?? 'old.md';
   let filePath = tabs[0]?.filePath ?? 'C:/docs/old.md';
-  let savedMarkdown = tabs[0]?.savedMarkdown ?? '';
+  let savedMarkdown = initialMarkdownTab?.savedMarkdown ?? '';
   let lastKnownModifiedAt = tabs[0]?.lastKnownModifiedAt ?? 0;
-  let largeDocumentMode = tabs[0]?.largeDocumentMode ?? false;
-  let readonlyDocumentMode = tabs[0]?.readonlyDocumentMode ?? false;
+  let largeDocumentMode = initialMarkdownTab?.largeDocumentMode ?? false;
+  let readonlyDocumentMode = initialMarkdownTab?.readonlyDocumentMode ?? false;
   let diskReadonly = tabs[0]?.diskReadonly ?? false;
   let dirty = tabs[0]?.dirty ?? false;
+  const getMarkdown = vi.fn(() => '# New Title\n\nchanged');
 
   return {
     options: {
@@ -107,7 +112,7 @@ function createOptions(initialTabs: Tab[]) {
       getCurrentFolderPath: () => '',
       getFileInput: () => document.createElement('input'),
       getEditor: () => ({
-        getMarkdown: () => '# New Title\n\nchanged',
+        getMarkdown,
         setDirty: vi.fn(),
       }),
       getTabs: () => tabs,
@@ -126,6 +131,7 @@ function createOptions(initialTabs: Tab[]) {
       setRecentFiles: vi.fn(),
       saveActiveTabState: vi.fn(),
       loadTabState: (tab: Tab) => {
+        if (!isMarkdownTab(tab)) return;
         activeTabId = tab.id;
         nativePath = tab.nativePath;
         fileName = tab.fileName;
@@ -157,6 +163,7 @@ function createOptions(initialTabs: Tab[]) {
       dirty,
       statusMessage,
     }),
+    getMarkdown,
   };
 }
 
@@ -312,5 +319,87 @@ describe('documentActionsController', () => {
     expect(getState().statusMessage).toBe(
       'Auto-save is paused because the source file is read-only. Use Save as to keep the current content.',
     );
+  });
+
+  it('segmented 标签误入手动保存时不读取或保存 Markdown', async () => {
+    const tab = createSegmentedTextTab({
+      id: 'segmented-json',
+      documentKind: 'json',
+      fileName: 'large.json',
+      filePath: 'C:/docs/large.json',
+      nativePath: 'C:/docs/large.json',
+      sessionId: 'session-1',
+      revision: 2,
+      persistedRevision: 1,
+      indexProgress: 1,
+    });
+    const { options, getMarkdown } = createOptions([tab]);
+    const controller = createDocumentActionsController(options as any);
+
+    await expect(controller.saveMarkdownFile(false)).resolves.toBe(false);
+
+    expect(getMarkdown).not.toHaveBeenCalled();
+    expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
+  });
+
+  it('浏览器模式拒绝 TXT/JSON 且不调用 File.text 全量读取', async () => {
+    const tab = createTab({ dirty: false });
+    const { options } = createOptions([tab]);
+    const text = vi.fn().mockResolvedValue('must-not-enter-webview');
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [{ name: 'large.json', text }],
+    });
+    const controller = createDocumentActionsController(options as any);
+
+    await controller.openMarkdownFile({ currentTarget: input } as unknown as Event);
+
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it('segmented 标签误入自动保存时不调度 Markdown 保存', async () => {
+    vi.useFakeTimers();
+    const tab = createSegmentedTextTab({
+      id: 'segmented-text',
+      documentKind: 'text',
+      fileName: 'large.txt',
+      filePath: 'C:/docs/large.txt',
+      nativePath: 'C:/docs/large.txt',
+      sessionId: 'session-1',
+      revision: 2,
+      persistedRevision: 1,
+      indexProgress: 1,
+    });
+    const { options } = createOptions([tab]);
+    const controller = createDocumentActionsController(options as any);
+
+    controller.debouncedAutoSave('must-not-be-normalized');
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('segmented 标签关闭不由 Markdown controller 处理', async () => {
+    const tab = createSegmentedTextTab({
+      id: 'segmented-text',
+      documentKind: 'text',
+      fileName: 'large.txt',
+      filePath: 'C:/docs/large.txt',
+      nativePath: 'C:/docs/large.txt',
+      sessionId: 'session-1',
+      revision: 2,
+      persistedRevision: 1,
+      indexProgress: 1,
+    });
+    const { options, getState } = createOptions([tab]);
+    const controller = createDocumentActionsController(options as any);
+
+    await controller.closeTab(tab.id);
+
+    expect(getState().tabs).toEqual([tab]);
+    expect(confirmAction).not.toHaveBeenCalled();
+    expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
   });
 });

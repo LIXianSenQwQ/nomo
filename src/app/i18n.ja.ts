@@ -1,5 +1,28 @@
 export const JA_JP_EXTRA_TRANSLATIONS = {
   close: '閉じる',
+  segmentedEditor: '分割テキストエディター',
+  indexingProgress: '行インデックスを作成中 {percent}%',
+  indexReady: '行インデックスの作成が完了しました',
+  segmentedReadonlyUnsupportedEncoding:
+    'このファイルは UTF-8 ではないため読み取り専用です。編集するには UTF-8 に変換してください。',
+  segmentedReadonlySource:
+    '元ファイルに書き込めないため、このセッションは読み取り専用です。コピーするには「名前を付けて保存」を使用してください。',
+  jsonValidate: 'JSON を検証',
+  jsonFormat: 'JSON を整形',
+  cancelTask: 'タスクをキャンセル',
+  taskRunning: 'バックグラウンドタスク {percent}%',
+  indexRequired: '完全なインデックスの作成後に実行できます',
+  jsonValid: 'JSON は有効です',
+  jsonFormatted: 'JSON を整形しました（まだ保存されていません）',
+  jsonInvalid: 'JSON の検証に失敗しました: {error}',
+  segmentedTaskFailed: 'バックグラウンドタスクに失敗しました: {error}',
+  segmentedTaskCancelling:
+    'バックグラウンドタスクをキャンセルしています。停止してからもう一度お試しください。',
+  fullDocumentCopied: '全文をストリーミングタスクでコピーしました',
+  segmentedRecoveryConflict:
+    '元ファイルが変更されたため復元編集は自動適用されませんでした。復元コピー: {path}',
+  renameOpenDocumentBlocked:
+    '名前を変更する前に、影響を受けるタブを閉じてください。開いている分割セッションや文書種類は別のパスへ安全に再関連付けできません。',
   cancel: 'キャンセル',
   discardChanges: '変更を破棄',
   theme: 'テーマ',

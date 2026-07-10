@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../i18n';
-import { resolveExternalFileChange } from './documentFiles';
+import { findDroppedDocumentPath, resolveExternalFileChange } from './documentFiles';
+
+describe('findDroppedDocumentPath', () => {
+  it('routes only the four supported document extensions', () => {
+    expect(findDroppedDocumentPath(['C:\\tmp\\image.png', 'C:\\tmp\\data.JSON'])).toBe(
+      'C:\\tmp\\data.JSON',
+    );
+    expect(findDroppedDocumentPath(['/tmp/readme.markdown'])).toBe('/tmp/readme.markdown');
+    expect(findDroppedDocumentPath(['/tmp/archive.csv'])).toBeNull();
+  });
+});
 
 describe('resolveExternalFileChange', () => {
   const baseInput = {

@@ -1,18 +1,64 @@
-export interface Tab {
+export type DocumentKind = 'markdown' | 'text' | 'json';
+
+export interface CommonTabState {
   id: string;
   fileName: string;
   filePath: string;
   nativePath: string | null;
-  draftId?: string | null;
-  markdown: string;
-  savedMarkdown: string;
   dirty: boolean;
   lastKnownModifiedAt: number;
-  largeDocumentMode: boolean;
-  readonlyDocumentMode: boolean;
   diskReadonly: boolean;
   externalFileChange: ExternalFileChangeState;
+}
+
+export interface MarkdownTabState extends CommonTabState {
+  documentKind: 'markdown';
+  draftId: string | null;
+  markdown: string;
+  savedMarkdown: string;
+  largeDocumentMode: boolean;
+  readonlyDocumentMode: boolean;
   version: number;
+}
+
+/** 分段选区只保存全局 UTF-8 字节端点，不把不可见正文带入 Svelte 状态。 */
+export interface GlobalSelection {
+  anchorByte: number;
+  headByte: number;
+}
+
+/** 恢复滚动位置时以全局字节位置为事实源，行号只用于首屏定位提示。 */
+export interface GlobalScrollAnchor {
+  byteOffset: number;
+  line: number;
+}
+
+export interface SegmentedTextTabState extends CommonTabState {
+  documentKind: 'text' | 'json';
+  sessionId: string;
+  revision: number;
+  persistedRevision: number;
+  recoveryConflictPath: string | null;
+  selection: GlobalSelection | null;
+  scrollAnchor: GlobalScrollAnchor | null;
+  indexProgress: number;
+}
+
+export type Tab = MarkdownTabState | SegmentedTextTabState;
+
+/** Rust 打开或恢复文件后返回的新会话数据；旧 sessionId 不得跨应用启动复用。 */
+export interface SegmentedSessionOpenData {
+  sessionId: string;
+  revision: number;
+  persistedRevision: number;
+  indexProgress: number;
+  readonly: boolean;
+  recoveryConflictPath: string | null;
+}
+
+/** 恢复冲突文件只保存路径元数据；缺失或非法值统一视为无冲突。 */
+export function normalizeRecoveryConflictPath(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 export type ExternalFileChangeType = 'none' | 'modified' | 'deleted';
@@ -70,22 +116,36 @@ export interface WorkspaceState {
   currentFolderPath?: string;
 }
 
-export interface PersistedWorkspaceTab {
+export interface PersistedCommonWorkspaceTab {
   id: string;
+  documentKind: DocumentKind;
   fileName: string;
   filePath: string;
   nativePath: string | null;
-  draftId?: string | null;
   dirty: boolean;
   lastKnownModifiedAt: number;
+  diskReadonly: boolean;
+}
+
+export interface PersistedMarkdownWorkspaceTab extends PersistedCommonWorkspaceTab {
+  documentKind: 'markdown';
+  draftId: string | null;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
-  diskReadonly: boolean;
   version: number;
 }
 
+export interface PersistedSegmentedWorkspaceTab extends PersistedCommonWorkspaceTab {
+  documentKind: 'text' | 'json';
+  recoveryConflictPath: string | null;
+  selection: GlobalSelection | null;
+  scrollAnchor: GlobalScrollAnchor | null;
+}
+
+export type PersistedWorkspaceTab = PersistedMarkdownWorkspaceTab | PersistedSegmentedWorkspaceTab;
+
 export interface PersistedWorkspaceState {
-  version: 2;
+  version: 3;
   tabs: PersistedWorkspaceTab[];
   activeTabId: string;
   currentFolderPath?: string;

@@ -34,6 +34,17 @@ describe('external file change flow', () => {
     expect(appSource).toContain("case 'overwrite-external'");
   });
 
+  it('keeps segmented conflicts active when the default action ignores one disk identity', () => {
+    expect(appSource).toContain('function ignoreSegmentedExternalChange(');
+    expect(appSource).toContain('ignoredSegmentedExternalChanges.set(sessionId, changeToken);');
+    expect(appSource).toMatch(
+      /case 'ignore':[\s\S]*?ignoreSegmentedExternalChange\([\s\S]*?segmentedIgnoreTarget\.changeToken/,
+    );
+    expect(appSource).toContain(
+      'tryHandleExternalFileChangeByPreference(change, segmentedIgnoreTarget)',
+    );
+  });
+
   it.skip('exposes explicit reload, save-as and overwrite actions in the editor alert', () => {
     expect(actionsSource).toContain('async function reloadExternalFile');
     expect(actionsSource).toContain('async function overwriteExternalFile');

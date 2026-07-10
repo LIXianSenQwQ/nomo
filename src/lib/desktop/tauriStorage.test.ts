@@ -2,19 +2,45 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   deleteWorkspaceDraft,
   installSampleDocument,
+  openMarkdownWithDialog,
   parseNativeError,
+  pickDocumentPathWithDialog,
   readWorkspaceDraft,
   writeWorkspaceDraft,
 } from './tauriStorage';
 
 const invokeMock = vi.hoisted(() => vi.fn());
+const openDialogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock,
 }));
 
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: openDialogMock,
+}));
+
 beforeEach(() => {
   invokeMock.mockReset();
+  openDialogMock.mockReset();
+});
+
+describe('document dialogs', () => {
+  it('keeps the legacy Markdown reader isolated from segmented document extensions', async () => {
+    openDialogMock.mockResolvedValue(null);
+
+    await openMarkdownWithDialog();
+    expect(openDialogMock).toHaveBeenLastCalledWith({
+      multiple: false,
+      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+    });
+
+    await pickDocumentPathWithDialog();
+    expect(openDialogMock).toHaveBeenLastCalledWith({
+      multiple: false,
+      filters: [{ name: 'Documents', extensions: ['md', 'markdown', 'txt', 'json'] }],
+    });
+  });
 });
 
 describe('parseNativeError', () => {

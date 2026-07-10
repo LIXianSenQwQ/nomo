@@ -318,7 +318,7 @@ fn has_supported_extension(path: &Path) -> bool {
         .and_then(|extension| extension.to_str())
         .map(|extension| {
             let extension = extension.to_ascii_lowercase();
-            matches!(extension.as_str(), "md" | "markdown" | "txt")
+            matches!(extension.as_str(), "md" | "markdown" | "txt" | "json")
         })
         .unwrap_or(false)
 }
@@ -371,6 +371,25 @@ mod tests {
         );
 
         assert_eq!(paths, vec![normalize_path(&md)]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn collects_json_paths_from_args() {
+        let dir = env::temp_dir().join(format!(
+            "nomo-external-open-json-{}",
+            crate::config::now_ts()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let json = dir.join("large-data.json");
+        fs::write(&json, "{}").unwrap();
+
+        let paths = collect_markdown_paths_from_args(
+            vec!["Nomo.exe".to_string(), json.to_string_lossy().to_string()],
+            None,
+        );
+
+        assert_eq!(paths, vec![normalize_path(&json)]);
         let _ = fs::remove_dir_all(dir);
     }
 
