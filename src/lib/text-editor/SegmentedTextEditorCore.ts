@@ -5,6 +5,7 @@ import {
   type DecorationSet,
   EditorView,
   keymap,
+  lineNumbers,
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
@@ -511,6 +512,10 @@ export class SegmentedTextEditorCore {
       Boolean(window.longLine) ||
       hasLineLongerThan(mapping.editorText, this.maxJsonHighlightLineLength);
     const extensions: Extension[] = [
+      lineNumbers({
+        // CodeMirror 只持有当前分段窗口，行号必须叠加后端提供的全文零基起始行。
+        formatNumber: (lineNumber) => String(window.startLine + lineNumber),
+      }),
       keymap.of([
         {
           key: 'Mod-z',
