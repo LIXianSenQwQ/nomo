@@ -140,7 +140,8 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 搜索替换逻辑 | `src/app/services/searchReplace.ts` | `src/app/components/SearchReplacePanel.svelte` | 搜索/替换算法和状态管理 |
-| 搜索替换面板 | `src/app/components/SearchReplacePanel.svelte` | `src/app/services/searchReplace.ts` | 搜索替换 UI 交互 |
+| 搜索替换面板 | `src/app/components/SearchReplacePanel.svelte` | `src/app/services/searchReplace.ts`, `SegmentedTextEditorWorkspace.svelte` | Markdown、TXT、JSON 的统一浮窗布局和选项交互 |
+| 全词边界判定 | `src/lib/search/textSearch.ts` | `searchReplace.ts`, `ProseMirrorEditorCore.ts` | Unicode 全词匹配边界规则 |
 
 ### 确认对话框
 
@@ -2967,6 +2968,7 @@
 
 **Owns:**
 - TXT/JSON 分段编辑器的生命周期、滚动事件与窗口切换
+- TXT/JSON 全文搜索分页、计数、单次替换和后台全部替换任务协调
 - 基于文件字节进度的固定全文滚动跑道；索引进度不得改变已校准的全局高度
 - 快速拖动时的小预览窗口、只读门禁、空闲后扩展到正式窗口
 - 后端首窗口不足正式窗口时的前端补读与原子切换
@@ -2978,7 +2980,7 @@
 
 **Called by:** `src/app/App.svelte`
 
-**Depends on:** `src/lib/text-editor/SegmentedTextEditorCore.ts`, `src/lib/text-editor/viewportController.ts`, `src/lib/text-editor/virtualScroll.ts`
+**Depends on:** `src/app/components/SearchReplacePanel.svelte`, `src/lib/text-editor/SegmentedTextEditorCore.ts`, `src/lib/text-editor/viewportController.ts`, `src/lib/text-editor/virtualScroll.ts`
 
 **Change this when:**
 - 修改 TXT/JSON 大文件的滚动、快速定位、加载状态或窗口切换体验
@@ -3022,6 +3024,7 @@
 
 **Owns:**
 - CodeMirror 局部窗口内容、全局字节锚点和选区映射
+- 当前可见全局字节范围的单次替换，并复用普通编辑批次与撤销链路
 - 加载/快速定位期间的交互只读门禁
 - 在不改变选区的前提下，将目标字节位置滚动进当前局部视口
 - 编辑批次、撤销重做和 JSON 增量高亮接线
@@ -3076,6 +3079,7 @@
 
 **Owns:**
 - 分段编辑器的固定像素视口、粘性定位和全文滚动跑道布局
+- 统一搜索替换浮窗在 TXT/JSON 工作区中的悬浮层定位
 - 隐藏 CodeMirror 内层滚动条，只保留外层全文滚动条
 - 窗口切换时的轻量加载遮罩
 

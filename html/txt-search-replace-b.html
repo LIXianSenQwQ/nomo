@@ -4,6 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TXT 查找替换原型 B · 渐进面板</title>
+    <script>
+      (() => {
+        try {
+          const saved = JSON.parse(
+            localStorage.getItem('newmd.searchReplace.position.v1') || 'null',
+          );
+          if (!saved || !Number.isFinite(saved.left) || !Number.isFinite(saved.top)) return;
+          const margin = 8;
+          const width = Math.min(500, Math.max(0, window.innerWidth - 28));
+          const left = Math.min(
+            Math.max(saved.left, margin),
+            Math.max(margin, window.innerWidth - width - margin),
+          );
+          const top = Math.min(
+            Math.max(saved.top, margin),
+            Math.max(margin, window.innerHeight - 48),
+          );
+          document.documentElement.style.setProperty('--finder-left', `${left}px`);
+          document.documentElement.style.setProperty('--finder-right', 'auto');
+          document.documentElement.style.setProperty('--finder-top', `${top}px`);
+        } catch {
+          // 存储不可用时直接使用默认位置。
+        }
+      })();
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -165,11 +190,12 @@
       }
 
       .finder {
-        position: absolute;
+        position: fixed;
         z-index: 20;
-        top: 82px;
-        right: 38px;
-        width: min(520px, calc(100vw - 28px));
+        top: var(--finder-top, 82px);
+        right: var(--finder-right, 38px);
+        left: var(--finder-left, auto);
+        width: min(500px, calc(100vw - 28px));
         border: 1px solid var(--border-strong);
         border-radius: 10px;
         background: var(--surface);
@@ -238,7 +264,7 @@
       .query-row,
       .replace-area {
         display: grid;
-        grid-template-columns: 48px minmax(0, 1fr) auto;
+        grid-template-columns: 60px minmax(0, 1fr) 144px;
         align-items: center;
         gap: 8px;
       }
@@ -263,22 +289,14 @@
 
       .search-shell:focus-within {
         border-color: var(--accent);
-        box-shadow: 0 0 0 2px rgba(47, 125, 111, 0.14);
-      }
-
-      .search-icon {
-        width: 15px;
-        height: 15px;
-        margin-left: 11px;
-        flex: 0 0 auto;
-        color: var(--muted);
+        box-shadow: none;
       }
 
       .search-shell input {
         width: 100%;
         min-width: 0;
         height: 100%;
-        padding: 0 9px;
+        padding: 0 9px 0 12px;
         border: 0;
         outline: 0;
         background: transparent;
@@ -294,7 +312,7 @@
       }
 
       .find-button {
-        min-width: 96px;
+        width: 100%;
         height: 38px;
         padding: 0 13px;
         border: 1px solid var(--accent);
@@ -378,14 +396,13 @@
       }
 
       .replace-area {
-        grid-template-columns: 48px minmax(0, 1fr) auto auto;
         margin-top: 8px;
       }
 
       .replace-input {
         min-width: 0;
-        height: 34px;
-        padding: 0 10px;
+        height: 38px;
+        padding: 0 12px;
         border: 1px solid var(--border-strong);
         border-radius: 6px;
         outline: 0;
@@ -395,12 +412,67 @@
 
       .replace-input:focus {
         border-color: var(--accent);
-        box-shadow: 0 0 0 2px rgba(47, 125, 111, 0.14);
+        box-shadow: none;
+      }
+
+      .action-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        width: 144px;
+      }
+
+      .action-group.single {
+        grid-template-columns: 1fr;
+      }
+
+      .action-group.find-actions {
+        grid-template-columns: minmax(0, 1fr) 32px;
+        gap: 0;
+      }
+
+      .find-actions .find-button {
+        border-radius: 6px 0 0 6px;
+      }
+
+      .replace-toggle {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 38px;
+        padding: 0;
+        border: 1px solid var(--accent);
+        border-left-color: rgba(255, 255, 255, 0.28);
+        border-radius: 0 6px 6px 0;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+      }
+
+      .replace-toggle:hover {
+        border-color: var(--accent-strong);
+        border-left-color: rgba(255, 255, 255, 0.34);
+        background: var(--accent-strong);
+      }
+
+      .replace-toggle svg {
+        width: 15px;
+        height: 15px;
+        transition: transform 160ms ease;
+      }
+
+      .finder.replace-hidden .replace-area {
+        display: none;
+      }
+
+      .finder.replace-hidden .replace-toggle svg {
+        transform: rotate(-90deg);
       }
 
       .button {
-        height: 34px;
-        padding: 0 11px;
+        width: 100%;
+        height: 38px;
+        padding: 0 5px;
         border: 1px solid var(--border-strong);
         border-radius: 6px;
         background: var(--surface);
@@ -425,6 +497,7 @@
       .find-button:focus-visible,
       .icon-button:focus-visible,
       .button:focus-visible,
+      .replace-toggle:focus-visible,
       .count-action:focus-visible {
         outline: 2px solid rgba(47, 125, 111, 0.45);
         outline-offset: 2px;
@@ -437,7 +510,7 @@
         }
 
         .query-row {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr;
         }
 
         .row-label,
@@ -449,18 +522,24 @@
           text-align: left;
         }
 
-        .find-button {
+        .action-group {
           grid-column: 1 / -1;
           width: 100%;
         }
 
         .replace-area {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr;
         }
 
         .replace-area .row-label,
         .replace-input {
           grid-column: 1 / -1;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .replace-toggle svg {
+          transition: none;
         }
       }
     </style>
@@ -515,19 +594,31 @@ SEARCH can be case-sensitive when needed.
             <div class="query-row">
               <span class="row-label">查找</span>
               <label class="search-shell">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
-                  <path
-                    d="m20 20-4-4"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                  ></path>
-                </svg>
                 <input id="query" value="search" aria-label="查找内容" autocomplete="off" />
                 <span class="result-counter" id="count">0 个结果</span>
               </label>
-              <button class="find-button" id="findNext" type="button">查找下一个</button>
+              <div class="action-group find-actions">
+                <button class="find-button" id="findNext" type="button">查找下一个</button>
+                <button
+                  class="replace-toggle"
+                  id="replaceToggle"
+                  type="button"
+                  title="隐藏替换"
+                  aria-label="隐藏替换"
+                  aria-expanded="true"
+                  aria-controls="replaceArea"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="m7 10 5 5 5-5"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div class="replace-area" id="replaceArea">
@@ -539,8 +630,10 @@ SEARCH can be case-sensitive when needed.
                 placeholder="输入替换内容"
                 autocomplete="off"
               />
-              <button class="button" id="replaceOne" type="button">替换</button>
-              <button class="button" id="replaceAll" type="button">全部替换</button>
+              <div class="action-group">
+                <button class="button" id="replaceOne" type="button">替换</button>
+                <button class="button" id="replaceAll" type="button">全部替换</button>
+              </div>
             </div>
 
             <div class="option-strip" aria-label="查找选项">
@@ -580,6 +673,7 @@ SEARCH can be case-sensitive when needed.
       const whole = document.querySelector('#whole');
       const caseSensitive = document.querySelector('#case');
       const wrap = document.querySelector('#wrap');
+      const positionStorageKey = 'newmd.searchReplace.position.v1';
       let matches = [];
       let activeMatch = -1;
 
@@ -675,6 +769,13 @@ SEARCH can be case-sensitive when needed.
       document.querySelector('#countButton').addEventListener('click', collectMatches);
       document.querySelector('#replaceOne').addEventListener('click', replaceOne);
       document.querySelector('#replaceAll').addEventListener('click', replaceAll);
+      document.querySelector('#replaceToggle').addEventListener('click', (event) => {
+        const hidden = finder.classList.toggle('replace-hidden');
+        const label = hidden ? '显示替换' : '隐藏替换';
+        event.currentTarget.setAttribute('aria-expanded', String(!hidden));
+        event.currentTarget.setAttribute('aria-label', label);
+        event.currentTarget.setAttribute('title', label);
+      });
       queryInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           event.preventDefault();
@@ -685,6 +786,10 @@ SEARCH can be case-sensitive when needed.
       document.querySelector('#close').addEventListener('click', () => {
         finder.style.display = 'none';
         document.querySelector('#reopen').style.display = 'inline-flex';
+        const match = matches[activeMatch];
+        if (match && editor.selectionStart === match.start && editor.selectionEnd === match.end) {
+          editor.setSelectionRange(match.end, match.end);
+        }
         editor.focus();
       });
       document.querySelector('#reopen').addEventListener('click', (event) => {
@@ -695,6 +800,19 @@ SEARCH can be case-sensitive when needed.
 
       const dragHandle = document.querySelector('#dragHandle');
       let drag = null;
+
+      function saveFinderPosition() {
+        try {
+          const rect = finder.getBoundingClientRect();
+          localStorage.setItem(
+            positionStorageKey,
+            JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }),
+          );
+        } catch {
+          // 本地文件禁用存储时仍可正常拖动。
+        }
+      }
+
       dragHandle.addEventListener('pointerdown', (event) => {
         if (event.target.closest('button')) return;
         const rect = finder.getBoundingClientRect();
@@ -716,6 +834,12 @@ SEARCH can be case-sensitive when needed.
         drag = null;
         finder.classList.remove('dragging');
         dragHandle.releasePointerCapture(event.pointerId);
+        saveFinderPosition();
+      });
+      dragHandle.addEventListener('pointercancel', () => {
+        drag = null;
+        finder.classList.remove('dragging');
+        saveFinderPosition();
       });
 
       editor.addEventListener('keyup', () => {
