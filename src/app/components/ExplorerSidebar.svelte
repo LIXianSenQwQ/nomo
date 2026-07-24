@@ -127,7 +127,7 @@
   export let getDirectoryLabel: (path: string) => string;
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (path: string) => void;
-  export let openPreviewFile: (path: string) => void;
+  export let openPreviewFile: (path: string) => void | Promise<void>;
   export let pinPreviewFile: () => void;
   export let previewNativePath: string | null;
   export let startResize: (event: MouseEvent) => void;
@@ -365,13 +365,13 @@
     }, 250);
   }
 
-  function handleFileDblClick(path: string) {
+  async function handleFileDblClick(path: string) {
     if (pendingClickTimer && pendingClickPath === path) {
       clearTimeout(pendingClickTimer);
       pendingClickTimer = null;
       pendingClickPath = null;
     }
-    openPreviewFile(path);
+    await openPreviewFile(path);
     pinPreviewFile();
   }
 

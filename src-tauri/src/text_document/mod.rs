@@ -54,6 +54,8 @@ pub(crate) struct OpenSegmentedDocumentResult {
     pub(crate) encoding: TextEncoding,
     pub(crate) line_ending: LineEnding,
     pub(crate) byte_length: u64,
+    /// 源文件系统权限是否只读；不包含 baseline/编码校验期间的临时编辑门禁。
+    pub(crate) filesystem_readonly: bool,
     pub(crate) readonly: bool,
     pub(crate) first_window: SegmentedWindow,
     /// 原文件基线变化时保留的恢复日志路径；补丁不会自动套到新基线。
@@ -156,6 +158,8 @@ pub(crate) struct SaveSegmentedRevisionResult {
     pub(crate) current_revision: u64,
     pub(crate) persisted_revision: u64,
     pub(crate) dirty: bool,
+    /// 保存目标的文件系统权限是否只读；与会话临时编辑门禁分开上报。
+    pub(crate) filesystem_readonly: bool,
     pub(crate) readonly: bool,
     pub(crate) modified_at: i64,
 }
@@ -276,6 +280,8 @@ pub(crate) struct SegmentedSessionStatus {
     pub(crate) completed: bool,
     pub(crate) encoding: TextEncoding,
     pub(crate) line_ending: LineEnding,
+    /// 源文件系统权限是否只读；不包含后台准备阶段的临时只读状态。
+    pub(crate) filesystem_readonly: bool,
     pub(crate) readonly: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) baseline_error: Option<String>,

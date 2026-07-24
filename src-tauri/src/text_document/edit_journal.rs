@@ -53,16 +53,19 @@ impl BaselineIdentity {
             path: path.to_string_lossy().into_owned(),
             physical_len: metadata.len(),
             modified_nanos,
-            file_id: platform_file_id(&metadata),
+            file_id: platform_file_id(file, &metadata)?,
             change_stamp: platform_change_stamp(file, &metadata)?,
         })
     }
 }
 
 #[cfg(unix)]
-fn platform_file_id(metadata: &std::fs::Metadata) -> Option<String> {
+fn platform_file_id(
+    _file: &File,
+    metadata: &std::fs::Metadata,
+) -> TextDocumentResult<Option<String>> {
     use std::os::unix::fs::MetadataExt;
-    Some(format!("unix:{}:{}", metadata.dev(), metadata.ino()))
+    Ok(Some(format!("unix:{}:{}", metadata.dev(), metadata.ino())))
 }
 
 #[cfg(unix)]
@@ -79,12 +82,32 @@ fn platform_change_stamp(
 }
 
 #[cfg(windows)]
-fn platform_file_id(metadata: &std::fs::Metadata) -> Option<String> {
-    use std::os::windows::fs::MetadataExt;
-    metadata
-        .volume_serial_number()
-        .zip(metadata.file_index())
-        .map(|(volume, index)| format!("windows:{volume}:{index}"))
+fn platform_file_id(
+    file: &File,
+    _metadata: &std::fs::Metadata,
+) -> TextDocumentResult<Option<String>> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+    };
+
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: raw handle 在 file 借用期间有效，输出缓冲区类型与 API 要求一致。
+    let result = unsafe { GetFileInformationByHandle(file.as_raw_handle().cast(), &mut info) };
+    if result == 0 {
+        return Err(TextDocumentError::new(
+            "file-identity-failed",
+            format!(
+                "读取 Windows 文件 ID 失败：{}",
+                std::io::Error::last_os_error()
+            ),
+        ));
+    }
+    let file_index = ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64;
+    Ok(Some(format!(
+        "windows:{}:{file_index}",
+        info.dwVolumeSerialNumber
+    )))
 }
 
 #[cfg(windows)]
@@ -120,8 +143,11 @@ fn platform_change_stamp(
 }
 
 #[cfg(not(any(unix, windows)))]
-fn platform_file_id(_metadata: &std::fs::Metadata) -> Option<String> {
-    None
+fn platform_file_id(
+    _file: &File,
+    _metadata: &std::fs::Metadata,
+) -> TextDocumentResult<Option<String>> {
+    Ok(None)
 }
 
 #[cfg(not(any(unix, windows)))]

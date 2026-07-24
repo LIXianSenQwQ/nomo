@@ -599,7 +599,7 @@ describe('App outline layout', () => {
     expect(tauriLibSource).not.toContain('tauri_plugin_updater');
   });
 
-  it('registers Nomo as an optional Markdown open-with application', () => {
+  it('registers Nomo as an optional document open-with application', () => {
     expect(windowsOpenWithInstallerHookSource).toContain('NSIS_HOOK_POSTINSTALL');
     expect(windowsOpenWithInstallerHookSource).toContain(
       'Software\\Classes\\Applications\\${MAINBINARYNAME}.exe',
@@ -607,9 +607,13 @@ describe('App outline layout', () => {
     expect(windowsOpenWithInstallerHookSource).toContain('SupportedTypes');
     expect(windowsOpenWithInstallerHookSource).toContain('.md');
     expect(windowsOpenWithInstallerHookSource).toContain('.markdown');
+    expect(windowsOpenWithInstallerHookSource).toContain('.txt');
+    expect(windowsOpenWithInstallerHookSource).toContain('.json');
     expect(windowsOpenWithInstallerHookSource).toContain('OpenWithList');
     expect(windowsOpenWithInstallerHookSource).toContain('OpenWithProgids');
     expect(windowsOpenWithInstallerHookSource).toContain('Nomo.Markdown');
+    expect(windowsOpenWithInstallerHookSource).toContain('Nomo.Text');
+    expect(windowsOpenWithInstallerHookSource).toContain('Nomo.Json');
     expect(windowsOpenWithInstallerHookSource).not.toContain('Software\\Classes\\.md" ""');
     expect(windowsOpenWithInstallerHookSource).toContain('NSIS_HOOK_POSTUNINSTALL');
   });
@@ -1349,12 +1353,12 @@ describe('App outline layout', () => {
     );
   });
 
-  it('pins conditional segmented rows so the editor viewport cannot collapse when notices are absent', () => {
-    expect(segmentedEditorCssSource).toContain('.segmented-toolbar {\n  grid-row: 1;');
-    expect(segmentedEditorCssSource).toContain('.segmented-search {\n  grid-row: 2;');
-    expect(segmentedEditorCssSource).toContain('.readonly-notice {\n  grid-row: 3;');
-    expect(segmentedEditorCssSource).toContain('.segmented-scroll {\n  grid-row: 4;');
-    expect(segmentedEditorCssSource).toContain('.segmented-status {\n  grid-row: 5;');
+  it('pins conditional segmented rows without reserving space for a toolbar', () => {
+    expect(segmentedEditorCssSource).not.toContain('.segmented-toolbar');
+    expect(segmentedEditorCssSource).toContain('.segmented-search {\n  grid-row: 1;');
+    expect(segmentedEditorCssSource).toContain('.readonly-notice {\n  grid-row: 2;');
+    expect(segmentedEditorCssSource).toContain('.segmented-scroll {\n  grid-row: 3;');
+    expect(segmentedEditorCssSource).toContain('.segmented-status {\n  grid-row: 4;');
   });
 
   it('does not leave open sessions pointing at stale paths after explorer renames', () => {

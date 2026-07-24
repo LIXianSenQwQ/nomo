@@ -64,14 +64,14 @@
   --md-dropdown-bg: rgba(255, 255, 255, 0.96);
   --md-dropdown-border: #d8d8d8;
 
-  /* Windows 资源管理器式滚动条 */
-  --md-scrollbar-size: 12px;
+  /* 保留 Windows 原生感，同时确保长文档中的滚动位置清晰可见 */
+  --md-scrollbar-size: 13px;
   --md-scrollbar-radius: 999px;
-  --md-scrollbar-track: transparent;
-  --md-scrollbar-thumb-idle: rgba(200, 205, 210, 0.42);
-  --md-scrollbar-thumb: #c8cdd2;
-  --md-scrollbar-thumb-hover: #aeb5bc;
-  --md-scrollbar-thumb-active: #9099a3;
+  --md-scrollbar-track: rgba(35, 42, 49, 0.035);
+  --md-scrollbar-thumb-idle: rgba(126, 136, 146, 0.72);
+  --md-scrollbar-thumb: #7e8892;
+  --md-scrollbar-thumb-hover: #66717c;
+  --md-scrollbar-thumb-active: #4f5964;
 }
 
 :root[data-theme='dark'] {
@@ -133,12 +133,12 @@
   --md-dropdown-bg: rgba(30, 30, 30, 0.96);
   --md-dropdown-border: #3a3a3a;
 
-  /* Windows 资源管理器式滚动条（暗色） */
-  --md-scrollbar-track: transparent;
-  --md-scrollbar-thumb-idle: rgba(75, 85, 97, 0.46);
-  --md-scrollbar-thumb: #4b5561;
-  --md-scrollbar-thumb-hover: #66717d;
-  --md-scrollbar-thumb-active: #828d99;
+  /* 暗色界面需要更高的明度差，避免滑块融入编辑区背景 */
+  --md-scrollbar-track: rgba(235, 241, 247, 0.04);
+  --md-scrollbar-thumb-idle: rgba(142, 154, 166, 0.72);
+  --md-scrollbar-thumb: #8e9aa6;
+  --md-scrollbar-thumb-hover: #a9b4bf;
+  --md-scrollbar-thumb-active: #c4ccd4;
 }
 
 :root[data-code-line-numbers='hidden'] .line-numbers-gutter {

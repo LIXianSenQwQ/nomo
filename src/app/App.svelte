@@ -771,14 +771,18 @@
         if (opened.recoveryConflictPath) {
           statusMessage = t.segmentedRecoveryConflict({ path: opened.recoveryConflictPath });
         }
-        return createRuntimeTabFromPersisted(persistedTab, {
-          sessionId: opened.sessionId,
-          revision: opened.revision,
-          persistedRevision: opened.persistedRevision,
-          indexProgress: opened.firstWindow.indexProgress,
-          readonly: opened.readonly,
-          recoveryConflictPath: opened.recoveryConflictPath ?? null,
-        });
+        return createRuntimeTabFromPersisted(
+          persistedTab,
+          {
+            sessionId: opened.sessionId,
+            revision: opened.revision,
+            persistedRevision: opened.persistedRevision,
+            indexProgress: opened.firstWindow.indexProgress,
+            readonly: opened.readonly,
+            recoveryConflictPath: opened.recoveryConflictPath ?? null,
+          },
+          { diskReadonly: opened.filesystemReadonly ?? false },
+        );
       } catch (error) {
         showVisibleError(error, t.openRecentFailed());
         return null;
@@ -2457,7 +2461,7 @@
         recoveryConflictPath: opened.recoveryConflictPath ?? null,
       },
       lastKnownModifiedAt: status?.modifiedAt ?? 0,
-      diskReadonly: Boolean(status?.readonly || opened.readonly),
+      diskReadonly: opened.filesystemReadonly ?? Boolean(status?.readonly),
     });
 
     tabs = replacedTab
@@ -2923,7 +2927,7 @@
       targetTab.revision = nextState.revision;
       targetTab.dirty = nextState.dirty;
       targetTab.lastKnownModifiedAt = result.modifiedAt;
-      targetTab.diskReadonly = nextState.readonly;
+      targetTab.diskReadonly = nextState.filesystemReadonly ?? false;
       if (targetPath) {
         targetTab.nativePath = targetPath;
         targetTab.filePath = targetPath;
@@ -3082,7 +3086,7 @@
     targetTab.dirty = false;
     targetTab.selection = null;
     targetTab.scrollAnchor = null;
-    targetTab.diskReadonly = opened.readonly;
+    targetTab.diskReadonly = opened.filesystemReadonly ?? false;
     targetTab.externalFileChange = createEmptyExternalFileChange();
     tabs = [...tabs];
     if (activeTabId === reloadingTabId) {
@@ -3122,7 +3126,7 @@
       targetTab.revision = nextState.revision;
       targetTab.dirty = nextState.dirty;
       targetTab.lastKnownModifiedAt = result.modifiedAt;
-      targetTab.diskReadonly = nextState.readonly;
+      targetTab.diskReadonly = nextState.filesystemReadonly ?? false;
       targetTab.externalFileChange = createEmptyExternalFileChange();
       ignoredSegmentedExternalChanges.delete(savingSessionId);
       if (activeTabId === savingTabId) {
@@ -3176,7 +3180,7 @@
                 tabToClose.revision = result.currentRevision;
                 tabToClose.dirty = result.dirty;
                 tabToClose.lastKnownModifiedAt = result.modifiedAt;
-                tabToClose.diskReadonly = result.readonly;
+                tabToClose.diskReadonly = result.filesystemReadonly ?? false;
                 return true;
               })
               .catch((error) => {
@@ -4067,7 +4071,7 @@
     targetTab.persistedRevision = next.persistedRevision;
     targetTab.dirty = next.dirty;
     targetTab.indexProgress = next.indexProgress;
-    targetTab.diskReadonly = next.readonly;
+    targetTab.diskReadonly = next.filesystemReadonly;
     targetTab.selection = next.selection;
     targetTab.scrollAnchor = next.scrollAnchor;
     if (targetTab.id === previewTabId && next.dirty) {
@@ -4075,7 +4079,7 @@
     }
     if (targetTab.id === activeTabId) {
       dirty = next.dirty;
-      diskReadonly = next.readonly;
+      diskReadonly = next.filesystemReadonly;
     }
     tabs = [...tabs];
     persistWorkspaceState();

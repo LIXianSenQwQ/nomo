@@ -36,7 +36,12 @@ import type {
   SaveSegmentedRevisionResult,
   Unlisten,
 } from './protocol';
-import { ViewportController, type ViewportLoadStatus } from './viewportController';
+import {
+  ViewportController,
+  type ViewportLoadOptions,
+  type ViewportLoadStatus,
+} from './viewportController';
+import { SEGMENTED_FULL_WINDOW_BYTES } from './virtualScroll';
 
 export interface SegmentedEditorMetadata {
   sessionId: string;
@@ -47,6 +52,7 @@ export interface SegmentedEditorMetadata {
   indexProgress: number;
   encoding: SegmentedEncoding;
   lineEnding: SegmentedLineEnding;
+  filesystemReadonly: boolean;
   readonly: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -83,7 +89,6 @@ export interface SegmentedTextEditorCoreOptions {
 }
 
 const DEFAULT_CACHE_CAPACITY_BYTES = 8 * 1024 * 1024;
-const DEFAULT_WINDOW_BYTES = 256 * 1024;
 const DEFAULT_MAX_JSON_HIGHLIGHT_LINE_LENGTH = 100_000;
 
 interface PendingEditSnapshot {
@@ -113,6 +118,7 @@ export class SegmentedTextEditorCore {
   private indexProgress: number;
   private encoding: SegmentedEncoding;
   private lineEnding: SegmentedLineEnding;
+  private filesystemReadonly: boolean;
   private backendReadonlyDocument: boolean;
   private readonlyDocument: boolean;
   private canUndo = false;
@@ -128,6 +134,7 @@ export class SegmentedTextEditorCore {
   private applyingGlobalSelection = false;
   private historyLocked = false;
   private exclusiveTaskLocked = false;
+  private seekingLocked = false;
   private historyQueueDepth = 0;
   private historyTail: Promise<void> = Promise.resolve();
   private destroyed = false;
@@ -142,6 +149,7 @@ export class SegmentedTextEditorCore {
     this.indexProgress = options.session.firstWindow.indexProgress;
     this.encoding = options.session.encoding;
     this.lineEnding = options.session.lineEnding;
+    this.filesystemReadonly = options.session.filesystemReadonly ?? false;
     this.backendReadonlyDocument =
       options.session.readonly || options.session.encoding === 'unsupported';
     this.readonlyDocument = this.backendReadonlyDocument;
@@ -159,7 +167,7 @@ export class SegmentedTextEditorCore {
       revision: this.revision,
       byteLength: this.byteLength,
       port: this.port,
-      windowBytes: options.windowBytes ?? DEFAULT_WINDOW_BYTES,
+      windowBytes: options.windowBytes ?? SEGMENTED_FULL_WINDOW_BYTES,
       cacheCapacityBytes: options.cacheCapacityBytes ?? DEFAULT_CACHE_CAPACITY_BYTES,
       prefetchBytes: options.prefetchBytes,
       prefetch: options.prefetch,
@@ -184,6 +192,7 @@ export class SegmentedTextEditorCore {
       indexProgress: this.indexProgress,
       encoding: this.encoding,
       lineEnding: this.lineEnding,
+      filesystemReadonly: this.filesystemReadonly,
       readonly: this.readonlyDocument,
       canUndo: this.canUndo,
       canRedo: this.canRedo,
@@ -217,10 +226,13 @@ export class SegmentedTextEditorCore {
     return this.indexProgress;
   }
 
-  async loadWindow(startByte: number): Promise<SegmentedCoreLoadResult> {
+  async loadWindow(
+    startByte: number,
+    options: ViewportLoadOptions = {},
+  ): Promise<SegmentedCoreLoadResult> {
     this.assertAlive();
     await this.editBatcher.flush();
-    const result = await this.viewport.loadWindow(startByte);
+    const result = await this.viewport.loadWindow(startByte, options);
     return {
       status: result.status,
       requestId: result.requestId,
@@ -263,6 +275,14 @@ export class SegmentedTextEditorCore {
     this.assertAlive();
     if (this.exclusiveTaskLocked === locked) return;
     this.exclusiveTaskLocked = locked;
+    this.reconfigureEditability();
+  }
+
+  /** 快速拖动期间临时冻结编辑，避免预览窗口切换与用户输入竞争。 */
+  setSeekingLocked(locked: boolean) {
+    this.assertAlive();
+    if (this.seekingLocked === locked) return;
+    this.seekingLocked = locked;
     this.reconfigureEditability();
   }
 
@@ -332,7 +352,12 @@ export class SegmentedTextEditorCore {
     if (result.currentRevision < this.revision) {
       // 保存冻结在旧 revision 时只推进已持久化水位，绝不让当前编辑 revision 倒退。
       this.persistedRevision = Math.max(this.persistedRevision, result.persistedRevision);
-      this.updateSessionMetadata(this.encoding, this.lineEnding, result.readonly);
+      this.updateSessionMetadata(
+        this.encoding,
+        this.lineEnding,
+        result.readonly,
+        result.filesystemReadonly,
+      );
       this.emitMetadata();
       return this.getMetadata();
     }
@@ -340,7 +365,12 @@ export class SegmentedTextEditorCore {
       if (this.editBatcher.hasPendingEdits) {
         // save invoke 与 edit ack 可能反向到达；保存水位可先推进，正文 revision 等 ack 自然确认。
         this.persistedRevision = Math.max(this.persistedRevision, result.persistedRevision);
-        this.updateSessionMetadata(this.encoding, this.lineEnding, result.readonly);
+        this.updateSessionMetadata(
+          this.encoding,
+          this.lineEnding,
+          result.readonly,
+          result.filesystemReadonly,
+        );
         this.emitMetadata();
         return this.getMetadata();
       }
@@ -354,7 +384,12 @@ export class SegmentedTextEditorCore {
       this.viewport.setRevision(this.revision, this.byteLength, this.currentWindow);
     }
     this.persistedRevision = Math.max(this.persistedRevision, result.persistedRevision);
-    this.updateSessionMetadata(this.encoding, this.lineEnding, result.readonly);
+    this.updateSessionMetadata(
+      this.encoding,
+      this.lineEnding,
+      result.readonly,
+      result.filesystemReadonly,
+    );
     this.emitMetadata();
     return this.getMetadata();
   }
@@ -378,11 +413,32 @@ export class SegmentedTextEditorCore {
     return this.getMetadata();
   }
 
+  /**
+   * 只滚动当前 CodeMirror 窗口，让指定全局字节出现在局部视口顶部。
+   * 此操作不改变 selection，因此拖动全文滚动条不会带走用户光标。
+   */
+  revealByteOffset(byteOffset: number) {
+    this.assertAlive();
+    if (
+      !Number.isSafeInteger(byteOffset) ||
+      byteOffset < this.mapping.startByte ||
+      byteOffset > this.mapping.endByte
+    ) {
+      return false;
+    }
+    const localOffset = this.mapping.globalByteToLocal(byteOffset, 'left');
+    this.view.dispatch({
+      effects: EditorView.scrollIntoView(localOffset, { y: 'start', yMargin: 0 }),
+    });
+    return true;
+  }
+
   /** destroy 不隐式关闭后端 session；是否丢弃修改必须由应用层显式决定。 */
   async destroy() {
     if (this.destroyed) return;
     // 销毁终止所有前端交互所有权，不能把独占任务锁泄漏给复用宿主。
     this.exclusiveTaskLocked = false;
+    this.seekingLocked = false;
     this.destroyed = true;
     this.deferredWindow = undefined;
     this.viewport.destroy();
@@ -662,7 +718,12 @@ export class SegmentedTextEditorCore {
     this.reportBaselineError(status.baselineError);
 
     this.persistedRevision = Math.max(this.persistedRevision, status.persistedRevision);
-    this.updateSessionMetadata(status.encoding, status.lineEnding, status.readonly);
+    this.updateSessionMetadata(
+      status.encoding,
+      status.lineEnding,
+      status.readonly,
+      status.filesystemReadonly,
+    );
     if (this.editBatcher.hasPendingEdits) {
       // status 可能早于或晚于在途 edit ack；pending 期间只接受会话级安全元数据，
       // byteLength、revision、历史能力和索引均等待 ack 后的同 revision 事件更新。
@@ -737,6 +798,7 @@ export class SegmentedTextEditorCore {
     encoding: SegmentedEncoding,
     lineEnding: SegmentedLineEnding,
     readonly: boolean,
+    filesystemReadonly = this.filesystemReadonly,
   ) {
     const nextReadonly = readonly || encoding === 'unsupported';
     const changed =
@@ -745,6 +807,7 @@ export class SegmentedTextEditorCore {
       nextReadonly !== this.backendReadonlyDocument;
     this.encoding = encoding;
     this.lineEnding = lineEnding;
+    this.filesystemReadonly = filesystemReadonly;
     this.backendReadonlyDocument = nextReadonly;
     if (!nextReadonly && this.currentWindow.utf16ByteOffsets !== undefined) {
       // 校验成功只改变了后端读取语义；当前窗口仍是 lossy 映射，必须保持只读直到精确重读完成。
@@ -813,7 +876,7 @@ export class SegmentedTextEditorCore {
   }
 
   private isInteractionLocked() {
-    return this.historyLocked || this.exclusiveTaskLocked;
+    return this.historyLocked || this.exclusiveTaskLocked || this.seekingLocked;
   }
 
   private reconfigureEditability() {

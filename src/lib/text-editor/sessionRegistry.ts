@@ -15,13 +15,20 @@ export interface SegmentedSessionMetadata {
   encoding: SegmentedEncoding;
   lineEnding: SegmentedLineEnding;
   byteLength: number;
+  filesystemReadonly: boolean;
   readonly: boolean;
 }
 
 export type SegmentedSessionMetadataUpdate = Partial<
   Pick<
     SegmentedSessionMetadata,
-    'revision' | 'persistedRevision' | 'encoding' | 'lineEnding' | 'byteLength' | 'readonly'
+    | 'revision'
+    | 'persistedRevision'
+    | 'encoding'
+    | 'lineEnding'
+    | 'byteLength'
+    | 'filesystemReadonly'
+    | 'readonly'
   >
 >;
 
@@ -73,6 +80,7 @@ export class SegmentedSessionRegistry {
       encoding: result.encoding,
       lineEnding: result.lineEnding,
       byteLength: result.byteLength,
+      filesystemReadonly: result.filesystemReadonly ?? false,
       readonly: result.readonly,
     };
     const previous = this.sessions.get(result.sessionId);

@@ -3,6 +3,7 @@ import { EditorView } from '@codemirror/view';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { segmentedSessionRegistry } from '../../lib/text-editor/sessionRegistry';
+import { SEGMENTED_FULL_WINDOW_BYTES } from '../../lib/text-editor/virtualScroll';
 import {
   SegmentedTextEditorCore,
   type SegmentedEditorMetadata,
@@ -38,7 +39,7 @@ vi.mock('../../lib/text-editor/tauriPort', () => ({
   createTauriSegmentedDocumentPort: () => port as unknown as SegmentedDocumentPort,
 }));
 
-const WINDOW_BYTES = 256 * 1024;
+const WINDOW_BYTES = SEGMENTED_FULL_WINDOW_BYTES;
 let indexProgressHandler: ((progress: SegmentedIndexProgress) => void) | null = null;
 let taskProgressHandler: ((progress: SegmentedTaskProgress) => void) | null = null;
 
@@ -114,6 +115,37 @@ afterEach(() => {
 });
 
 describe('SegmentedTextEditorWorkspace', () => {
+  it('removes completed index progress and does not present a temporary edit lock as a readonly source', async () => {
+    const opened = createOpenedSession('utf-8');
+    opened.readonly = true;
+    opened.filesystemReadonly = false;
+    const tab = registerJsonTab(opened);
+
+    render(SegmentedTextEditorWorkspace, {
+      props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
+    });
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-segmented-editor="true"]')).toBeTruthy();
+    });
+    expect(screen.queryByText(/Building line index 100%/i)).toBeNull();
+    expect(screen.queryByText(/source file is not writable/i)).toBeNull();
+  });
+
+  it('still explains a genuinely readonly source file', async () => {
+    const opened = createOpenedSession('utf-8');
+    opened.readonly = true;
+    opened.filesystemReadonly = true;
+    const tab = registerJsonTab(opened);
+    tab.diskReadonly = true;
+
+    render(SegmentedTextEditorWorkspace, {
+      props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
+    });
+
+    expect(await screen.findByText(/source file is not writable/i)).toBeTruthy();
+  });
+
   it('mounts JSON through the segmented Core and consumes the bounded first window', async () => {
     const opened = createOpenedSession('utf-8');
     segmentedSessionRegistry.register(opened);
@@ -133,12 +165,34 @@ describe('SegmentedTextEditorWorkspace', () => {
       props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
     });
 
-    expect(await screen.findByText('Validate JSON')).toBeTruthy();
-    expect(screen.getByText('Format JSON')).toBeTruthy();
+    expect(screen.queryByText('Validate JSON')).toBeNull();
+    expect(screen.queryByText('Format JSON')).toBeNull();
     await waitFor(() => {
       expect(document.querySelector('[data-segmented-editor="true"]')).toBeTruthy();
     });
     expect(segmentedSessionRegistry.consumeFirstWindow(opened.sessionId)).toBeUndefined();
+  });
+
+  it('expands the backend 256 KiB probe into the 512 KiB editing window on mount', async () => {
+    const opened = createLongSingleLineSession();
+    const backendProbeBytes = 256 * 1024;
+    opened.firstWindow = {
+      ...opened.firstWindow,
+      endByte: backendProbeBytes,
+      text: 'x'.repeat(backendProbeBytes),
+    };
+    const tab = registerTextTab(opened);
+
+    render(SegmentedTextEditorWorkspace, {
+      props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
+    });
+
+    await waitFor(() => {
+      expect(port.readWindow).toHaveBeenCalledWith(
+        expect.objectContaining({ startByte: 0, targetBytes: WINDOW_BYTES }),
+      );
+      expect(document.querySelector('[data-segmented-editor="true"]')).toBeTruthy();
+    });
   });
 
   it('keeps unsupported encoding read-only and explains the boundary', async () => {
@@ -161,10 +215,15 @@ describe('SegmentedTextEditorWorkspace', () => {
     });
 
     expect(await screen.findByText(/not UTF-8/i)).toBeTruthy();
-    expect(screen.getByText('Format JSON').closest('button')).toHaveProperty('disabled', true);
+    await fireEvent.keyDown(screen.getByRole('application'), {
+      key: 'F',
+      altKey: true,
+      shiftKey: true,
+    });
+    expect(port.startTask).not.toHaveBeenCalled();
   });
 
-  it('moves through a long single line with accessible previous and next byte controls', async () => {
+  it('moves forward through a long single line with the byte-segment keyboard shortcut', async () => {
     const opened = createLongSingleLineSession();
     const tab = registerTextTab(opened);
     const stateChanges: SegmentedEditorMetadata[] = [];
@@ -178,26 +237,15 @@ describe('SegmentedTextEditorWorkspace', () => {
       },
     });
 
-    const previous = await screen.findByRole('button', { name: /Previous byte segment/ });
-    const next = screen.getByRole('button', { name: /Next byte segment/ });
-    expect(previous).toHaveProperty('disabled', true);
-    expect(next).toHaveProperty('disabled', false);
-
-    await fireEvent.click(next);
+    const workspace = await screen.findByRole('application');
+    await fireEvent.keyDown(workspace, { key: 'PageDown', altKey: true });
     await waitFor(() => {
       expect(port.readWindow).toHaveBeenCalledWith(
         expect.objectContaining({ startByte: WINDOW_BYTES, targetBytes: WINDOW_BYTES }),
       );
-      expect(screen.getByText(/262,144–524,288 \/ 524,288 B/)).toBeTruthy();
       expect(stateChanges.some((state) => state.scrollAnchor?.byteOffset === WINDOW_BYTES)).toBe(
         true,
       );
-    });
-    expect(next).toHaveProperty('disabled', true);
-
-    await fireEvent.click(previous);
-    await waitFor(() => {
-      expect(screen.getByText(/0–262,144 \/ 524,288 B/)).toBeTruthy();
     });
   });
 
@@ -231,6 +279,67 @@ describe('SegmentedTextEditorWorkspace', () => {
     });
     expect(port.readWindow).not.toHaveBeenCalledWith(
       expect.objectContaining({ startByte: opened.byteLength }),
+    );
+  });
+
+  it('keeps the fixed virtual runway stable while line-index estimates change', async () => {
+    const opened = createLongSingleLineSession(0.25);
+    const tab = registerTextTab(opened);
+    render(SegmentedTextEditorWorkspace, {
+      props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
+    });
+
+    await waitFor(() => expect(indexProgressHandler).not.toBeNull());
+    const runway = screen.getByTestId('segmented-scroll-runway');
+    const initialHeight = runway.getAttribute('style');
+    indexProgressHandler?.({
+      sessionId: opened.sessionId,
+      revision: opened.revision,
+      indexedBytes: opened.byteLength / 2,
+      totalBytes: opened.byteLength,
+      estimatedLines: 10_000_000,
+      completed: false,
+    });
+    await tick();
+
+    expect(runway.getAttribute('style')).toBe(initialHeight);
+  });
+
+  it('uses a small read-only preview for a fast jump, then expands to the full window', async () => {
+    const opened = createLongSingleLineSession();
+    const tab = registerTextTab(opened);
+    render(SegmentedTextEditorWorkspace, {
+      props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
+    });
+
+    const content = await waitFor(() => {
+      const element = document.querySelector<HTMLElement>('[data-segmented-editor="true"]');
+      expect(element).not.toBeNull();
+      return element!;
+    });
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    port.readWindow.mockClear();
+
+    const scroller = document.querySelector<HTMLElement>('.segmented-scroll')!;
+    scroller.scrollTop = 1_000_000;
+    await fireEvent.scroll(scroller);
+
+    await waitFor(() => {
+      const previewCall = port.readWindow.mock.calls.find(
+        ([request]) => request.targetBytes >= 16 * 1024 && request.targetBytes <= 64 * 1024,
+      );
+      expect(previewCall).toBeTruthy();
+      expect(content.getAttribute('contenteditable')).toBe('false');
+    });
+    await waitFor(
+      () => {
+        const requests = port.readWindow.mock.calls.map(([request]) => request);
+        expect(requests.some((request) => request.targetBytes === WINDOW_BYTES)).toBe(true);
+        expect(content.getAttribute('contenteditable')).toBe('true');
+      },
+      { timeout: 2_000 },
     );
   });
 
@@ -417,7 +526,13 @@ describe('SegmentedTextEditorWorkspace', () => {
         matchCount: 41,
       }),
     );
-    await waitFor(() => expect(port.readWindow).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        stateChanges.some(
+          (state) => state.selection?.anchorByte === 10 && state.selection.headByte === 16,
+        ),
+      ).toBe(true),
+    );
     port.readWindow.mockClear();
 
     await fireEvent.click(screen.getByRole('button', { name: /Next match/i }));
@@ -542,7 +657,11 @@ describe('SegmentedTextEditorWorkspace', () => {
       props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
     });
 
-    await fireEvent.click(await screen.findByRole('button', { name: /Format JSON/i }));
+    await fireEvent.keyDown(await screen.findByRole('application'), {
+      key: 'F',
+      altKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => expect(port.startTask).toHaveBeenCalledTimes(1));
 
     expect(lockSpy).toHaveBeenCalledWith(true);
@@ -570,7 +689,11 @@ describe('SegmentedTextEditorWorkspace', () => {
     const failed = render(SegmentedTextEditorWorkspace, {
       props: { interfaceLocale: 'en-US', tab, autoSaveEnabled: false, autoSaveDelayMs: 500 },
     });
-    await fireEvent.click(await screen.findByRole('button', { name: /Format JSON/i }));
+    await fireEvent.keyDown(await screen.findByRole('application'), {
+      key: 'F',
+      altKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => expect(screen.getByText('start failed')).toBeTruthy());
     expect(lockSpy).toHaveBeenLastCalledWith(false);
     failed.unmount();
@@ -587,7 +710,11 @@ describe('SegmentedTextEditorWorkspace', () => {
         autoSaveDelayMs: 500,
       },
     });
-    await fireEvent.click(await screen.findByRole('button', { name: /Format JSON/i }));
+    await fireEvent.keyDown(await screen.findByRole('application'), {
+      key: 'F',
+      altKey: true,
+      shiftKey: true,
+    });
     await waitFor(() => expect(lockSpy).toHaveBeenLastCalledWith(true));
 
     active.unmount();

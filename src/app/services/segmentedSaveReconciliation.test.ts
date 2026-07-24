@@ -10,6 +10,7 @@ describe('reconcileSegmentedSaveState', () => {
         currentRevision: 4,
         persistedRevision: 4,
         dirty: false,
+        filesystemReadonly: false,
         readonly: false,
         modifiedAt: 10,
       },
@@ -17,6 +18,7 @@ describe('reconcileSegmentedSaveState', () => {
         revision: 4,
         persistedRevision: 4,
         dirty: true,
+        filesystemReadonly: true,
         readonly: false,
       },
     );
@@ -25,6 +27,7 @@ describe('reconcileSegmentedSaveState', () => {
       revision: 4,
       persistedRevision: 4,
       dirty: true,
+      filesystemReadonly: true,
       readonly: false,
     });
   });
@@ -37,6 +40,7 @@ describe('reconcileSegmentedSaveState', () => {
         currentRevision: 3,
         persistedRevision: 2,
         dirty: true,
+        filesystemReadonly: true,
         readonly: true,
         modifiedAt: 10,
       },
@@ -47,6 +51,7 @@ describe('reconcileSegmentedSaveState', () => {
       revision: 3,
       persistedRevision: 2,
       dirty: true,
+      filesystemReadonly: true,
       readonly: true,
     });
   });

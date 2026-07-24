@@ -13,6 +13,13 @@ export interface ViewportLoadResult {
   window?: SegmentedWindow;
 }
 
+export interface ViewportLoadOptions {
+  /** 快速定位可先请求小窗口；省略时使用正式窗口大小。 */
+  targetBytes?: number;
+  /** 快速预览阶段禁止预取，停止滚动并扩展为正式窗口后再启动。 */
+  prefetch?: boolean;
+}
+
 export interface ViewportControllerOptions {
   sessionId: string;
   revision: number;
@@ -97,24 +104,29 @@ export class ViewportController {
     this.selectionKeys.clear();
   }
 
-  async loadWindow(startByte: number): Promise<ViewportLoadResult> {
+  async loadWindow(
+    startByte: number,
+    options: ViewportLoadOptions = {},
+  ): Promise<ViewportLoadResult> {
     this.assertAlive();
+    const targetBytes = options.targetBytes ?? this.options.windowBytes;
+    assertPositiveInteger(targetBytes, 'targetBytes');
     const targetStart = normalizeWindowStart(
       clampByte(startByte, this.byteLength),
       this.byteLength,
-      this.options.windowBytes,
+      targetBytes,
     );
     const requestId = ++this.requestSequence;
     this.latestPrimaryRequestId = requestId;
 
-    const cached = this.findCachedWindow(targetStart);
+    const cached = this.findCachedWindow(targetStart, targetBytes);
     if (cached) {
       this.applyVisibleWindow(cached);
-      this.schedulePrefetch(cached);
+      if (options.prefetch !== false) this.schedulePrefetch(cached);
       return { status: 'cached', requestId, window: cached };
     }
 
-    const request = this.createRequest(targetStart, requestId);
+    const request = this.createRequest(targetStart, requestId, targetBytes);
     const requestPromise = this.options.port.readWindow(request);
     this.track(requestPromise);
     try {
@@ -123,7 +135,7 @@ export class ViewportController {
         return { status: 'stale', requestId };
       }
       this.applyVisibleWindow(window);
-      this.schedulePrefetch(window);
+      if (options.prefetch !== false) this.schedulePrefetch(window);
       return { status: 'applied', requestId, window };
     } catch (error) {
       if (
@@ -177,12 +189,16 @@ export class ViewportController {
     this.currentKey = undefined;
   }
 
-  private createRequest(startByte: number, requestId: number): ReadSegmentedWindowRequest {
+  private createRequest(
+    startByte: number,
+    requestId: number,
+    targetBytes = this.options.windowBytes,
+  ): ReadSegmentedWindowRequest {
     return {
       sessionId: this.options.sessionId,
       revision: this.revision,
       startByte,
-      targetBytes: this.options.windowBytes,
+      targetBytes,
       requestId,
     };
   }
@@ -201,6 +217,7 @@ export class ViewportController {
       return;
     }
     this.releaseViewportPins();
+    this.removeWindowsContainedBy(window);
     this.storeAndPin(window);
     this.currentWindow = window;
     this.currentKey = key;
@@ -213,11 +230,12 @@ export class ViewportController {
     }
     const distance = this.options.prefetchBytes ?? this.options.windowBytes;
     const ownerKey = cacheKey(window);
-    const starts = [Math.max(0, window.startByte - distance), window.endByte].filter(
+    // 停止快速拖动后优先补用户继续向下滚动最可能命中的前方窗口，再补后方。
+    const starts = [window.endByte, Math.max(0, window.startByte - distance)].filter(
       (start) => start < this.byteLength && !containsByte(window, start),
     );
     for (const start of new Set(starts)) {
-      if (this.findCachedWindow(start)) continue;
+      if (this.findCachedWindow(start, this.options.windowBytes)) continue;
       this.prefetch(start, ownerKey);
     }
   }
@@ -271,13 +289,34 @@ export class ViewportController {
     }
   }
 
-  private findCachedWindow(byteOffset: number) {
+  private findCachedWindow(byteOffset: number, requiredBytes = 1) {
+    const requiredEnd = Math.min(this.byteLength, byteOffset + Math.max(1, requiredBytes));
     for (const window of this.cache.values()) {
-      if (window.revision === this.revision && containsByte(window, byteOffset)) {
+      if (
+        window.revision === this.revision &&
+        window.startByte <= byteOffset &&
+        window.endByte >= requiredEnd
+      ) {
         return this.cache.get(cacheKey(window));
       }
     }
     return undefined;
+  }
+
+  /** 正式窗口覆盖快速预览后立即移除小窗口，避免同一正文重复占用 LRU。 */
+  private removeWindowsContainedBy(container: SegmentedWindow) {
+    for (const cached of this.cache.values()) {
+      if (
+        cached.revision === container.revision &&
+        cached.startByte >= container.startByte &&
+        cached.endByte <= container.endByte &&
+        cacheKey(cached) !== cacheKey(container)
+      ) {
+        this.cache.delete(cacheKey(cached));
+        this.prefetchKeys.delete(cacheKey(cached));
+        this.selectionKeys.delete(cacheKey(cached));
+      }
+    }
   }
 
   private track<T>(promise: Promise<T>) {

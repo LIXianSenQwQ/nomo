@@ -394,6 +394,25 @@ mod tests {
     }
 
     #[test]
+    fn collects_txt_paths_from_args() {
+        let dir = env::temp_dir().join(format!(
+            "nomo-external-open-txt-{}",
+            crate::config::now_ts()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let txt = dir.join("large-data.txt");
+        fs::write(&txt, "plain text").unwrap();
+
+        let paths = collect_markdown_paths_from_args(
+            vec!["Nomo.exe".to_string(), txt.to_string_lossy().to_string()],
+            None,
+        );
+
+        assert_eq!(paths, vec![normalize_path(&txt)]);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn resolves_relative_args_with_cwd() {
         let dir = env::temp_dir().join(format!(
             "nomo-external-open-relative-{}",

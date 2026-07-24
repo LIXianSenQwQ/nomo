@@ -71,6 +71,47 @@ describe('ViewportController', () => {
     expect(onWindow).toHaveBeenCalledTimes(1);
   });
 
+  it('loads a bounded seek preview without starting adjacent prefetch', async () => {
+    const readWindow = vi.fn(async (request: ReadSegmentedWindowRequest) => createWindow(request));
+    const controller = new ViewportController({
+      sessionId: 'session-1',
+      revision: 0,
+      byteLength: 200,
+      port: createPort(readWindow),
+      windowBytes: 10,
+      cacheCapacityBytes: 40,
+    });
+
+    await controller.loadWindow(80, { targetBytes: 4, prefetch: false });
+
+    expect(readWindow).toHaveBeenCalledTimes(1);
+    expect(readWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ startByte: 80, targetBytes: 4 }),
+    );
+  });
+
+  it('expands a cached seek preview instead of treating it as a full window hit', async () => {
+    const readWindow = vi.fn(async (request: ReadSegmentedWindowRequest) => createWindow(request));
+    const controller = new ViewportController({
+      sessionId: 'session-1',
+      revision: 0,
+      byteLength: 200,
+      port: createPort(readWindow),
+      windowBytes: 10,
+      cacheCapacityBytes: 40,
+      prefetch: false,
+    });
+
+    await controller.loadWindow(80, { targetBytes: 4, prefetch: false });
+    const expanded = await controller.loadWindow(80, { targetBytes: 10, prefetch: false });
+
+    expect(readWindow).toHaveBeenCalledTimes(2);
+    expect(readWindow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ startByte: 80, targetBytes: 10 }),
+    );
+    expect(expanded.window).toMatchObject({ startByte: 80, endByte: 90 });
+  });
+
   it('drops an out-of-order primary response using requestId and revision', async () => {
     const resolvers = new Map<number, (window: SegmentedWindow) => void>();
     const requests = new Map<number, ReadSegmentedWindowRequest>();

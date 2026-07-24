@@ -4,6 +4,7 @@ export interface SegmentedSaveState {
   revision: number;
   persistedRevision: number;
   dirty: boolean;
+  filesystemReadonly?: boolean;
   readonly: boolean;
 }
 
@@ -20,6 +21,7 @@ export function reconcileSegmentedSaveState(
       revision: observed.revision,
       persistedRevision: observed.persistedRevision,
       dirty: observed.dirty,
+      filesystemReadonly: observed.filesystemReadonly ?? result.filesystemReadonly ?? false,
       readonly: observed.readonly,
     };
   }
@@ -27,6 +29,7 @@ export function reconcileSegmentedSaveState(
     revision: result.currentRevision,
     persistedRevision: result.persistedRevision,
     dirty: result.dirty,
+    filesystemReadonly: result.filesystemReadonly ?? false,
     readonly: result.readonly,
   };
 }

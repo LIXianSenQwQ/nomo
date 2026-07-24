@@ -233,7 +233,7 @@ describe('SegmentedTextEditorCore', () => {
     const view = (core as unknown as { view: EditorView }).view;
     const setState = vi.spyOn(view, 'setState');
 
-    expect((await core.loadWindow(0)).status).toBe('cached');
+    expect((await core.loadWindow(0, { targetBytes: 5, prefetch: false })).status).toBe('cached');
 
     expect(port.readWindow).not.toHaveBeenCalled();
     expect(setState).not.toHaveBeenCalled();
@@ -905,6 +905,64 @@ describe('SegmentedTextEditorCore', () => {
       baseRevision: 0,
       edits: [{ fromByte: 5, toByte: 5, insertedText: '!' }],
     });
+    await core.destroy();
+  });
+
+  it('temporarily blocks editing while a fast-scroll preview owns the visible window', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const core = new SegmentedTextEditorCore({
+      host,
+      session: createOpenResult(1),
+      port: createPort(),
+      prefetch: false,
+    });
+    const view = (core as unknown as { view: EditorView }).view;
+
+    core.setSeekingLocked(true);
+    expect(view.state.readOnly).toBe(true);
+    view.dispatch({ changes: { from: 0, insert: 'blocked' } });
+    expect(view.state.doc.toString()).toBe('first');
+
+    core.setSeekingLocked(false);
+    expect(view.state.readOnly).toBe(false);
+    await core.destroy();
+  });
+
+  it('reveals a byte in the current window without moving the selection', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const core = new SegmentedTextEditorCore({
+      host,
+      session: createOpenResult(1),
+      port: createPort(),
+      prefetch: false,
+    });
+    core.setSelection({ anchorByte: 1, headByte: 3 });
+    const selectionBefore = core.getMetadata().selection;
+
+    expect(core.revealByteOffset(4)).toBe(true);
+    expect(core.revealByteOffset(10)).toBe(false);
+    expect(core.getMetadata().selection).toEqual(selectionBefore);
+    await core.destroy();
+  });
+
+  it('forwards a bounded preview size to the viewport reader', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const port = createPort();
+    const core = new SegmentedTextEditorCore({
+      host,
+      session: createOpenResult(1),
+      port,
+      prefetch: false,
+    });
+
+    await core.loadWindow(10, { targetBytes: 16 * 1024, prefetch: false });
+
+    expect(port.readWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ startByte: 10, targetBytes: 16 * 1024 }),
+    );
     await core.destroy();
   });
 

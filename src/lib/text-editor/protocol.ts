@@ -45,6 +45,8 @@ export interface OpenSegmentedDocumentResult {
   encoding: SegmentedEncoding;
   lineEnding: SegmentedLineEnding;
   byteLength: number;
+  /** 仅表示源文件系统权限，不包含 baseline/编码校验期间的临时编辑门禁。 */
+  filesystemReadonly?: boolean;
   readonly: boolean;
   recoveryConflictPath?: string;
   firstWindow: SegmentedWindow;
@@ -105,6 +107,8 @@ export interface SaveSegmentedRevisionResult {
   currentRevision: number;
   persistedRevision: number;
   dirty: boolean;
+  /** 仅表示保存目标的文件系统权限。 */
+  filesystemReadonly?: boolean;
   readonly: boolean;
   modifiedAt: number;
 }
@@ -167,6 +171,8 @@ export interface SegmentedSessionStatus {
   completed: boolean;
   encoding: SegmentedEncoding;
   lineEnding: SegmentedLineEnding;
+  /** 仅表示源文件系统权限，不包含后台准备阶段的临时编辑门禁。 */
+  filesystemReadonly?: boolean;
   readonly: boolean;
   baselineError?: string;
   canUndo: boolean;

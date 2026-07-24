@@ -53,6 +53,20 @@
         "description": "Markdown Document",
         "role": "Editor",
         "mimeType": "text/markdown"
+      },
+      {
+        "ext": ["txt"],
+        "name": "Text Document",
+        "description": "Text Document",
+        "role": "Editor",
+        "mimeType": "text/plain"
+      },
+      {
+        "ext": ["json"],
+        "name": "JSON Document",
+        "description": "JSON Document",
+        "role": "Editor",
+        "mimeType": "application/json"
       }
     ],
     "icon": [

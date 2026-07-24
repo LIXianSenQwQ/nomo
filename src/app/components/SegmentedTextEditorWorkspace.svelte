@@ -1,16 +1,5 @@
 <script lang="ts">
-  import {
-    Braces,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    ChevronUp,
-    LoaderCircle,
-    Search,
-    Square,
-    WandSparkles,
-    X,
-  } from '@lucide/svelte';
+  import { ChevronDown, ChevronUp, LoaderCircle, Search, Square, X } from '@lucide/svelte';
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import {
     SegmentedTextEditorCore,
@@ -26,13 +15,23 @@
   } from '../../lib/text-editor/protocol';
   import { segmentedSessionRegistry } from '../../lib/text-editor/sessionRegistry';
   import { createTauriSegmentedDocumentPort } from '../../lib/text-editor/tauriPort';
+  import {
+    SEGMENTED_FULL_WINDOW_BYTES,
+    SEGMENTED_PREVIEW_THROTTLE_MS,
+    SEGMENTED_SCROLL_SETTLE_MS,
+    createSegmentedVirtualScrollMetrics,
+    estimateSegmentedPixelsPerByte,
+    resolveByteOffsetFromVirtualScroll,
+    resolveCenteredSegmentWindowStart,
+    resolveSegmentedPreviewBytes,
+    resolveVirtualScrollTopForByteOffset,
+    type SegmentedVirtualScrollMetrics,
+  } from '../../lib/text-editor/virtualScroll';
   import type { SegmentedTextTabState } from '../types';
   import { t } from '../i18n';
   import {
     classifySegmentedTaskProgress,
-    estimateTotalLinesFromProgress,
     getAdjacentSegmentStart,
-    resolveSegmentWindowStart,
     type SegmentDirection,
     type SegmentedTaskIdentity,
   } from './segmentedWorkspaceState';
@@ -48,9 +47,6 @@
     status: { message: string };
   }>();
   const port = createTauriSegmentedDocumentPort();
-  const WINDOW_BYTES = 256 * 1024;
-  const LINE_HEIGHT = 22;
-  const MAX_VIRTUAL_HEIGHT = 16_000_000;
 
   interface ActiveTask extends SegmentedTaskIdentity {
     terminal: Promise<void>;
@@ -69,10 +65,9 @@
   let core: SegmentedTextEditorCore | null = null;
   let metadata: SegmentedEditorMetadata | null = null;
   let viewportHeight = 0;
-  let windowVisualHeight = 0;
-  let estimatedLines = 1;
-  let topSpacerHeight = 0;
-  let bottomSpacerHeight = 0;
+  let virtualMetrics: SegmentedVirtualScrollMetrics | null = null;
+  let virtualRunwayHeight = 0;
+  let frozenPixelsPerByte = 0.25;
   let loading = true;
   let errorMessage = '';
   let statusMessage = '';
@@ -93,10 +88,20 @@
   let exclusiveTaskLockHeld = false;
   let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
   let indexPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let previewThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+  let scrollSettleTimer: ReturnType<typeof setTimeout> | null = null;
   let scrollFrame: number | null = null;
   let destroyed = false;
   let readRequestId = 1;
   let segmentNavigationLoading = false;
+  let latestSeekByte = 0;
+  let lastScrollByte = 0;
+  let lastScrollAt = 0;
+  let lastPreviewAt = Number.NEGATIVE_INFINITY;
+  let pointerSeeking = false;
+  let seeking = false;
+  let suppressNextScroll = false;
+  let loadGeneration = 0;
 
   $: indexPercent = Math.round((metadata?.indexProgress ?? tab.indexProgress) * 100);
   $: taskPercent = taskProgress?.totalBytes
@@ -105,16 +110,18 @@
   $: sessionMetadata = segmentedSessionRegistry.get(tab.sessionId);
   $: readonly = metadata?.readonly ?? sessionMetadata?.readonly ?? tab.diskReadonly;
   $: unsupportedEncoding = (metadata?.encoding ?? sessionMetadata?.encoding) === 'unsupported';
-  $: segmentNavigationVisible =
-    (metadata?.byteLength ?? sessionMetadata?.byteLength ?? 0) > WINDOW_BYTES;
-  $: previousSegmentDisabled =
-    segmentNavigationLoading || !metadata || metadata.visibleStartByte <= 0;
-  $: nextSegmentDisabled =
-    segmentNavigationLoading || !metadata || metadata.visibleEndByte >= metadata.byteLength;
-  $: segmentRangeText = metadata ? formatSegmentRange(metadata) : '';
-  $: segmentCopy = getSegmentNavigationCopy(interfaceLocale);
+  $: filesystemReadonly =
+    metadata?.filesystemReadonly ?? sessionMetadata?.filesystemReadonly ?? tab.diskReadonly;
   $: if (!autoSaveEnabled || readonly || tab.externalFileChange.type !== 'none') {
     clearAutoSaveTimer();
+  }
+  $: if (
+    virtualMetrics &&
+    metadata &&
+    viewportHeight > 0 &&
+    virtualMetrics.viewportHeight !== viewportHeight
+  ) {
+    resizeVirtualGeometry(metadata.byteLength);
   }
 
   onMount(() => {
@@ -125,6 +132,7 @@
     destroyed = true;
     clearAutoSaveTimer();
     clearIndexPollTimer();
+    clearSeekTimers();
     if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     if (activeTask && taskProgress?.state === 'running') {
       void port.cancelTask(activeTask.taskId).catch(() => undefined);
@@ -153,6 +161,7 @@
         host,
         session,
         port,
+        windowBytes: SEGMENTED_FULL_WINDOW_BYTES,
         selection: tab.selection,
         scrollAnchor: tab.scrollAnchor,
         onMetadataChange: handleMetadataChange,
@@ -164,11 +173,10 @@
       await core.ready();
       if (destroyed) return;
       ensureIndexPolling();
-      loading = false;
-      estimatedLines = estimateInitialLines(session);
       await tick();
-      updateVirtualGeometry();
+      initializeVirtualGeometry(session);
       restoreScrollAnchor(session.byteLength);
+      loading = false;
       core.focus();
     } catch (error) {
       showError(error);
@@ -181,24 +189,37 @@
     if (!session) {
       throw new Error(`Segmented session metadata missing: ${tab.sessionId}`);
     }
-    const startByte = resolveSegmentWindowStart(
-      tab.scrollAnchor?.byteOffset ?? 0,
+    const anchorByte = Math.min(tab.scrollAnchor?.byteOffset ?? 0, session.byteLength);
+    const startByte = resolveCenteredSegmentWindowStart(
+      anchorByte,
       session.byteLength,
-      WINDOW_BYTES,
+      SEGMENTED_FULL_WINDOW_BYTES,
     );
-    const firstWindow =
-      segmentedSessionRegistry.consumeFirstWindow(tab.sessionId) ??
-      (await port.readWindow({
-        sessionId: tab.sessionId,
-        revision: tab.revision,
-        startByte,
-        targetBytes: WINDOW_BYTES,
-        requestId: readRequestId++,
-      }));
+    const registeredWindow = segmentedSessionRegistry.consumeFirstWindow(tab.sessionId);
+    const expectedBytes = Math.min(SEGMENTED_FULL_WINDOW_BYTES, session.byteLength);
+    const registeredBytes = registeredWindow
+      ? registeredWindow.endByte - registeredWindow.startByte
+      : 0;
+    const canReuseRegisteredWindow =
+      registeredWindow !== undefined &&
+      registeredBytes >= expectedBytes &&
+      registeredWindow.startByte <= anchorByte &&
+      registeredWindow.endByte >= anchorByte;
+    const firstWindow = canReuseRegisteredWindow
+      ? registeredWindow
+      : await port.readWindow({
+          sessionId: tab.sessionId,
+          revision: tab.revision,
+          startByte,
+          targetBytes: SEGMENTED_FULL_WINDOW_BYTES,
+          requestId: readRequestId++,
+        });
     return { ...session, firstWindow };
   }
 
   function handleMetadataChange(next: SegmentedEditorMetadata) {
+    const preservedAnchor = resolveCurrentVirtualByte();
+    const byteLengthChanged = virtualMetrics?.byteLength !== next.byteLength;
     metadata = next;
     if (nearbyMatchesRevision !== null && nearbyMatchesRevision !== next.revision) {
       nearbyMatches = [];
@@ -211,21 +232,19 @@
       byteLength: next.byteLength,
       encoding: next.encoding,
       lineEnding: next.lineEnding,
+      filesystemReadonly: next.filesystemReadonly,
       readonly: next.readonly,
     });
     dispatch('stateChange', next);
-    void tick().then(updateVirtualGeometry);
+    if (byteLengthChanged && virtualMetrics) {
+      void tick().then(() => updateVirtualGeometry(next.byteLength, preservedAnchor));
+    }
     scheduleAutoSave(next);
     ensureIndexPolling();
     maybeStartQueuedTask(next.indexProgress);
   }
 
   function handleIndexProgress(progress: SegmentedIndexProgress) {
-    estimatedLines = estimateTotalLinesFromProgress(progress, estimatedLines);
-    if (progress.completed) {
-      statusMessage = t.indexReady();
-    }
-    updateVirtualGeometry();
     maybeStartQueuedTask(progress.completed ? 1 : (metadata?.indexProgress ?? 0));
   }
 
@@ -327,74 +346,236 @@
     if (statusMessage) dispatch('status', { message: statusMessage });
   }
 
-  function estimateInitialLines(session: OpenSegmentedDocumentResult) {
-    const visibleLines = Math.max(1, session.firstWindow.text.split(/\r?\n/).length);
+  function initializeVirtualGeometry(session: OpenSegmentedDocumentResult) {
     const visibleBytes = Math.max(1, session.firstWindow.endByte - session.firstWindow.startByte);
-    return Math.max(visibleLines, Math.ceil((visibleLines / visibleBytes) * session.byteLength));
+    frozenPixelsPerByte = estimateSegmentedPixelsPerByte(
+      visibleBytes,
+      measureCurrentWindowHeight(),
+    );
+    const initialAnchor = Math.min(
+      tab.scrollAnchor?.byteOffset ?? session.firstWindow.startByte,
+      session.byteLength,
+    );
+    updateVirtualGeometry(session.byteLength, initialAnchor);
   }
 
-  function updateVirtualGeometry() {
-    if (!metadata || !scroller) return;
-    windowVisualHeight = Math.max(
-      viewportHeight,
-      host?.scrollHeight || viewportHeight,
-      LINE_HEIGHT,
+  /** 当前窗口重排和索引推进不能改变该轨道；这里只接受真实 byteLength 或视口尺寸变化。 */
+  function updateVirtualGeometry(
+    byteLength: number,
+    preservedAnchor = resolveCurrentVirtualByte(),
+  ) {
+    if (!scroller) return;
+    virtualMetrics = createSegmentedVirtualScrollMetrics(
+      byteLength,
+      Math.max(1, viewportHeight || scroller.clientHeight),
+      frozenPixelsPerByte,
     );
-    const totalHeight = Math.max(
-      viewportHeight,
-      Math.min(MAX_VIRTUAL_HEIGHT, Math.max(estimatedLines * LINE_HEIGHT, windowVisualHeight)),
+    virtualRunwayHeight = Math.max(0, virtualMetrics.totalHeight - virtualMetrics.viewportHeight);
+    setProgrammaticScrollTop(
+      resolveVirtualScrollTopForByteOffset(Math.min(preservedAnchor, byteLength), virtualMetrics),
     );
-    const availableHeight = Math.max(0, totalHeight - windowVisualHeight);
-    const ratio = metadata.byteLength > 0 ? metadata.visibleStartByte / metadata.byteLength : 0;
-    topSpacerHeight = Math.round(availableHeight * Math.min(1, Math.max(0, ratio)));
-    bottomSpacerHeight = Math.max(0, availableHeight - topSpacerHeight);
+  }
+
+  function resizeVirtualGeometry(byteLength: number) {
+    updateVirtualGeometry(byteLength, resolveCurrentVirtualByte());
+  }
+
+  function measureCurrentWindowHeight() {
+    const content = host?.querySelector<HTMLElement>('.cm-content');
+    const localScroller = host?.querySelector<HTMLElement>('.cm-scroller');
+    return Math.max(
+      1,
+      content?.scrollHeight ?? 0,
+      localScroller?.scrollHeight ?? 0,
+      viewportHeight,
+    );
+  }
+
+  function resolveCurrentVirtualByte() {
+    if (virtualMetrics && scroller) {
+      return resolveByteOffsetFromVirtualScroll(scroller.scrollTop, virtualMetrics);
+    }
+    return metadata?.scrollAnchor?.byteOffset ?? tab.scrollAnchor?.byteOffset ?? 0;
   }
 
   function restoreScrollAnchor(byteLength: number) {
-    if (!scroller || !tab.scrollAnchor || byteLength <= 0) return;
-    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    scroller.scrollTop = (tab.scrollAnchor.byteOffset / byteLength) * maxScroll;
+    if (!scroller || !virtualMetrics) return;
+    const anchor = Math.min(tab.scrollAnchor?.byteOffset ?? 0, byteLength);
+    setProgrammaticScrollTop(resolveVirtualScrollTopForByteOffset(anchor, virtualMetrics));
+    lastScrollByte = anchor;
+    lastScrollAt = performance.now();
+    core?.revealByteOffset(anchor);
+  }
+
+  function setProgrammaticScrollTop(scrollTop: number) {
+    if (!scroller) return;
+    suppressNextScroll = true;
+    scroller.scrollTop = scrollTop;
+    requestAnimationFrame(() => {
+      suppressNextScroll = false;
+    });
+  }
+
+  function syncVirtualScrollToByte(byteOffset: number) {
+    if (!virtualMetrics) return;
+    const safeByteOffset = Math.min(byteOffset, virtualMetrics.byteLength);
+    setProgrammaticScrollTop(resolveVirtualScrollTopForByteOffset(safeByteOffset, virtualMetrics));
+    lastScrollByte = safeByteOffset;
+    lastScrollAt = performance.now();
   }
 
   function handleVirtualScroll() {
+    if (suppressNextScroll) return;
     if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = null;
+      const activeCore = core;
       const current = metadata;
-      if (!core || !current || current.byteLength <= 0) return;
-      const maxScroll = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
-      const targetByte = resolveSegmentWindowStart(
-        Math.round((scroller.scrollTop / maxScroll) * current.byteLength),
-        current.byteLength,
-        WINDOW_BYTES,
-      );
-      const margin = Math.max(
-        4096,
-        Math.floor((current.visibleEndByte - current.visibleStartByte) / 5),
-      );
-      if (
-        targetByte < current.visibleStartByte + margin ||
-        targetByte > current.visibleEndByte - margin
-      ) {
-        const activeCore = core;
-        const targetLine = estimateLineForByte(targetByte, current.byteLength, estimatedLines);
-        loading = true;
-        void activeCore
-          .loadWindow(targetByte)
-          .then((result) => {
-            if (result.status !== 'stale' && !destroyed && core === activeCore) {
-              activeCore.setScrollAnchor(result.startByte ?? targetByte, targetLine);
-            }
-          })
-          .catch(showError)
-          .finally(() => {
-            loading = false;
-          });
+      const metrics = virtualMetrics;
+      if (!activeCore || !current || !metrics || current.byteLength <= 0) return;
+
+      const now = performance.now();
+      const targetByte = resolveByteOffsetFromVirtualScroll(scroller.scrollTop, metrics);
+      const elapsed = Math.max(1, now - lastScrollAt);
+      const byteDelta = Math.abs(targetByte - lastScrollByte);
+      const visibleBytes = Math.max(1, current.visibleEndByte - current.visibleStartByte);
+      const fastSeek =
+        pointerSeeking ||
+        byteDelta > Math.max(SEGMENTED_FULL_WINDOW_BYTES / 2, visibleBytes) ||
+        byteDelta / elapsed > 4 * 1024;
+      lastScrollByte = targetByte;
+      lastScrollAt = now;
+
+      if (fastSeek) {
+        scheduleFastSeek(targetByte);
+        return;
+      }
+
+      activeCore.setScrollAnchor(targetByte);
+      const margin = Math.max(4096, Math.floor(visibleBytes / 5));
+      const needsPreviousWindow =
+        current.visibleStartByte > 0 && targetByte < current.visibleStartByte + margin;
+      const needsNextWindow =
+        current.visibleEndByte < current.byteLength && targetByte > current.visibleEndByte - margin;
+      if (needsPreviousWindow || needsNextWindow || !activeCore.revealByteOffset(targetByte)) {
+        void loadVisibleWindow(targetByte, SEGMENTED_FULL_WINDOW_BYTES, true);
       }
     });
   }
 
+  function scheduleFastSeek(targetByte: number) {
+    latestSeekByte = targetByte;
+    if (!seeking) {
+      seeking = true;
+      core?.setSeekingLocked(true);
+    }
+    if (scrollSettleTimer) clearTimeout(scrollSettleTimer);
+    scrollSettleTimer = setTimeout(() => void settleFastSeek(), SEGMENTED_SCROLL_SETTLE_MS);
+
+    const remainingThrottle = SEGMENTED_PREVIEW_THROTTLE_MS - (performance.now() - lastPreviewAt);
+    if (remainingThrottle <= 0) {
+      void loadSeekPreview();
+      return;
+    }
+    if (!previewThrottleTimer) {
+      previewThrottleTimer = setTimeout(() => void loadSeekPreview(), remainingThrottle);
+    }
+  }
+
+  async function loadSeekPreview() {
+    if (previewThrottleTimer) clearTimeout(previewThrottleTimer);
+    previewThrottleTimer = null;
+    if (!seeking || destroyed || !metadata) return;
+    lastPreviewAt = performance.now();
+    const previewBytes = resolveSegmentedPreviewBytes(
+      viewportHeight,
+      Math.max(1, metadata.visibleEndByte - metadata.visibleStartByte),
+      measureCurrentWindowHeight(),
+    );
+    await loadVisibleWindow(latestSeekByte, previewBytes, false);
+  }
+
+  async function settleFastSeek() {
+    scrollSettleTimer = null;
+    if (previewThrottleTimer) clearTimeout(previewThrottleTimer);
+    previewThrottleTimer = null;
+    const targetByte = latestSeekByte;
+    seeking = false;
+    core?.setSeekingLocked(false);
+    await loadVisibleWindow(targetByte, SEGMENTED_FULL_WINDOW_BYTES, true);
+  }
+
+  async function loadVisibleWindow(targetByte: number, targetBytes: number, prefetch: boolean) {
+    const activeCore = core;
+    const current = metadata;
+    if (!activeCore || !current) return;
+    const startByte = resolveCenteredSegmentWindowStart(
+      targetByte,
+      current.byteLength,
+      targetBytes,
+    );
+    const generation = ++loadGeneration;
+    loading = true;
+    try {
+      const result = await activeCore.loadWindow(startByte, { targetBytes, prefetch });
+      if (result.status === 'stale' || destroyed || core !== activeCore) return;
+      activeCore.revealByteOffset(targetByte);
+      activeCore.setScrollAnchor(targetByte);
+    } catch (error) {
+      showError(error);
+    } finally {
+      if (generation === loadGeneration) loading = false;
+    }
+  }
+
+  function handleViewportWheel(event: WheelEvent) {
+    if (!scroller || event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+    event.preventDefault();
+    const unit =
+      event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 18
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? viewportHeight
+          : 1;
+    scroller.scrollTop += event.deltaY * unit;
+  }
+
+  function handleScrollPointerDown(event: PointerEvent) {
+    const bounds = scroller.getBoundingClientRect();
+    if (event.clientX < bounds.right - 20) return;
+    pointerSeeking = true;
+    scroller.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleScrollPointerUp(event: PointerEvent) {
+    if (!pointerSeeking) return;
+    pointerSeeking = false;
+    if (scroller.hasPointerCapture?.(event.pointerId)) {
+      scroller.releasePointerCapture(event.pointerId);
+    }
+    if (seeking) {
+      if (scrollSettleTimer) clearTimeout(scrollSettleTimer);
+      scrollSettleTimer = setTimeout(() => void settleFastSeek(), SEGMENTED_SCROLL_SETTLE_MS);
+    }
+  }
+
+  function clearSeekTimers() {
+    if (previewThrottleTimer) clearTimeout(previewThrottleTimer);
+    if (scrollSettleTimer) clearTimeout(scrollSettleTimer);
+    previewThrottleTimer = null;
+    scrollSettleTimer = null;
+    if (seeking) core?.setSeekingLocked(false);
+    seeking = false;
+    pointerSeeking = false;
+  }
+
   function handleWorkspaceKeydown(event: KeyboardEvent) {
+    const key = event.key.toLowerCase();
+    if (event.shiftKey && event.altKey && key === 'f' && tab.documentKind === 'json') {
+      event.preventDefault();
+      if (!readonly) void startTask('json-format');
+      return;
+    }
     if (event.altKey && (event.key === 'PageUp' || event.key === 'PageDown')) {
       event.preventDefault();
       void loadAdjacentSegment(event.key === 'PageUp' ? 'previous' : 'next');
@@ -402,7 +583,6 @@
     }
     const modifier = event.ctrlKey || event.metaKey;
     if (!modifier) return;
-    const key = event.key.toLowerCase();
     if (key === 'f') {
       event.preventDefault();
       openSearch(false);
@@ -580,17 +760,16 @@
   async function loadAdjacentSegment(direction: SegmentDirection) {
     const current = metadata;
     if (!core || !current || segmentNavigationLoading) return;
-    const target = getAdjacentSegmentStart(direction, current, WINDOW_BYTES);
+    const target = getAdjacentSegmentStart(direction, current, SEGMENTED_FULL_WINDOW_BYTES);
     if (target === null) return;
     segmentNavigationLoading = true;
     loading = true;
     try {
       const result = await core.loadWindow(target);
       if (result.status !== 'stale') {
-        core.setScrollAnchor(
-          result.startByte ?? target,
-          estimateLineForByte(target, current.byteLength, estimatedLines),
-        );
+        core.revealByteOffset(target);
+        core.setScrollAnchor(target);
+        syncVirtualScrollToByte(target);
       }
       core.focus();
     } catch (error) {
@@ -633,10 +812,9 @@
     const result = await activeCore.loadWindow(match.startByte);
     if (result.status === 'stale' || core !== activeCore) return;
     activeCore.setSelection({ anchorByte: match.startByte, headByte: match.endByte });
-    activeCore.setScrollAnchor(
-      result.startByte ?? match.startByte,
-      estimateLineForByte(match.startByte, activeCore.getMetadata().byteLength, estimatedLines),
-    );
+    activeCore.revealByteOffset(match.startByte);
+    activeCore.setScrollAnchor(match.startByte);
+    syncVirtualScrollToByte(match.startByte);
     activeCore.focus();
   }
 
@@ -681,48 +859,6 @@
   function clearIndexPollTimer() {
     if (indexPollTimer) clearTimeout(indexPollTimer);
     indexPollTimer = null;
-  }
-
-  function formatSegmentRange(current: SegmentedEditorMetadata) {
-    const formatter = new Intl.NumberFormat(interfaceLocale || undefined);
-    return `${formatter.format(current.visibleStartByte)}–${formatter.format(
-      current.visibleEndByte,
-    )} / ${formatter.format(current.byteLength)} B`;
-  }
-
-  function estimateLineForByte(byteOffset: number, byteLength: number, totalLines: number) {
-    if (byteLength <= 0 || totalLines <= 1) return 0;
-    return Math.round((byteOffset / byteLength) * (totalLines - 1));
-  }
-
-  function getSegmentNavigationCopy(locale: string) {
-    const normalized = locale.toLowerCase();
-    if (normalized.startsWith('ja')) {
-      return {
-        group: 'バイト区間ナビゲーション',
-        previous: '前のバイト区間（Alt+PageUp）',
-        next: '次のバイト区間（Alt+PageDown）',
-      };
-    }
-    if (normalized.startsWith('zh-tw') || normalized.startsWith('zh-hk')) {
-      return {
-        group: '位元組分段導覽',
-        previous: '上一個位元組分段（Alt+PageUp）',
-        next: '下一個位元組分段（Alt+PageDown）',
-      };
-    }
-    if (normalized.startsWith('zh')) {
-      return {
-        group: '字节分段导航',
-        previous: '上一字节段（Alt+PageUp）',
-        next: '下一字节段（Alt+PageDown）',
-      };
-    }
-    return {
-      group: 'Byte segment navigation',
-      previous: 'Previous byte segment (Alt+PageUp)',
-      next: 'Next byte segment (Alt+PageDown)',
-    };
   }
 
   function showError(error: unknown) {
@@ -809,68 +945,6 @@
   data-interface-locale={interfaceLocale}
   on:keydown|capture={handleWorkspaceKeydown}
 >
-  <header class="segmented-toolbar">
-    <div class="document-badge">
-      {#if tab.documentKind === 'json'}<Braces size={14} />{:else}<span>TXT</span>{/if}
-      <strong>{tab.documentKind.toUpperCase()}</strong>
-    </div>
-    <button
-      type="button"
-      title={t.search()}
-      aria-label={t.search()}
-      on:click={() => openSearch(false)}
-    >
-      <Search size={14} />
-    </button>
-    {#if tab.documentKind === 'json'}
-      <button type="button" on:click={() => startTask('json-validate')}>
-        <Braces size={14} />{t.jsonValidate()}
-      </button>
-      <button type="button" disabled={readonly} on:click={() => startTask('json-format')}>
-        <WandSparkles size={14} />{t.jsonFormat()}
-      </button>
-    {/if}
-    {#if segmentNavigationVisible}
-      <div
-        class="segment-navigation"
-        role="group"
-        aria-label={segmentCopy.group}
-        style="display:inline-flex;align-items:center;min-width:0;border:1px solid var(--md-editor-border);border-radius:var(--md-editor-radius-sm);overflow:hidden"
-      >
-        <button
-          type="button"
-          class="segment-navigation-button"
-          title={segmentCopy.previous}
-          aria-label={segmentCopy.previous}
-          disabled={previousSegmentDisabled}
-          on:click={() => loadAdjacentSegment('previous')}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <output
-          class="revision-label"
-          aria-live="polite"
-          aria-atomic="true"
-          style="min-width:10.5rem;padding:0 7px;text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums"
-        >
-          {segmentRangeText}
-        </output>
-        <button
-          type="button"
-          class="segment-navigation-button"
-          title={segmentCopy.next}
-          aria-label={segmentCopy.next}
-          disabled={nextSegmentDisabled}
-          on:click={() => loadAdjacentSegment('next')}
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
-    {/if}
-    <span class="toolbar-spacer"></span>
-    <span class="revision-label">r{metadata?.revision ?? tab.revision}</span>
-  </header>
-
   {#if searchOpen}
     <form class="segmented-search" on:submit|preventDefault={() => startTask('search')}>
       <label>
@@ -900,7 +974,7 @@
     </form>
   {/if}
 
-  {#if readonly}
+  {#if unsupportedEncoding || filesystemReadonly}
     <div class="readonly-notice" role="status">
       {unsupportedEncoding ? t.segmentedReadonlyUnsupportedEncoding() : t.segmentedReadonlySource()}
     </div>
@@ -908,42 +982,60 @@
 
   <div
     class="segmented-scroll"
+    role="group"
+    aria-label={tab.fileName}
     bind:this={scroller}
     bind:clientHeight={viewportHeight}
     on:scroll={handleVirtualScroll}
+    on:pointerdown={handleScrollPointerDown}
+    on:pointerup={handleScrollPointerUp}
+    on:pointercancel={handleScrollPointerUp}
   >
-    <div class="virtual-spacer" style={`height:${topSpacerHeight}px`}></div>
-    <div class="segmented-editor-host" bind:this={host}></div>
-    <div class="virtual-spacer" style={`height:${bottomSpacerHeight}px`}></div>
-    {#if loading}
-      <div class="loading-overlay" role="status" aria-live="polite">
-        <LoaderCircle size={16} />
-      </div>
-    {/if}
+    <div
+      class="segmented-editor-viewport"
+      style={`height:${Math.max(1, viewportHeight)}px`}
+      on:wheel|nonpassive={handleViewportWheel}
+    >
+      <div class="segmented-editor-host" bind:this={host}></div>
+      {#if loading}
+        <div class="loading-overlay" role="status" aria-live="polite">
+          <LoaderCircle size={16} />
+        </div>
+      {/if}
+    </div>
+    <div
+      class="segmented-scroll-runway"
+      data-testid="segmented-scroll-runway"
+      style={`height:${virtualRunwayHeight}px`}
+    ></div>
   </div>
 
-  <footer class="segmented-status" aria-live="polite">
-    <span>{t.indexingProgress({ percent: indexPercent })}</span>
-    <progress
-      max="100"
-      value={indexPercent}
-      aria-label={t.indexingProgress({ percent: indexPercent })}
-    ></progress>
-    <span class="status-spacer"></span>
-    {#if queuedTaskRequest}
-      <span>{t.indexRequired()}</span>
-      <button type="button" class="cancel-task" on:click={cancelTask}>
-        <Square size={11} />{t.cancelTask()}
-      </button>
-    {:else if taskProgress?.state === 'running'}
-      <span>{t.taskRunning({ percent: taskPercent })}</span>
-      <button type="button" class="cancel-task" on:click={cancelTask}>
-        <Square size={11} />{t.cancelTask()}
-      </button>
-    {:else if errorMessage}
-      <span class="error-text">{errorMessage}</span>
-    {:else if statusMessage}
-      <span>{statusMessage}</span>
-    {/if}
-  </footer>
+  {#if indexPercent < 100 || queuedTaskRequest || taskProgress?.state === 'running' || errorMessage || statusMessage}
+    <footer class="segmented-status" aria-live="polite">
+      {#if indexPercent < 100}
+        <span>{t.indexingProgress({ percent: indexPercent })}</span>
+        <progress
+          max="100"
+          value={indexPercent}
+          aria-label={t.indexingProgress({ percent: indexPercent })}
+        ></progress>
+        <span class="status-spacer"></span>
+      {/if}
+      {#if queuedTaskRequest}
+        <span>{t.indexRequired()}</span>
+        <button type="button" class="cancel-task" on:click={cancelTask}>
+          <Square size={11} />{t.cancelTask()}
+        </button>
+      {:else if taskProgress?.state === 'running'}
+        <span>{t.taskRunning({ percent: taskPercent })}</span>
+        <button type="button" class="cancel-task" on:click={cancelTask}>
+          <Square size={11} />{t.cancelTask()}
+        </button>
+      {:else if errorMessage}
+        <span class="error-text">{errorMessage}</span>
+      {:else if statusMessage}
+        <span>{statusMessage}</span>
+      {/if}
+    </footer>
+  {/if}
 </section>

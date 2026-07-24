@@ -52,3 +52,9 @@ Object.defineProperty(globalThis, 'ResizeObserver', {
   configurable: true,
   value: TestResizeObserver,
 });
+
+/** CodeMirror 的 scrollIntoView 会测量文本 Range；jsdom 只缺少几何 API。 */
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}

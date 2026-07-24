@@ -97,6 +97,35 @@ describe('ExplorerSidebar', () => {
     expect(container.textContent).toContain('july-00.md');
     expect(container.textContent).not.toContain('july-24.md');
   });
+
+  it('waits for an async TXT open before pinning the double-clicked preview tab', async () => {
+    const rootPath = 'D:\\Workspace';
+    const txtPath = `${rootPath}\\notes.txt`;
+    let finishOpen: (() => void) | undefined;
+    const openPreviewFile = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishOpen = resolve;
+        }),
+    );
+    const pinPreviewFile = vi.fn();
+    const { getByTitle } = render(ExplorerSidebar, {
+      props: createProps({
+        currentFolderPath: rootPath,
+        folderTree: [fileNode('notes.txt', txtPath)],
+        openPreviewFile,
+        pinPreviewFile,
+      }),
+    });
+
+    await fireEvent.dblClick(getByTitle(txtPath));
+    expect(openPreviewFile).toHaveBeenCalledWith(txtPath);
+    expect(pinPreviewFile).not.toHaveBeenCalled();
+
+    finishOpen?.();
+    await tick();
+    expect(pinPreviewFile).toHaveBeenCalledOnce();
+  });
 });
 
 function createProps(overrides: Partial<ExplorerSidebarProps> = {}): ExplorerSidebarProps {

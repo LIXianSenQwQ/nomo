@@ -935,6 +935,7 @@ impl DocumentSessionManager {
             encoding: metadata.encoding,
             line_ending: metadata.line_ending,
             byte_length: first_snapshot.len(),
+            filesystem_readonly: metadata.filesystem_readonly,
             readonly: metadata.readonly(),
             first_window,
             recovery_conflict_path: recovery_conflict_path
@@ -1730,6 +1731,7 @@ impl DocumentSessionManager {
             current_revision,
             persisted_revision,
             dirty,
+            filesystem_readonly: target_readonly,
             readonly,
             modified_at: (new_baseline.modified_nanos / 1_000_000_000) as i64,
         })
@@ -1917,6 +1919,7 @@ impl DocumentSessionManager {
             completed: state.line_index.is_completed(),
             encoding: metadata.encoding,
             line_ending: metadata.line_ending,
+            filesystem_readonly: metadata.filesystem_readonly,
             readonly: metadata.readonly(),
             baseline_error,
             can_undo: state.history.can_undo(),
