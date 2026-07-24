@@ -311,6 +311,30 @@ export class SegmentedTextEditorCore {
     return this.getMetadata();
   }
 
+  /** 用当前可见窗口中的全局字节范围执行一次普通编辑，复用现有批处理与撤销链路。 */
+  replaceRange(fromByte: number, toByte: number, replacement: string) {
+    this.assertAlive();
+    if (this.readonlyDocument || this.isInteractionLocked()) return false;
+    if (
+      !Number.isSafeInteger(fromByte) ||
+      !Number.isSafeInteger(toByte) ||
+      fromByte < this.mapping.startByte ||
+      toByte < fromByte ||
+      toByte > this.mapping.endByte
+    ) {
+      return false;
+    }
+    const from = this.mapping.globalByteToLocal(fromByte, 'left');
+    const to = this.mapping.globalByteToLocal(toByte, 'right');
+    this.view.dispatch({
+      changes: { from, to, insert: replacement },
+      selection: { anchor: from + replacement.length },
+      scrollIntoView: true,
+    });
+    this.view.focus();
+    return true;
+  }
+
   /** 全选复制由 Rust 流式任务处理；普通局部选区继续使用 CodeMirror 原生复制。 */
   async copy() {
     this.assertAlive();

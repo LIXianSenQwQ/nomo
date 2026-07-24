@@ -24,6 +24,12 @@ const TASK_CHUNK_BYTES: usize = 64 * 1024;
 const NEARBY_MATCH_LIMIT: usize = 16;
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Clone, Copy)]
+struct MatchOptions {
+    case_sensitive: bool,
+    whole_word: bool,
+}
+
 #[derive(Clone)]
 pub(super) struct TaskControl {
     pub(super) session_id: String,
@@ -182,12 +188,36 @@ fn run_task(context: &TaskContext, task: SegmentedTask) -> TextDocumentResult<Ta
     match task {
         SegmentedTask::Search {
             query,
+            case_sensitive,
+            whole_word,
+            wrap_around,
             anchor_byte,
             direction,
-        } => run_search(context, &query, anchor_byte, direction),
-        SegmentedTask::ReplaceAll { query, replacement } => {
-            run_replace_all(context, &query, &replacement)
-        }
+        } => run_search(
+            context,
+            &query,
+            MatchOptions {
+                case_sensitive,
+                whole_word,
+            },
+            wrap_around,
+            anchor_byte,
+            direction,
+        ),
+        SegmentedTask::ReplaceAll {
+            query,
+            replacement,
+            case_sensitive,
+            whole_word,
+        } => run_replace_all(
+            context,
+            &query,
+            &replacement,
+            MatchOptions {
+                case_sensitive,
+                whole_word,
+            },
+        ),
         SegmentedTask::SelectAllCopy => run_select_all_copy(context),
         SegmentedTask::JsonValidate => run_json_validate(context),
         SegmentedTask::JsonFormat => run_json_format(context),
@@ -197,6 +227,8 @@ fn run_task(context: &TaskContext, task: SegmentedTask) -> TextDocumentResult<Ta
 fn run_search(
     context: &TaskContext,
     query: &str,
+    options: MatchOptions,
+    wrap_around: bool,
     anchor_byte: Option<u64>,
     direction: Option<SegmentedSearchDirection>,
 ) -> TextDocumentResult<TaskOutcome> {
@@ -207,10 +239,12 @@ fn run_search(
         ));
     }
     validate_search_page(anchor_byte, direction, context.snapshot.len())?;
+    let direction = direction.unwrap_or(SegmentedSearchDirection::Forward);
     let mut outcome = TaskOutcome::default();
     let mut page = VecDeque::with_capacity(NEARBY_MATCH_LIMIT);
+    let mut wrap_page = VecDeque::with_capacity(NEARBY_MATCH_LIMIT);
     let mut offset = 0_u64;
-    let mut matcher = KmpMatcher::new(query.as_bytes());
+    let mut matcher = StreamingMatchScanner::new(query.as_bytes(), options);
     while offset < context.snapshot.len() {
         check_cancel(context)?;
         let chunk = context.snapshot.read_range(offset, TASK_CHUNK_BYTES)?;
@@ -218,28 +252,44 @@ fn run_search(
             break;
         }
         for byte in &chunk {
-            if let Some(from) = matcher.push(*byte) {
+            if let Some(found) = matcher.push(*byte) {
+                let from = found.start_byte;
                 let found = SegmentedTaskMatch {
                     start_byte: from,
-                    end_byte: from + query.len() as u64,
+                    end_byte: found.end_byte,
                 };
                 outcome.match_count += 1;
                 let eligible = match (anchor_byte, direction) {
-                    (Some(anchor), Some(SegmentedSearchDirection::Forward)) => from > anchor,
-                    (Some(anchor), Some(SegmentedSearchDirection::Backward)) => from < anchor,
-                    (None, None) => true,
-                    _ => false,
+                    (Some(anchor), SegmentedSearchDirection::Forward) => from > anchor,
+                    (Some(anchor), SegmentedSearchDirection::Backward) => from < anchor,
+                    (None, _) => true,
                 };
                 if eligible {
                     match direction {
-                        Some(SegmentedSearchDirection::Backward) => {
+                        SegmentedSearchDirection::Backward => {
                             // 反向页只保留锚点前最近的 16 条，避免随文件大小增长占用内存。
                             if page.len() == NEARBY_MATCH_LIMIT {
                                 page.pop_front();
                             }
-                            page.push_back(found);
+                            page.push_back(found.clone());
                         }
-                        _ if page.len() < NEARBY_MATCH_LIMIT => page.push_back(found),
+                        _ if page.len() < NEARBY_MATCH_LIMIT => page.push_back(found.clone()),
+                        _ => {}
+                    }
+                }
+                if wrap_around && anchor_byte.is_some() {
+                    match direction {
+                        SegmentedSearchDirection::Backward => {
+                            if wrap_page.len() == NEARBY_MATCH_LIMIT {
+                                wrap_page.pop_front();
+                            }
+                            wrap_page.push_back(found);
+                        }
+                        SegmentedSearchDirection::Forward
+                            if wrap_page.len() < NEARBY_MATCH_LIMIT =>
+                        {
+                            wrap_page.push_back(found);
+                        }
                         _ => {}
                     }
                 }
@@ -249,9 +299,53 @@ fn run_search(
         outcome.processed_bytes = offset;
         emit(context, SegmentedTaskState::Running, &outcome, None);
     }
+    if let Some(found) = matcher.finish() {
+        let from = found.start_byte;
+        let found = SegmentedTaskMatch {
+            start_byte: from,
+            end_byte: found.end_byte,
+        };
+        outcome.match_count += 1;
+        let eligible = match (anchor_byte, direction) {
+            (Some(anchor), SegmentedSearchDirection::Forward) => from > anchor,
+            (Some(anchor), SegmentedSearchDirection::Backward) => from < anchor,
+            (None, _) => true,
+        };
+        if eligible {
+            match direction {
+                SegmentedSearchDirection::Backward => {
+                    if page.len() == NEARBY_MATCH_LIMIT {
+                        page.pop_front();
+                    }
+                    page.push_back(found.clone());
+                }
+                SegmentedSearchDirection::Forward if page.len() < NEARBY_MATCH_LIMIT => {
+                    page.push_back(found.clone());
+                }
+                _ => {}
+            }
+        }
+        if wrap_around && anchor_byte.is_some() {
+            match direction {
+                SegmentedSearchDirection::Backward => {
+                    if wrap_page.len() == NEARBY_MATCH_LIMIT {
+                        wrap_page.pop_front();
+                    }
+                    wrap_page.push_back(found);
+                }
+                SegmentedSearchDirection::Forward if wrap_page.len() < NEARBY_MATCH_LIMIT => {
+                    wrap_page.push_back(found);
+                }
+                _ => {}
+            }
+        }
+    }
+    if page.is_empty() && wrap_around && anchor_byte.is_some() {
+        page = wrap_page;
+    }
     outcome.nearby_matches = page.into_iter().collect();
     outcome.current_match = match direction {
-        Some(SegmentedSearchDirection::Backward) => outcome.nearby_matches.last().cloned(),
+        SegmentedSearchDirection::Backward => outcome.nearby_matches.last().cloned(),
         _ => outcome.nearby_matches.first().cloned(),
     };
     Ok(outcome)
@@ -277,6 +371,7 @@ fn run_replace_all(
     context: &TaskContext,
     query: &str,
     replacement: &str,
+    options: MatchOptions,
 ) -> TextDocumentResult<TaskOutcome> {
     if query.is_empty() {
         return Err(TextDocumentError::new(
@@ -291,8 +386,9 @@ fn run_replace_all(
     let mut output = create_output(&output_path)?;
     let mut undo = create_output(&undo_path)?;
     let replacement = encoding::normalize_inserted_text(replacement, context.line_ending);
-    let mut replacer = StreamingReplacer::new(query.as_bytes());
+    let mut matcher = StreamingMatchScanner::new(query.as_bytes(), options);
     let mut offset = 0_u64;
+    let mut output_offset = 0_u64;
     let mut match_count = 0_u64;
     let mut line_breaks = 0_u64;
     let mut undo_line_breaks = 0_u64;
@@ -307,7 +403,16 @@ fn run_replace_all(
         }
         write_counted(&mut undo, &chunk, &mut undo_line_breaks)?;
         for byte in &chunk {
-            if replacer.push(*byte, &replacement, &mut output, &mut line_breaks)? {
+            if let Some(found) = matcher.push(*byte) {
+                copy_snapshot_range_counted(
+                    context,
+                    output_offset,
+                    found.start_byte,
+                    &mut output,
+                    &mut line_breaks,
+                )?;
+                write_counted(&mut output, &replacement, &mut line_breaks)?;
+                output_offset = found.end_byte;
                 match_count += 1;
             }
         }
@@ -323,7 +428,25 @@ fn run_replace_all(
             None,
         );
     }
-    replacer.finish(&mut output, &mut line_breaks)?;
+    if let Some(found) = matcher.finish() {
+        copy_snapshot_range_counted(
+            context,
+            output_offset,
+            found.start_byte,
+            &mut output,
+            &mut line_breaks,
+        )?;
+        write_counted(&mut output, &replacement, &mut line_breaks)?;
+        output_offset = found.end_byte;
+        match_count += 1;
+    }
+    copy_snapshot_range_counted(
+        context,
+        output_offset,
+        context.snapshot.len(),
+        &mut output,
+        &mut line_breaks,
+    )?;
     output.sync_all()?;
     undo.sync_all()?;
     drop(output);
@@ -771,8 +894,98 @@ impl KmpMatcher {
         self.matched = self.failure[self.matched - 1];
         Some(start)
     }
+
+    fn reset(&mut self) {
+        self.matched = 0;
+    }
 }
 
+struct StreamingMatchScanner {
+    matcher: KmpMatcher,
+    pattern_len: usize,
+    options: MatchOptions,
+    history: VecDeque<u8>,
+    pending: Option<SegmentedTaskMatch>,
+}
+
+impl StreamingMatchScanner {
+    fn new(pattern: &[u8], options: MatchOptions) -> Self {
+        let normalized_pattern = pattern
+            .iter()
+            .map(|byte| normalize_search_byte(*byte, options.case_sensitive))
+            .collect::<Vec<_>>();
+        Self {
+            matcher: KmpMatcher::new(&normalized_pattern),
+            pattern_len: pattern.len(),
+            options,
+            history: VecDeque::with_capacity(pattern.len().saturating_add(1)),
+            pending: None,
+        }
+    }
+
+    fn push(&mut self, byte: u8) -> Option<SegmentedTaskMatch> {
+        let resolved = self.pending.take().and_then(|candidate| {
+            if !is_word_byte(byte) {
+                self.matcher.reset();
+                Some(candidate)
+            } else {
+                None
+            }
+        });
+
+        self.history.push_back(byte);
+        if self.history.len() > self.pattern_len.saturating_add(1) {
+            self.history.pop_front();
+        }
+
+        let normalized = normalize_search_byte(byte, self.options.case_sensitive);
+        let immediate = self.matcher.push(normalized).and_then(|start_byte| {
+            let preceding = if start_byte == 0 || self.history.len() <= self.pattern_len {
+                None
+            } else {
+                self.history.front().copied()
+            };
+            if self.options.whole_word && preceding.is_some_and(is_word_byte) {
+                return None;
+            }
+            let found = SegmentedTaskMatch {
+                start_byte,
+                end_byte: start_byte + self.pattern_len as u64,
+            };
+            if self.options.whole_word {
+                self.pending = Some(found);
+                None
+            } else {
+                self.matcher.reset();
+                Some(found)
+            }
+        });
+
+        resolved.or(immediate)
+    }
+
+    fn finish(&mut self) -> Option<SegmentedTaskMatch> {
+        let pending = self.pending.take();
+        if pending.is_some() {
+            self.matcher.reset();
+        }
+        pending
+    }
+}
+
+fn normalize_search_byte(byte: u8, case_sensitive: bool) -> u8 {
+    if case_sensitive {
+        byte
+    } else {
+        byte.to_ascii_lowercase()
+    }
+}
+
+fn is_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || !byte.is_ascii()
+}
+
+#[cfg(test)]
 struct StreamingReplacer {
     pattern: Vec<u8>,
     failure: Vec<usize>,
@@ -780,6 +993,7 @@ struct StreamingReplacer {
     pending: VecDeque<u8>,
 }
 
+#[cfg(test)]
 impl StreamingReplacer {
     fn new(pattern: &[u8]) -> Self {
         Self {
@@ -850,6 +1064,32 @@ fn build_failure(pattern: &[u8]) -> Vec<usize> {
 fn write_counted(file: &mut File, bytes: &[u8], line_breaks: &mut u64) -> TextDocumentResult<()> {
     file.write_all(bytes)?;
     *line_breaks += bytes.iter().filter(|byte| **byte == b'\n').count() as u64;
+    Ok(())
+}
+
+fn copy_snapshot_range_counted(
+    context: &TaskContext,
+    start: u64,
+    end: u64,
+    output: &mut File,
+    line_breaks: &mut u64,
+) -> TextDocumentResult<()> {
+    let mut offset = start;
+    while offset < end {
+        check_cancel(context)?;
+        let remaining = end - offset;
+        let chunk = context
+            .snapshot
+            .read_range(offset, remaining.min(TASK_CHUNK_BYTES as u64) as usize)?;
+        if chunk.is_empty() {
+            return Err(TextDocumentError::new(
+                "task-snapshot-short-read",
+                "替换任务读取源文档时提前结束",
+            ));
+        }
+        write_counted(output, &chunk, line_breaks)?;
+        offset += chunk.len() as u64;
+    }
     Ok(())
 }
 

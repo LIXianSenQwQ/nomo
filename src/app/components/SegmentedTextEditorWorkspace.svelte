@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, ChevronUp, LoaderCircle, Search, Square, X } from '@lucide/svelte';
+  import { LoaderCircle, Square } from '@lucide/svelte';
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import {
     SegmentedTextEditorCore,
@@ -29,6 +29,7 @@
   } from '../../lib/text-editor/virtualScroll';
   import type { SegmentedTextTabState } from '../types';
   import { t } from '../i18n';
+  import SearchReplacePanel from './SearchReplacePanel.svelte';
   import {
     classifySegmentedTaskProgress,
     getAdjacentSegmentStart,
@@ -51,6 +52,7 @@
   interface ActiveTask extends SegmentedTaskIdentity {
     terminal: Promise<void>;
     resolveTerminal: () => void;
+    request: SegmentedTaskSpec;
   }
 
   interface PendingTaskLaunch {
@@ -61,7 +63,6 @@
 
   let host: HTMLDivElement;
   let scroller: HTMLDivElement;
-  let searchInput: HTMLInputElement;
   let core: SegmentedTextEditorCore | null = null;
   let metadata: SegmentedEditorMetadata | null = null;
   let viewportHeight = 0;
@@ -75,6 +76,11 @@
   let replaceVisible = false;
   let query = '';
   let replacement = '';
+  let caseSensitive = false;
+  let wholeWord = false;
+  let backwards = false;
+  let wrapAround = true;
+  let searchMatchCount = 0;
   let nearbyMatches: SegmentedMatchRange[] = [];
   let nearbyMatchesRevision: number | null = null;
   let activeNearbyIndex = 0;
@@ -107,6 +113,7 @@
   $: taskPercent = taskProgress?.totalBytes
     ? Math.round((taskProgress.processedBytes / taskProgress.totalBytes) * 100)
     : 0;
+  $: searchBusy = Boolean(activeTask || taskLaunchPromise || queuedTaskRequest);
   $: sessionMetadata = segmentedSessionRegistry.get(tab.sessionId);
   $: readonly = metadata?.readonly ?? sessionMetadata?.readonly ?? tab.diskReadonly;
   $: unsupportedEncoding = (metadata?.encoding ?? sessionMetadata?.encoding) === 'unsupported';
@@ -274,7 +281,10 @@
 
     if (decision.resultCurrent) {
       taskProgress = progress;
-      if (progress.nearbyMatches?.length) {
+      if (progress.kind === 'search') {
+        searchMatchCount = progress.matchCount;
+      }
+      if (progress.nearbyMatches) {
         nearbyMatches = progress.nearbyMatches;
         nearbyMatchesRevision = identity.baseRevision;
         const currentIndex = progress.currentMatch
@@ -285,7 +295,9 @@
             )
           : -1;
         activeNearbyIndex =
-          currentIndex >= 0 ? currentIndex : Math.min(activeNearbyIndex, nearbyMatches.length - 1);
+          currentIndex >= 0
+            ? currentIndex
+            : Math.max(0, Math.min(activeNearbyIndex, nearbyMatches.length - 1));
       }
     } else {
       // revision 已变化时仍接收终态以解除等待，但旧命中、计数和结果不得污染当前文档。
@@ -304,7 +316,7 @@
     terminalTaskIds.add(progress.taskId);
     try {
       if (progress.state === 'completed' && decision.resultCurrent) {
-        await finishCompletedTask(progress);
+        await finishCompletedTask(identity, progress);
       } else if (progress.state === 'failed' || progress.state === 'conflict') {
         statusMessage = t.segmentedTaskFailed({ error: progress.message ?? progress.state });
       }
@@ -318,14 +330,24 @@
     }
   }
 
-  async function finishCompletedTask(progress: SegmentedTaskProgress) {
+  async function finishCompletedTask(identity: ActiveTask, progress: SegmentedTaskProgress) {
     if (
       (progress.kind === 'replace-all' || progress.kind === 'json-format') &&
       progress.resultRevision !== undefined
     ) {
       await core?.applyTaskResult(progress.resultRevision, progress.resultByteLength);
+      if (progress.kind === 'replace-all') {
+        nearbyMatches = [];
+        nearbyMatchesRevision = null;
+        activeNearbyIndex = 0;
+        searchMatchCount = 0;
+      }
     }
-    if (progress.kind === 'search' && progress.currentMatch) {
+    if (
+      progress.kind === 'search' &&
+      progress.currentMatch &&
+      identity.request.selectMatch !== false
+    ) {
       // 搜索只在冻结 revision 仍为当前状态时跳转；consumeTaskProgress 已完成该校验。
       await revealSearchMatch(progress.currentMatch);
     }
@@ -613,9 +635,20 @@
       type,
       query: query || undefined,
     };
+    if (type === 'search') {
+      request.caseSensitive = caseSensitive;
+      request.wholeWord = wholeWord;
+      request.wrapAround = wrapAround;
+      if (backwards) {
+        request.anchorByte = core?.getMetadata().byteLength ?? metadata?.byteLength ?? 0;
+        request.direction = 'backward';
+      }
+    }
     if (type === 'replace-all') {
       // 空字符串是“删除全部命中”的有效 replacement，不能按缺省参数丢弃。
       request.replacement = replacement;
+      request.caseSensitive = caseSensitive;
+      request.wholeWord = wholeWord;
     }
     if ((metadata?.indexProgress ?? 0) < 1) {
       // 后发请求替换旧等待项；只保存参数，不保存正文或旧 revision。
@@ -682,6 +715,7 @@
         kind: type,
         terminal,
         resolveTerminal,
+        request,
       };
       activeTask = identity;
       if (request.type !== 'search' || request.anchorByte === undefined) {
@@ -798,12 +832,105 @@
     const anchor = nearbyMatches[activeNearbyIndex];
     if (!anchor || !query) return;
     // 页边界才重新流式扫描；每一页仍只把至多 16 个附近命中送进 WebView。
-    void launchTask({
+    void launchTask(createSearchRequest(direction, anchor.startByte));
+  }
+
+  function createSearchRequest(
+    direction: -1 | 1,
+    anchorByte?: number,
+    selectMatch = true,
+  ): SegmentedTaskSpec {
+    const resolvedAnchor =
+      anchorByte ??
+      (direction < 0 ? (core?.getMetadata().byteLength ?? metadata?.byteLength ?? 0) : undefined);
+    return {
       type: 'search',
       query,
-      anchorByte: anchor.startByte,
-      direction: direction > 0 ? 'forward' : 'backward',
-    });
+      anchorByte: resolvedAnchor,
+      direction: resolvedAnchor === undefined ? undefined : direction > 0 ? 'forward' : 'backward',
+      caseSensitive,
+      wholeWord,
+      wrapAround,
+      selectMatch,
+    };
+  }
+
+  function runFind(direction: -1 | 1) {
+    if (!query || searchBusy) return;
+    if (nearbyMatches.length > 0 && nearbyMatchesRevision === core?.getMetadata().revision) {
+      navigateNearby(direction);
+      return;
+    }
+    void launchTask(createSearchRequest(direction));
+  }
+
+  function countSearchMatches() {
+    if (!query || searchBusy) return;
+    void launchTask(createSearchRequest(backwards ? -1 : 1, undefined, false));
+  }
+
+  function updateSearchQuery(event: Event) {
+    query = (event.currentTarget as HTMLInputElement).value;
+    invalidateSearchResults();
+  }
+
+  function updateSearchReplacement(event: Event) {
+    replacement = (event.currentTarget as HTMLInputElement).value;
+  }
+
+  function toggleCaseSensitive() {
+    caseSensitive = !caseSensitive;
+    invalidateSearchResults();
+  }
+
+  function toggleWholeWord() {
+    wholeWord = !wholeWord;
+    invalidateSearchResults();
+  }
+
+  function toggleBackwards() {
+    backwards = !backwards;
+    invalidateSearchResults();
+  }
+
+  function toggleWrapAround() {
+    wrapAround = !wrapAround;
+  }
+
+  function toggleReplaceVisible() {
+    replaceVisible = !replaceVisible;
+  }
+
+  function invalidateSearchResults() {
+    if (activeTask?.kind === 'search' && taskProgress?.state === 'running') {
+      void cancelTask();
+    }
+    if (queuedTaskRequest?.type === 'search') {
+      queuedTaskRequest = null;
+    }
+    nearbyMatches = [];
+    nearbyMatchesRevision = null;
+    activeNearbyIndex = 0;
+    searchMatchCount = 0;
+    if (taskProgress?.kind === 'search') {
+      taskProgress = null;
+    }
+  }
+
+  async function replaceCurrentMatch() {
+    const match = nearbyMatches[activeNearbyIndex];
+    if (!core || !match || readonly || searchBusy) return;
+    try {
+      await revealSearchMatch(match);
+      if (!core.replaceRange(match.startByte, match.endByte, replacement)) return;
+      await core.flush();
+      statusMessage = t.replacedOneMatch();
+      dispatch('status', { message: statusMessage });
+      invalidateSearchResults();
+      await launchTask(createSearchRequest(backwards ? -1 : 1));
+    } catch (error) {
+      showError(error);
+    }
   }
 
   async function revealSearchMatch(match: SegmentedMatchRange) {
@@ -916,11 +1043,22 @@
   export function openSearch(showReplace = false) {
     searchOpen = true;
     replaceVisible = showReplace;
-    void tick().then(() => searchInput?.focus());
   }
 
   export function closeSearch() {
     searchOpen = false;
+    const match = nearbyMatches[activeNearbyIndex];
+    const selection = core?.getMetadata().selection;
+    if (
+      core &&
+      match &&
+      selection &&
+      ((selection.anchorByte === match.startByte && selection.headByte === match.endByte) ||
+        (selection.anchorByte === match.endByte && selection.headByte === match.startByte))
+    ) {
+      core.setSelection({ anchorByte: match.endByte, headByte: match.endByte });
+    }
+    core?.focus();
   }
 
   export function getSearchState() {
@@ -946,32 +1084,37 @@
   on:keydown|capture={handleWorkspaceKeydown}
 >
   {#if searchOpen}
-    <form class="segmented-search" on:submit|preventDefault={() => startTask('search')}>
-      <label>
-        <span class="sr-only">{t.searchInDocument()}</span>
-        <input bind:this={searchInput} bind:value={query} placeholder={t.searchReady()} />
-      </label>
-      {#if replaceVisible}
-        <label>
-          <span class="sr-only">{t.replaceWith()}</span>
-          <input bind:value={replacement} placeholder={t.replaceWith()} />
-        </label>
-      {/if}
-      <button type="submit" title={t.search()}><Search size={13} /></button>
-      <button type="button" title={t.previousMatch()} on:click={() => navigateNearby(-1)}>
-        <ChevronUp size={13} />
-      </button>
-      <button type="button" title={t.nextMatch()} on:click={() => navigateNearby(1)}>
-        <ChevronDown size={13} />
-      </button>
-      {#if replaceVisible}
-        <button type="button" disabled={readonly} on:click={() => startTask('replace-all')}>
-          {t.replaceAll()}
-        </button>
-      {/if}
-      <span class="match-count">{taskProgress?.matchCount ?? 0}</span>
-      <button type="button" title={t.closeSearch()} on:click={closeSearch}><X size={13} /></button>
-    </form>
+    <div class="segmented-search-layer">
+      <SearchReplacePanel
+        {interfaceLocale}
+        open={searchOpen}
+        {replaceVisible}
+        {query}
+        {replacement}
+        {caseSensitive}
+        {wholeWord}
+        {backwards}
+        {wrapAround}
+        activeIndex={activeNearbyIndex}
+        matchCount={searchMatchCount}
+        showActivePosition={false}
+        {readonly}
+        busy={searchBusy}
+        updateQuery={updateSearchQuery}
+        updateReplacement={updateSearchReplacement}
+        {toggleCaseSensitive}
+        {toggleWholeWord}
+        {toggleBackwards}
+        {toggleWrapAround}
+        {toggleReplaceVisible}
+        findPrevious={() => runFind(-1)}
+        findNext={() => runFind(1)}
+        countMatches={countSearchMatches}
+        replaceCurrent={replaceCurrentMatch}
+        replaceAll={() => startTask('replace-all')}
+        close={closeSearch}
+      />
+    </div>
   {/if}
 
   {#if unsupportedEncoding || filesystemReadonly}

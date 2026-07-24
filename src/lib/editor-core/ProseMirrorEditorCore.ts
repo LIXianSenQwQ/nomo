@@ -88,6 +88,7 @@ import type {
   EditorThemeOptions,
   SetMarkdownOptions,
 } from './types';
+import { isWholeWordRange } from '../search/textSearch';
 
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
 const MARKDOWN_SYNC_DEBOUNCE_MS = 120;
@@ -336,6 +337,18 @@ export class ProseMirrorEditorCore implements EditorCore {
     }
 
     const tr = this.view.state.tr.setMeta('searchHighlight', { matches, activeIndex });
+    this.view.dispatch(tr);
+  }
+
+  clearSearchState(activeMatch?: EditorSearchMatch): void {
+    this.assertActive();
+    if (!this.view) return;
+
+    const { selection } = this.view.state;
+    let tr = this.view.state.tr.setMeta('searchHighlight', { matches: [], activeIndex: 0 });
+    if (activeMatch && selection.from === activeMatch.from && selection.to === activeMatch.to) {
+      tr = tr.setSelection(TextSelection.create(this.view.state.doc, activeMatch.to));
+    }
     this.view.dispatch(tr);
   }
 
@@ -1154,13 +1167,15 @@ function findEditorTextMatches(
 
       const from = pos + found;
       const to = from + query.length;
-      matches.push({
-        id: `${from}:${to}:${matches.length}`,
-        index: matches.length,
-        from,
-        to,
-        text: node.text.slice(found, found + query.length),
-      });
+      if (!options.wholeWord || isWholeWordRange(node.text, found, found + query.length)) {
+        matches.push({
+          id: `${from}:${to}:${matches.length}`,
+          index: matches.length,
+          from,
+          to,
+          text: node.text.slice(found, found + query.length),
+        });
+      }
       offset = found + Math.max(needle.length, 1);
     }
 

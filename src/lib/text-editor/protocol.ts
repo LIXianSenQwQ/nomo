@@ -126,6 +126,11 @@ export interface SegmentedTaskSpec {
   type: SegmentedTaskType;
   query?: string;
   replacement?: string;
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  wrapAround?: boolean;
+  /** 只参与 WebView 结果处理，不发送给旧后端也不会改变任务结果。 */
+  selectMatch?: boolean;
   /** 搜索分页始终只取 anchor 附近的有界结果，不把全部命中传入 WebView。 */
   anchorByte?: number;
   direction?: SegmentedSearchDirection;

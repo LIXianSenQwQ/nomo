@@ -76,6 +76,9 @@
   export let searchQuery: string;
   export let searchReplacement: string;
   export let searchCaseSensitive: boolean;
+  export let searchWholeWord: boolean;
+  export let searchBackwards: boolean;
+  export let searchWrapAround: boolean;
   export let searchActiveIndex: number;
   export let searchMatchCount: number;
   export let autoSaveEnabled: boolean;
@@ -113,9 +116,13 @@
   export let updateSearchQuery: (event: Event) => void;
   export let updateSearchReplacement: (event: Event) => void;
   export let toggleSearchCaseSensitive: () => void;
+  export let toggleSearchWholeWord: () => void;
+  export let toggleSearchBackwards: () => void;
+  export let toggleSearchWrapAround: () => void;
   export let toggleSearchReplaceVisible: () => void;
   export let findPreviousSearchMatch: () => void;
   export let findNextSearchMatch: () => void;
+  export let countSearchMatches: () => void;
   export let replaceCurrentSearchMatch: () => void;
   export let replaceAllSearchMatches: () => void;
   export let editFrontMatter: () => void;
@@ -305,15 +312,22 @@
               query={searchQuery}
               replacement={searchReplacement}
               caseSensitive={searchCaseSensitive}
+              wholeWord={searchWholeWord}
+              backwards={searchBackwards}
+              wrapAround={searchWrapAround}
               activeIndex={searchActiveIndex}
               matchCount={searchMatchCount}
               readonly={readonlyDocumentMode}
               updateQuery={updateSearchQuery}
               updateReplacement={updateSearchReplacement}
               toggleCaseSensitive={toggleSearchCaseSensitive}
+              toggleWholeWord={toggleSearchWholeWord}
+              toggleBackwards={toggleSearchBackwards}
+              toggleWrapAround={toggleSearchWrapAround}
               toggleReplaceVisible={toggleSearchReplaceVisible}
               findPrevious={findPreviousSearchMatch}
               findNext={findNextSearchMatch}
+              countMatches={countSearchMatches}
               replaceCurrent={replaceCurrentSearchMatch}
               replaceAll={replaceAllSearchMatches}
               close={closeSearchPanel}

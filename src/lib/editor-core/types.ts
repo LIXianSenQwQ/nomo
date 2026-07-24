@@ -3,7 +3,13 @@ import type { ImageContext } from '../services/render';
 import type { ContextMenuOpenEvent } from './plugins/contextMenu';
 
 export type EditorMode = 'semantic' | 'source';
-export type InlinePendingMarkName = 'strong' | 'em' | 'code' | 'strikethrough' | 'underline' | 'highlight';
+export type InlinePendingMarkName =
+  | 'strong'
+  | 'em'
+  | 'code'
+  | 'strikethrough'
+  | 'underline'
+  | 'highlight';
 export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
 
 export interface EditorThemeOptions {
@@ -58,6 +64,7 @@ export interface EditorAnchorRect {
 
 export interface EditorSearchOptions {
   caseSensitive: boolean;
+  wholeWord?: boolean;
 }
 
 export interface EditorSearchMatch {
@@ -194,6 +201,7 @@ export interface EditorCore {
   getSelectionAnchorRect(): EditorAnchorRect | null;
   findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[];
   setSearchHighlights(matches: EditorSearchMatch[], activeIndex: number): void;
+  clearSearchState?(activeMatch?: EditorSearchMatch): void;
   selectSearchMatch(match: EditorSearchMatch, focus?: boolean): boolean;
   replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean;
   replaceAllSearchMatches(query: string, replacement: string, options: EditorSearchOptions): number;

@@ -1,5 +1,8 @@
+import { isWholeWordRange } from '../../lib/search/textSearch';
+
 export interface TextSearchOptions {
   caseSensitive: boolean;
+  wholeWord?: boolean;
 }
 
 export interface TextSearchMatch {
@@ -30,13 +33,16 @@ export function findTextMatches(
       break;
     }
 
-    matches.push({
-      id: `${found}:${found + query.length}:${matches.length}`,
-      index: matches.length,
-      from: found,
-      to: found + query.length,
-      text: text.slice(found, found + query.length),
-    });
+    const to = found + query.length;
+    if (!options.wholeWord || isWholeWordRange(text, found, to)) {
+      matches.push({
+        id: `${found}:${to}:${matches.length}`,
+        index: matches.length,
+        from: found,
+        to,
+        text: text.slice(found, to),
+      });
+    }
     offset = found + Math.max(needle.length, 1);
   }
 

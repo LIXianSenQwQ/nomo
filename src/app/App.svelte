@@ -339,6 +339,9 @@
   let searchQuery = '';
   let searchReplacement = '';
   let searchCaseSensitive = false;
+  let searchWholeWord = false;
+  let searchBackwards = false;
+  let searchWrapAround = true;
   let searchMatches: EditorSearchMatch[] = [];
   let searchActiveIndex = 0;
   let searchMatchCount = 0;
@@ -2034,10 +2037,28 @@
       segmentedWorkspace?.closeSearch();
       return;
     }
+    const activeMatch = searchMatches[searchActiveIndex];
     searchPanelOpen = false;
     clearSearchDebounceTimer();
-    refreshSearchMatches({ preserveActive: false, selectActive: false });
-    editor.focus();
+    if (mode === 'source') {
+      editor.setSearchHighlights([], 0);
+      if (
+        sourceTextarea &&
+        activeMatch &&
+        sourceTextarea.selectionStart === activeMatch.from &&
+        sourceTextarea.selectionEnd === activeMatch.to
+      ) {
+        sourceTextarea.setSelectionRange(activeMatch.to, activeMatch.to);
+      }
+      sourceTextarea?.focus();
+    } else {
+      if (editor.clearSearchState) {
+        editor.clearSearchState(activeMatch);
+      } else {
+        editor.setSearchHighlights([], 0);
+      }
+      editor.focus();
+    }
   }
 
   function updateSearchQuery(event: Event) {
@@ -2062,20 +2083,43 @@
     refreshSearchMatches({ preserveActive: false, selectActive: false });
   }
 
+  function toggleSearchWholeWord() {
+    searchWholeWord = !searchWholeWord;
+    searchActiveIndex = 0;
+    clearSearchDebounceTimer();
+    refreshSearchMatches({ preserveActive: false, selectActive: false });
+  }
+
+  function toggleSearchBackwards() {
+    searchBackwards = !searchBackwards;
+  }
+
+  function toggleSearchWrapAround() {
+    searchWrapAround = !searchWrapAround;
+  }
+
   function toggleSearchReplaceVisible() {
     searchReplaceVisible = !searchReplaceVisible;
   }
 
   function findPreviousSearchMatch() {
-    if (searchMatches.length === 0) return;
-    searchActiveIndex = (searchActiveIndex - 1 + searchMatches.length) % searchMatches.length;
-    selectActiveSearchMatch();
+    moveSearchMatch(-1);
   }
 
   function findNextSearchMatch() {
+    moveSearchMatch(1);
+  }
+
+  function moveSearchMatch(direction: -1 | 1) {
     if (searchMatches.length === 0) return;
-    searchActiveIndex = (searchActiveIndex + 1) % searchMatches.length;
+    const nextIndex = searchActiveIndex + direction;
+    if ((nextIndex < 0 || nextIndex >= searchMatches.length) && !searchWrapAround) return;
+    searchActiveIndex = (nextIndex + searchMatches.length) % searchMatches.length;
     selectActiveSearchMatch();
+  }
+
+  function countSearchMatches() {
+    refreshSearchMatches({ preserveActive: true, selectActive: false });
   }
 
   function replaceCurrentSearchMatch() {
@@ -2103,6 +2147,7 @@
     if (mode === 'source') {
       const result = replaceAllTextMatches(markdown, searchQuery, searchReplacement, {
         caseSensitive: searchCaseSensitive,
+        wholeWord: searchWholeWord,
       });
       replaced = result.count;
       if (replaced > 0) {
@@ -2111,6 +2156,7 @@
     } else {
       replaced = editor.replaceAllSearchMatches(searchQuery, searchReplacement, {
         caseSensitive: searchCaseSensitive,
+        wholeWord: searchWholeWord,
       });
     }
 
@@ -2133,8 +2179,14 @@
     const previousMatch = searchMatches[searchActiveIndex];
     searchMatches =
       mode === 'source'
-        ? findTextMatches(markdown, searchQuery, { caseSensitive: searchCaseSensitive })
-        : editor.findSearchMatches(searchQuery, { caseSensitive: searchCaseSensitive });
+        ? findTextMatches(markdown, searchQuery, {
+            caseSensitive: searchCaseSensitive,
+            wholeWord: searchWholeWord,
+          })
+        : editor.findSearchMatches(searchQuery, {
+            caseSensitive: searchCaseSensitive,
+            wholeWord: searchWholeWord,
+          });
     searchMatchCount = searchMatches.length;
 
     if (searchMatches.length === 0) {
@@ -4373,7 +4425,7 @@
   $: {
     const activeDocument = tabs.find((tab) => tab.id === activeTabId);
     if (isMarkdownTab(activeDocument)) {
-      const signature = `${searchPanelOpen}|${mode}|${searchCaseSensitive}|${markdown}`;
+      const signature = `${searchPanelOpen}|${mode}|${searchCaseSensitive}|${searchWholeWord}|${markdown}`;
       if (signature !== lastSearchSignature) {
         lastSearchSignature = signature;
         refreshSearchMatches({ preserveActive: true, selectActive: false });
@@ -4763,6 +4815,9 @@
   {searchQuery}
   {searchReplacement}
   {searchCaseSensitive}
+  {searchWholeWord}
+  {searchBackwards}
+  {searchWrapAround}
   {searchActiveIndex}
   {searchMatchCount}
   {autoSaveEnabled}
@@ -4798,9 +4853,13 @@
   {updateSearchQuery}
   {updateSearchReplacement}
   {toggleSearchCaseSensitive}
+  {toggleSearchWholeWord}
+  {toggleSearchBackwards}
+  {toggleSearchWrapAround}
   {toggleSearchReplaceVisible}
   {findPreviousSearchMatch}
   {findNextSearchMatch}
+  {countSearchMatches}
   {replaceCurrentSearchMatch}
   {replaceAllSearchMatches}
   {editFrontMatter}

@@ -177,6 +177,12 @@ pub(crate) struct StartSegmentedTaskRequest {
 pub(crate) enum SegmentedTask {
     Search {
         query: String,
+        #[serde(default, rename = "caseSensitive")]
+        case_sensitive: bool,
+        #[serde(default, rename = "wholeWord")]
+        whole_word: bool,
+        #[serde(default, rename = "wrapAround")]
+        wrap_around: bool,
         /// 分页锚点只参与筛选结果窗口，全文匹配总数仍按完整快照统计。
         #[serde(default, rename = "anchorByte")]
         anchor_byte: Option<u64>,
@@ -186,6 +192,10 @@ pub(crate) enum SegmentedTask {
     ReplaceAll {
         query: String,
         replacement: String,
+        #[serde(default, rename = "caseSensitive")]
+        case_sensitive: bool,
+        #[serde(default, rename = "wholeWord")]
+        whole_word: bool,
     },
     SelectAllCopy,
     JsonValidate,
@@ -549,6 +559,9 @@ mod tests {
                     base_revision: opened.revision,
                     task: SegmentedTask::Search {
                         query: "needle".into(),
+                        case_sensitive: true,
+                        whole_word: false,
+                        wrap_around: false,
                         anchor_byte: None,
                         direction: None,
                     },
@@ -581,6 +594,9 @@ mod tests {
                     base_revision: opened.revision,
                     task: SegmentedTask::Search {
                         query: "needle".into(),
+                        case_sensitive: true,
+                        whole_word: false,
+                        wrap_around: false,
                         anchor_byte: Some(anchor),
                         direction: Some(SegmentedSearchDirection::Forward),
                     },
@@ -609,6 +625,9 @@ mod tests {
                     base_revision: opened.revision,
                     task: SegmentedTask::Search {
                         query: "needle".into(),
+                        case_sensitive: true,
+                        whole_word: false,
+                        wrap_around: false,
                         anchor_byte: Some(forward_current),
                         direction: Some(SegmentedSearchDirection::Backward),
                     },
@@ -1011,6 +1030,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -1400,6 +1421,9 @@ mod tests {
                     base_revision: 0,
                     task: SegmentedTask::Search {
                         query: "missing".into(),
+                        case_sensitive: true,
+                        whole_word: false,
+                        wrap_around: false,
                         anchor_byte: None,
                         direction: None,
                     },
@@ -1431,6 +1455,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -1578,6 +1604,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -1638,6 +1666,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "x\ny".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -1751,6 +1781,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -1953,6 +1985,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
@@ -2100,6 +2134,8 @@ mod tests {
                     task: SegmentedTask::ReplaceAll {
                         query: "foo".into(),
                         replacement: "bar".into(),
+                        case_sensitive: true,
+                        whole_word: false,
                     },
                 },
                 Some(Arc::new(move |event| {
