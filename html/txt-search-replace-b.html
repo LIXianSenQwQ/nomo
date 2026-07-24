@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TXT 查找替换原型 B · 渐进面板</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #eef1f3;
+        --surface: #ffffff;
+        --chrome: #f7f8fa;
+        --editor: #fbfcfd;
+        --text: #202428;
+        --muted: #68707a;
+        --border: #dfe3e8;
+        --border-strong: #cbd2d9;
+        --accent: #2f7d6f;
+        --accent-strong: #174e45;
+        --accent-soft: #e7f0ee;
+        --shadow: 0 22px 62px rgba(24, 36, 46, 0.18), 0 3px 12px rgba(24, 36, 46, 0.1);
+        --font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 13px;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      .app {
+        display: grid;
+        grid-template-rows: 34px 35px 1fr 26px;
+        width: 100%;
+        height: 100%;
+        background: var(--surface);
+      }
+
+      .app-titlebar,
+      .document-tabs,
+      .statusbar {
+        display: flex;
+        align-items: center;
+        border-color: var(--border);
+        background: var(--chrome);
+      }
+
+      .app-titlebar {
+        gap: 10px;
+        padding: 0 13px;
+        border-bottom: 1px solid var(--border);
+        color: #343a40;
+        font-size: 12px;
+      }
+
+      .app-mark {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        background: var(--accent);
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .window-name {
+        color: var(--muted);
+      }
+
+      .document-tabs {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .document-tab {
+        display: flex;
+        align-items: center;
+        align-self: stretch;
+        min-width: 190px;
+        padding: 0 15px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 12px;
+      }
+
+      .editor-wrap {
+        position: relative;
+        display: grid;
+        grid-template-columns: 50px 1fr;
+        min-height: 0;
+        background: var(--editor);
+      }
+
+      .line-numbers {
+        padding: 18px 12px 18px 0;
+        border-right: 1px solid #edf0f2;
+        color: #9aa2ab;
+        font-family: var(--font-mono);
+        line-height: 1.7;
+        text-align: right;
+        user-select: none;
+      }
+
+      .editor {
+        width: 100%;
+        height: 100%;
+        resize: none;
+        padding: 18px 22px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #30363b;
+        font-family: var(--font-mono);
+        font-size: 14px;
+        line-height: 1.7;
+        tab-size: 2;
+      }
+
+      .statusbar {
+        justify-content: space-between;
+        padding: 0 12px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .reopen {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: none;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 11px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--surface);
+        box-shadow: 0 8px 20px rgba(24, 36, 46, 0.1);
+        cursor: pointer;
+      }
+
+      .finder {
+        position: absolute;
+        z-index: 20;
+        top: 82px;
+        right: 38px;
+        width: min(520px, calc(100vw - 28px));
+        border: 1px solid var(--border-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .finder.dragging {
+        user-select: none;
+      }
+
+      .finder-titlebar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 38px;
+        padding: 0 9px 0 13px;
+        border-bottom: 1px solid var(--border);
+        border-radius: 10px 10px 0 0;
+        background: var(--chrome);
+        cursor: move;
+      }
+
+      .finder-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .finder-title small {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 400;
+      }
+
+      .finder-glyph {
+        width: 15px;
+        height: 15px;
+        color: var(--accent);
+      }
+
+      .icon-button {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        border-color: var(--border);
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .finder-body {
+        padding: 14px;
+      }
+
+      .query-row,
+      .replace-area {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .row-label {
+        color: #505860;
+        font-size: 12px;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .search-shell {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        height: 38px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--surface);
+      }
+
+      .search-shell:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(47, 125, 111, 0.14);
+      }
+
+      .search-icon {
+        width: 15px;
+        height: 15px;
+        margin-left: 11px;
+        flex: 0 0 auto;
+        color: var(--muted);
+      }
+
+      .search-shell input {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        padding: 0 9px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text);
+      }
+
+      .result-counter {
+        margin-right: 9px;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .find-button {
+        min-width: 96px;
+        height: 38px;
+        padding: 0 13px;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .find-button:hover {
+        border-color: var(--accent-strong);
+        background: var(--accent-strong);
+      }
+
+      .option-strip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .option-strip::-webkit-scrollbar {
+        display: none;
+      }
+
+      .option {
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .option input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .option span {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 9px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--chrome);
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .option input:checked + span {
+        border-color: rgba(47, 125, 111, 0.32);
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-weight: 600;
+      }
+
+      .option input:focus-visible + span {
+        outline: 2px solid rgba(47, 125, 111, 0.45);
+        outline-offset: 2px;
+      }
+
+      .strip-spacer {
+        min-width: 4px;
+        flex: 1;
+      }
+
+      .count-action {
+        height: 28px;
+        padding: 0 8px;
+        border: 0;
+        background: transparent;
+        color: var(--accent-strong);
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .replace-area {
+        grid-template-columns: 48px minmax(0, 1fr) auto auto;
+        margin-top: 8px;
+      }
+
+      .replace-input {
+        min-width: 0;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        outline: 0;
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .replace-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(47, 125, 111, 0.14);
+      }
+
+      .button {
+        height: 34px;
+        padding: 0 11px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        background: var(--surface);
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .button:hover {
+        border-color: #aab4bd;
+        background: var(--chrome);
+      }
+
+      .feedback {
+        display: flex;
+        align-items: center;
+        min-height: 22px;
+        margin: 8px 2px -4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .find-button:focus-visible,
+      .icon-button:focus-visible,
+      .button:focus-visible,
+      .count-action:focus-visible {
+        outline: 2px solid rgba(47, 125, 111, 0.45);
+        outline-offset: 2px;
+      }
+
+      @media (max-width: 560px) {
+        .finder {
+          top: 48px;
+          right: 14px;
+        }
+
+        .query-row {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .row-label,
+        .search-shell {
+          grid-column: 1 / -1;
+        }
+
+        .row-label {
+          text-align: left;
+        }
+
+        .find-button {
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+
+        .replace-area {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .replace-area .row-label,
+        .replace-input {
+          grid-column: 1 / -1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-titlebar">
+        <span class="app-mark">N</span>
+        <span>project-notes.txt</span>
+        <span class="window-name">— NewMd</span>
+      </header>
+      <nav class="document-tabs" aria-label="文档标签">
+        <div class="document-tab">project-notes.txt</div>
+      </nav>
+      <section class="editor-wrap">
+        <div class="line-numbers" aria-hidden="true">
+          1<br />2<br />3<br />4<br />5<br />6<br />7<br />8
+        </div>
+        <textarea class="editor" id="editor" spellcheck="false">
+Search should stay close to the text.
+The search window must not block editing.
+查找结果需要显示当前位置和总数。
+替换单个结果时，继续定位到下一个结果。
+SEARCH can be case-sensitive when needed.
+循环查找用于跨过文档末尾。
+全词匹配不应命中 searching。
+最后，弹窗保持轻量并支持后续扩展。</textarea
+        >
+        <button class="reopen" id="reopen" type="button">⌕ 重新打开查找</button>
+
+        <section class="finder" id="finder" aria-label="查找与替换">
+          <header class="finder-titlebar" id="dragHandle">
+            <div class="finder-title">
+              <svg class="finder-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+                <path
+                  d="m20 20-4-4"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                ></path>
+              </svg>
+              查找与替换
+              <small>当前文档</small>
+            </div>
+            <button class="icon-button" id="close" type="button" title="关闭" aria-label="关闭">
+              ×
+            </button>
+          </header>
+
+          <div class="finder-body">
+            <div class="query-row">
+              <span class="row-label">查找</span>
+              <label class="search-shell">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+                  <path
+                    d="m20 20-4-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  ></path>
+                </svg>
+                <input id="query" value="search" aria-label="查找内容" autocomplete="off" />
+                <span class="result-counter" id="count">0 个结果</span>
+              </label>
+              <button class="find-button" id="findNext" type="button">查找下一个</button>
+            </div>
+
+            <div class="replace-area" id="replaceArea">
+              <label class="row-label" for="replacement">替换为</label>
+              <input
+                class="replace-input"
+                id="replacement"
+                value="find"
+                placeholder="输入替换内容"
+                autocomplete="off"
+              />
+              <button class="button" id="replaceOne" type="button">替换</button>
+              <button class="button" id="replaceAll" type="button">全部替换</button>
+            </div>
+
+            <div class="option-strip" aria-label="查找选项">
+              <label class="option"
+                ><input id="backward" type="checkbox" /><span>← 反向</span></label
+              >
+              <label class="option"><input id="whole" type="checkbox" /><span>全词</span></label>
+              <label class="option"
+                ><input id="case" type="checkbox" /><span>Aa 大小写</span></label
+              >
+              <label class="option"
+                ><input id="wrap" type="checkbox" checked /><span>↻ 循环</span></label
+              >
+              <span class="strip-spacer"></span>
+              <button class="count-action" id="countButton" type="button">计数</button>
+            </div>
+
+            <div class="feedback" id="feedback" aria-live="polite">输入关键词后开始查找</div>
+          </div>
+        </section>
+      </section>
+      <footer class="statusbar">
+        <span>TXT · UTF-8</span>
+        <span id="editorStatus">行 1，列 1</span>
+      </footer>
+    </main>
+
+    <script>
+      const finder = document.querySelector('#finder');
+      const editor = document.querySelector('#editor');
+      const queryInput = document.querySelector('#query');
+      const replacementInput = document.querySelector('#replacement');
+      const countLabel = document.querySelector('#count');
+      const feedback = document.querySelector('#feedback');
+      const findButton = document.querySelector('#findNext');
+      const backward = document.querySelector('#backward');
+      const whole = document.querySelector('#whole');
+      const caseSensitive = document.querySelector('#case');
+      const wrap = document.querySelector('#wrap');
+      let matches = [];
+      let activeMatch = -1;
+
+      function isWordChar(char) {
+        return Boolean(char && /[\p{L}\p{N}_]/u.test(char));
+      }
+
+      function collectMatches() {
+        const source = editor.value;
+        const rawQuery = queryInput.value;
+        matches = [];
+        activeMatch = -1;
+        if (!rawQuery) {
+          countLabel.textContent = '0 个结果';
+          feedback.textContent = '输入关键词后开始查找';
+          return;
+        }
+
+        const haystack = caseSensitive.checked ? source : source.toLocaleLowerCase();
+        const needle = caseSensitive.checked ? rawQuery : rawQuery.toLocaleLowerCase();
+        let cursor = 0;
+        while (cursor <= haystack.length - needle.length) {
+          const index = haystack.indexOf(needle, cursor);
+          if (index < 0) break;
+          const validWholeWord =
+            !whole.checked ||
+            (!isWordChar(source[index - 1]) && !isWordChar(source[index + rawQuery.length]));
+          if (validWholeWord) matches.push({ start: index, end: index + rawQuery.length });
+          cursor = index + Math.max(1, needle.length);
+        }
+        countLabel.textContent = `${matches.length} 个结果`;
+        feedback.textContent = matches.length ? `找到 ${matches.length} 处匹配` : '未找到匹配内容';
+      }
+
+      function selectActive() {
+        if (activeMatch < 0 || !matches[activeMatch]) return;
+        const match = matches[activeMatch];
+        editor.focus();
+        editor.setSelectionRange(match.start, match.end);
+        feedback.textContent = `${activeMatch + 1} / ${matches.length}`;
+      }
+
+      function findNext() {
+        if (!matches.length) collectMatches();
+        if (!matches.length) return;
+        const step = backward.checked ? -1 : 1;
+        const next = activeMatch < 0 ? (step > 0 ? 0 : matches.length - 1) : activeMatch + step;
+        if (next < 0 || next >= matches.length) {
+          if (!wrap.checked) {
+            feedback.textContent = step > 0 ? '已到达文档末尾' : '已到达文档开头';
+            return;
+          }
+          activeMatch = next < 0 ? matches.length - 1 : 0;
+          feedback.textContent = '已循环到另一端';
+        } else {
+          activeMatch = next;
+        }
+        selectActive();
+      }
+
+      function replaceOne() {
+        if (activeMatch < 0) findNext();
+        if (activeMatch < 0 || !matches[activeMatch]) return;
+        const match = matches[activeMatch];
+        editor.value =
+          editor.value.slice(0, match.start) +
+          replacementInput.value +
+          editor.value.slice(match.end);
+        collectMatches();
+        feedback.textContent = '已替换 1 处';
+      }
+
+      function replaceAll() {
+        collectMatches();
+        if (!matches.length) return;
+        const count = matches.length;
+        for (let index = matches.length - 1; index >= 0; index -= 1) {
+          const match = matches[index];
+          editor.value =
+            editor.value.slice(0, match.start) +
+            replacementInput.value +
+            editor.value.slice(match.end);
+        }
+        collectMatches();
+        feedback.textContent = `已替换 ${count} 处`;
+      }
+
+      [queryInput, editor, whole, caseSensitive].forEach((element) => {
+        element.addEventListener('input', collectMatches);
+        element.addEventListener('change', collectMatches);
+      });
+      findButton.addEventListener('click', findNext);
+      document.querySelector('#countButton').addEventListener('click', collectMatches);
+      document.querySelector('#replaceOne').addEventListener('click', replaceOne);
+      document.querySelector('#replaceAll').addEventListener('click', replaceAll);
+      queryInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          findNext();
+        }
+      });
+
+      document.querySelector('#close').addEventListener('click', () => {
+        finder.style.display = 'none';
+        document.querySelector('#reopen').style.display = 'inline-flex';
+        editor.focus();
+      });
+      document.querySelector('#reopen').addEventListener('click', (event) => {
+        finder.style.display = 'block';
+        event.currentTarget.style.display = 'none';
+        queryInput.focus();
+      });
+
+      const dragHandle = document.querySelector('#dragHandle');
+      let drag = null;
+      dragHandle.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return;
+        const rect = finder.getBoundingClientRect();
+        finder.style.left = `${rect.left}px`;
+        finder.style.right = 'auto';
+        finder.style.top = `${rect.top}px`;
+        drag = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        finder.classList.add('dragging');
+        dragHandle.setPointerCapture(event.pointerId);
+      });
+      dragHandle.addEventListener('pointermove', (event) => {
+        if (!drag) return;
+        const maxX = window.innerWidth - finder.offsetWidth;
+        const maxY = window.innerHeight - finder.offsetHeight;
+        finder.style.left = `${Math.max(0, Math.min(maxX, event.clientX - drag.x))}px`;
+        finder.style.top = `${Math.max(0, Math.min(maxY, event.clientY - drag.y))}px`;
+      });
+      dragHandle.addEventListener('pointerup', (event) => {
+        drag = null;
+        finder.classList.remove('dragging');
+        dragHandle.releasePointerCapture(event.pointerId);
+      });
+
+      editor.addEventListener('keyup', () => {
+        const prefix = editor.value.slice(0, editor.selectionStart);
+        const lines = prefix.split('\n');
+        document.querySelector('#editorStatus').textContent =
+          `行 ${lines.length}，列 ${lines.at(-1).length + 1}`;
+      });
+
+      collectMatches();
+      queryInput.focus();
+      queryInput.select();
+    </script>
+  </body>
+</html>

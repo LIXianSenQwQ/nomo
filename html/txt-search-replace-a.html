@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TXT 查找替换原型 A · 双页签</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #eef1f3;
+        --surface: #ffffff;
+        --chrome: #f7f8fa;
+        --editor: #fbfcfd;
+        --text: #202428;
+        --muted: #68707a;
+        --border: #dfe3e8;
+        --border-strong: #cbd2d9;
+        --accent: #2f7d6f;
+        --accent-strong: #174e45;
+        --accent-soft: #e7f0ee;
+        --danger: #b42318;
+        --shadow: 0 22px 62px rgba(24, 36, 46, 0.18), 0 3px 12px rgba(24, 36, 46, 0.1);
+        --font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 13px;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      .app {
+        display: grid;
+        grid-template-rows: 34px 35px 1fr 26px;
+        width: 100%;
+        height: 100%;
+        background: var(--surface);
+      }
+
+      .app-titlebar,
+      .document-tabs,
+      .statusbar {
+        display: flex;
+        align-items: center;
+        border-color: var(--border);
+        background: var(--chrome);
+      }
+
+      .app-titlebar {
+        gap: 10px;
+        padding: 0 13px;
+        border-bottom: 1px solid var(--border);
+        color: #343a40;
+        font-size: 12px;
+      }
+
+      .app-mark {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        background: var(--accent);
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .window-name {
+        color: var(--muted);
+      }
+
+      .document-tabs {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .document-tab {
+        display: flex;
+        align-items: center;
+        align-self: stretch;
+        min-width: 190px;
+        padding: 0 15px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        font-size: 12px;
+      }
+
+      .editor-wrap {
+        position: relative;
+        display: grid;
+        grid-template-columns: 50px 1fr;
+        min-height: 0;
+        background: var(--editor);
+      }
+
+      .line-numbers {
+        padding: 18px 12px 18px 0;
+        border-right: 1px solid #edf0f2;
+        color: #9aa2ab;
+        font-family: var(--font-mono);
+        line-height: 1.7;
+        text-align: right;
+        user-select: none;
+      }
+
+      .editor {
+        width: 100%;
+        height: 100%;
+        resize: none;
+        padding: 18px 22px;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #30363b;
+        font-family: var(--font-mono);
+        font-size: 14px;
+        line-height: 1.7;
+        tab-size: 2;
+      }
+
+      .statusbar {
+        justify-content: space-between;
+        padding: 0 12px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .reopen {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        display: none;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 11px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--surface);
+        box-shadow: 0 8px 20px rgba(24, 36, 46, 0.1);
+        cursor: pointer;
+      }
+
+      .finder {
+        position: absolute;
+        z-index: 20;
+        top: 78px;
+        left: 50%;
+        width: min(500px, calc(100vw - 28px));
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        transform: translateX(-50%);
+      }
+
+      .finder.dragging {
+        user-select: none;
+      }
+
+      .finder-titlebar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 38px;
+        padding: 0 9px 0 13px;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        cursor: move;
+      }
+
+      .finder-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .finder-glyph {
+        width: 15px;
+        height: 15px;
+        color: var(--accent);
+      }
+
+      .icon-button {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        border-color: var(--border);
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .tabs {
+        display: flex;
+        gap: 18px;
+        height: 42px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .tab {
+        position: relative;
+        padding: 1px 2px 0;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .tab.active {
+        color: var(--accent-strong);
+        font-weight: 600;
+      }
+
+      .tab.active::after {
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+        background: var(--accent);
+        content: '';
+      }
+
+      .finder-body {
+        padding: 15px 16px 14px;
+      }
+
+      .fields {
+        display: grid;
+        gap: 10px;
+      }
+
+      .field-row {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+      }
+
+      .field-label {
+        color: #4f5861;
+        text-align: right;
+      }
+
+      .field-shell {
+        position: relative;
+      }
+
+      .field-shell input {
+        width: 100%;
+        height: 34px;
+        padding: 0 82px 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        outline: 0;
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .field-shell input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(47, 125, 111, 0.14);
+      }
+
+      .inline-count {
+        position: absolute;
+        top: 50%;
+        right: 9px;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
+
+      .options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px 18px;
+        margin: 14px 0 15px 86px;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: #42494f;
+        cursor: pointer;
+      }
+
+      .check input {
+        width: 15px;
+        height: 15px;
+        margin: 0;
+        accent-color: var(--accent);
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 13px;
+        border-top: 1px solid #edf0f2;
+      }
+
+      .feedback {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .button {
+        height: 32px;
+        padding: 0 13px;
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        background: var(--surface);
+        cursor: pointer;
+      }
+
+      .button:hover {
+        border-color: #aab4bd;
+        background: var(--chrome);
+      }
+
+      .button.primary {
+        min-width: 94px;
+        border-color: var(--accent);
+        background: var(--accent);
+        color: white;
+        font-weight: 600;
+      }
+
+      .button.primary:hover {
+        border-color: var(--accent-strong);
+        background: var(--accent-strong);
+      }
+
+      .button:focus-visible,
+      .tab:focus-visible,
+      .icon-button:focus-visible,
+      .check input:focus-visible {
+        outline: 2px solid rgba(47, 125, 111, 0.45);
+        outline-offset: 2px;
+      }
+
+      .replace-only {
+        display: none;
+      }
+
+      .finder[data-mode='replace'] .replace-only {
+        display: grid;
+      }
+
+      .finder[data-mode='replace'] .find-only {
+        display: none;
+      }
+
+      @media (max-width: 560px) {
+        .finder {
+          top: 48px;
+        }
+
+        .field-row {
+          grid-template-columns: 1fr;
+          gap: 5px;
+        }
+
+        .field-label {
+          text-align: left;
+        }
+
+        .options {
+          margin-left: 0;
+        }
+
+        .footer {
+          flex-wrap: wrap;
+        }
+
+        .feedback {
+          flex-basis: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-titlebar">
+        <span class="app-mark">N</span>
+        <span>project-notes.txt</span>
+        <span class="window-name">— NewMd</span>
+      </header>
+      <nav class="document-tabs" aria-label="文档标签">
+        <div class="document-tab">project-notes.txt</div>
+      </nav>
+      <section class="editor-wrap">
+        <div class="line-numbers" aria-hidden="true">
+          1<br />2<br />3<br />4<br />5<br />6<br />7<br />8
+        </div>
+        <textarea class="editor" id="editor" spellcheck="false">
+Search should stay close to the text.
+The search window must not block editing.
+查找结果需要显示当前位置和总数。
+替换单个结果时，继续定位到下一个结果。
+SEARCH can be case-sensitive when needed.
+循环查找用于跨过文档末尾。
+全词匹配不应命中 searching。
+最后，弹窗保持轻量并支持后续扩展。</textarea
+        >
+        <button class="reopen" id="reopen" type="button">⌕ 重新打开查找</button>
+
+        <section class="finder" id="finder" data-mode="find" aria-label="查找与替换">
+          <header class="finder-titlebar" id="dragHandle">
+            <div class="finder-title">
+              <svg class="finder-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"></circle>
+                <path
+                  d="m20 20-4-4"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                ></path>
+              </svg>
+              查找与替换
+            </div>
+            <button class="icon-button" id="close" type="button" title="关闭" aria-label="关闭">
+              ×
+            </button>
+          </header>
+
+          <div class="tabs" role="tablist">
+            <button
+              class="tab active"
+              data-tab="find"
+              type="button"
+              role="tab"
+              aria-selected="true"
+            >
+              查找
+            </button>
+            <button class="tab" data-tab="replace" type="button" role="tab" aria-selected="false">
+              替换
+            </button>
+          </div>
+
+          <div class="finder-body">
+            <div class="fields">
+              <label class="field-row">
+                <span class="field-label">查找内容</span>
+                <span class="field-shell">
+                  <input id="query" value="search" autocomplete="off" />
+                  <span class="inline-count" id="count">0 个结果</span>
+                </span>
+              </label>
+              <label class="field-row replace-only">
+                <span class="field-label">替换为</span>
+                <span class="field-shell">
+                  <input id="replacement" value="find" autocomplete="off" />
+                </span>
+              </label>
+            </div>
+
+            <div class="options" aria-label="查找选项">
+              <label class="check"><input id="backward" type="checkbox" />反向查找</label>
+              <label class="check"><input id="whole" type="checkbox" />全词匹配</label>
+              <label class="check"><input id="case" type="checkbox" />匹配大小写</label>
+              <label class="check"><input id="wrap" type="checkbox" checked />循环查找</label>
+            </div>
+
+            <footer class="footer">
+              <span class="feedback" id="feedback" aria-live="polite">输入关键词后开始查找</span>
+              <button class="button find-only" id="countButton" type="button">计数</button>
+              <button class="button replace-only" id="replaceOne" type="button">替换</button>
+              <button class="button replace-only" id="replaceAll" type="button">全部替换</button>
+              <button class="button primary" id="findNext" type="button">查找下一个</button>
+            </footer>
+          </div>
+        </section>
+      </section>
+      <footer class="statusbar">
+        <span>TXT · UTF-8</span>
+        <span id="editorStatus">行 1，列 1</span>
+      </footer>
+    </main>
+
+    <script>
+      const finder = document.querySelector('#finder');
+      const editor = document.querySelector('#editor');
+      const queryInput = document.querySelector('#query');
+      const replacementInput = document.querySelector('#replacement');
+      const countLabel = document.querySelector('#count');
+      const feedback = document.querySelector('#feedback');
+      const findButton = document.querySelector('#findNext');
+      const backward = document.querySelector('#backward');
+      const whole = document.querySelector('#whole');
+      const caseSensitive = document.querySelector('#case');
+      const wrap = document.querySelector('#wrap');
+      let matches = [];
+      let activeMatch = -1;
+
+      function isWordChar(char) {
+        return Boolean(char && /[\p{L}\p{N}_]/u.test(char));
+      }
+
+      function collectMatches() {
+        const source = editor.value;
+        const rawQuery = queryInput.value;
+        matches = [];
+        activeMatch = -1;
+        if (!rawQuery) {
+          countLabel.textContent = '0 个结果';
+          feedback.textContent = '输入关键词后开始查找';
+          return;
+        }
+
+        const haystack = caseSensitive.checked ? source : source.toLocaleLowerCase();
+        const needle = caseSensitive.checked ? rawQuery : rawQuery.toLocaleLowerCase();
+        let cursor = 0;
+        while (cursor <= haystack.length - needle.length) {
+          const index = haystack.indexOf(needle, cursor);
+          if (index < 0) break;
+          const validWholeWord =
+            !whole.checked ||
+            (!isWordChar(source[index - 1]) && !isWordChar(source[index + rawQuery.length]));
+          if (validWholeWord) matches.push({ start: index, end: index + rawQuery.length });
+          cursor = index + Math.max(1, needle.length);
+        }
+        countLabel.textContent = `${matches.length} 个结果`;
+        feedback.textContent = matches.length ? `找到 ${matches.length} 处匹配` : '未找到匹配内容';
+      }
+
+      function selectActive() {
+        if (activeMatch < 0 || !matches[activeMatch]) return;
+        const match = matches[activeMatch];
+        editor.focus();
+        editor.setSelectionRange(match.start, match.end);
+        feedback.textContent = `${activeMatch + 1} / ${matches.length}`;
+      }
+
+      function findNext() {
+        if (!matches.length) collectMatches();
+        if (!matches.length) return;
+        const step = backward.checked ? -1 : 1;
+        const next = activeMatch < 0 ? (step > 0 ? 0 : matches.length - 1) : activeMatch + step;
+        if (next < 0 || next >= matches.length) {
+          if (!wrap.checked) {
+            feedback.textContent = step > 0 ? '已到达文档末尾' : '已到达文档开头';
+            return;
+          }
+          activeMatch = next < 0 ? matches.length - 1 : 0;
+          feedback.textContent = '已循环到另一端';
+        } else {
+          activeMatch = next;
+        }
+        selectActive();
+      }
+
+      function replaceOne() {
+        if (activeMatch < 0) findNext();
+        if (activeMatch < 0 || !matches[activeMatch]) return;
+        const match = matches[activeMatch];
+        editor.value =
+          editor.value.slice(0, match.start) +
+          replacementInput.value +
+          editor.value.slice(match.end);
+        collectMatches();
+        feedback.textContent = '已替换 1 处';
+      }
+
+      function replaceAll() {
+        collectMatches();
+        if (!matches.length) return;
+        const count = matches.length;
+        for (let index = matches.length - 1; index >= 0; index -= 1) {
+          const match = matches[index];
+          editor.value =
+            editor.value.slice(0, match.start) +
+            replacementInput.value +
+            editor.value.slice(match.end);
+        }
+        collectMatches();
+        feedback.textContent = `已替换 ${count} 处`;
+      }
+
+      document.querySelectorAll('.tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+          finder.dataset.mode = tab.dataset.tab;
+          document.querySelectorAll('.tab').forEach((item) => {
+            const selected = item === tab;
+            item.classList.toggle('active', selected);
+            item.setAttribute('aria-selected', String(selected));
+          });
+          queryInput.focus();
+        });
+      });
+
+      [queryInput, editor, whole, caseSensitive].forEach((element) => {
+        element.addEventListener('input', collectMatches);
+        element.addEventListener('change', collectMatches);
+      });
+      findButton.addEventListener('click', findNext);
+      document.querySelector('#countButton').addEventListener('click', collectMatches);
+      document.querySelector('#replaceOne').addEventListener('click', replaceOne);
+      document.querySelector('#replaceAll').addEventListener('click', replaceAll);
+      queryInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          findNext();
+        }
+      });
+
+      document.querySelector('#close').addEventListener('click', () => {
+        finder.style.display = 'none';
+        document.querySelector('#reopen').style.display = 'inline-flex';
+        editor.focus();
+      });
+      document.querySelector('#reopen').addEventListener('click', (event) => {
+        finder.style.display = 'block';
+        event.currentTarget.style.display = 'none';
+        queryInput.focus();
+      });
+
+      const dragHandle = document.querySelector('#dragHandle');
+      let drag = null;
+      dragHandle.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return;
+        const rect = finder.getBoundingClientRect();
+        finder.style.left = `${rect.left}px`;
+        finder.style.top = `${rect.top}px`;
+        finder.style.transform = 'none';
+        drag = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        finder.classList.add('dragging');
+        dragHandle.setPointerCapture(event.pointerId);
+      });
+      dragHandle.addEventListener('pointermove', (event) => {
+        if (!drag) return;
+        const maxX = window.innerWidth - finder.offsetWidth;
+        const maxY = window.innerHeight - finder.offsetHeight;
+        finder.style.left = `${Math.max(0, Math.min(maxX, event.clientX - drag.x))}px`;
+        finder.style.top = `${Math.max(0, Math.min(maxY, event.clientY - drag.y))}px`;
+      });
+      dragHandle.addEventListener('pointerup', (event) => {
+        drag = null;
+        finder.classList.remove('dragging');
+        dragHandle.releasePointerCapture(event.pointerId);
+      });
+
+      editor.addEventListener('keyup', () => {
+        const prefix = editor.value.slice(0, editor.selectionStart);
+        const lines = prefix.split('\n');
+        document.querySelector('#editorStatus').textContent =
+          `行 ${lines.length}，列 ${lines.at(-1).length + 1}`;
+      });
+
+      collectMatches();
+      queryInput.focus();
+      queryInput.select();
+    </script>
+  </body>
+</html>

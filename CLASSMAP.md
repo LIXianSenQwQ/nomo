@@ -97,6 +97,15 @@
 | Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写/目录扫描/索引 |
 | 图片资源后端 | `src-tauri/src/file_system/image_assets.rs` | — | 图片导入/解析/PicGo 上传/删除 |
 
+### 大文件 TXT/JSON 分段编辑
+
+| Responsibility | Primary code | Related code | Change when |
+|---|---|---|---|
+| 分段编辑工作区与全文滚动 | `src/app/components/SegmentedTextEditorWorkspace.svelte` | `src/app/styles/editor-segmented.css`, `src/lib/text-editor/virtualScroll.ts` | 修改 TXT/JSON 视口、全文滚动、快速定位、加载提示或任务 UI |
+| CodeMirror 分段核心 | `src/lib/text-editor/SegmentedTextEditorCore.ts` | `positionMapping.ts`, `editBatch.ts`, `jsonLexer.ts` | 修改局部窗口编辑、全局选区/锚点映射、临时只读或历史门禁 |
+| 窗口读取、缓存与预取 | `src/lib/text-editor/viewportController.ts` | `chunkCache.ts`, `protocol.ts` | 修改主读取乱序保护、窗口大小、LRU、预览扩展或前后预取 |
+| 分段文件后端会话 | `src-tauri/src/text_document/session.rs` | `src-tauri/src/text_document/mod.rs`, `line_index.rs`, `task_runner.rs` | 修改首窗口、窗口读取上限、revision、编辑日志或后台索引/任务 |
+
 ### 大纲与导航
 
 | Responsibility | Primary code | Related code | Change when |
@@ -2952,6 +2961,140 @@
 
 ---
 
+### `src/app/components/SegmentedTextEditorWorkspace.svelte`
+
+**Kind:** workspace controller / Svelte component
+
+**Owns:**
+- TXT/JSON 分段编辑器的生命周期、滚动事件与窗口切换
+- 基于文件字节进度的固定全文滚动跑道；索引进度不得改变已校准的全局高度
+- 快速拖动时的小预览窗口、只读门禁、空闲后扩展到正式窗口
+- 后端首窗口不足正式窗口时的前端补读与原子切换
+
+**Does not own:**
+- 不拥有 CodeMirror 局部文档状态（在 `SegmentedTextEditorCore.ts`）
+- 不拥有字节与滚动位置的纯映射算法（在 `virtualScroll.ts`）
+- 不拥有 Rust 文件读取和索引任务
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `src/lib/text-editor/SegmentedTextEditorCore.ts`, `src/lib/text-editor/viewportController.ts`, `src/lib/text-editor/virtualScroll.ts`
+
+**Change this when:**
+- 修改 TXT/JSON 大文件的滚动、快速定位、加载状态或窗口切换体验
+
+**Related tests:** `src/app/components/SegmentedTextEditorWorkspace.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/lib/text-editor/virtualScroll.ts`
+
+**Kind:** utility / model
+
+**Owns:**
+- 正式窗口、快速预览、拖动节流和空闲扩展的统一参数
+- 首次校准后冻结的像素/字节比例及全文滚动高度
+- 字节偏移与全局滚动位置的双向映射
+- 快速定位预览窗口大小与居中起点计算
+
+**Does not own:**
+- 不发起文件读取
+- 不控制 CodeMirror 或 Svelte DOM
+
+**Called by:** `src/app/components/SegmentedTextEditorWorkspace.svelte`
+
+**Depends on:** —
+
+**Change this when:**
+- 修改全文滚动高度模型、窗口大小或快速定位参数
+
+**Related tests:** `src/lib/text-editor/virtualScroll.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/lib/text-editor/SegmentedTextEditorCore.ts`
+
+**Kind:** editor core
+
+**Owns:**
+- CodeMirror 局部窗口内容、全局字节锚点和选区映射
+- 加载/快速定位期间的交互只读门禁
+- 在不改变选区的前提下，将目标字节位置滚动进当前局部视口
+- 编辑批次、撤销重做和 JSON 增量高亮接线
+
+**Does not own:**
+- 不拥有全文滚动跑道和快速拖动状态机
+- 不直接读取后端窗口
+
+**Called by:** `src/app/components/SegmentedTextEditorWorkspace.svelte`
+
+**Depends on:** CodeMirror 6, `positionMapping.ts`, `editBatch.ts`, `jsonLexer.ts`
+
+**Change this when:**
+- 修改局部编辑、选区/锚点映射、只读门禁或窗口内容替换
+
+**Related tests:** `src/lib/text-editor/SegmentedTextEditorCore.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/lib/text-editor/viewportController.ts`
+
+**Kind:** controller
+
+**Owns:**
+- 分段窗口读取、LRU 缓存和过期响应保护
+- 预览窗口与正式窗口的区分；正式读取不得错误复用过短预览
+- 正式窗口加载后的前向优先、后向补充预取
+- 正式窗口覆盖预览后清理临时缓存
+
+**Does not own:**
+- 不拥有滚动几何
+- 不拥有后端实际文件读取实现
+
+**Called by:** `src/app/components/SegmentedTextEditorWorkspace.svelte`
+
+**Depends on:** `chunkCache.ts`, `protocol.ts`
+
+**Change this when:**
+- 修改窗口读取策略、缓存、乱序保护、预览扩展或预取顺序
+
+**Related tests:** `src/lib/text-editor/viewportController.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/styles/editor-segmented.css`
+
+**Kind:** stylesheet
+
+**Owns:**
+- 分段编辑器的固定像素视口、粘性定位和全文滚动跑道布局
+- 隐藏 CodeMirror 内层滚动条，只保留外层全文滚动条
+- 窗口切换时的轻量加载遮罩
+
+**Does not own:**
+- 不拥有滚动状态或文件读取逻辑
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `SegmentedTextEditorWorkspace.svelte`
+
+**Change this when:**
+- 修改分段编辑器布局、滚动条或加载提示样式
+
+**Related tests:** `src/app/App.layout.test.ts`, `src/app/components/SegmentedTextEditorWorkspace.test.ts`
+
+**Confidence:** high
+
+---
+
 ## 文件与目录速查
 
 | 目录 | 用途 |
@@ -2971,11 +3114,13 @@
 | `src/lib/toc/` | TOC 服务 |
 | `src/lib/services/` | 渲染服务接口与实现（Shiki、KaTeX、Mermaid） |
 | `src/lib/desktop/` | Tauri IPC 适配（tauriStorage、tauriUpdater） |
+| `src/lib/text-editor/` | TXT/JSON 大文件分段编辑、窗口缓存与全文虚拟滚动 |
 | `src/quicklook/` | macOS Quick Look 预览 |
 | `src/paraglide/` | Inlang/Paraglide 生成的本地化代码（**不要手改**） |
 | `src-tauri/src/` | Rust 后端 |
 | `src-tauri/src/config/` | JSON 配置管理（ConfigManager、commands）：设置、最近打开、快照索引、工作区状态/草稿正文仓库、窗口状态 |
 | `src-tauri/src/file_system/` | 文件系统与图片资源 |
+| `src-tauri/src/text_document/` | TXT/JSON 分段文档会话、字节索引、编辑日志与后台任务 |
 | `src-tauri/src/window/` | 窗口、菜单、托盘、外部打开、文件关联 |
 | `project.inlang/` | Inlang 本地化文案源文件（**修改这里而非 paraglide/**） |
 
