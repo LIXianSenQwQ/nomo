@@ -11,10 +11,14 @@ export type SoftwareUpdateStatus =
   | 'unsupported'
   | 'error';
 
+export type SoftwareUpdateInstallationKind = 'installer' | 'portable' | 'unsupported';
+export type SoftwareUpdateAssetKind = 'windowsInstaller' | 'windowsPortable';
+
 export interface SoftwareUpdateCandidate {
   version: string;
   date?: string;
   body?: string;
+  assetKind?: SoftwareUpdateAssetKind;
   assetName: string;
   assetSize?: number;
   downloadUrl: string;
@@ -33,6 +37,7 @@ export interface SoftwareUpdateCheckResult {
   supported: boolean;
   available: boolean;
   currentVersion: string;
+  installationKind?: SoftwareUpdateInstallationKind;
   version?: string;
   date?: string;
   body?: string;
@@ -57,12 +62,28 @@ export interface SoftwareUpdateProgressEvent extends SoftwareUpdateProgress {
   requestId: string;
 }
 
+export interface SoftwareUpdateSnapshot {
+  status: SoftwareUpdateStatus;
+  currentVersion: string;
+  installationKind: SoftwareUpdateInstallationKind;
+  version?: string;
+  date?: string;
+  body?: string;
+  candidate?: SoftwareUpdateCandidate;
+  downloadedUpdate?: DownloadedSoftwareUpdate;
+  progress?: SoftwareUpdateProgressEvent;
+  error?: string;
+  noticeWindowLabel?: string;
+}
+
+export const SOFTWARE_UPDATE_STATE_EVENT = 'nomo://software-update-state';
+
 interface SoftwareUpdateRuntime {
   isDesktopRuntime: () => boolean;
   isWindowsRuntime: () => boolean;
   isInstallerRuntime: () => Promise<boolean>;
   getCurrentVersion: () => Promise<string>;
-  check: () => Promise<SoftwareUpdateCheckResult>;
+  check: (startup?: boolean) => Promise<SoftwareUpdateCheckResult>;
   download: (
     candidate: SoftwareUpdateCandidate,
     requestId: string,
@@ -86,11 +107,15 @@ export async function isSoftwareUpdateInstallerSupported(
 
 export async function checkSoftwareUpdate(
   runtime: Partial<SoftwareUpdateRuntime> = {},
+  startup = false,
 ): Promise<SoftwareUpdateCheckResult> {
   const fullRuntime = await resolveRuntime(runtime);
   const currentVersion = await fullRuntime.getCurrentVersion().catch(() => '');
 
-  if (!isSoftwareUpdateSupported(fullRuntime) || !(await fullRuntime.isInstallerRuntime())) {
+  if (
+    !isSoftwareUpdateSupported(fullRuntime) ||
+    (runtime.isInstallerRuntime && !(await fullRuntime.isInstallerRuntime()))
+  ) {
     return {
       supported: false,
       available: false,
@@ -98,7 +123,7 @@ export async function checkSoftwareUpdate(
     };
   }
 
-  const result = await fullRuntime.check();
+  const result = await fullRuntime.check(startup);
   return {
     ...result,
     currentVersion: result.currentVersion || currentVersion,
@@ -158,6 +183,20 @@ export async function getCachedSoftwareUpdate(): Promise<DownloadedSoftwareUpdat
   return invoke<DownloadedSoftwareUpdate | null>('get_cached_software_update').catch(() => null);
 }
 
+export async function getSoftwareUpdateState(): Promise<SoftwareUpdateSnapshot> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<SoftwareUpdateSnapshot>('get_software_update_state');
+}
+
+export async function listenSoftwareUpdateState(
+  handler: (state: SoftwareUpdateSnapshot) => void,
+): Promise<() => void> {
+  const { listen } = await import('@tauri-apps/api/event');
+  return listen<SoftwareUpdateSnapshot>(SOFTWARE_UPDATE_STATE_EVENT, (event) =>
+    handler(event.payload),
+  );
+}
+
 export function isSoftwareUpdateIntegrityFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /MD5|校验失败|integrity|checksum/i.test(message);
@@ -183,9 +222,9 @@ async function defaultGetCurrentVersion(): Promise<string> {
   return getVersion();
 }
 
-async function defaultCheck(): Promise<SoftwareUpdateCheckResult> {
+async function defaultCheck(startup = false): Promise<SoftwareUpdateCheckResult> {
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<SoftwareUpdateCheckResult>('check_software_update');
+  return invoke<SoftwareUpdateCheckResult>('check_software_update', { startup });
 }
 
 async function defaultDownload(

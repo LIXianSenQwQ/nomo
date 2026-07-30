@@ -298,6 +298,62 @@
   background: rgba(128, 128, 128, 0.15);
 }
 
+.software-update-icon-btn {
+  position: relative;
+  color: var(--md-editor-accent-strong) !important;
+}
+
+.software-update-icon-btn.downloading svg {
+  animation: software-update-pulse 1.2s ease-in-out infinite;
+}
+
+.software-update-dot,
+.software-update-ready-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--md-titlebar-bg);
+  border-radius: 50%;
+  box-sizing: content-box;
+}
+
+.software-update-dot {
+  background: var(--md-editor-danger);
+}
+
+.software-update-ready-dot {
+  background: var(--md-editor-accent);
+}
+
+.software-update-progress {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  min-width: 16px;
+  padding: 0 2px;
+  border-radius: 999px;
+  background: var(--md-editor-accent);
+  color: white;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+}
+
+@keyframes software-update-pulse {
+  50% {
+    opacity: 0.48;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .software-update-icon-btn.downloading svg {
+    animation: none;
+  }
+}
+
 .sidebar-toggle-btn {
   flex-shrink: 0;
   color: var(--md-editor-muted-fg);

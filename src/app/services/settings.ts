@@ -90,6 +90,7 @@ export interface AppPreferences {
   shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
   developerMode: boolean;
+  softwareUpdateAutoCheckEnabled: boolean;
 }
 
 export type AppPreferenceKey = keyof AppPreferences;
@@ -149,6 +150,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
   developerMode: false,
+  softwareUpdateAutoCheckEnabled: true,
 };
 
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
@@ -270,6 +272,10 @@ export async function loadAppPreferences(
       'imageHandlingSettings',
     ),
     developerMode: parseSetting<unknown>(settings, 'developerMode'),
+    softwareUpdateAutoCheckEnabled: parseSetting<unknown>(
+      settings,
+      'softwareUpdateAutoCheckEnabled',
+    ),
   });
 }
 
@@ -422,6 +428,10 @@ export function normalizeAppPreferences(
       typeof value.developerMode === 'boolean'
         ? value.developerMode
         : DEFAULT_APP_PREFERENCES.developerMode,
+    softwareUpdateAutoCheckEnabled:
+      typeof value.softwareUpdateAutoCheckEnabled === 'boolean'
+        ? value.softwareUpdateAutoCheckEnabled
+        : DEFAULT_APP_PREFERENCES.softwareUpdateAutoCheckEnabled,
   };
 }
 

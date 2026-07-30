@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Moon, PanelLeftClose, PanelLeftOpen, Sun } from '@lucide/svelte';
+  import { Download, Moon, PanelLeftClose, PanelLeftOpen, Sun } from '@lucide/svelte';
+  import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
   import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import {
     DIAGRAM_TEMPLATES,
@@ -50,6 +51,8 @@
   export let openSettings: () => void;
   export let exportHtml: () => void;
   export let exportPdf: () => void;
+  export let softwareUpdateState: SoftwareUpdateSnapshot;
+  export let openSoftwareUpdate: () => void;
 
   let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
@@ -609,6 +612,31 @@
 
       <span class="titlebar-spacer" data-drag-region></span>
       <div class="titlebar-right">
+        {#if ['available', 'downloading', 'downloaded'].includes(softwareUpdateState.status)}
+          <button
+            class="icon-btn software-update-icon-btn"
+            class:downloading={softwareUpdateState.status === 'downloading'}
+            title={softwareUpdateState.status === 'downloaded'
+              ? t.softwareUpdateWaitingInstall()
+              : t.softwareUpdateNoticeTitle()}
+            aria-label={softwareUpdateState.status === 'downloaded'
+              ? t.softwareUpdateWaitingInstall()
+              : t.softwareUpdateNoticeTitle()}
+            on:click={openSoftwareUpdate}
+          >
+            <Download size={15} />
+            {#if softwareUpdateState.status === 'available'}
+              <span class="software-update-dot" aria-hidden="true"></span>
+            {:else if softwareUpdateState.status === 'downloading'}
+              <span class="software-update-progress" aria-hidden="true">
+                {softwareUpdateState.progress?.percent ?? 0}
+              </span>
+            {:else}
+              <span class="software-update-ready-dot" aria-hidden="true"></span>
+            {/if}
+          </button>
+        {/if}
+
         <button
           class="icon-btn theme-toggle-icon-btn"
           title={t.switchTheme()}

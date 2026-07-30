@@ -1,0 +1,1306 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nomo 更新提醒交互原型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f6f7f9;
+        --surface: #ffffff;
+        --surface-elevated: #ffffff;
+        --rail: #f3f4f6;
+        --chrome: #f8f9fb;
+        --text: #202428;
+        --heading: #171a1f;
+        --muted: #68707a;
+        --faint: #8b939c;
+        --border: #dfe3e8;
+        --border-strong: #cbd2d9;
+        --accent: #2f7d6f;
+        --accent-strong: #174e45;
+        --accent-soft: #e7f0ee;
+        --accent-wash: #f2f7f5;
+        --warning: #9a6700;
+        --danger: #b42318;
+        --backdrop: rgba(17, 24, 39, 0.28);
+        --shadow-card:
+          0 22px 50px rgba(23, 34, 44, 0.14),
+          0 4px 14px rgba(23, 34, 44, 0.08);
+        --shadow-modal:
+          0 36px 90px rgba(19, 27, 35, 0.2),
+          0 8px 28px rgba(19, 27, 35, 0.11);
+        --font-body: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #15181d;
+        --surface: #1d2229;
+        --surface-elevated: #222830;
+        --rail: #181d23;
+        --chrome: #20262e;
+        --text: #eef2f5;
+        --heading: #ffffff;
+        --muted: #9aa4af;
+        --faint: #77818c;
+        --border: #333b46;
+        --border-strong: #46505c;
+        --accent: #67b7a5;
+        --accent-strong: #9fd8c7;
+        --accent-soft: #203530;
+        --accent-wash: #1b2b28;
+        --warning: #d4a72c;
+        --danger: #ff8a7a;
+        --backdrop: rgba(3, 6, 10, 0.56);
+        --shadow-card:
+          0 22px 58px rgba(0, 0, 0, 0.38),
+          0 4px 16px rgba(0, 0, 0, 0.24);
+        --shadow-modal:
+          0 38px 96px rgba(0, 0, 0, 0.52),
+          0 8px 30px rgba(0, 0, 0, 0.32);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--font-body);
+        font-size: 13px;
+      }
+
+      button {
+        border: 0;
+        color: inherit;
+        font: inherit;
+      }
+
+      button,
+      [role='button'] {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .app {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-rows: 38px minmax(0, 1fr) 26px;
+        background: var(--canvas);
+      }
+
+      .titlebar {
+        z-index: 2;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 14px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        user-select: none;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 120px;
+        color: var(--heading);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      .brand img {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+      }
+
+      .document-title {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .window-actions {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .icon-button {
+        position: relative;
+        width: 30px;
+        height: 28px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition:
+          color 150ms ease,
+          background 150ms ease;
+      }
+
+      .icon-button:hover {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .icon-button svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+
+      .update-dot {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 7px;
+        height: 7px;
+        border: 2px solid var(--chrome);
+        border-radius: 50%;
+        background: var(--danger);
+        box-sizing: content-box;
+      }
+
+      .workspace {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 42px 218px minmax(0, 1fr);
+      }
+
+      .activity-rail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        padding-top: 9px;
+        border-right: 1px solid var(--border);
+        background: var(--rail);
+      }
+
+      .activity-rail .icon-button.active {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .explorer {
+        min-width: 0;
+        border-right: 1px solid var(--border);
+        background: var(--rail);
+      }
+
+      .panel-title {
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+      }
+
+      .folder {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .file-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .file-list li {
+        height: 29px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px 0 28px;
+        color: var(--muted);
+      }
+
+      .file-list li.active {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .file-mark {
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .editor-shell {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: 35px minmax(0, 1fr);
+        background: var(--surface);
+      }
+
+      .tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+      }
+
+      .tab {
+        min-width: 142px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .editor-viewport {
+        min-height: 0;
+        overflow: hidden;
+        background: var(--surface);
+      }
+
+      .document {
+        width: min(740px, calc(100% - 64px));
+        height: 100%;
+        margin: 0 auto;
+        padding: 54px 20px 96px;
+        color: var(--text);
+      }
+
+      .document h1 {
+        margin: 0 0 12px;
+        color: var(--heading);
+        font-size: clamp(26px, 3vw, 38px);
+        font-weight: 720;
+        letter-spacing: -0.035em;
+      }
+
+      .document .lead {
+        max-width: 620px;
+        margin: 0 0 34px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .document h2 {
+        margin: 28px 0 12px;
+        color: var(--heading);
+        font-size: 18px;
+      }
+
+      .document p {
+        margin: 0 0 14px;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .quote {
+        margin: 22px 0;
+        padding: 2px 0 2px 16px;
+        border-left: 3px solid var(--accent);
+        color: var(--muted);
+      }
+
+      .statusbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        border-top: 1px solid var(--border);
+        background: var(--chrome);
+        color: var(--muted);
+        font-size: 11px;
+        user-select: none;
+      }
+
+      .statusbar div {
+        display: flex;
+        gap: 16px;
+      }
+
+      .update-notice {
+        position: fixed;
+        z-index: 20;
+        right: 22px;
+        bottom: 44px;
+        width: min(390px, calc(100vw - 28px));
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+        border-radius: 12px;
+        background: var(--surface-elevated);
+        box-shadow: var(--shadow-card);
+        transform-origin: right bottom;
+        transition:
+          opacity 180ms ease,
+          transform 220ms cubic-bezier(0.2, 0.85, 0.35, 1);
+      }
+
+      .update-notice[hidden] {
+        display: block;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+      }
+
+      .notice-accent {
+        height: 3px;
+        background: var(--accent);
+      }
+
+      .notice-body {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 16px 16px 13px;
+      }
+
+      .notice-icon {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .notice-icon svg {
+        width: 21px;
+        height: 21px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
+
+      .notice-copy {
+        min-width: 0;
+      }
+
+      .notice-kicker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .version-chip {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+
+      .notice-copy h2 {
+        margin: 0;
+        color: var(--heading);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .notice-copy p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .notice-close {
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--faint);
+        cursor: pointer;
+      }
+
+      .notice-close:hover {
+        background: var(--rail);
+        color: var(--text);
+      }
+
+      .notice-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 0 16px 14px;
+      }
+
+      .button {
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 13px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        transition:
+          border-color 150ms ease,
+          background 150ms ease,
+          color 150ms ease,
+          transform 120ms ease;
+      }
+
+      .button:hover {
+        border-color: var(--border-strong);
+        background: var(--rail);
+      }
+
+      .button:active {
+        transform: translateY(1px);
+      }
+
+      .button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      :root[data-theme='dark'] .button.primary {
+        color: #10201c;
+      }
+
+      .button.primary:hover {
+        border-color: var(--accent-strong);
+        background: var(--accent-strong);
+      }
+
+      .button.quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .button.quiet:hover {
+        background: var(--rail);
+        color: var(--text);
+      }
+
+      .dialog-layer {
+        position: fixed;
+        z-index: 40;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--backdrop);
+        opacity: 1;
+        backdrop-filter: blur(2px);
+        transition: opacity 170ms ease;
+      }
+
+      .dialog-layer[hidden] {
+        display: grid;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      .dialog {
+        width: min(640px, calc(100vw - 28px));
+        max-height: min(720px, calc(100vh - 36px));
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent) 22%);
+        border-radius: 14px;
+        background: var(--surface-elevated);
+        box-shadow: var(--shadow-modal);
+        transform: translateY(0) scale(1);
+        transition: transform 220ms cubic-bezier(0.2, 0.85, 0.35, 1);
+      }
+
+      .dialog-layer[hidden] .dialog {
+        transform: translateY(10px) scale(0.985);
+      }
+
+      .dialog-header {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        padding: 20px 22px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .app-mark {
+        width: 48px;
+        height: 48px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: #ffffff;
+      }
+
+      .app-mark img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .dialog-title {
+        min-width: 0;
+      }
+
+      .dialog-title h2 {
+        margin: 0 0 5px;
+        color: var(--heading);
+        font-size: 19px;
+        font-weight: 720;
+        letter-spacing: -0.015em;
+      }
+
+      .release-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .release-meta code {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .dialog-close {
+        align-self: start;
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .dialog-close:hover {
+        background: var(--rail);
+        color: var(--text);
+      }
+
+      .release-scroll {
+        min-height: 0;
+        overflow-y: auto;
+        padding: 22px;
+        scrollbar-color: var(--faint) transparent;
+        scrollbar-width: thin;
+      }
+
+      .release-intro {
+        margin: 0 0 22px;
+        color: var(--text);
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .release-section {
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
+        gap: 18px;
+        padding: 18px 0;
+        border-top: 1px solid var(--border);
+      }
+
+      .release-section:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .section-label {
+        padding-top: 2px;
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.05em;
+      }
+
+      .release-list {
+        display: grid;
+        gap: 14px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .release-item {
+        position: relative;
+        padding-left: 16px;
+      }
+
+      .release-item::before {
+        content: '';
+        position: absolute;
+        top: 7px;
+        left: 0;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .release-item strong {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--heading);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .release-item p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .dialog-footer {
+        min-height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 22px;
+        border-top: 1px solid var(--border);
+        background: color-mix(in srgb, var(--rail) 62%, var(--surface-elevated));
+      }
+
+      .footer-note {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .footer-note strong {
+        display: block;
+        color: var(--text);
+        font-weight: 650;
+      }
+
+      .footer-actions {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 8px;
+      }
+
+      .download-status {
+        display: none;
+        min-width: 220px;
+      }
+
+      .download-status.visible {
+        display: block;
+      }
+
+      .download-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .progress-track {
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--border);
+      }
+
+      .progress-value {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+        transition: width 160ms ease;
+      }
+
+      .preview-hint {
+        position: fixed;
+        z-index: 12;
+        left: 58px;
+        bottom: 40px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 9px 7px 11px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+        box-shadow: 0 8px 24px rgba(22, 32, 44, 0.08);
+        color: var(--muted);
+        font-size: 11px;
+        backdrop-filter: blur(8px);
+      }
+
+      .preview-hint button {
+        padding: 4px 7px;
+        border-radius: 5px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .result-toast {
+        position: fixed;
+        z-index: 60;
+        left: 50%;
+        bottom: 42px;
+        padding: 9px 15px;
+        border-radius: 8px;
+        background: var(--text);
+        color: var(--surface);
+        font-size: 12px;
+        box-shadow: var(--shadow-card);
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 8px);
+        transition:
+          opacity 170ms ease,
+          transform 170ms ease;
+      }
+
+      .result-toast.visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      @media (max-width: 760px) {
+        .workspace {
+          grid-template-columns: 42px minmax(0, 1fr);
+        }
+
+        .explorer {
+          display: none;
+        }
+
+        .document {
+          width: min(100%, 620px);
+          padding: 40px 24px 90px;
+        }
+
+        .preview-hint {
+          display: none;
+        }
+
+        .dialog-layer {
+          align-items: end;
+          padding: 12px;
+        }
+
+        .dialog {
+          width: 100%;
+          max-height: calc(100vh - 24px);
+          border-radius: 14px;
+        }
+
+        .release-section {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .document-title {
+          display: none;
+        }
+
+        .titlebar {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .window-actions .icon-button:first-child {
+          display: none;
+        }
+
+        .update-notice {
+          right: 14px;
+          bottom: 38px;
+        }
+
+        .notice-body {
+          grid-template-columns: 38px minmax(0, 1fr) auto;
+          padding: 14px 14px 11px;
+        }
+
+        .notice-icon {
+          width: 38px;
+          height: 38px;
+        }
+
+        .notice-actions {
+          padding: 0 14px 13px;
+        }
+
+        .dialog-header {
+          grid-template-columns: 42px minmax(0, 1fr) auto;
+          padding: 17px 17px 15px;
+        }
+
+        .app-mark {
+          width: 42px;
+          height: 42px;
+        }
+
+        .release-scroll {
+          padding: 18px;
+        }
+
+        .dialog-footer {
+          align-items: stretch;
+          flex-direction: column;
+          padding: 13px 17px 16px;
+        }
+
+        .footer-actions {
+          width: 100%;
+        }
+
+        .footer-actions .button {
+          flex: 1;
+        }
+
+        .download-status {
+          min-width: 0;
+          width: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app" aria-label="Nomo 编辑器更新提醒原型">
+      <header class="titlebar">
+        <div class="brand">
+          <img src="../assets/128x128.png" alt="" />
+          <span>Nomo</span>
+        </div>
+        <div class="document-title">产品更新记录.md — Nomo</div>
+        <div class="window-actions">
+          <button class="icon-button" id="themeButton" type="button" aria-label="切换明暗主题">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.64 5.64l1.42 1.42M16.94 16.94l1.42 1.42M18.36 5.64l-1.42 1.42M7.06 16.94l-1.42 1.42" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+          </button>
+          <button class="icon-button" id="settingsButton" type="button" aria-label="设置，有可用更新">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 3.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2V9.6h.09A1.7 1.7 0 0 0 3.6 8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2h4v.09A1.7 1.7 0 0 0 15 3.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+            </svg>
+            <span class="update-dot" aria-hidden="true"></span>
+          </button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="activity-rail" aria-label="应用功能">
+          <button class="icon-button active" type="button" aria-label="文件">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h6l2 2h8v14H4Z" />
+            </svg>
+          </button>
+          <button class="icon-button" type="button" aria-label="搜索">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6" />
+              <path d="m16 16 4 4" />
+            </svg>
+          </button>
+        </aside>
+
+        <aside class="explorer" aria-label="文件资源管理器">
+          <div class="panel-title">
+            <span>资源管理器</span>
+            <span>···</span>
+          </div>
+          <div class="folder">
+            <span>⌄</span>
+            <span>NOMO 文档</span>
+          </div>
+          <ul class="file-list">
+            <li class="active"><span class="file-mark">M↓</span>产品更新记录.md</li>
+            <li><span class="file-mark">M↓</span>使用说明.md</li>
+            <li><span class="file-mark">T</span>灵感片段.txt</li>
+            <li><span class="file-mark">{ }</span>设置备份.json</li>
+          </ul>
+        </aside>
+
+        <section class="editor-shell">
+          <div class="tabs">
+            <div class="tab"><span class="file-mark">M↓</span>产品更新记录.md</div>
+          </div>
+          <div class="editor-viewport">
+            <article class="document">
+              <h1>让更新被看见，而不是打断写作</h1>
+              <p class="lead">
+                更新提醒应该像一枚安静的书签：需要时清楚可见，不需要时不占用注意力。
+              </p>
+              <h2>提醒层级</h2>
+              <p>
+                首次发现新版本时，在编辑器右下角显示更新通知。关闭通知后，设置按钮上的提示点继续保留，用户随时可以返回查看。
+              </p>
+              <div class="quote">通知负责告诉用户“有更新”，弹窗负责解释“更新了什么”。</div>
+              <h2>更新过程</h2>
+              <p>
+                下载由用户主动触发。下载完成后，再询问是否重启安装，避免用户正在编辑时突然中断。
+              </p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <footer class="statusbar">
+        <div><span>行 12，列 8</span><span>Markdown</span></div>
+        <div><span>UTF-8</span><span>自动保存</span></div>
+      </footer>
+    </main>
+
+    <aside class="update-notice" id="updateNotice" aria-live="polite">
+      <div class="notice-accent"></div>
+      <div class="notice-body">
+        <div class="notice-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3v12" />
+            <path d="m7.5 10.5 4.5 4.5 4.5-4.5" />
+            <path d="M5 20h14" />
+          </svg>
+        </div>
+        <div class="notice-copy">
+          <div class="notice-kicker">
+            <span>软件更新</span>
+            <span class="version-chip">v0.3.1</span>
+          </div>
+          <h2>Nomo 有新版本可以使用</h2>
+          <p>改进了长文档体验，并修复了保存与搜索问题。</p>
+        </div>
+        <button class="notice-close" id="noticeClose" type="button" aria-label="关闭更新提醒">
+          ✕
+        </button>
+      </div>
+      <div class="notice-actions">
+        <button class="button quiet" id="laterButton" type="button">稍后提醒</button>
+        <button class="button primary" id="viewUpdateButton" type="button">查看更新</button>
+      </div>
+    </aside>
+
+    <div class="dialog-layer" id="dialogLayer" hidden>
+      <section
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dialogTitle"
+        aria-describedby="releaseIntro"
+      >
+        <header class="dialog-header">
+          <div class="app-mark">
+            <img src="../assets/128x128.png" alt="" />
+          </div>
+          <div class="dialog-title">
+            <h2 id="dialogTitle">Nomo v0.3.1 已发布</h2>
+            <div class="release-meta">
+              <code>v0.3.1</code>
+              <span>2026 年 7 月 30 日</span>
+              <span>约 36 MB</span>
+            </div>
+          </div>
+          <button class="dialog-close" id="dialogClose" type="button" aria-label="关闭更新日志">
+            ✕
+          </button>
+        </header>
+
+        <div class="release-scroll">
+          <p class="release-intro" id="releaseIntro">
+            这次更新重点改善长文档编辑的稳定性，并让查找、保存和恢复阅读位置更加顺手。
+          </p>
+
+          <section class="release-section">
+            <div class="section-label">新增功能</div>
+            <ul class="release-list">
+              <li class="release-item">
+                <strong>TXT 与 JSON 分段编辑</strong>
+                <p>打开超大文本时按需加载内容，降低等待时间和内存占用。</p>
+              </li>
+              <li class="release-item">
+                <strong>统一查找与替换</strong>
+                <p>Markdown、TXT 和 JSON 使用同一套轻量面板，并记住上次位置。</p>
+              </li>
+            </ul>
+          </section>
+
+          <section class="release-section">
+            <div class="section-label">体验改进</div>
+            <ul class="release-list">
+              <li class="release-item">
+                <strong>恢复上次阅读位置</strong>
+                <p>重新打开文档时更准确地回到离开前的位置。</p>
+              </li>
+              <li class="release-item">
+                <strong>全局行号</strong>
+                <p>分段文本编辑器中的行号现在会跨分段连续显示。</p>
+              </li>
+            </ul>
+          </section>
+
+          <section class="release-section">
+            <div class="section-label">问题修复</div>
+            <ul class="release-list">
+              <li class="release-item">
+                <strong>保存只读来源文件</strong>
+                <p>文件来自只读位置时仍可继续编辑，并在保存时引导另存为。</p>
+              </li>
+              <li class="release-item">
+                <strong>窗口主题同步</strong>
+                <p>修复部分场景下系统主题切换后窗口未及时更新的问题。</p>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <footer class="dialog-footer">
+          <div class="footer-note" id="footerNote">
+            <strong>安装前不会重启应用</strong>
+            下载完成后由你决定何时安装
+          </div>
+          <div class="download-status" id="downloadStatus" aria-live="polite">
+            <div class="download-label">
+              <span id="downloadText">正在下载更新…</span>
+              <span id="downloadPercent">0%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-value" id="progressValue"></div>
+            </div>
+          </div>
+          <div class="footer-actions" id="footerActions">
+            <button class="button" id="modalLaterButton" type="button">稍后更新</button>
+            <button class="button primary" id="downloadButton" type="button">下载更新</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+
+    <div class="preview-hint">
+      <span>交互演示</span>
+      <button id="replayButton" type="button">重新显示通知</button>
+    </div>
+
+    <div class="result-toast" id="resultToast" role="status"></div>
+
+    <script>
+      const root = document.documentElement;
+      const notice = document.getElementById('updateNotice');
+      const dialogLayer = document.getElementById('dialogLayer');
+      const dialogClose = document.getElementById('dialogClose');
+      const viewUpdateButton = document.getElementById('viewUpdateButton');
+      const noticeClose = document.getElementById('noticeClose');
+      const laterButton = document.getElementById('laterButton');
+      const modalLaterButton = document.getElementById('modalLaterButton');
+      const replayButton = document.getElementById('replayButton');
+      const settingsButton = document.getElementById('settingsButton');
+      const themeButton = document.getElementById('themeButton');
+      const downloadButton = document.getElementById('downloadButton');
+      const downloadStatus = document.getElementById('downloadStatus');
+      const footerNote = document.getElementById('footerNote');
+      const footerActions = document.getElementById('footerActions');
+      const progressValue = document.getElementById('progressValue');
+      const downloadPercent = document.getElementById('downloadPercent');
+      const downloadText = document.getElementById('downloadText');
+      const resultToast = document.getElementById('resultToast');
+      let lastFocusedElement = null;
+      let downloadTimer = null;
+      let toastTimer = null;
+
+      function setNoticeVisible(visible) {
+        notice.hidden = !visible;
+      }
+
+      function openDialog() {
+        lastFocusedElement = document.activeElement;
+        setNoticeVisible(false);
+        dialogLayer.hidden = false;
+        window.requestAnimationFrame(() => dialogClose.focus());
+      }
+
+      function closeDialog() {
+        dialogLayer.hidden = true;
+        if (lastFocusedElement instanceof HTMLElement) {
+          lastFocusedElement.focus();
+        }
+      }
+
+      function showResultToast(message) {
+        window.clearTimeout(toastTimer);
+        resultToast.textContent = message;
+        resultToast.classList.add('visible');
+        toastTimer = window.setTimeout(() => {
+          resultToast.classList.remove('visible');
+        }, 2200);
+      }
+
+      function resetDownload() {
+        window.clearInterval(downloadTimer);
+        downloadTimer = null;
+        downloadStatus.classList.remove('visible');
+        footerNote.style.display = '';
+        footerActions.style.display = '';
+        progressValue.style.width = '0%';
+        downloadPercent.textContent = '0%';
+        downloadText.textContent = '正在下载更新…';
+        downloadButton.textContent = '下载更新';
+        downloadButton.dataset.state = 'idle';
+      }
+
+      function startDownload() {
+        if (downloadButton.dataset.state === 'ready') {
+          closeDialog();
+          showResultToast('演示：应用将在保存文档后重启并安装');
+          return;
+        }
+
+        footerNote.style.display = 'none';
+        footerActions.style.display = 'none';
+        downloadStatus.classList.add('visible');
+        let progress = 0;
+
+        downloadTimer = window.setInterval(() => {
+          progress = Math.min(100, progress + Math.ceil(Math.random() * 12));
+          progressValue.style.width = `${progress}%`;
+          downloadPercent.textContent = `${progress}%`;
+
+          if (progress < 100) return;
+
+          window.clearInterval(downloadTimer);
+          downloadTimer = null;
+          downloadText.textContent = '更新已下载并完成校验';
+          window.setTimeout(() => {
+            downloadStatus.classList.remove('visible');
+            footerNote.style.display = '';
+            footerNote.innerHTML = '<strong>更新已经准备好</strong>重启后将自动完成安装';
+            footerActions.style.display = '';
+            modalLaterButton.textContent = '下次重启时安装';
+            downloadButton.textContent = '重启并安装';
+            downloadButton.dataset.state = 'ready';
+          }, 450);
+        }, 120);
+      }
+
+      function toggleTheme() {
+        const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = nextTheme;
+      }
+
+      viewUpdateButton.addEventListener('click', openDialog);
+      settingsButton.addEventListener('click', openDialog);
+      noticeClose.addEventListener('click', () => setNoticeVisible(false));
+      laterButton.addEventListener('click', () => {
+        setNoticeVisible(false);
+        showResultToast('已稍后提醒，设置按钮会保留更新提示');
+      });
+      modalLaterButton.addEventListener('click', () => {
+        closeDialog();
+        showResultToast(
+          downloadButton.dataset.state === 'ready'
+            ? '更新将在下次启动时安装'
+            : '已保留更新提醒',
+        );
+      });
+      dialogClose.addEventListener('click', closeDialog);
+      replayButton.addEventListener('click', () => {
+        closeDialog();
+        resetDownload();
+        setNoticeVisible(true);
+      });
+      themeButton.addEventListener('click', toggleTheme);
+      downloadButton.addEventListener('click', startDownload);
+
+      dialogLayer.addEventListener('click', (event) => {
+        if (event.target === dialogLayer) closeDialog();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !dialogLayer.hidden) {
+          closeDialog();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -2,16 +2,47 @@ use std::{
     fs::{self, File},
     io::Write,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 const GITHUB_LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/LIXianSenQwQ/nomo/releases/latest";
 const CHECKSUMS_ASSET_NAME: &str = "checksums.md5";
 const DOWNLOAD_PROGRESS_EVENT: &str = "nomo://software-update-download-progress";
+const UPDATE_STATE_EVENT: &str = "nomo://software-update-state";
 const CACHED_UPDATE_INFO_FILE: &str = "update-info.json";
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SoftwareUpdateInstallationKind {
+    Installer,
+    Portable,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SoftwareUpdateAssetKind {
+    WindowsInstaller,
+    WindowsPortable,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum SoftwareUpdateStatus {
+    Idle,
+    Checking,
+    UpToDate,
+    Available,
+    Downloading,
+    Downloaded,
+    Installing,
+    Unsupported,
+    Error,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +50,7 @@ pub(crate) struct SoftwareUpdateCandidate {
     pub(crate) version: String,
     pub(crate) date: Option<String>,
     pub(crate) body: Option<String>,
+    pub(crate) asset_kind: SoftwareUpdateAssetKind,
     pub(crate) asset_name: String,
     pub(crate) asset_size: Option<u64>,
     pub(crate) download_url: String,
@@ -31,6 +63,7 @@ pub(crate) struct SoftwareUpdateCheckPayload {
     pub(crate) supported: bool,
     pub(crate) available: bool,
     pub(crate) current_version: String,
+    pub(crate) installation_kind: SoftwareUpdateInstallationKind,
     pub(crate) version: Option<String>,
     pub(crate) date: Option<String>,
     pub(crate) body: Option<String>,
@@ -47,13 +80,65 @@ pub(crate) struct DownloadedSoftwareUpdate {
     pub(crate) downloaded_bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct SoftwareUpdateDownloadProgress {
     request_id: String,
     downloaded_bytes: u64,
     total_bytes: Option<u64>,
     percent: Option<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SoftwareUpdateSnapshot {
+    status: SoftwareUpdateStatus,
+    current_version: String,
+    installation_kind: SoftwareUpdateInstallationKind,
+    version: Option<String>,
+    date: Option<String>,
+    body: Option<String>,
+    candidate: Option<SoftwareUpdateCandidate>,
+    downloaded_update: Option<DownloadedSoftwareUpdate>,
+    progress: Option<SoftwareUpdateDownloadProgress>,
+    error: Option<String>,
+    notice_window_label: Option<String>,
+}
+
+impl Default for SoftwareUpdateSnapshot {
+    fn default() -> Self {
+        Self {
+            status: SoftwareUpdateStatus::Idle,
+            current_version: env!("CARGO_PKG_VERSION").to_string(),
+            installation_kind: SoftwareUpdateInstallationKind::Unsupported,
+            version: None,
+            date: None,
+            body: None,
+            candidate: None,
+            downloaded_update: None,
+            progress: None,
+            error: None,
+            notice_window_label: None,
+        }
+    }
+}
+
+#[derive(Default)]
+struct SoftwareUpdateRuntimeState {
+    snapshot: SoftwareUpdateSnapshot,
+    check_in_progress: bool,
+}
+
+static SOFTWARE_UPDATE_STATE: OnceLock<Mutex<SoftwareUpdateRuntimeState>> = OnceLock::new();
+
+struct SoftwareUpdateCheckGuard;
+
+impl Drop for SoftwareUpdateCheckGuard {
+    fn drop(&mut self) {
+        if let Ok(mut state) = shared_state().lock() {
+            state.check_in_progress = false;
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,21 +186,135 @@ pub(crate) async fn is_windows_installer_installation() -> Result<bool, String> 
 }
 
 #[tauri::command]
-pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload, String> {
+pub(crate) fn get_software_update_state<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<SoftwareUpdateSnapshot, String> {
+    let installation_kind = current_installation_kind()?;
+    let current_version = env!("CARGO_PKG_VERSION");
+    let cached_update = if installation_kind == SoftwareUpdateInstallationKind::Installer {
+        get_cached_software_update(app.clone())?.filter(|cached| {
+            is_release_newer(current_version, &cached.version).unwrap_or(false)
+        })
+    } else {
+        None
+    };
+
+    update_shared_state(&app, |state| {
+        state.installation_kind = installation_kind;
+        if let Some(cached) = cached_update {
+            state.version = Some(cached.version.clone());
+            state.downloaded_update = Some(cached);
+            state.status = SoftwareUpdateStatus::Downloaded;
+        } else if installation_kind == SoftwareUpdateInstallationKind::Unsupported
+            && state.status == SoftwareUpdateStatus::Idle
+        {
+            state.status = SoftwareUpdateStatus::Unsupported;
+        }
+    })
+}
+
+#[tauri::command]
+pub(crate) async fn check_software_update<R: Runtime>(
+    app: AppHandle<R>,
+    window: WebviewWindow<R>,
+    startup: Option<bool>,
+) -> Result<SoftwareUpdateCheckPayload, String> {
+    let installation_kind = current_installation_kind()?;
+    let previous_snapshot = {
+        let mut state = shared_state()
+            .lock()
+            .map_err(|error| format!("读取软件更新状态失败：{error}"))?;
+        if state.check_in_progress {
+            return Err("软件更新检查正在进行中。".to_string());
+        }
+        state.check_in_progress = true;
+        state.snapshot.clone()
+    };
+    let _check_guard = SoftwareUpdateCheckGuard;
+
+    let is_startup = startup.unwrap_or(false);
+    let notice_window_label = if is_startup {
+        crate::window::tray::last_active_document_window_label()
+            .or_else(|| Some(window.label().to_string()))
+    } else {
+        None
+    };
+    update_shared_state(&app, |state| {
+        state.status = SoftwareUpdateStatus::Checking;
+        state.installation_kind = installation_kind;
+        state.error = None;
+        state.progress = None;
+        state.notice_window_label = notice_window_label.clone();
+    })?;
+
+    let result = perform_software_update_check(installation_kind).await;
+    let final_result = match result {
+        Ok(payload) => {
+            let cached = if payload.available
+                && payload.installation_kind == SoftwareUpdateInstallationKind::Installer
+            {
+                get_cached_software_update(app.clone())
+                    .ok()
+                    .flatten()
+                    .filter(|cached| Some(&cached.version) == payload.version.as_ref())
+            } else {
+                None
+            };
+            update_shared_state(&app, |state| {
+                state.current_version = payload.current_version.clone();
+                state.installation_kind = payload.installation_kind;
+                state.version = payload.version.clone();
+                state.date = payload.date.clone();
+                state.body = payload.body.clone();
+                state.candidate = payload.candidate.clone();
+                state.downloaded_update = cached.clone();
+                state.status = if !payload.supported {
+                    SoftwareUpdateStatus::Unsupported
+                } else if cached.is_some() {
+                    SoftwareUpdateStatus::Downloaded
+                } else if payload.available {
+                    SoftwareUpdateStatus::Available
+                } else {
+                    SoftwareUpdateStatus::UpToDate
+                };
+                state.error = None;
+            })?;
+            Ok(payload)
+        }
+        Err(error) => {
+            if is_startup {
+                update_shared_state(&app, |state| {
+                    *state = previous_snapshot.clone();
+                })?;
+            } else {
+                update_shared_state(&app, |state| {
+                    state.status = SoftwareUpdateStatus::Error;
+                    state.error = Some(error.clone());
+                })?;
+            }
+            Err(error)
+        }
+    };
+
+    final_result
+}
+
+async fn perform_software_update_check(
+    installation_kind: SoftwareUpdateInstallationKind,
+) -> Result<SoftwareUpdateCheckPayload, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     crate::app_logger::info("Update", &format!("开始检查软件更新，当前版本：{current_version}"));
 
     let timer = std::time::Instant::now();
 
-    // 步骤1：检查是否为 Windows 安装版
-    let is_installer = is_current_windows_installer_installation()?;
-    crate::app_logger::info("Update", &format!("安装版检测结果：{is_installer}，耗时：{:?}", timer.elapsed()));
-    if !is_installer {
-        crate::app_logger::info("Update", "非安装版，跳过更新检查");
+    // 步骤1：开发环境和非 Windows 平台不发起远程更新检查
+    if installation_kind == SoftwareUpdateInstallationKind::Unsupported {
+        crate::app_logger::info("Update", "当前环境不支持软件更新，跳过远程检查");
         return Ok(SoftwareUpdateCheckPayload {
             supported: false,
             available: false,
             current_version,
+            installation_kind,
             version: None,
             date: None,
             body: None,
@@ -158,6 +357,7 @@ pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload
             supported: true,
             available: false,
             current_version,
+            installation_kind,
             version: Some(release_version),
             date,
             body: release.body,
@@ -165,14 +365,25 @@ pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload
         });
     }
 
-    // 步骤4：查找安装包资产和校验清单
-    crate::app_logger::info("Update", &format!("发现新版本 {release_version}，正在查找安装包资产"));
-    let installer_asset = select_windows_installer_asset(&release.assets, &release_version)
-        .ok_or_else(|| {
-            crate::app_logger::error("Update", &format!("缺少安装包：Nomo_{release_version}_x64-setup.exe"));
-            format!("GitHub Release 缺少 Windows 安装包资产：Nomo_{release_version}_x64-setup.exe")
-        })?;
-    crate::app_logger::info("Update", &format!("找到安装包：{}（{} bytes）", installer_asset.name, installer_asset.size.unwrap_or(0)));
+    // 步骤4：根据当前安装形态选择安装包或免安装 zip
+    crate::app_logger::info("Update", &format!("发现新版本 {release_version}，正在查找对应资产"));
+    let (asset_kind, update_asset) = match installation_kind {
+        SoftwareUpdateInstallationKind::Installer => (
+            SoftwareUpdateAssetKind::WindowsInstaller,
+            select_windows_installer_asset(&release.assets, &release_version),
+        ),
+        SoftwareUpdateInstallationKind::Portable => (
+            SoftwareUpdateAssetKind::WindowsPortable,
+            select_windows_portable_asset(&release.assets, &release_version),
+        ),
+        SoftwareUpdateInstallationKind::Unsupported => unreachable!(),
+    };
+    let update_asset = update_asset.ok_or_else(|| {
+        let expected_name = expected_asset_name(asset_kind, &release_version);
+        crate::app_logger::error("Update", &format!("缺少更新资产：{expected_name}"));
+        format!("GitHub Release 缺少 Windows 更新资产：{expected_name}")
+    })?;
+    crate::app_logger::info("Update", &format!("找到更新资产：{}（{} bytes）", update_asset.name, update_asset.size.unwrap_or(0)));
 
     let checksums_asset = find_asset_by_name(&release.assets, CHECKSUMS_ASSET_NAME)
         .ok_or_else(|| {
@@ -204,10 +415,10 @@ pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload
         })?;
     crate::app_logger::info("Update", &format!("校验清单下载完成，耗时：{:?}", checksum_timer.elapsed()));
 
-    let expected_md5 = find_md5_for_file(&checksums, &installer_asset.name)
+    let expected_md5 = find_md5_for_file(&checksums, &update_asset.name)
         .ok_or_else(|| {
-            crate::app_logger::error("Update", &format!("校验清单中未找到 {} 的 MD5", installer_asset.name));
-            format!("MD5 校验清单缺少安装包条目：{}", installer_asset.name)
+            crate::app_logger::error("Update", &format!("校验清单中未找到 {} 的 MD5", update_asset.name));
+            format!("MD5 校验清单缺少更新资产条目：{}", update_asset.name)
         })?;
     crate::app_logger::info("Update", &format!("MD5 校验通过：{}", &expected_md5[..8]));
 
@@ -215,9 +426,10 @@ pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload
         version: release_version.clone(),
         date: date.clone(),
         body: release.body.clone(),
-        asset_name: installer_asset.name.clone(),
-        asset_size: installer_asset.size,
-        download_url: installer_asset.browser_download_url.clone(),
+        asset_kind,
+        asset_name: update_asset.name.clone(),
+        asset_size: update_asset.size,
+        download_url: update_asset.browser_download_url.clone(),
         md5: expected_md5,
     };
 
@@ -227,6 +439,7 @@ pub(crate) async fn check_software_update() -> Result<SoftwareUpdateCheckPayload
         supported: true,
         available: true,
         current_version,
+        installation_kind,
         version: Some(release_version),
         date,
         body: release.body,
@@ -240,10 +453,52 @@ pub(crate) async fn download_software_update<R: Runtime>(
     candidate: SoftwareUpdateCandidate,
     request_id: String,
 ) -> Result<DownloadedSoftwareUpdate, String> {
+    update_shared_state(&app, |state| {
+        state.status = SoftwareUpdateStatus::Downloading;
+        state.version = Some(candidate.version.clone());
+        state.candidate = Some(candidate.clone());
+        state.progress = Some(SoftwareUpdateDownloadProgress {
+            request_id: request_id.clone(),
+            downloaded_bytes: 0,
+            total_bytes: candidate.asset_size,
+            percent: Some(0),
+        });
+        state.error = None;
+    })?;
+
+    let result =
+        download_software_update_inner(app.clone(), candidate, request_id).await;
+    match &result {
+        Ok(downloaded) => {
+            update_shared_state(&app, |state| {
+                state.status = SoftwareUpdateStatus::Downloaded;
+                state.downloaded_update = Some(downloaded.clone());
+                state.progress = None;
+                state.error = None;
+            })?;
+        }
+        Err(error) => {
+            update_shared_state(&app, |state| {
+                state.status = SoftwareUpdateStatus::Error;
+                state.progress = None;
+                state.error = Some(error.clone());
+            })?;
+        }
+    }
+    result
+}
+
+async fn download_software_update_inner<R: Runtime>(
+    app: AppHandle<R>,
+    candidate: SoftwareUpdateCandidate,
+    request_id: String,
+) -> Result<DownloadedSoftwareUpdate, String> {
     crate::app_logger::info("Update", &format!("开始下载更新包：{}（{} bytes）", candidate.asset_name, candidate.asset_size.unwrap_or(0)));
     let timer = std::time::Instant::now();
 
-    if !is_current_windows_installer_installation()? {
+    if candidate.asset_kind != SoftwareUpdateAssetKind::WindowsInstaller
+        || current_installation_kind()? != SoftwareUpdateInstallationKind::Installer
+    {
         crate::app_logger::error("Update", "非安装版环境，拒绝下载更新");
         return Err("当前环境不支持自动更新：仅 Windows 安装版支持应用内更新。".to_string());
     }
@@ -333,6 +588,24 @@ pub(crate) fn install_software_update<R: Runtime>(
     app: AppHandle<R>,
     downloaded_update: DownloadedSoftwareUpdate,
 ) -> Result<(), String> {
+    update_shared_state(&app, |state| {
+        state.status = SoftwareUpdateStatus::Installing;
+        state.error = None;
+    })?;
+    let result = install_software_update_inner(app.clone(), downloaded_update);
+    if let Err(error) = &result {
+        update_shared_state(&app, |state| {
+            state.status = SoftwareUpdateStatus::Error;
+            state.error = Some(error.clone());
+        })?;
+    }
+    result
+}
+
+fn install_software_update_inner<R: Runtime>(
+    app: AppHandle<R>,
+    downloaded_update: DownloadedSoftwareUpdate,
+) -> Result<(), String> {
     crate::app_logger::info("Update", &format!("开始安装更新：{}", downloaded_update.version));
 
     if !is_current_windows_installer_installation()? {
@@ -374,6 +647,25 @@ fn is_current_windows_installer_installation() -> Result<bool, String> {
 #[cfg(not(target_os = "windows"))]
 fn is_current_windows_installer_installation() -> Result<bool, String> {
     Ok(false)
+}
+
+#[cfg(all(target_os = "windows", debug_assertions))]
+fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String> {
+    Ok(SoftwareUpdateInstallationKind::Unsupported)
+}
+
+#[cfg(all(target_os = "windows", not(debug_assertions)))]
+fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String> {
+    if is_current_windows_installer_installation()? {
+        Ok(SoftwareUpdateInstallationKind::Installer)
+    } else {
+        Ok(SoftwareUpdateInstallationKind::Portable)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String> {
+    Ok(SoftwareUpdateInstallationKind::Unsupported)
 }
 
 #[cfg(target_os = "windows")]
@@ -515,6 +807,23 @@ fn select_windows_installer_asset<'a>(
     assets.iter().find(|asset| asset.name == expected_name)
 }
 
+fn select_windows_portable_asset<'a>(
+    assets: &'a [GitHubReleaseAsset],
+    version: &str,
+) -> Option<&'a GitHubReleaseAsset> {
+    let expected_name = format!("Nomo_{version}_x64.zip");
+    assets.iter().find(|asset| asset.name == expected_name)
+}
+
+fn expected_asset_name(kind: SoftwareUpdateAssetKind, version: &str) -> String {
+    match kind {
+        SoftwareUpdateAssetKind::WindowsInstaller => {
+            format!("Nomo_{version}_x64-setup.exe")
+        }
+        SoftwareUpdateAssetKind::WindowsPortable => format!("Nomo_{version}_x64.zip"),
+    }
+}
+
 fn find_asset_by_name<'a>(
     assets: &'a [GitHubReleaseAsset],
     name: &str,
@@ -603,15 +912,36 @@ fn emit_download_progress<R: Runtime>(
     let percent = total_bytes
         .filter(|total| *total > 0)
         .map(|total| ((downloaded_bytes.saturating_mul(100) / total).min(100)) as u8);
-    let _ = app.emit(
-        DOWNLOAD_PROGRESS_EVENT,
-        SoftwareUpdateDownloadProgress {
-            request_id: request_id.to_string(),
-            downloaded_bytes,
-            total_bytes,
-            percent,
-        },
-    );
+    let progress = SoftwareUpdateDownloadProgress {
+        request_id: request_id.to_string(),
+        downloaded_bytes,
+        total_bytes,
+        percent,
+    };
+    let _ = app.emit(DOWNLOAD_PROGRESS_EVENT, progress.clone());
+    let _ = update_shared_state(app, |state| {
+        state.status = SoftwareUpdateStatus::Downloading;
+        state.progress = Some(progress);
+    });
+}
+
+fn shared_state() -> &'static Mutex<SoftwareUpdateRuntimeState> {
+    SOFTWARE_UPDATE_STATE.get_or_init(|| Mutex::new(SoftwareUpdateRuntimeState::default()))
+}
+
+fn update_shared_state<R: Runtime>(
+    app: &AppHandle<R>,
+    updater: impl FnOnce(&mut SoftwareUpdateSnapshot),
+) -> Result<SoftwareUpdateSnapshot, String> {
+    let snapshot = {
+        let mut runtime_state = shared_state()
+            .lock()
+            .map_err(|error| format!("更新软件状态失败：{error}"))?;
+        updater(&mut runtime_state.snapshot);
+        runtime_state.snapshot.clone()
+    };
+    let _ = app.emit(UPDATE_STATE_EVENT, snapshot.clone());
+    Ok(snapshot)
 }
 
 fn calculate_file_md5(path: &Path) -> Result<String, String> {

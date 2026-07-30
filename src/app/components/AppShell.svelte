@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { RecentEntry } from '../../lib/desktop/tauriStorage';
+  import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
   import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
@@ -143,6 +144,8 @@
   export let startResize: (event: MouseEvent) => void;
   export let exportHtml: () => void;
   export let exportPdf: () => void;
+  export let softwareUpdateState: SoftwareUpdateSnapshot;
+  export let openSoftwareUpdate: () => void;
   export let switchTab: (tabId: string) => void;
   export let closeTab: (tabId: string, event?: Event) => void;
   export let pinPreviewTab: () => void;
@@ -224,6 +227,8 @@
       {openSettings}
       {exportHtml}
       {exportPdf}
+      {softwareUpdateState}
+      {openSoftwareUpdate}
     />
   {/if}
 

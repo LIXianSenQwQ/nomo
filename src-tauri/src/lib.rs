@@ -228,6 +228,7 @@ pub fn run() {
             crate::app_logger::get_logger_enabled,
             crate::software_update::is_windows_installer_installation,
             crate::software_update::get_cached_software_update,
+            crate::software_update::get_software_update_state,
             crate::software_update::check_software_update,
             crate::software_update::download_software_update,
             crate::software_update::install_software_update,

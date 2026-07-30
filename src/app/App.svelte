@@ -126,6 +126,9 @@
   import UnsavedConfirmDialog from './components/UnsavedConfirmDialog.svelte';
   import ExternalChangeDialog from './components/ExternalChangeDialog.svelte';
   import CloseWindowBehaviorDialog from './components/CloseWindowBehaviorDialog.svelte';
+  import SoftwareUpdateDialog from './components/SoftwareUpdateDialog.svelte';
+  import SoftwareUpdateNotice from './components/SoftwareUpdateNotice.svelte';
+  import type { SoftwareUpdateSnapshot } from '../lib/desktop/tauriUpdater';
   import type {
     ContextMenuOpenEvent,
     ContextMenuItem,
@@ -164,6 +167,15 @@
   } from './services/firstRunSample';
   import { createOutlineInteractionController } from './services/outlineInteractionController';
   import { createEditorInteractionController } from './services/editorInteractionController';
+  import {
+    disposeSoftwareUpdateCoordinator,
+    initializeSoftwareUpdateCoordinator,
+    runSoftwareUpdateCheck,
+    softwareUpdateState,
+    startSoftwareUpdateDownload,
+    startSoftwareUpdateInstall,
+  } from './services/softwareUpdate';
+  import { createSoftwareUpdateSummary } from './services/softwareUpdateReleaseNotes';
   import {
     confirmAction,
     confirmDialogStore,
@@ -316,6 +328,18 @@
   let linkOpeningToken = 0;
   let toastMessage = '';
   let toastTimer: number | null = null;
+  let softwareUpdateSnapshot: SoftwareUpdateSnapshot = {
+    status: 'idle',
+    currentVersion: '',
+    installationKind: 'unsupported',
+  };
+  let softwareUpdateNoticeVisible = false;
+  let softwareUpdateDialogOpen = false;
+  let softwareUpdateDismissedVersion = '';
+  let softwareUpdateAutoCheckEnabled = DEFAULT_APP_PREFERENCES.softwareUpdateAutoCheckEnabled;
+  let softwareUpdateStartupTimer: number | null = null;
+  let softwareUpdateNoticeSignature = '';
+  let unsubscribeSoftwareUpdate: (() => void) | null = null;
 
   /** 后台/非活动标签没有自己的状态栏，错误必须同时进入全局 toast 才对用户可见。 */
   function showVisibleError(error: unknown, fallback: string) {
@@ -1808,15 +1832,118 @@
   }
 
   async function approveSoftwareUpdateInstall(requestId: string) {
-    const dirtyTabs = getDirtyTabs(tabs);
-    let approved = true;
-    if (dirtyTabs.length > 0) {
-      const names = dirtyTabs.map((tab) => tab.fileName).join('、');
-      approved = (await confirmAction(t.unsavedChangesBeforeUpdate({ names }))) !== false;
-    }
+    const approved = await confirmSoftwareUpdateInstall();
 
     const { emit } = await import('@tauri-apps/api/event');
     await emit('nomo://update-install-decision', { requestId, approved });
+  }
+
+  async function confirmSoftwareUpdateInstall() {
+    const dirtyTabs = getDirtyTabs(tabs);
+    if (dirtyTabs.length === 0) {
+      return true;
+    }
+    const names = dirtyTabs.map((tab) => tab.fileName).join('、');
+    return (await confirmAction(t.unsavedChangesBeforeUpdate({ names }))) !== false;
+  }
+
+  function handleSoftwareUpdateSnapshot(state: SoftwareUpdateSnapshot) {
+    const version = state.version ?? state.candidate?.version;
+    if (
+      !version ||
+      !['available', 'downloaded'].includes(state.status) ||
+      state.noticeWindowLabel !== windowLabel
+    ) {
+      return;
+    }
+    const signature = `${version}:${state.noticeWindowLabel}`;
+    if (signature === softwareUpdateNoticeSignature) {
+      return;
+    }
+    softwareUpdateNoticeSignature = signature;
+    if (softwareUpdateDismissedVersion && softwareUpdateDismissedVersion !== version) {
+      softwareUpdateDismissedVersion = '';
+      void updateAppSetting('softwareUpdateDismissedVersion', '');
+    }
+    if (softwareUpdateDismissedVersion !== version) {
+      softwareUpdateNoticeVisible = true;
+    }
+  }
+
+  function openSoftwareUpdate() {
+    if (!softwareUpdateSnapshot.candidate && !softwareUpdateSnapshot.downloadedUpdate) {
+      return;
+    }
+    softwareUpdateNoticeVisible = false;
+    softwareUpdateDialogOpen = true;
+  }
+
+  function hideSoftwareUpdateForLater() {
+    softwareUpdateNoticeVisible = false;
+    softwareUpdateDialogOpen = false;
+  }
+
+  function dismissSoftwareUpdateVersion() {
+    const version =
+      softwareUpdateSnapshot.version ?? softwareUpdateSnapshot.candidate?.version ?? '';
+    softwareUpdateNoticeVisible = false;
+    if (!version) return;
+    softwareUpdateDismissedVersion = version;
+    void updateAppSetting('softwareUpdateDismissedVersion', version);
+  }
+
+  async function downloadCurrentSoftwareUpdate() {
+    const candidate = softwareUpdateSnapshot.candidate;
+    if (!candidate || candidate.assetKind !== 'windowsInstaller') {
+      return;
+    }
+    try {
+      await startSoftwareUpdateDownload(candidate);
+    } catch (error) {
+      showVisibleError(error, t.softwareUpdateFailed());
+    }
+  }
+
+  async function installCurrentSoftwareUpdate() {
+    const downloaded = softwareUpdateSnapshot.downloadedUpdate;
+    if (!downloaded || !(await confirmSoftwareUpdateInstall())) {
+      return;
+    }
+    try {
+      await startSoftwareUpdateInstall(downloaded);
+    } catch (error) {
+      showVisibleError(error, t.softwareUpdateInstallFailed());
+    }
+  }
+
+  async function retrySoftwareUpdateCheck() {
+    try {
+      await runSoftwareUpdateCheck(false);
+    } catch (error) {
+      showVisibleError(error, t.softwareUpdateFailed());
+    }
+  }
+
+  function scheduleStartupSoftwareUpdateCheck() {
+    if (
+      !desktopEnabled ||
+      windowLabel !== 'main' ||
+      !softwareUpdateAutoCheckEnabled ||
+      softwareUpdateSnapshot.installationKind === 'unsupported' ||
+      softwareUpdateStartupTimer !== null
+    ) {
+      return;
+    }
+    softwareUpdateStartupTimer = window.setTimeout(() => {
+      softwareUpdateStartupTimer = null;
+      if (
+        !softwareUpdateAutoCheckEnabled ||
+        softwareUpdateSnapshot.installationKind === 'unsupported'
+      ) {
+        return;
+      }
+      void runSoftwareUpdateCheck(true).catch(() => undefined);
+    }, 2000);
   }
 
   function persistEditorModePreference(nextMode: EditorMode) {
@@ -3669,6 +3796,7 @@
     inlineCodeRenderingEnabled = preferences.inlineCodeRenderingEnabled;
     shortcutPreferences = preferences.shortcutPreferences;
     developerMode = preferences.developerMode;
+    softwareUpdateAutoCheckEnabled = preferences.softwareUpdateAutoCheckEnabled;
 
     if (!filePreviewEnabled) {
       invalidatePendingPreviewOpen();
@@ -3749,6 +3877,7 @@
       shortcutPreferences,
       imageHandlingSettings: imageSettings,
       developerMode,
+      softwareUpdateAutoCheckEnabled,
     });
   }
 
@@ -3915,6 +4044,22 @@
         await setupCriticalDesktopEvents();
 
         settings = await listAppSettings().catch(() => []);
+        const dismissedUpdateSetting = settings.find(
+          (setting) => setting.key === 'softwareUpdateDismissedVersion',
+        );
+        if (dismissedUpdateSetting) {
+          try {
+            const value = JSON.parse(dismissedUpdateSetting.valueJson);
+            softwareUpdateDismissedVersion = typeof value === 'string' ? value : '';
+          } catch {
+            softwareUpdateDismissedVersion = '';
+          }
+        }
+        unsubscribeSoftwareUpdate = softwareUpdateState.subscribe((state) => {
+          softwareUpdateSnapshot = state;
+          handleSoftwareUpdateSnapshot(state);
+        });
+        await initializeSoftwareUpdateCoordinator().catch(() => undefined);
         await loadReadingPositions();
 
         // 先读取待处理的外部打开路径和文件夹，再决定如何恢复工作区
@@ -4021,6 +4166,7 @@
       await updateWindowTitle().catch(() => undefined);
     } finally {
       appBootState = 'ready';
+      scheduleStartupSoftwareUpdateCheck();
     }
   });
 
@@ -4031,10 +4177,13 @@
     saveCurrentReadingPositionToMemoryOnly();
     void flushReadingPositions();
     _unsubConfirmStore();
+    unsubscribeSoftwareUpdate?.();
+    void disposeSoftwareUpdateCoordinator();
     for (const unlisten of desktopUnlisteners) unlisten();
     if (fileCheckTimer !== null) window.clearInterval(fileCheckTimer);
     if (toastTimer !== null) window.clearTimeout(toastTimer);
     if (linkOpeningTimer !== null) window.clearTimeout(linkOpeningTimer);
+    if (softwareUpdateStartupTimer !== null) window.clearTimeout(softwareUpdateStartupTimer);
     clearContentAnalysisTimer();
     clearSearchDebounceTimer();
     window.removeEventListener('keydown', handleGlobalShortcut);
@@ -4826,6 +4975,8 @@
   {searchMatchCount}
   {autoSaveEnabled}
   {autoSaveDelayMs}
+  softwareUpdateState={softwareUpdateSnapshot}
+  openSoftwareUpdate={openSoftwareUpdate}
   {getCompactPath}
   {getFolderName}
   {getDirectoryLabel}
@@ -4916,6 +5067,36 @@
   on:stateChange={handleSegmentedStateChange}
   on:status={handleSegmentedStatus}
 />
+
+{#if softwareUpdateNoticeVisible}
+  <SoftwareUpdateNotice
+    version={softwareUpdateSnapshot.version ?? softwareUpdateSnapshot.candidate?.version ?? ''}
+    summary={createSoftwareUpdateSummary(
+      softwareUpdateSnapshot.body ?? softwareUpdateSnapshot.candidate?.body,
+      t.softwareUpdateNoticeSummary(),
+    )}
+    onView={openSoftwareUpdate}
+    onLater={hideSoftwareUpdateForLater}
+    onDismiss={dismissSoftwareUpdateVersion}
+    onAutoHide={() => {
+      softwareUpdateNoticeVisible = false;
+    }}
+  />
+{/if}
+
+{#if softwareUpdateDialogOpen &&
+  (softwareUpdateSnapshot.candidate || softwareUpdateSnapshot.downloadedUpdate)}
+  <SoftwareUpdateDialog
+    state={softwareUpdateSnapshot}
+    onClose={() => {
+      softwareUpdateDialogOpen = false;
+    }}
+    onLater={hideSoftwareUpdateForLater}
+    onDownload={downloadCurrentSoftwareUpdate}
+    onInstall={installCurrentSoftwareUpdate}
+    onRetry={retrySoftwareUpdateCheck}
+  />
+{/if}
 
 <div class="app-toast" class:visible={toastMessage} role="status">{toastMessage}</div>
 

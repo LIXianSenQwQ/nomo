@@ -148,6 +148,13 @@ pub(crate) fn record_last_active_window<R: Runtime>(app: &AppHandle<R>, label: &
     let _ = refresh_tray_menu(app);
 }
 
+pub(crate) fn last_active_document_window_label() -> Option<String> {
+    last_active_window()
+        .lock()
+        .ok()
+        .and_then(|active| active.clone())
+}
+
 pub(crate) fn record_window_title<R: Runtime>(
     app: &AppHandle<R>,
     label: &str,

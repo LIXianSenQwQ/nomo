@@ -15,14 +15,9 @@
   import { DIAGRAM_TEMPLATES } from '../../lib/editor-core/diagramTemplates';
   import { isTauriRuntime } from '../../lib/desktop/tauriStorage';
   import {
-    checkSoftwareUpdate,
-    downloadSoftwareUpdate,
-    getCachedSoftwareUpdate,
-    installSoftwareUpdate,
-    isSoftwareUpdateIntegrityFailure,
-    isSoftwareUpdateSupported,
     type DownloadedSoftwareUpdate,
-    type SoftwareUpdateProgress,
+    type SoftwareUpdateCandidate,
+    type SoftwareUpdateSnapshot,
     type SoftwareUpdateUiState,
   } from '../../lib/desktop/tauriUpdater';
   import packageInfo from '../../../package.json';
@@ -65,6 +60,15 @@
     ImageUploadProvider,
   } from '../../lib/services/render';
   import { getPlatformCapabilities } from '../services/platform';
+  import {
+    disposeSoftwareUpdateCoordinator,
+    initializeSoftwareUpdateCoordinator,
+    runSoftwareUpdateCheck,
+    softwareUpdateState,
+    startSoftwareUpdateDownload,
+    startSoftwareUpdateInstall,
+  } from '../services/softwareUpdate';
+  import SoftwareUpdateDialog from './SoftwareUpdateDialog.svelte';
   import nomoLogoDark from '../../../src-tauri/icons/nomo/source/nomo-app-dark-128.png?url';
   import nomoLogoLight from '../../../src-tauri/icons/nomo/source/nomo-app-light-128.png?url';
 
@@ -133,6 +137,12 @@
   let contextMenuError = '';
   let focusDebounceTimer: number | null = null;
   let downloadedSoftwareUpdate: DownloadedSoftwareUpdate | null = null;
+  let softwareUpdateSnapshot: SoftwareUpdateSnapshot = {
+    status: 'idle',
+    currentVersion: packageInfo.version,
+    installationKind: 'unsupported',
+  };
+  let softwareUpdateDialogOpen = false;
   let updateState: SoftwareUpdateUiState = {
     status: 'idle',
     message: '',
@@ -175,6 +185,8 @@
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
     void loadPreferences();
+    const unsubscribeSoftwareUpdate = softwareUpdateState.subscribe(applySharedSoftwareUpdateState);
+    void initializeSoftwareUpdateCoordinator();
     window.addEventListener('focus', handleWindowFocus);
 
     return () => {
@@ -191,6 +203,8 @@
       if (updateDecisionUnlisten) {
         updateDecisionUnlisten();
       }
+      unsubscribeSoftwareUpdate();
+      void disposeSoftwareUpdateCoordinator();
       window.removeEventListener('focus', handleWindowFocus);
     };
   });
@@ -216,9 +230,6 @@
     activeCategory = categoryId;
     if (categoryId === 'files') {
       void ensureFilesIntegrationStatus();
-    }
-    if (categoryId === 'about') {
-      void ensureSoftwareUpdateSupportChecked();
     }
   }
 
@@ -373,9 +384,7 @@
     }, 1800);
   }
 
-  // 暂存检查结果中的候选版本信息，用于后续下载步骤
-  let pendingUpdateCandidate: import('../../lib/desktop/tauriUpdater').SoftwareUpdateCandidate | null = null;
-  let pendingUpdateVersion: string | null = null;
+  let pendingUpdateCandidate: SoftwareUpdateCandidate | null = null;
 
   async function checkForSoftwareUpdate() {
     if (['checking', 'downloading', 'installing'].includes(updateState.status)) {
@@ -383,146 +392,47 @@
     }
     logToTerminal('info', 'SettingsWindow', '开始检查软件更新');
 
-    downloadedSoftwareUpdate = null;
-    pendingUpdateCandidate = null;
-    pendingUpdateVersion = null;
-
-    if (!isSoftwareUpdateSupported()) {
-      logToTerminal('warn', 'SettingsWindow', '当前平台不支持软件更新');
-      updateState = {
-        status: 'unsupported',
-        message: t.softwareUpdateUnsupported(),
-      };
-      return;
-    }
-
-    updateState = {
-      status: 'checking',
-      message: t.softwareUpdateChecking(),
-    };
-
     try {
-      const result = await checkSoftwareUpdate();
-      if (!result.supported) {
-        logToTerminal('warn', 'SettingsWindow', '软件更新不支持：非安装包版本');
-        updateState = {
-          status: 'unsupported',
-          message: t.softwareUpdateUnsupported(),
-        };
-        return;
-      }
-
-      if (!result.available || !result.candidate) {
-        logToTerminal('info', 'SettingsWindow', '软件已是最新版本', {
-          currentVersion: result.currentVersion,
-        });
-        updateState = {
-          status: 'upToDate',
-          message: t.softwareUpdateUpToDate(),
-        };
-        return;
-      }
-
-      logToTerminal('info', 'SettingsWindow', '发现新版本', {
-        version: result.version,
-      });
-      // 暂存候选版本信息，等用户确认后再下载
-      pendingUpdateCandidate = result.candidate;
-      pendingUpdateVersion = result.version ?? null;
-
-      // 检查本地是否已经下载过同一版本
-      const cached = await getCachedSoftwareUpdate().catch(() => null);
-      if (cached && cached.version === result.version) {
-        logToTerminal('info', 'SettingsWindow', `版本 ${result.version} 已下载过，直接显示安装入口`);
-        downloadedSoftwareUpdate = cached;
-        updateState = {
-          status: 'downloaded',
-          message: t.softwareUpdateDownloaded(),
-          version: result.version,
-        };
-        return;
-      }
-
-      updateState = {
-        status: 'available',
-        message: t.softwareUpdateAvailable({ version: result.version ?? '' }),
-        version: result.version,
-      };
+      await runSoftwareUpdateCheck(false);
     } catch (error) {
       logToTerminal('error', 'SettingsWindow', '软件更新检查失败', {
         error: error instanceof Error ? error.message : String(error),
       });
-      updateState = {
-        status: 'error',
-        message: t.softwareUpdateFailed(),
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
   }
 
   async function downloadAvailableUpdate() {
-    if (!pendingUpdateCandidate || updateState.status !== 'available') {
+    if (
+      !pendingUpdateCandidate ||
+      pendingUpdateCandidate.assetKind !== 'windowsInstaller' ||
+      updateState.status !== 'available'
+    ) {
       return;
     }
     logToTerminal('info', 'SettingsWindow', '用户确认，开始下载更新');
 
     try {
-      const candidate = pendingUpdateCandidate;
-      const version = pendingUpdateVersion;
-      updateState = {
-        status: 'downloading',
-        message: t.softwareUpdateDownloading(),
-        version: version ?? undefined,
-      };
-
-      downloadedSoftwareUpdate = await downloadSoftwareUpdate(candidate, (progress) => {
-        updateState = {
-          status: 'downloading',
-          message: getSoftwareUpdateDownloadMessage(progress),
-          version: version ?? undefined,
-          progress,
-        };
-      });
-
+      downloadedSoftwareUpdate = await startSoftwareUpdateDownload(pendingUpdateCandidate);
       logToTerminal('info', 'SettingsWindow', '软件更新下载完成');
-      updateState = {
-        status: 'downloaded',
-        message: t.softwareUpdateDownloaded(),
-        version: version ?? undefined,
-        progress: updateState.progress,
-      };
     } catch (error) {
       downloadedSoftwareUpdate = null;
       logToTerminal('error', 'SettingsWindow', '软件更新下载失败', {
         error: error instanceof Error ? error.message : String(error),
       });
-      updateState = {
-        status: 'error',
-        message: isSoftwareUpdateIntegrityFailure(error)
-          ? t.softwareUpdateIntegrityFailed()
-          : t.softwareUpdateFailed(),
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
   }
 
-  async function ensureSoftwareUpdateSupportChecked() {
-    // 只在首次进入关于页且状态为 idle 时检查，避免反复切换分类重复执行
-    if (updateState.status !== 'idle') {
-      logToTerminal('info', 'SettingsWindow', `跳过自动更新检查，当前状态：${updateState.status}`);
-      return;
-    }
-    logToTerminal('info', 'SettingsWindow', '进入关于页，开始自动检查更新');
-    if (!isSoftwareUpdateSupported()) {
-      logToTerminal('warn', 'SettingsWindow', '当前平台不支持软件更新（非 Windows）');
-      updateState = {
-        status: 'unsupported',
-        message: t.softwareUpdateUnsupported(),
-      };
-      return;
-    }
-    await checkForSoftwareUpdate();
-    logToTerminal('info', 'SettingsWindow', `ensureSoftwareUpdateSupportChecked 完成，最终状态：${updateState.status}`);
+  function applySharedSoftwareUpdateState(snapshot: SoftwareUpdateSnapshot) {
+    softwareUpdateSnapshot = snapshot;
+    pendingUpdateCandidate = snapshot.candidate ?? null;
+    downloadedSoftwareUpdate = snapshot.downloadedUpdate ?? null;
+    updateState = {
+      status: snapshot.status,
+      message: getSoftwareUpdateMessage(snapshot),
+      version: snapshot.version,
+      progress: snapshot.progress,
+      error: snapshot.error,
+    };
   }
 
   async function installDownloadedSoftwareUpdate() {
@@ -543,23 +453,12 @@
         return;
       }
 
-      updateState = {
-        ...updateState,
-        status: 'installing',
-        message: t.softwareUpdateInstalling(),
-      };
-      await installSoftwareUpdate(downloadedSoftwareUpdate);
+      await startSoftwareUpdateInstall(downloadedSoftwareUpdate);
       logToTerminal('info', 'SettingsWindow', '软件更新安装完成');
     } catch (error) {
       logToTerminal('error', 'SettingsWindow', '软件更新安装失败', {
         error: error instanceof Error ? error.message : String(error),
       });
-      updateState = {
-        ...updateState,
-        status: 'error',
-        message: t.softwareUpdateInstallFailed(),
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
   }
 
@@ -609,11 +508,29 @@
     });
   }
 
-  function getSoftwareUpdateDownloadMessage(progress: SoftwareUpdateProgress) {
-    if (typeof progress.percent === 'number') {
-      return t.softwareUpdateDownloadingPercent({ percent: progress.percent });
+  function getSoftwareUpdateMessage(snapshot: SoftwareUpdateSnapshot) {
+    switch (snapshot.status) {
+      case 'checking':
+        return t.softwareUpdateChecking();
+      case 'upToDate':
+        return t.softwareUpdateUpToDate();
+      case 'available':
+        return t.softwareUpdateAvailable({ version: snapshot.version ?? '' });
+      case 'downloading':
+        return typeof snapshot.progress?.percent === 'number'
+          ? t.softwareUpdateDownloadingPercent({ percent: snapshot.progress.percent })
+          : t.softwareUpdateDownloading();
+      case 'downloaded':
+        return t.softwareUpdateDownloaded();
+      case 'installing':
+        return t.softwareUpdateInstalling();
+      case 'unsupported':
+        return t.softwareUpdateUnsupported();
+      case 'error':
+        return t.softwareUpdateFailed();
+      default:
+        return '';
     }
-    return t.softwareUpdateDownloading();
   }
 
   // 以下软件更新相关的 UI 派生值必须用 $: 声明，不能使用普通函数。
@@ -625,7 +542,7 @@
       : updateStatus === 'downloading'
         ? t.softwareUpdateDownloadingShort()
         : updateStatus === 'available'
-          ? t.softwareUpdateDownloadNow()
+          ? t.softwareUpdateViewDetails()
           : updateStatus === 'downloaded'
             ? t.softwareUpdateRestartAndInstall()
             : updateStatus === 'installing'
@@ -674,7 +591,7 @@
       return;
     }
     if (updateState.status === 'available') {
-      void downloadAvailableUpdate();
+      softwareUpdateDialogOpen = true;
       return;
     }
     void checkForSoftwareUpdate();
@@ -2272,6 +2189,20 @@
                 </div>
               </dl>
 
+              <label class="toggle-row" for="softwareUpdateAutoCheckEnabled">
+                <span>
+                  <span class="toggle-title">{t.softwareUpdateAutoCheck()}</span>
+                  <span class="toggle-desc">{t.softwareUpdateAutoCheckDescription()}</span>
+                </span>
+                <input
+                  id="softwareUpdateAutoCheckEnabled"
+                  type="checkbox"
+                  checked={draftSettings.softwareUpdateAutoCheckEnabled}
+                  on:change={(event) => toggleSetting('softwareUpdateAutoCheckEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
               <div class="setting-row">
                 <div>
                   <span class="setting-label">{t.updateCheck()}</span>
@@ -2301,6 +2232,17 @@
     </section>
   </div>
 {/key}
+
+{#if softwareUpdateDialogOpen}
+  <SoftwareUpdateDialog
+    state={softwareUpdateSnapshot}
+    onClose={() => (softwareUpdateDialogOpen = false)}
+    onLater={() => (softwareUpdateDialogOpen = false)}
+    onDownload={() => void downloadAvailableUpdate()}
+    onInstall={() => void installDownloadedSoftwareUpdate()}
+    onRetry={() => void checkForSoftwareUpdate()}
+  />
+{/if}
 
 <style>
   :global(html),

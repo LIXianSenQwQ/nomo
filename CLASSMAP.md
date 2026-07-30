@@ -197,8 +197,11 @@
 
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
-| 更新前端适配 | `src/lib/desktop/tauriUpdater.ts` | `src/app/components/SettingsWindow.svelte` | 检查/下载/安装更新前端逻辑 |
-| 更新后端 | `src-tauri/src/software_update.rs` | — | GitHub Release/下载/校验/安装器 |
+| 更新共享协调 | `src/app/services/softwareUpdate.ts` | `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/desktop/tauriUpdater.ts` | 跨窗口状态订阅、强制检查、下载或安装入口变更 |
+| 更新日志安全渲染 | `src/app/services/softwareUpdateReleaseNotes.ts` | `src/app/components/SoftwareUpdateDialog.svelte`, `src/app/components/SoftwareUpdateNotice.svelte` | Release Markdown 过滤、清理、摘要逻辑变更 |
+| 更新提醒界面 | `src/app/components/SoftwareUpdateNotice.svelte`, `src/app/components/SoftwareUpdateDialog.svelte` | `src/app/App.svelte`, `src/app/components/AppTitleBar.svelte` | 启动通知、更新日志弹窗、下载状态展示变更 |
+| 更新前端 IPC 适配 | `src/lib/desktop/tauriUpdater.ts` | `src/app/services/softwareUpdate.ts` | 检查/下载/安装/共享快照 IPC 契约变更 |
+| 更新后端 | `src-tauri/src/software_update.rs` | `src-tauri/src/window/tray.rs` | GitHub Release、安装形态、共享状态、下载/校验/安装器 |
 
 ### 原生系统集成
 
@@ -279,6 +282,7 @@
 - 加载设置和 v2 工作区状态，协调草稿恢复与启动冲突选择
 - 协调打开、保存、自动保存、模式切换、外部文件打开、关闭确认
 - 订阅编辑器内容变化并同步 dirty/统计/大纲状态
+- 工作区恢复后发起一次启动更新检查，并按目标窗口协调通知卡片与安装确认
 
 **Does not own:**
 - 不拥有具体 UI 子组件渲染逻辑（委派给 AppShell.svelte）
@@ -347,11 +351,11 @@
 
 **Does not own:**
 - 不拥有设置持久化后端逻辑（通过 settings.ts）
-- 不拥有软件更新后端（通过 tauriUpdater.ts）
+- 不拥有软件更新共享状态和后端（通过 softwareUpdate.ts / tauriUpdater.ts）
 
 **Called by:** `src/main.ts`（当 `view=settings` 时）
 
-**Depends on:** `src/app/services/settings.ts`, `src/lib/desktop/tauriUpdater.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
+**Depends on:** `src/app/services/settings.ts`, `src/app/services/softwareUpdate.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
 
 **Change this when:**
 - 添加新的设置项 UI
@@ -363,6 +367,44 @@
 - 修改后端配置结构（在 config/mod.rs 中）
 
 **Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src/app/components/SoftwareUpdateNotice.svelte`
+
+**Kind:** component
+
+**Owns:**
+- 12 秒自动收起的启动更新通知卡片
+- 查看、稍后提醒和关闭当前版本提醒三个入口
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `src/app/i18n.ts`, `@lucide/svelte`
+
+**Change this when:** 修改更新卡片视觉、计时或按钮交互
+
+**Confidence:** high
+
+---
+
+### `src/app/components/SoftwareUpdateDialog.svelte`
+
+**Kind:** component
+
+**Owns:**
+- 更新日志弹窗、下载进度、安装版与免安装版操作区
+- 遮罩、Escape、外部 HTTPS 链接交互
+
+**Does not own:** Release Markdown 安全策略（在 softwareUpdateReleaseNotes.ts）
+
+**Called by:** `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`
+
+**Depends on:** `src/app/services/softwareUpdateReleaseNotes.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
+
+**Change this when:** 修改更新弹窗布局或状态动作
 
 **Confidence:** high
 
@@ -707,6 +749,45 @@
 - 修改后端配置结构（在 config/mod.rs 中）
 
 **Related tests:** `src/app/services/settings.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/services/softwareUpdate.ts`
+
+**Kind:** service / store
+
+**Owns:**
+- 当前 WebView 对进程级更新快照的订阅和 Svelte store
+- 检查、下载、安装命令的统一调用与状态刷新
+
+**Does not own:** 更新候选选择、下载缓存或安装器启动
+
+**Called by:** `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`
+
+**Depends on:** `src/lib/desktop/tauriUpdater.ts`
+
+**Change this when:** 修改前端共享更新状态或命令协调流程
+
+**Confidence:** high
+
+---
+
+### `src/app/services/softwareUpdateReleaseNotes.ts`
+
+**Kind:** service
+
+**Owns:**
+- Release 正文的安装包章节裁剪
+- 禁用原始 HTML/图片、仅保留 HTTPS 链接的 Markdown 安全渲染
+- 通知卡片摘要提取
+
+**Called by:** `src/app/components/SoftwareUpdateDialog.svelte`, `src/app/App.svelte`
+
+**Depends on:** `markdown-it`, DOM API
+
+**Change this when:** 修改更新日志过滤、允许标签或摘要规则
 
 **Confidence:** high
 
@@ -1440,12 +1521,13 @@
 
 **Owns：**
 - 检查 GitHub Release
-- 选择 Windows 安装包
+- 区分 Windows 安装版、免安装版和不支持环境，选择对应资产
+- 维护进程级更新快照并通过 `nomo://software-update-state` 同步所有窗口
 - 下载、校验 MD5、启动安装器
-- 仅 Windows 安装版支持应用内更新
+- Windows 安装版支持应用内更新，免安装版只提供 zip 直链
 
 **Does not own：**
-- 不拥有前端更新 UI（在 tauriUpdater.ts 中）
+- 不拥有前端更新 UI（在 SoftwareUpdateNotice / SoftwareUpdateDialog 中）
 
 **Called by:** `src-tauri/src/lib.rs`（注册为 IPC）
 
