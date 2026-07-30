@@ -1,55 +1,5 @@
 :root {
   color-scheme: light;
-  --md-editor-bg: #f6f7f9;
-  --md-editor-surface: #ffffff;
-  --md-editor-rail: #f3f4f6;
-  --md-editor-chrome: #f8f9fb;
-  --md-editor-document-bg: #ffffff;
-  --md-editor-sidebar-active: #e7f0ee;
-  --md-editor-fg: #202428;
-  --md-editor-muted-fg: #68707a;
-  --md-editor-border: #dfe3e8;
-  --md-editor-selection-bg: rgba(47, 125, 111, 0.18);
-  --md-editor-heading-fg: #171a1f;
-  --md-editor-link-fg: #116d8f;
-  --md-editor-accent: #2f7d6f;
-  --md-editor-accent-strong: #174e45;
-  --md-editor-accent-fill: #2f7d6f;
-  --md-editor-on-accent: #ffffff;
-  --md-editor-success: #166534;
-  --md-editor-warning: #9a6700;
-  --md-editor-danger: #b42318;
-  --md-editor-blockquote-border: #7f9f97;
-  --md-editor-blockquote-fg: #465753;
-  --md-editor-blockquote-bg: transparent;
-  --md-editor-blockquote-bg-classic: #f2f4f5;
-
-  /* Callout 提示块颜色（亮色） */
-  --md-editor-callout-note-border: #3b82f6;
-  --md-editor-callout-note-bg: transparent;
-  --md-editor-callout-note-bg-classic: #f2f4f5;
-  --md-editor-callout-note-fg: #1e40af;
-  --md-editor-callout-tip-border: #22c55e;
-  --md-editor-callout-tip-bg: transparent;
-  --md-editor-callout-tip-bg-classic: #f2f4f5;
-  --md-editor-callout-tip-fg: #166534;
-  --md-editor-callout-important-border: #a855f7;
-  --md-editor-callout-important-bg: transparent;
-  --md-editor-callout-important-bg-classic: #f2f4f5;
-  --md-editor-callout-important-fg: #6b21a8;
-  --md-editor-callout-warning-border: #f59e0b;
-  --md-editor-callout-warning-bg: transparent;
-  --md-editor-callout-warning-bg-classic: #f2f4f5;
-  --md-editor-callout-warning-fg: #92400e;
-  --md-editor-callout-caution-border: #ef4444;
-  --md-editor-callout-caution-bg: transparent;
-  --md-editor-callout-caution-bg-classic: #f2f4f5;
-  --md-editor-callout-caution-fg: #991b1b;
-  --md-editor-code-bg: #f5f6f8;
-  --md-editor-code-fg: #383a42;
-  --md-editor-code-border: #e0e2e6;
-  --md-editor-table-border: #dfe3e8;
-  --md-editor-table-header-bg: #f0f2f4;
   --md-editor-shadow: 0 14px 34px rgba(22, 32, 44, 0.08);
   --md-window-border: rgba(0, 0, 0, 0.72);
   --md-editor-radius-sm: 4px;
@@ -59,92 +9,14 @@
   --md-editor-font-size: 16px;
   --md-editor-line-height: 1.7;
   --md-editor-zoom: 1;
-
-  /* 顶栏与菜单变量（亮色） */
-  --md-titlebar-bg: #fcfcfc;
-  --md-titlebar-border: #e5e5e5;
-  --md-titlebar-fg: #333333;
-  --md-dropdown-bg: rgba(255, 255, 255, 0.96);
-  --md-dropdown-border: #d8d8d8;
-
-  /* 保留 Windows 原生感，同时确保长文档中的滚动位置清晰可见 */
   --md-scrollbar-size: 13px;
   --md-scrollbar-radius: 999px;
-  --md-scrollbar-track: rgba(35, 42, 49, 0.035);
-  --md-scrollbar-thumb-idle: rgba(126, 136, 146, 0.72);
-  --md-scrollbar-thumb: #7e8892;
-  --md-scrollbar-thumb-hover: #66717c;
-  --md-scrollbar-thumb-active: #4f5964;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --md-editor-bg: #15181d;
-  --md-editor-surface: #1d2229;
-  --md-editor-rail: #181d23;
-  --md-editor-chrome: #20262e;
-  --md-editor-document-bg: #1d2229;
-  --md-editor-sidebar-active: #203530;
-  --md-editor-fg: #eef2f5;
-  --md-editor-muted-fg: #9aa4af;
-  --md-editor-border: #333b46;
-  --md-editor-selection-bg: rgba(103, 183, 165, 0.28);
-  --md-editor-heading-fg: #ffffff;
-  --md-editor-link-fg: #79c9d8;
-  --md-editor-accent: #67b7a5;
-  --md-editor-accent-strong: #9fd8c7;
-  --md-editor-accent-fill: #2f7d6f;
-  --md-editor-on-accent: #ffffff;
-  --md-editor-success: #86efac;
-  --md-editor-warning: #d4a72c;
-  --md-editor-danger: #ff8a7a;
-  --md-editor-blockquote-border: #6f938b;
-  --md-editor-blockquote-fg: #c8d8d4;
-  --md-editor-blockquote-bg: transparent;
-  --md-editor-blockquote-bg-classic: #1a1e23;
-
-  /* Callout 提示块颜色（暗色） */
-  --md-editor-callout-note-border: #3b82f6;
-  --md-editor-callout-note-bg: transparent;
-  --md-editor-callout-note-bg-classic: #1a1e23;
-  --md-editor-callout-note-fg: #93c5fd;
-  --md-editor-callout-tip-border: #22c55e;
-  --md-editor-callout-tip-bg: transparent;
-  --md-editor-callout-tip-bg-classic: #1a1e23;
-  --md-editor-callout-tip-fg: #86efac;
-  --md-editor-callout-important-border: #a855f7;
-  --md-editor-callout-important-bg: transparent;
-  --md-editor-callout-important-bg-classic: #1a1e23;
-  --md-editor-callout-important-fg: #d8b4fe;
-  --md-editor-callout-warning-border: #f59e0b;
-  --md-editor-callout-warning-bg: transparent;
-  --md-editor-callout-warning-bg-classic: #1a1e23;
-  --md-editor-callout-warning-fg: #fcd34d;
-  --md-editor-callout-caution-border: #ef4444;
-  --md-editor-callout-caution-bg: transparent;
-  --md-editor-callout-caution-bg-classic: #1a1e23;
-  --md-editor-callout-caution-fg: #fca5a5;
-  --md-editor-code-bg: #11151a;
-  --md-editor-code-fg: #edf3f6;
-  --md-editor-code-border: #2b333d;
-  --md-editor-table-border: #333b46;
-  --md-editor-table-header-bg: #252c35;
   --md-editor-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
   --md-window-border: rgba(0, 0, 0, 0.86);
-
-  /* 顶栏与菜单变量（暗色） */
-  --md-titlebar-bg: #1a1a1a;
-  --md-titlebar-border: #2e2e2e;
-  --md-titlebar-fg: #cccccc;
-  --md-dropdown-bg: rgba(30, 30, 30, 0.96);
-  --md-dropdown-border: #3a3a3a;
-
-  /* 暗色界面需要更高的明度差，避免滑块融入编辑区背景 */
-  --md-scrollbar-track: rgba(235, 241, 247, 0.04);
-  --md-scrollbar-thumb-idle: rgba(142, 154, 166, 0.72);
-  --md-scrollbar-thumb: #8e9aa6;
-  --md-scrollbar-thumb-hover: #a9b4bf;
-  --md-scrollbar-thumb-active: #c4ccd4;
 }
 
 :root[data-code-line-numbers='hidden'] .line-numbers-gutter {
@@ -181,7 +53,8 @@
 :root.theme-transitioning .table-util-bar,
 :root.theme-transitioning .table-control-btn,
 :root.theme-transitioning .document-layout,
-:root.theme-transitioning .source-editor {
+:root.theme-transitioning .source-editor,
+:root.theme-transitioning .theme-card {
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -238,7 +111,8 @@
   :root.theme-transitioning .table-util-bar,
   :root.theme-transitioning .table-control-btn,
   :root.theme-transitioning .document-layout,
-  :root.theme-transitioning .source-editor {
+  :root.theme-transitioning .source-editor,
+  :root.theme-transitioning .theme-card {
     transition: none;
   }
 

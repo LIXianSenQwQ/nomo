@@ -37,44 +37,48 @@
 </script>
 
 {#key interfaceLocale}
-{#if open}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div
-    class="folder-dialog-backdrop"
-    data-interface-locale={interfaceLocale}
-    transition:fade={{ duration: 150 }}
-    on:click={cancel}
-  >
+  {#if open}
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
-      class="folder-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="folder-dialog-title"
-      tabindex="-1"
-      on:click|stopPropagation
-      on:keydown={handleKeydown}
+      class="folder-dialog-backdrop"
+      data-interface-locale={interfaceLocale}
+      transition:fade={{ duration: 150 }}
+      on:click={cancel}
     >
-      <h3 id="folder-dialog-title">{t.folderOpenQuestion({ folderName })}</h3>
-      <p class="folder-dialog-path">{folderPath}</p>
+      <div
+        class="folder-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="folder-dialog-title"
+        tabindex="-1"
+        on:click|stopPropagation
+        on:keydown={handleKeydown}
+      >
+        <h3 id="folder-dialog-title">{t.folderOpenQuestion({ folderName })}</h3>
+        <p class="folder-dialog-path">{folderPath}</p>
 
-      <div class="folder-dialog-actions">
-        <button type="button" class="folder-dialog-btn" on:click={() => choose('current-window')}>
-          {t.openInCurrentWindow()}
-        </button>
-        <button type="button" class="folder-dialog-btn primary" on:click={() => choose('new-window')}>
-          {t.openInNewWindow()}
-        </button>
-        <button type="button" class="folder-dialog-btn" on:click={cancel}> {t.cancel()} </button>
+        <div class="folder-dialog-actions">
+          <button type="button" class="folder-dialog-btn" on:click={() => choose('current-window')}>
+            {t.openInCurrentWindow()}
+          </button>
+          <button
+            type="button"
+            class="folder-dialog-btn primary"
+            on:click={() => choose('new-window')}
+          >
+            {t.openInNewWindow()}
+          </button>
+          <button type="button" class="folder-dialog-btn" on:click={cancel}> {t.cancel()} </button>
+        </div>
+
+        <label class="folder-dialog-remember">
+          <input type="checkbox" bind:checked={rememberChoice} />
+          <span>{t.rememberFolderOpenChoice()}</span>
+        </label>
       </div>
-
-      <label class="folder-dialog-remember">
-        <input type="checkbox" bind:checked={rememberChoice} />
-        <span>{t.rememberFolderOpenChoice()}</span>
-      </label>
     </div>
-  </div>
-{/if}
+  {/if}
 {/key}
 
 <style>
@@ -133,7 +137,7 @@
   }
 
   .folder-dialog-btn:hover {
-    background: var(--md-editor-hover);
+    background: var(--md-editor-hover-bg);
   }
 
   .folder-dialog-btn.primary {

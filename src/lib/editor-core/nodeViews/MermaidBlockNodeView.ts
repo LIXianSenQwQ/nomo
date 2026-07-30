@@ -3,6 +3,7 @@ import { TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { getDiagramRenderer } from '../renderers';
+import type { MermaidThemeDefinition } from '../../theme/types';
 
 /**
  * Mermaid 图表块 NodeView。
@@ -14,6 +15,7 @@ import { getDiagramRenderer } from '../renderers';
  */
 export class MermaidBlockNodeView {
   private static instances = new Set<MermaidBlockNodeView>();
+  private static currentTheme: MermaidThemeDefinition = { theme: 'default' };
   private static readonly PREVIEW_DEBOUNCE_MS = 250;
   private static readonly FULLSCREEN_DEFAULT_SCALE = 1.25;
   private static readonly FULLSCREEN_MIN_SCALE = 0.5;
@@ -77,10 +79,15 @@ export class MermaidBlockNodeView {
     this.renderMermaid();
   }
 
-  static updateTheme(): void {
+  static updateTheme(theme?: MermaidThemeDefinition): void {
+    if (theme) {
+      MermaidBlockNodeView.currentTheme = theme;
+    }
     for (const instance of MermaidBlockNodeView.instances) {
-      if (!instance.editing) {
-        instance.renderMermaid();
+      if (instance.editing) {
+        void instance.updatePreview();
+      } else {
+        void instance.renderMermaid();
       }
     }
   }
@@ -425,6 +432,7 @@ export class MermaidBlockNodeView {
       this.previewEl.textContent = '';
       if (options.html) {
         this.previewEl.innerHTML = content;
+        this.normalizeRenderedMermaidViewport(this.previewEl);
       } else {
         this.previewEl.textContent = content;
       }
@@ -439,6 +447,9 @@ export class MermaidBlockNodeView {
       renderedEl.textContent = content;
     }
     this.previewEl.replaceChildren(renderedEl);
+    if (options.html) {
+      this.normalizeRenderedMermaidViewport(renderedEl);
+    }
     this.previewSnapshotEl = null;
   }
 
@@ -480,6 +491,7 @@ export class MermaidBlockNodeView {
     });
 
     this.dom.append(renderedEl, fullscreenButton);
+    this.normalizeRenderedMermaidViewport(renderedEl);
   }
 
   private normalizeMermaidSvgSize(svg: string): string {
@@ -518,6 +530,55 @@ export class MermaidBlockNodeView {
     }
 
     return template.innerHTML;
+  }
+
+  private normalizeRenderedMermaidViewport(container: HTMLElement): void {
+    const svgEl = container.querySelector<SVGSVGElement>('svg');
+    const rootGroupEl = svgEl?.querySelector<SVGGElement>('g.root');
+    const viewBox = svgEl?.getAttribute('viewBox');
+    if (!svgEl || !rootGroupEl || !viewBox) return;
+
+    const [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight] = viewBox
+      .trim()
+      .split(/\s+/)
+      .map((value) => Number.parseFloat(value));
+    const svgBounds = svgEl.getBoundingClientRect();
+    const rootBounds = rootGroupEl.getBoundingClientRect();
+    if (
+      ![viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].every(Number.isFinite) ||
+      viewBoxWidth <= 0 ||
+      viewBoxHeight <= 0 ||
+      svgBounds.width <= 0 ||
+      svgBounds.height <= 0 ||
+      rootBounds.width <= 0 ||
+      rootBounds.height <= 0
+    ) {
+      return;
+    }
+
+    const scaleX = svgBounds.width / viewBoxWidth;
+    const scaleY = svgBounds.height / viewBoxHeight;
+    const contentX = viewBoxX + (rootBounds.left - svgBounds.left) / scaleX;
+    const contentY = viewBoxY + (rootBounds.top - svgBounds.top) / scaleY;
+    const contentWidth = rootBounds.width / scaleX;
+    const contentHeight = rootBounds.height / scaleY;
+    const padding = 8;
+    const normalizedWidth = Math.ceil(contentWidth + padding * 2);
+    const normalizedHeight = Math.ceil(contentHeight + padding * 2);
+
+    // Mermaid 11 在部分 WebView 中会把 foreignObject 文本计入错误的 SVG 边界，
+    // 导致简单图表产生数千像素 viewBox。用已布局的根图形边界回正视口。
+    svgEl.setAttribute(
+      'viewBox',
+      [
+        Math.floor(contentX - padding),
+        Math.floor(contentY - padding),
+        normalizedWidth,
+        normalizedHeight,
+      ].join(' '),
+    );
+    svgEl.setAttribute('width', String(normalizedWidth));
+    svgEl.setAttribute('height', String(normalizedHeight));
   }
 
   private openFullscreen(): void {
@@ -749,7 +810,7 @@ export class MermaidBlockNodeView {
     return button;
   }
 
-  private getTheme(): 'light' | 'dark' {
-    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  private getTheme(): MermaidThemeDefinition {
+    return MermaidBlockNodeView.currentTheme;
   }
 }

@@ -105,8 +105,8 @@
     width: 34px;
     height: 34px;
     border-radius: var(--md-editor-radius-sm);
-    color: var(--md-editor-warning, #d97706);
-    background: color-mix(in srgb, var(--md-editor-warning, #d97706) 12%, transparent);
+    color: var(--md-editor-warning);
+    background: color-mix(in srgb, var(--md-editor-warning) 12%, transparent);
   }
 
   .title {
@@ -168,7 +168,7 @@
 
   .btn.reload {
     border-color: color-mix(in srgb, var(--md-editor-accent) 42%, var(--md-editor-border));
-    color: var(--md-editor-accent-strong, var(--md-editor-accent));
+    color: var(--md-editor-accent-strong);
     background: color-mix(in srgb, var(--md-editor-accent) 10%, var(--md-editor-surface));
   }
 
@@ -178,7 +178,7 @@
   }
 
   .btn.save-as {
-    color: var(--md-editor-accent-strong, var(--md-editor-accent));
+    color: var(--md-editor-accent-strong);
   }
 
   .btn.overwrite {

@@ -25,6 +25,8 @@ beforeEach(() => {
   storageMock.listAppSettings.mockReset();
   storageMock.updateAppSetting.mockReset();
   storageMock.updateAppSettings.mockReset();
+  storageMock.updateAppSetting.mockResolvedValue(undefined);
+  storageMock.updateAppSettings.mockResolvedValue(undefined);
   localStorage.clear();
 });
 
@@ -87,7 +89,10 @@ describe('settings', () => {
 
   it('reuses provided native settings rows without another desktop read', async () => {
     const preferences = await loadAppPreferences(true, [
-      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('appearanceThemeModelV1', true),
+      createSetting('themeMode', 'system'),
+      createSetting('colorThemeId', 'nomo-default'),
+      createSetting('documentStyleId', 'nomo-modern'),
       createSetting('fontSize', 18),
       createSetting('interfaceLanguage', 'ja-JP'),
     ]);
@@ -99,7 +104,7 @@ describe('settings', () => {
 
   it('reads native settings when no reusable rows are provided', async () => {
     storageMock.listAppSettings.mockResolvedValue([
-      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('appearanceThemeModelV1', true),
       createSetting('fontSize', 19),
     ]);
 
@@ -107,6 +112,45 @@ describe('settings', () => {
 
     expect(preferences.fontSize).toBe(19);
     expect(storageMock.listAppSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('migrates legacy theme and block style into the appearance model once', async () => {
+    const preferences = await loadAppPreferences(true, [
+      createSetting('theme', 'dark'),
+      createSetting('blockStyle', 'classic'),
+    ]);
+
+    expect(preferences).toMatchObject({
+      themeMode: 'dark',
+      colorThemeId: 'nomo-default',
+      documentStyleId: 'nomo-classic',
+    });
+    expect(storageMock.updateAppSettings).toHaveBeenCalledWith({
+      themeMode: 'dark',
+      colorThemeId: 'nomo-default',
+      documentStyleId: 'nomo-classic',
+      appearanceThemeModelV1: true,
+    });
+  });
+
+  it('repairs invalid persisted theme and document style identifiers', async () => {
+    const preferences = await loadAppPreferences(true, [
+      createSetting('appearanceThemeModelV1', true),
+      createSetting('themeMode', 'sepia'),
+      createSetting('colorThemeId', 'missing-theme'),
+      createSetting('documentStyleId', 'missing-style'),
+    ]);
+
+    expect(preferences).toMatchObject({
+      themeMode: 'system',
+      colorThemeId: 'nomo-default',
+      documentStyleId: 'nomo-modern',
+    });
+    expect(storageMock.updateAppSettings).toHaveBeenCalledWith({
+      themeMode: 'system',
+      colorThemeId: 'nomo-default',
+      documentStyleId: 'nomo-modern',
+    });
   });
 
   it('ignores legacy local storage preference fallbacks when native settings are missing', async () => {
@@ -118,15 +162,16 @@ describe('settings', () => {
     localStorage.setItem('nomo-block-style', 'classic');
 
     const preferences = await loadAppPreferences(true, [
-      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('appearanceThemeModelV1', true),
     ]);
 
-    expect(preferences.theme).toBe(DEFAULT_APP_PREFERENCES.theme);
+    expect(preferences.themeMode).toBe(DEFAULT_APP_PREFERENCES.themeMode);
+    expect(preferences.colorThemeId).toBe(DEFAULT_APP_PREFERENCES.colorThemeId);
+    expect(preferences.documentStyleId).toBe(DEFAULT_APP_PREFERENCES.documentStyleId);
     expect(preferences.interfaceLanguage).toBe(DEFAULT_APP_PREFERENCES.interfaceLanguage);
     expect(preferences.fontSize).toBe(DEFAULT_APP_PREFERENCES.fontSize);
     expect(preferences.lineHeight).toBe(DEFAULT_APP_PREFERENCES.lineHeight);
     expect(preferences.contentWidthPercent).toBe(DEFAULT_APP_PREFERENCES.contentWidthPercent);
-    expect(preferences.blockStyle).toBe(DEFAULT_APP_PREFERENCES.blockStyle);
   });
 
   it('ignores legacy local image settings when native image preferences are missing', async () => {
@@ -141,7 +186,7 @@ describe('settings', () => {
     );
 
     const preferences = await loadAppPreferences(true, [
-      createSetting('themeFollowSystemMigrationV1', true),
+      createSetting('appearanceThemeModelV1', true),
     ]);
     const imageSettings = await loadPersistedImageSettings(true, []);
 
@@ -157,11 +202,9 @@ describe('settings', () => {
     localStorage.setItem('nomo-block-style', 'classic');
 
     await expect(loadPersistedEditorSettings(true, [])).resolves.toEqual({
-      theme: undefined,
       fontSize: undefined,
       lineHeight: undefined,
       contentWidthPercent: undefined,
-      blockStyle: undefined,
     });
 
     await expect(
@@ -173,11 +216,9 @@ describe('settings', () => {
         createSetting('blockStyle', 'classic'),
       ]),
     ).resolves.toEqual({
-      theme: 'dark',
       fontSize: 18,
       lineHeight: 1.8,
       contentWidthPercent: 72,
-      blockStyle: 'classic',
     });
   });
 
@@ -246,7 +287,9 @@ describe('settings', () => {
 
   it('normalizes first and second batch preference fields', () => {
     const normalized = normalizeAppPreferences({
-      theme: 'system',
+      themeMode: 'system',
+      colorThemeId: 'nomo-amber-paper',
+      documentStyleId: 'nomo-classic',
       zoomPercent: 500,
       outlineDefaultExpandLevel: 0,
       codeBlockIndent: 'tab',
@@ -260,7 +303,9 @@ describe('settings', () => {
       } as never,
     });
 
-    expect(normalized.theme).toBe('system');
+    expect(normalized.themeMode).toBe('system');
+    expect(normalized.colorThemeId).toBe('nomo-amber-paper');
+    expect(normalized.documentStyleId).toBe('nomo-classic');
     expect(normalized.zoomPercent).toBe(160);
     expect(normalized.outlineDefaultExpandLevel).toBe(1);
     expect(normalized.codeBlockIndent).toBe('tab');
@@ -311,8 +356,7 @@ describe('settings', () => {
     expect(DEFAULT_APP_PREFERENCES.externalFileChangeBehavior).toBe('reload-external');
     expect(normalizeAppPreferences({}).externalFileChangeBehavior).toBe('reload-external');
     expect(
-      normalizeAppPreferences({ externalFileChangeBehavior: 'ignore' })
-        .externalFileChangeBehavior,
+      normalizeAppPreferences({ externalFileChangeBehavior: 'ignore' }).externalFileChangeBehavior,
     ).toBe('ignore');
     expect(
       normalizeAppPreferences({ externalFileChangeBehavior: 'invalid' as never })
@@ -337,14 +381,14 @@ describe('settings', () => {
   it('migrates legacy close-to-tray choices into close window behavior', async () => {
     await expect(
       loadAppPreferences(true, [
-        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('appearanceThemeModelV1', true),
         createSetting('closeToTrayEnabled', true),
       ]),
     ).resolves.toMatchObject({ closeWindowBehavior: 'close-to-tray' });
 
     await expect(
       loadAppPreferences(true, [
-        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('appearanceThemeModelV1', true),
         createSetting('closeToTrayEnabled', false),
         createSetting('closeToTrayPromptAnswered', true),
       ]),
@@ -352,7 +396,7 @@ describe('settings', () => {
 
     await expect(
       loadAppPreferences(true, [
-        createSetting('themeFollowSystemMigrationV1', true),
+        createSetting('appearanceThemeModelV1', true),
         createSetting('closeToTrayEnabled', false),
       ]),
     ).resolves.toMatchObject({ closeWindowBehavior: 'ask-every-time' });

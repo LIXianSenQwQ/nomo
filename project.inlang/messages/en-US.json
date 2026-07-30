@@ -22,6 +22,8 @@
   "settingsSaving": "Saving...",
   "settingsSaveFailed": "Failed to save settings",
   "settingsLoading": "Reading settings...",
+  "themeMode": "Light and dark mode",
+  "colorTheme": "Color theme",
   "themeDescription": "Syncs to the main window and render services after saving.",
   "themeLight": "Light",
   "themeDark": "Dark",

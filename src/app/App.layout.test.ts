@@ -998,9 +998,11 @@ describe('App outline layout', () => {
   });
 
   it('wires the first and second batch settings to runtime behavior instead of placeholders', () => {
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('light')}>{t.themeLight()}");
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('dark')}>{t.themeDark()}");
-    expect(settingsWindowSource).toContain("on:click={() => setTheme('system')}>{t.themeSystem()}");
+    expect(settingsWindowSource).toContain("on:click={() => setThemeMode('light')}");
+    expect(settingsWindowSource).toContain("on:click={() => setThemeMode('dark')}");
+    expect(settingsWindowSource).toContain("on:click={() => setThemeMode('system')}");
+    expect(settingsWindowSource).toContain('availableThemes');
+    expect(settingsWindowSource).toContain('setColorTheme');
     expect(settingsWindowSource).toContain('id="zoomPercent"');
     expect(settingsWindowSource).toContain('ctrlWheelZoomEnabled');
     expect(settingsWindowSource).toContain('codeBlockLineNumbersVisible');
@@ -1015,7 +1017,7 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain('shortcutItems');
     expect(settingsWindowSource).toContain('updateShortcut');
 
-    expect(settingsServiceSource).toContain("type ThemePreference = 'light' | 'dark' | 'system'");
+    expect(settingsServiceSource).toContain('APPEARANCE_THEME_MODEL_MIGRATION_KEY');
     expect(appSource).toContain('setupSystemThemeListener');
     expect(appSource).toContain('handleGlobalWheel');
     expect(appSource).toContain(

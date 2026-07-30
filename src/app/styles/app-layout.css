@@ -72,7 +72,7 @@
 
 .sidebar-resizer:hover,
 .sidebar-resizer.active {
-  background-color: var(--md-editor-accent, #007acc);
+  background-color: var(--md-editor-accent);
 }
 
 .explorer-header {

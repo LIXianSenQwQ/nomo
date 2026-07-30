@@ -24,9 +24,7 @@
   import {
     DEFAULT_APP_PREFERENCES,
     SETTINGS_UPDATED_EVENT,
-    applyBlockStyleSetting,
     applyEditorLayoutSettings,
-    applyThemeSetting,
     applyTypographySettings,
     loadAppPreferences,
     normalizeAppPreferences,
@@ -34,7 +32,6 @@
     type AppPreferences,
     type AppPreferenceKey,
     type AppPreferencesPatch,
-    type BlockStylePreference,
     type CloseWindowBehavior,
     type CodeBlockIndentPreference,
     type EditorModePreference,
@@ -43,9 +40,22 @@
     type InterfaceLanguagePreference,
     type RenderModePreference,
     type ShortcutCommandId,
-    type ThemePreference,
     type WritingStatsMetric,
   } from '../services/settings';
+  import {
+    applyThemeRuntime,
+    listenForSystemThemeChanges,
+    readEffectiveSystemScheme,
+    resolveTheme,
+    writeThemeBootSnapshot,
+  } from '../services/themeManager';
+  import {
+    CLASSIC_DOCUMENT_STYLE_ID,
+    DEFAULT_DOCUMENT_STYLE_ID,
+    getThemeDisplayName,
+    themeRegistry,
+  } from '../services/themeRegistry';
+  import type { ColorScheme, ThemeMode } from '../../lib/theme/types';
   import { createPerfTimer, logToTerminal } from '../../lib/services/logger';
   import {
     INTERFACE_LANGUAGE_OPTIONS,
@@ -109,6 +119,10 @@
 
   let activeCategory: CategoryId = 'general';
   let draftSettings: AppPreferences = { ...DEFAULT_APP_PREFERENCES };
+  let lastPersistedSettings: AppPreferences = { ...DEFAULT_APP_PREFERENCES };
+  let effectiveSystemScheme: ColorScheme =
+    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  const availableThemes = themeRegistry.listThemes();
   let interfaceLocale: EffectiveInterfaceLocale = applyInterfaceLanguagePreference(
     draftSettings.interfaceLanguage,
   );
@@ -151,7 +165,8 @@
 
   // 响应式派生：强制 Svelte 追踪 updateState 的变化
   $: updateStatus = updateState.status;
-  $: updateBusy = updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing';
+  $: updateBusy =
+    updateStatus === 'checking' || updateStatus === 'downloading' || updateStatus === 'installing';
 
   function createCategoryTitles(_locale: EffectiveInterfaceLocale): Record<CategoryId, string> {
     return {
@@ -188,6 +203,7 @@
     const unsubscribeSoftwareUpdate = softwareUpdateState.subscribe(applySharedSoftwareUpdateState);
     void initializeSoftwareUpdateCoordinator();
     window.addEventListener('focus', handleWindowFocus);
+    const stopSystemThemeSync = listenForSystemThemeChanges(syncSystemTheme);
 
     return () => {
       logToTerminal('info', 'SettingsWindow', '设置窗口关闭（组件卸载）');
@@ -204,6 +220,7 @@
         updateDecisionUnlisten();
       }
       unsubscribeSoftwareUpdate();
+      stopSystemThemeSync();
       void disposeSoftwareUpdateCoordinator();
       window.removeEventListener('focus', handleWindowFocus);
     };
@@ -256,7 +273,10 @@
     logToTerminal('info', 'SettingsWindow', '开始加载偏好设置');
     const timer = createPerfTimer('SettingsWindow', 'loadPreferences');
     draftSettings = await loadAppPreferences(desktopEnabled);
-    applySettingsToThisWindow(draftSettings);
+    lastPersistedSettings = draftSettings;
+    effectiveSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    const resolved = await applySettingsToThisWindow(draftSettings);
+    writeThemeBootSnapshot(resolved);
     loaded = true;
     timer.end({ desktopEnabled });
     logToTerminal('info', 'SettingsWindow', '偏好设置加载完成');
@@ -289,16 +309,38 @@
           }
           try {
             const saved = await saveAppPreferences(desktopEnabled, settingsToSave, keysToSave);
+            lastPersistedSettings = normalizeAppPreferences({
+              ...lastPersistedSettings,
+              ...Object.fromEntries(keysToSave.map((key) => [key, saved[key]])),
+            });
             if (draftSettings === settingsToSave) {
               draftSettings = saved;
-              applySettingsToThisWindow(saved);
+              await applySettingsToThisWindow(saved);
+            }
+            if (keysToSave.some(isAppearancePreferenceKey)) {
+              writeThemeBootSnapshot(resolveTheme(saved, effectiveSystemScheme));
             }
             logToTerminal('info', 'SettingsWindow', '偏好设置保存成功', {
               keys: keysToSave,
             });
             showStatus(t.settingsSaved());
           } catch (error) {
-            keysToSave.forEach((key) => dirtyPreferenceKeys.add(key));
+            const appearanceKeys = keysToSave.filter(
+              (key) => isAppearancePreferenceKey(key) && draftSettings[key] === settingsToSave[key],
+            );
+            const otherKeys = keysToSave.filter((key) => !isAppearancePreferenceKey(key));
+            otherKeys.forEach((key) => dirtyPreferenceKeys.add(key));
+            if (appearanceKeys.length > 0) {
+              const rollbackPatch = Object.fromEntries(
+                appearanceKeys.map((key) => [key, lastPersistedSettings[key]]),
+              ) as AppPreferencesPatch;
+              draftSettings = normalizeAppPreferences({
+                ...draftSettings,
+                ...rollbackPatch,
+              });
+              await applySettingsToThisWindow(draftSettings);
+              await emitSettingsUpdated(rollbackPatch);
+            }
             logToTerminal('error', 'SettingsWindow', '偏好设置保存失败', {
               error: error instanceof Error ? error.message : String(error),
             });
@@ -365,12 +407,27 @@
     await invoke('close_window').catch(() => undefined);
   }
 
-  function applySettingsToThisWindow(settings: AppPreferences) {
+  async function applySettingsToThisWindow(settings: AppPreferences) {
     interfaceLocale = applyInterfaceLanguagePreference(settings.interfaceLanguage);
-    applyThemeSetting(settings.theme);
+    const resolved = await applyThemeRuntime(settings, {
+      systemScheme: effectiveSystemScheme,
+      desktopEnabled,
+    });
     applyTypographySettings(settings.fontSize, settings.lineHeight);
     applyEditorLayoutSettings(settings.contentWidthPercent);
-    applyBlockStyleSetting(settings.blockStyle);
+    return resolved;
+  }
+
+  async function syncSystemTheme() {
+    if (!loaded || draftSettings.themeMode !== 'system') {
+      return;
+    }
+    effectiveSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    await applySettingsToThisWindow(draftSettings);
+  }
+
+  function isAppearancePreferenceKey(key: AppPreferenceKey) {
+    return key === 'themeMode' || key === 'colorThemeId' || key === 'documentStyleId';
   }
 
   function showStatus(message: string) {
@@ -608,7 +665,7 @@
     const normalizedPatch = createNormalizedPatch(patch, nextSettings);
 
     draftSettings = nextSettings;
-    applySettingsToThisWindow(nextSettings);
+    void applySettingsToThisWindow(nextSettings);
     markDirtyPreferences(normalizedPatch);
     void emitSettingsUpdated(normalizedPatch);
     scheduleAutoSave();
@@ -671,8 +728,12 @@
     }
   }
 
-  function setTheme(theme: ThemePreference) {
-    updateDraft({ theme });
+  function setThemeMode(themeMode: ThemeMode) {
+    updateDraft({ themeMode });
+  }
+
+  function setColorTheme(colorThemeId: string) {
+    updateDraft({ colorThemeId });
   }
 
   function setInterfaceLanguage(interfaceLanguage: InterfaceLanguagePreference) {
@@ -693,8 +754,8 @@
     updateDraft({ editorMode });
   }
 
-  function setBlockStyle(blockStyle: BlockStylePreference) {
-    updateDraft({ blockStyle });
+  function setDocumentStyle(documentStyleId: string) {
+    updateDraft({ documentStyleId });
   }
 
   function setFolderBehavior(folderOpenDefaultBehavior: FolderOpenDefaultBehavior) {
@@ -1000,16 +1061,15 @@
               ? t.pendingSelection()
               : t.unbound();
 
-  $: mdAssociationDesc =
-    !desktopEnabled
-      ? t.mdAssociationDesktopOnly()
-      : !platformCapabilities.isWindows
-        ? t.mdAssociationWindowsOnly()
-        : mdAssociationError
-          ? mdAssociationError
-          : checkingMdAssociation && !mdAssociationStatus
-            ? t.mdAssociationCheckingDescription()
-            : mdAssociationStatus?.message ?? t.mdAssociationDefaultDescription();
+  $: mdAssociationDesc = !desktopEnabled
+    ? t.mdAssociationDesktopOnly()
+    : !platformCapabilities.isWindows
+      ? t.mdAssociationWindowsOnly()
+      : mdAssociationError
+        ? mdAssociationError
+        : checkingMdAssociation && !mdAssociationStatus
+          ? t.mdAssociationCheckingDescription()
+          : (mdAssociationStatus?.message ?? t.mdAssociationDefaultDescription());
 
   $: mdAssociationBtnLabel = bindingMdAssociation
     ? t.opening()
@@ -1038,16 +1098,15 @@
             ? t.registered()
             : t.unregistered();
 
-  $: contextMenuDesc =
-    !desktopEnabled
-      ? t.contextMenuDesktopOnly()
-      : !platformCapabilities.isWindows
-        ? t.contextMenuWindowsOnly()
-        : contextMenuError
-          ? contextMenuError
-          : checkingContextMenu && !contextMenuStatus
-            ? t.contextMenuCheckingDescription()
-            : contextMenuStatus?.message ?? t.contextMenuDefaultDescription();
+  $: contextMenuDesc = !desktopEnabled
+    ? t.contextMenuDesktopOnly()
+    : !platformCapabilities.isWindows
+      ? t.contextMenuWindowsOnly()
+      : contextMenuError
+        ? contextMenuError
+        : checkingContextMenu && !contextMenuStatus
+          ? t.contextMenuCheckingDescription()
+          : (contextMenuStatus?.message ?? t.contextMenuDefaultDescription());
 
   $: contextMenuBtnLabel = registeringContextMenu
     ? t.registering()
@@ -1280,33 +1339,6 @@
               <h2>{t.basicBehavior()}</h2>
               <div class="setting-row">
                 <div>
-                  <span class="setting-label">{t.theme()}</span>
-                  <p>{t.themeDescription()}</p>
-                </div>
-                <div class="triple-control" role="group" aria-label={t.theme()}>
-                  <button
-                    type="button"
-                    class:active={draftSettings.theme === 'light'}
-                    aria-pressed={draftSettings.theme === 'light'}
-                    on:click={() => setTheme('light')}>{t.themeLight()}</button
-                  >
-                  <button
-                    type="button"
-                    class:active={draftSettings.theme === 'dark'}
-                    aria-pressed={draftSettings.theme === 'dark'}
-                    on:click={() => setTheme('dark')}>{t.themeDark()}</button
-                  >
-                  <button
-                    type="button"
-                    class:active={draftSettings.theme === 'system'}
-                    aria-pressed={draftSettings.theme === 'system'}
-                    on:click={() => setTheme('system')}>{t.themeSystem()}</button
-                  >
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div>
                   <span class="setting-label">{t.editorModeDefault()}</span>
                   <p>{t.editorModeDefaultDescription()}</p>
                 </div>
@@ -1458,15 +1490,17 @@
                 <div class="segmented-control" role="group" aria-label={t.calloutStyle()}>
                   <button
                     type="button"
-                    class:active={draftSettings.blockStyle === 'classic'}
-                    aria-pressed={draftSettings.blockStyle === 'classic'}
-                    on:click={() => setBlockStyle('classic')}>{t.classic()}</button
+                    class:active={draftSettings.documentStyleId === CLASSIC_DOCUMENT_STYLE_ID}
+                    aria-pressed={draftSettings.documentStyleId === CLASSIC_DOCUMENT_STYLE_ID}
+                    on:click={() => setDocumentStyle(CLASSIC_DOCUMENT_STYLE_ID)}
+                    >{t.classic()}</button
                   >
                   <button
                     type="button"
-                    class:active={draftSettings.blockStyle === 'modern'}
-                    aria-pressed={draftSettings.blockStyle === 'modern'}
-                    on:click={() => setBlockStyle('modern')}>{t.modern()}</button
+                    class:active={draftSettings.documentStyleId === DEFAULT_DOCUMENT_STYLE_ID}
+                    aria-pressed={draftSettings.documentStyleId === DEFAULT_DOCUMENT_STYLE_ID}
+                    on:click={() => setDocumentStyle(DEFAULT_DOCUMENT_STYLE_ID)}
+                    >{t.modern()}</button
                   >
                 </div>
               </div>
@@ -1549,6 +1583,64 @@
             </div>
           {:else if activeCategory === 'appearance'}
             <div class="settings-group">
+              <h2>{t.theme()}</h2>
+              <div class="appearance-theme-row">
+                <span class="setting-label">{t.themeMode()}</span>
+                <div class="triple-control" role="group" aria-label={t.themeMode()}>
+                  <button
+                    type="button"
+                    class:active={draftSettings.themeMode === 'system'}
+                    aria-pressed={draftSettings.themeMode === 'system'}
+                    on:click={() => setThemeMode('system')}>{t.themeSystem()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.themeMode === 'light'}
+                    aria-pressed={draftSettings.themeMode === 'light'}
+                    on:click={() => setThemeMode('light')}>{t.themeLight()}</button
+                  >
+                  <button
+                    type="button"
+                    class:active={draftSettings.themeMode === 'dark'}
+                    aria-pressed={draftSettings.themeMode === 'dark'}
+                    on:click={() => setThemeMode('dark')}>{t.themeDark()}</button
+                  >
+                </div>
+              </div>
+
+              <div class="theme-picker">
+                <span class="setting-label">{t.colorTheme()}</span>
+                <div class="theme-card-grid" role="group" aria-label={t.colorTheme()}>
+                  {#each availableThemes as colorTheme}
+                    <button
+                      type="button"
+                      class="theme-card"
+                      class:active={draftSettings.colorThemeId === colorTheme.id}
+                      aria-pressed={draftSettings.colorThemeId === colorTheme.id}
+                      aria-label={getThemeDisplayName(colorTheme, interfaceLocale)}
+                      on:click={() => setColorTheme(colorTheme.id)}
+                    >
+                      <span class="theme-card-preview" aria-hidden="true">
+                        <span
+                          class="theme-card-variant"
+                          style={`--preview-bg: ${colorTheme.variants.light.preview.background}; --preview-surface: ${colorTheme.variants.light.preview.surface}; --preview-accent: ${colorTheme.variants.light.preview.accent}; --preview-fg: ${colorTheme.variants.light.preview.foreground}`}
+                        ></span>
+                        <span
+                          class="theme-card-variant"
+                          style={`--preview-bg: ${colorTheme.variants.dark.preview.background}; --preview-surface: ${colorTheme.variants.dark.preview.surface}; --preview-accent: ${colorTheme.variants.dark.preview.accent}; --preview-fg: ${colorTheme.variants.dark.preview.foreground}`}
+                        ></span>
+                      </span>
+                      <span class="theme-card-footer">
+                        <span>{getThemeDisplayName(colorTheme, interfaceLocale)}</span>
+                        {#if draftSettings.colorThemeId === colorTheme.id}
+                          <span class="theme-card-check" aria-hidden="true">✓</span>
+                        {/if}
+                      </span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
               <h2>{t.visualZoom()}</h2>
               <div class="setting-row">
                 <div>
@@ -1582,14 +1674,6 @@
                 />
                 <span class="toggle-switch" aria-hidden="true"></span>
               </label>
-
-              <div class="disabled-row" aria-disabled="true">
-                <div>
-                  <span class="setting-label">{t.customCssTheme()}</span>
-                  <p>{t.customCssThemeDescription()}</p>
-                </div>
-                <span class="disabled-pill">{t.futureVersionSupport()}</span>
-              </div>
             </div>
           {:else if activeCategory === 'files'}
             <div class="settings-group">
@@ -1684,7 +1768,11 @@
                   <span class="setting-label">{t.externalFileChangeBehavior()}</span>
                   <p>{t.externalFileChangeBehaviorDescription()}</p>
                 </div>
-                <div class="triple-control" role="group" aria-label={t.externalFileChangeBehavior()}>
+                <div
+                  class="triple-control"
+                  role="group"
+                  aria-label={t.externalFileChangeBehavior()}
+                >
                   <button
                     type="button"
                     class:active={draftSettings.externalFileChangeBehavior === 'reload-external'}
@@ -2479,6 +2567,114 @@
     letter-spacing: 0;
   }
 
+  .settings-group h2:not(:first-child) {
+    margin-top: 28px;
+  }
+
+  .appearance-theme-row,
+  .theme-picker {
+    display: grid;
+    gap: 12px;
+    padding: 14px 0;
+    border-top: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
+  }
+
+  .appearance-theme-row {
+    grid-template-columns: minmax(180px, 1fr) minmax(260px, 300px);
+    align-items: center;
+  }
+
+  .theme-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .theme-card {
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--md-editor-border);
+    border-radius: var(--md-editor-radius-md);
+    background: var(--md-editor-surface);
+    color: var(--md-editor-fg);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .theme-card:hover {
+    border-color: color-mix(in srgb, var(--md-editor-accent) 55%, var(--md-editor-border));
+    transform: translateY(-1px);
+  }
+
+  .theme-card.active {
+    border-color: var(--md-editor-accent);
+    box-shadow: 0 0 0 1px var(--md-editor-accent);
+  }
+
+  .theme-card-preview {
+    height: 74px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid var(--md-editor-border);
+  }
+
+  .theme-card-variant {
+    position: relative;
+    display: block;
+    background: var(--preview-bg);
+  }
+
+  .theme-card-variant::before {
+    content: '';
+    position: absolute;
+    inset: 12px 11px;
+    border: 1px solid color-mix(in srgb, var(--preview-fg) 15%, transparent);
+    border-radius: 4px;
+    background: var(--preview-surface);
+  }
+
+  .theme-card-variant::after {
+    content: '';
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: 20px;
+    height: 5px;
+    border-radius: 99px;
+    background: var(--preview-accent);
+    box-shadow: 0 -13px 0 -1px var(--preview-fg);
+  }
+
+  .theme-card-footer {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .theme-card-check {
+    width: 18px;
+    height: 18px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 18px;
+    border-radius: 50%;
+    background: var(--md-editor-accent);
+    color: var(--md-editor-on-accent);
+    font-size: 11px;
+    line-height: 1;
+  }
+
   .setting-row,
   .toggle-row,
   .disabled-row {
@@ -2863,7 +3059,8 @@
 
     .setting-row,
     .toggle-row,
-    .disabled-row {
+    .disabled-row,
+    .appearance-theme-row {
       grid-template-columns: minmax(0, 1fr);
       gap: 10px;
     }
@@ -2875,6 +3072,16 @@
 
     .settings-content {
       padding: 18px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .theme-card {
+      transition: none;
+    }
+
+    .theme-card:hover {
+      transform: none;
     }
   }
 </style>

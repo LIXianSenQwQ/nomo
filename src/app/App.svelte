@@ -78,12 +78,10 @@
     closeAppWindow as closeDesktopWindow,
     createAppWindow,
     exitApp as exitDesktopApp,
-    getDesktopSystemTheme,
     maximizeAppWindow,
     minimizeAppWindow,
     openSettingsWindow,
     refreshInterfaceLanguageChrome,
-    setDesktopIconTheme,
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
@@ -136,15 +134,12 @@
   import {
     DEFAULT_APP_PREFERENCES,
     SETTINGS_UPDATED_EVENT,
-    applyBlockStyleSetting,
     applyCodeBlockLineNumberSetting,
     applyEditorLayoutSettings,
-    applyThemeSetting,
     applyTypographySettings,
     applyZoomSetting,
     loadAppPreferences,
     normalizeAppPreferences,
-    resolveThemePreference,
     type AppPreferences,
     type AppPreferencesPatch,
     type CloseWindowBehavior,
@@ -153,8 +148,16 @@
     type InterfaceLanguagePreference,
     type SettingsUpdatedPayload,
     type ShortcutPreferences,
-    type ThemePreference,
   } from './services/settings';
+  import {
+    applyThemeRuntime,
+    listenForSystemThemeChanges,
+    readEffectiveSystemScheme,
+    readThemeBootSnapshot,
+    resolveTheme,
+    writeThemeBootSnapshot,
+  } from './services/themeManager';
+  import type { ThemeMode } from '../lib/theme/types';
   import { applyInterfaceLanguagePreference, t, type EffectiveInterfaceLocale } from './i18n';
   import { createFolderExplorerController } from './services/folderExplorerController';
   import { createDocumentActionsController } from './services/documentActionsController';
@@ -247,9 +250,16 @@
     savedMarkdown = '',
     dirty = false,
     version = 0;
+  const bootAppearance = readThemeBootSnapshot() ?? DEFAULT_APP_PREFERENCES;
+  const initialResolvedTheme = resolveTheme(
+    bootAppearance,
+    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+  );
   let mode: EditorMode = DEFAULT_APP_PREFERENCES.editorMode;
-  let themePreference: ThemePreference = DEFAULT_APP_PREFERENCES.theme;
-  let theme: 'light' | 'dark' = resolveThemePreference(themePreference);
+  let themeMode: ThemeMode = bootAppearance.themeMode;
+  let colorThemeId = bootAppearance.colorThemeId;
+  let documentStyleId = bootAppearance.documentStyleId;
+  let theme: 'light' | 'dark' = initialResolvedTheme.effectiveScheme;
   let interfaceLanguage: InterfaceLanguagePreference = DEFAULT_APP_PREFERENCES.interfaceLanguage;
   let interfaceLocale: EffectiveInterfaceLocale =
     applyInterfaceLanguagePreference(interfaceLanguage);
@@ -273,8 +283,7 @@
   let fontSize = DEFAULT_APP_PREFERENCES.fontSize,
     lineHeight = DEFAULT_APP_PREFERENCES.lineHeight,
     contentWidthPercent = DEFAULT_APP_PREFERENCES.contentWidthPercent,
-    focusMode = DEFAULT_APP_PREFERENCES.sidebarHidden,
-    blockStyle: 'classic' | 'modern' = DEFAULT_APP_PREFERENCES.blockStyle;
+    focusMode = DEFAULT_APP_PREFERENCES.sidebarHidden;
   let largeDocumentLimit = DEFAULT_APP_PREFERENCES.largeDocumentLimit;
   let autoSaveDelayMs = DEFAULT_APP_PREFERENCES.autoSaveDelayMs;
   let createSnapshotBeforeSave = DEFAULT_APP_PREFERENCES.createSnapshotBeforeSave;
@@ -2065,8 +2074,7 @@
   }
   let fileCheckTimer: number | null = null;
   let explorerSyncInProgress = false;
-  let systemThemeMediaQuery: MediaQueryList | null = null;
-  let systemThemeChangeHandler: (() => void) | null = null;
+  let stopSystemThemeSync: () => void = () => undefined;
 
   async function ensureExplorerPathExists(path: string, missingMessage: string) {
     if (!desktopEnabled) {
@@ -2137,7 +2145,7 @@
     markdown,
     mode,
     inlineCodeRenderingEnabled,
-    theme: { name: theme },
+    theme: initialResolvedTheme.editorTheme,
     onChange: syncFromEditor,
     onLinkShortcut: () => openLinkPicker(),
     onOpenLink: (href) => openLinkFromEditor(href),
@@ -2438,12 +2446,6 @@
 
   const editorSettings = createEditorSettingsController({
     getDesktopEnabled: () => desktopEnabled,
-    getEditor: () => editor,
-    getTheme: () => theme,
-    setTheme: (value) => {
-      themePreference = value;
-      theme = resolveThemePreference(value);
-    },
     getFontSize: () => fontSize,
     setFontSize: (value) => {
       fontSize = value;
@@ -2455,10 +2457,6 @@
     getContentWidthPercent: () => contentWidthPercent,
     setContentWidthPercent: (value) => {
       contentWidthPercent = value;
-    },
-    getBlockStyle: () => blockStyle,
-    setBlockStyle: (value) => {
-      blockStyle = value;
     },
     refreshEditorViewportLayout: () => refreshEditorViewportLayout(),
   });
@@ -2895,41 +2893,57 @@
     runMarkdownCommand(command);
   }
   refreshEditorViewportLayout = editorInteraction.refreshEditorViewportLayout;
-  async function getDesktopEffectiveSystemTheme() {
-    return (await getDesktopSystemTheme(desktopEnabled)) ?? resolveThemePreference('system');
+  function getCurrentAppearancePreferences() {
+    return { themeMode, colorThemeId, documentStyleId };
   }
 
-  async function syncDesktopIconTheme(nextTheme?: 'light' | 'dark') {
-    const effectiveTheme =
-      nextTheme ?? (themePreference === 'system' ? await getDesktopEffectiveSystemTheme() : theme);
-    await setDesktopIconTheme(desktopEnabled, effectiveTheme).catch(() => undefined);
+  async function applyCurrentAppearance(options?: {
+    transition?: boolean;
+    systemScheme?: 'light' | 'dark';
+    writeBootSnapshot?: boolean;
+  }) {
+    const systemScheme =
+      options?.systemScheme ??
+      (themeMode === 'system' ? await readEffectiveSystemScheme(desktopEnabled) : undefined);
+    const resolved = await applyThemeRuntime(getCurrentAppearancePreferences(), {
+      transition: options?.transition,
+      systemScheme,
+      desktopEnabled,
+      editor,
+    });
+    theme = resolved.effectiveScheme;
+    themeMode = resolved.preferences.themeMode;
+    colorThemeId = resolved.preferences.colorThemeId;
+    documentStyleId = resolved.preferences.documentStyleId;
+    if (options?.writeBootSnapshot) {
+      writeThemeBootSnapshot(resolved);
+    }
+    return resolved;
   }
 
   async function syncSystemThemeFromDesktop(options?: { transition?: boolean }) {
-    if (themePreference !== 'system') {
+    if (themeMode !== 'system') {
       return;
     }
-
-    const nextTheme = await getDesktopEffectiveSystemTheme();
-    const previousTheme = theme;
-    theme = applyThemeSetting(themePreference, {
-      effectiveTheme: nextTheme,
+    await applyCurrentAppearance({
+      systemScheme: await readEffectiveSystemScheme(desktopEnabled),
       transition: options?.transition,
     });
-    if (previousTheme !== nextTheme) {
-      editor.updateTheme({ name: nextTheme });
-    }
-    await syncDesktopIconTheme(nextTheme);
   }
 
-  function toggleTheme() {
-    const nextTheme: ThemePreference = theme === 'light' ? 'dark' : 'light';
-    themePreference = nextTheme;
-    theme = applyThemeSetting(themePreference, { transition: true });
-    localStorage.setItem('nomo-theme', themePreference);
-    updateAppSetting('theme', themePreference).catch(() => undefined);
-    syncDesktopIconTheme().catch(() => undefined);
-    editor.updateTheme({ name: theme });
+  async function toggleTheme() {
+    const previousMode = themeMode;
+    const nextMode: ThemeMode = theme === 'light' ? 'dark' : 'light';
+    themeMode = nextMode;
+    const resolved = await applyCurrentAppearance({ transition: true });
+    try {
+      await updateAppSetting('themeMode', nextMode);
+      writeThemeBootSnapshot(resolved);
+    } catch {
+      themeMode = previousMode;
+      await applyCurrentAppearance({ transition: true });
+      statusMessage = t.settingsSaveFailed();
+    }
   }
   const updateContentWidth = editorSettings.updateContentWidth;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
@@ -3755,15 +3769,19 @@
 
   async function applyAppPreferences(
     preferences: AppPreferences,
-    options: { applyEditorMode?: boolean; refreshInterfaceChrome?: boolean } = {},
+    options: {
+      applyEditorMode?: boolean;
+      refreshInterfaceChrome?: boolean;
+      writeBootSnapshot?: boolean;
+    } = {},
   ) {
-    themePreference = preferences.theme;
-    if (themePreference === 'system') {
-      await syncSystemThemeFromDesktop({ transition: true });
-    } else {
-      theme = applyThemeSetting(themePreference, { transition: true });
-      await syncDesktopIconTheme(theme);
-    }
+    themeMode = preferences.themeMode;
+    colorThemeId = preferences.colorThemeId;
+    documentStyleId = preferences.documentStyleId;
+    await applyCurrentAppearance({
+      transition: true,
+      writeBootSnapshot: options.writeBootSnapshot,
+    });
     interfaceLanguage = preferences.interfaceLanguage;
     interfaceLocale = applyInterfaceLanguagePreference(interfaceLanguage);
     if (options.refreshInterfaceChrome) {
@@ -3772,7 +3790,6 @@
     fontSize = preferences.fontSize;
     lineHeight = preferences.lineHeight;
     contentWidthPercent = preferences.contentWidthPercent;
-    blockStyle = preferences.blockStyle;
     imageSettings = preferences.imageHandlingSettings;
     folderOpenDefaultBehavior = preferences.folderOpenDefaultBehavior;
     filePreviewEnabled = preferences.filePreviewEnabled;
@@ -3809,11 +3826,9 @@
 
     applyTypographySettings(fontSize, lineHeight);
     applyEditorLayoutSettings(contentWidthPercent);
-    applyBlockStyleSetting(blockStyle);
     applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout });
     applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible);
     document.documentElement.dataset.codeBlockIndent = codeBlockIndent;
-    editor.updateTheme({ name: theme });
     editor.updateOptions({ inlineCodeRenderingEnabled });
     applyOutlineDefaultExpansion();
 
@@ -3846,7 +3861,9 @@
 
   function getCurrentAppPreferences(): AppPreferences {
     return normalizeAppPreferences({
-      theme: themePreference,
+      themeMode,
+      colorThemeId,
+      documentStyleId,
       interfaceLanguage,
       editorMode: mode,
       autoSaveEnabled,
@@ -3855,7 +3872,6 @@
       fontSize,
       lineHeight,
       contentWidthPercent,
-      blockStyle,
       largeDocumentLimit,
       folderOpenDefaultBehavior,
       filePreviewEnabled,
@@ -4128,7 +4144,10 @@
         }
 
         const appPreferences = await loadAppPreferences(desktopEnabled, settings);
-        await applyAppPreferences(appPreferences, { applyEditorMode: false });
+        await applyAppPreferences(appPreferences, {
+          applyEditorMode: false,
+          writeBootSnapshot: true,
+        });
         persistedEditorMode = appPreferences.editorMode;
       }
 
@@ -4137,8 +4156,6 @@
         editor.updateOptions({ mode: persistedEditorMode });
         scheduleRestoreReadingPosition(filePath, persistedEditorMode);
       }
-      // 确保 blockStyle 默认值写入 DOM
-      applyBlockStyleSetting(blockStyle);
       await setupDesktopEvents();
       await refreshRecentFiles();
       if (pendingExternalOpenPaths.length === 0) {
@@ -4189,9 +4206,7 @@
     window.removeEventListener('keydown', handleGlobalShortcut);
     window.removeEventListener('wheel', handleGlobalWheel, { capture: true });
     detachMountedEditorHostEvents();
-    if (systemThemeMediaQuery && systemThemeChangeHandler) {
-      systemThemeMediaQuery.removeEventListener('change', systemThemeChangeHandler);
-    }
+    stopSystemThemeSync();
     sidebarResize.destroy();
     unsubscribe();
     editor.destroy();
@@ -4802,17 +4817,13 @@
   }
 
   function setupSystemThemeListener() {
-    if (typeof window.matchMedia !== 'function') {
-      return;
-    }
-    systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    systemThemeChangeHandler = () => {
-      if (themePreference !== 'system') {
+    stopSystemThemeSync();
+    stopSystemThemeSync = listenForSystemThemeChanges(() => {
+      if (themeMode !== 'system') {
         return;
       }
-      syncSystemThemeFromDesktop({ transition: true }).catch(() => undefined);
-    };
-    systemThemeMediaQuery.addEventListener('change', systemThemeChangeHandler);
+      return syncSystemThemeFromDesktop({ transition: true });
+    });
   }
 
   async function loadFolder(folderPath: string) {
@@ -4976,7 +4987,7 @@
   {autoSaveEnabled}
   {autoSaveDelayMs}
   softwareUpdateState={softwareUpdateSnapshot}
-  openSoftwareUpdate={openSoftwareUpdate}
+  {openSoftwareUpdate}
   {getCompactPath}
   {getFolderName}
   {getDirectoryLabel}
@@ -5084,8 +5095,7 @@
   />
 {/if}
 
-{#if softwareUpdateDialogOpen &&
-  (softwareUpdateSnapshot.candidate || softwareUpdateSnapshot.downloadedUpdate)}
+{#if softwareUpdateDialogOpen && (softwareUpdateSnapshot.candidate || softwareUpdateSnapshot.downloadedUpdate)}
   <SoftwareUpdateDialog
     state={softwareUpdateSnapshot}
     onClose={() => {

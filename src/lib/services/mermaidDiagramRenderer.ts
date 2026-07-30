@@ -1,16 +1,19 @@
 import type { DiagramRenderer } from './render';
+import type { MermaidThemeDefinition } from '../theme/types';
 
 type MermaidApi = typeof import('mermaid').default;
 
 let mermaidPromise: Promise<MermaidApi> | null = null;
-let initializedTheme: 'default' | 'dark' | null = null;
+let initializedThemeKey: string | null = null;
+let renderSequence = 0;
 
 export function createMermaidDiagramRenderer(): DiagramRenderer {
   return {
     async renderMermaid(code, options) {
       try {
-        const mermaid = await loadMermaid(options.theme === 'dark' ? 'dark' : 'default');
-        const id = `nomo-${hashText(code)}`;
+        const mermaid = await loadMermaid(options.theme);
+        renderSequence += 1;
+        const id = `nomo-${hashText(code)}-${renderSequence}`;
         const result = await mermaid.render(id, code);
         return { svg: result.svg };
       } catch (error) {
@@ -23,16 +26,18 @@ export function createMermaidDiagramRenderer(): DiagramRenderer {
   };
 }
 
-async function loadMermaid(theme: 'default' | 'dark'): Promise<MermaidApi> {
+async function loadMermaid(theme: MermaidThemeDefinition): Promise<MermaidApi> {
   mermaidPromise ??= import('mermaid').then((module) => module.default);
   const mermaid = await mermaidPromise;
-  if (initializedTheme !== theme) {
+  const themeKey = JSON.stringify(theme);
+  if (initializedThemeKey !== themeKey) {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
-      theme,
+      theme: theme.theme,
+      themeVariables: theme.themeVariables,
     });
-    initializedTheme = theme;
+    initializedThemeKey = themeKey;
   }
   return mermaid;
 }

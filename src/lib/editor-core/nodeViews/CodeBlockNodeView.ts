@@ -5,6 +5,7 @@ import { getCodeTokenizer } from '../renderers';
 import type { CodeTokenLine } from '../../services/render';
 import { escapeHtml } from '../utils/html';
 import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
+import type { EditorThemeOptions } from '../../theme/types';
 
 /**
  * code_block 节点的 NodeView —— 展示态 / 编辑态
@@ -187,6 +188,12 @@ function createCheckIcon(): SVGSVGElement {
 }
 
 export class CodeBlockNodeView {
+  private static currentTheme: EditorThemeOptions = {
+    name: 'light',
+    colorThemeId: 'nomo-default',
+    shikiTheme: 'github-light',
+    mermaid: { theme: 'default' },
+  };
   private static activeEditingView: CodeBlockNodeView | null = null;
   private static instances = new Set<CodeBlockNodeView>();
 
@@ -306,7 +313,10 @@ export class CodeBlockNodeView {
     this.renderDisplay();
   }
 
-  static updateTheme(): void {
+  static updateTheme(theme?: EditorThemeOptions): void {
+    if (theme) {
+      CodeBlockNodeView.currentTheme = theme;
+    }
     for (const instance of CodeBlockNodeView.instances) {
       instance.renderDisplay();
       if (instance.editing && instance.textarea && instance.highlightLayer) {
@@ -419,14 +429,11 @@ export class CodeBlockNodeView {
       codeEl.textContent = code;
       return;
     }
-    // 根据当前主题选择 Shiki 主题
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const theme = isDark ? 'github-dark' : 'github-light';
     try {
       const result = await codeTokenizer.tokenize({
         code,
         language: getHighlightLanguage(language),
-        theme,
+        theme: CodeBlockNodeView.currentTheme.shikiTheme,
       });
       if (id !== this.renderId) return; // 放弃过期渲染
       codeEl.innerHTML = tokensToHtml(result.tokens);

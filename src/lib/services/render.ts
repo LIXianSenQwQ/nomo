@@ -112,7 +112,7 @@ export interface MathRenderer {
 }
 
 export interface DiagramRenderOptions {
-  theme: 'light' | 'dark';
+  theme: MermaidThemeDefinition;
 }
 
 export interface DiagramRenderResult {
@@ -123,3 +123,4 @@ export interface DiagramRenderResult {
 export interface DiagramRenderer {
   renderMermaid(code: string, options: DiagramRenderOptions): Promise<DiagramRenderResult>;
 }
+import type { MermaidThemeDefinition } from '../theme/types';

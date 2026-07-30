@@ -5,6 +5,7 @@ import {
   type SettingRecord,
 } from '../../lib/desktop/tauriStorage';
 import type { DiagramType } from '../../lib/editor-core/diagramTemplates';
+import type { AppearancePreferences, ColorScheme, ThemeMode } from '../../lib/theme/types';
 import {
   DEFAULT_IMAGE_HANDLING_SETTINGS,
   type ImageDefaultAlign,
@@ -12,17 +13,22 @@ import {
   type ImageInsertStrategy,
   type ImageUploadProvider,
 } from '../../lib/services/render';
-import { logDebug, perfAsync } from '../../lib/services/logger';
+import { logDebug, logWarn, perfAsync } from '../../lib/services/logger';
 import {
   DEFAULT_INTERFACE_LANGUAGE,
   isInterfaceLanguagePreference,
   type InterfaceLanguagePreference,
 } from '../i18n';
+import {
+  CLASSIC_DOCUMENT_STYLE_ID,
+  DEFAULT_COLOR_THEME_ID,
+  DEFAULT_DOCUMENT_STYLE_ID,
+  isRegisteredDocumentStyleId,
+  isRegisteredThemeId,
+} from './themeRegistry';
 
-export type ThemePreference = 'light' | 'dark' | 'system';
-export type EffectiveTheme = 'light' | 'dark';
+export type { AppearancePreferences, ColorScheme, ThemeMode };
 export type EditorModePreference = 'semantic' | 'source';
-export type BlockStylePreference = 'classic' | 'modern';
 export type FolderOpenDefaultBehavior = 'current-window' | 'new-window' | 'ask-every-time';
 export type CloseWindowBehavior = 'ask-every-time' | 'close-window' | 'close-to-tray';
 export type ExternalFileChangeBehavior = 'reload-external' | 'overwrite-external' | 'ignore';
@@ -50,15 +56,15 @@ export type ShortcutCommandId =
 export type ShortcutPreferences = Record<ShortcutCommandId, string>;
 
 export interface PersistedEditorSettings {
-  theme?: ThemePreference;
   fontSize?: number;
   lineHeight?: number;
   contentWidthPercent?: number;
-  blockStyle?: BlockStylePreference;
 }
 
 export interface AppPreferences {
-  theme: ThemePreference;
+  themeMode: ThemeMode;
+  colorThemeId: string;
+  documentStyleId: string;
   interfaceLanguage: InterfaceLanguagePreference;
   editorMode: EditorModePreference;
   autoSaveEnabled: boolean;
@@ -67,7 +73,6 @@ export interface AppPreferences {
   fontSize: number;
   lineHeight: number;
   contentWidthPercent: number;
-  blockStyle: BlockStylePreference;
   largeDocumentLimit: number;
   folderOpenDefaultBehavior: FolderOpenDefaultBehavior;
   filePreviewEnabled: boolean;
@@ -118,7 +123,9 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
 };
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
-  theme: 'system',
+  themeMode: 'system',
+  colorThemeId: DEFAULT_COLOR_THEME_ID,
+  documentStyleId: DEFAULT_DOCUMENT_STYLE_ID,
   interfaceLanguage: DEFAULT_INTERFACE_LANGUAGE,
   editorMode: 'semantic',
   autoSaveEnabled: false,
@@ -127,7 +134,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   fontSize: 16,
   lineHeight: 1.75,
   contentWidthPercent: 60,
-  blockStyle: 'modern',
   largeDocumentLimit: 500_000,
   folderOpenDefaultBehavior: 'ask-every-time',
   filePreviewEnabled: true,
@@ -156,14 +162,10 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 export const SETTINGS_UPDATED_EVENT = 'nomo://settings-updated';
 
 const LEGACY_CLOSE_TO_TRAY_PROMPT_ANSWERED_KEY = 'closeToTrayPromptAnswered';
-const THEME_SYSTEM_MIGRATION_KEY = 'themeFollowSystemMigrationV1';
-const THEME_TRANSITION_CLASS = 'theme-transitioning';
-const THEME_TRANSITION_MS = 180;
+export const APPEARANCE_THEME_MODEL_MIGRATION_KEY = 'appearanceThemeModelV1';
 const ZOOM_TRANSITION_MS = 150;
 const ZOOM_REDUCED_TRANSITION_MS = 90;
-let themeTransitionTimer: number | null = null;
 let zoomAnimationFrame: number | null = null;
-let themeSystemMigrationPersistedInSession = false;
 
 export async function loadPersistedEditorSettings(
   desktopEnabled: boolean,
@@ -172,14 +174,11 @@ export async function loadPersistedEditorSettings(
   const settings = await perfAsync('settings', 'readNativeSettingsMap(editor)', () =>
     readNativeSettingsMap(desktopEnabled, nativeSettings),
   );
-  const savedTheme = parseSetting<string>(settings, 'theme');
   const savedFontSize = Number(parseSetting<number>(settings, 'fontSize'));
   const savedLineHeight = Number(parseSetting<number>(settings, 'lineHeight'));
   const savedContentWidthPercent = Number(parseSetting<number>(settings, 'contentWidthPercent'));
-  const savedBlockStyle = parseSetting<string>(settings, 'blockStyle');
 
   return {
-    theme: isThemePreference(savedTheme) ? savedTheme : undefined,
     fontSize:
       Number.isFinite(savedFontSize) && savedFontSize >= 14 && savedFontSize <= 22
         ? savedFontSize
@@ -194,8 +193,6 @@ export async function loadPersistedEditorSettings(
       savedContentWidthPercent <= 90
         ? savedContentWidthPercent
         : undefined,
-    blockStyle:
-      savedBlockStyle === 'classic' || savedBlockStyle === 'modern' ? savedBlockStyle : undefined,
   };
 }
 
@@ -231,11 +228,10 @@ export async function loadAppPreferences(
   const settings = await perfAsync('settings', 'readNativeSettingsMap(prefs)', () =>
     readNativeSettingsMap(desktopEnabled, nativeSettings),
   );
-  const storedTheme = parseSetting<unknown>(settings, 'theme');
-  const theme = await migrateThemePreferenceToSystem(desktopEnabled, settings, storedTheme);
+  const appearance = await migrateAppearancePreferences(desktopEnabled, settings);
 
   return normalizeAppPreferences({
-    theme,
+    ...appearance,
     interfaceLanguage: parseSetting<unknown>(settings, 'interfaceLanguage'),
     editorMode: parseSetting<unknown>(settings, 'editorMode'),
     autoSaveEnabled: parseSetting<unknown>(settings, 'autoSaveEnabled'),
@@ -244,7 +240,6 @@ export async function loadAppPreferences(
     fontSize: parseSetting<unknown>(settings, 'fontSize'),
     lineHeight: parseSetting<unknown>(settings, 'lineHeight'),
     contentWidthPercent: parseSetting<unknown>(settings, 'contentWidthPercent'),
-    blockStyle: parseSetting<unknown>(settings, 'blockStyle'),
     largeDocumentLimit: parseSetting<unknown>(settings, 'largeDocumentLimit'),
     folderOpenDefaultBehavior: parseSetting<unknown>(settings, 'folderOpenDefaultBehavior'),
     filePreviewEnabled: parseSetting<unknown>(settings, 'filePreviewEnabled'),
@@ -301,13 +296,16 @@ export async function saveAppPreferences(
 ) {
   const normalized = normalizeAppPreferences(preferences);
 
-  markThemeSystemMigrationDone(desktopEnabled);
+  markAppearanceMigrationDone();
 
   if (!desktopEnabled) {
     return normalized;
   }
 
-  const persistedEntries = pickPersistedPreferenceEntries(normalized, keys);
+  const persistedEntries = {
+    ...pickPersistedPreferenceEntries(normalized, keys),
+    ...(keys ? {} : { [APPEARANCE_THEME_MODEL_MIGRATION_KEY]: true }),
+  };
   await updateAppSettings(persistedEntries);
 
   return normalized;
@@ -317,7 +315,13 @@ export function normalizeAppPreferences(
   value: Partial<Record<keyof AppPreferences, unknown>>,
 ): AppPreferences {
   return {
-    theme: isThemePreference(value.theme) ? value.theme : DEFAULT_APP_PREFERENCES.theme,
+    themeMode: isThemeMode(value.themeMode) ? value.themeMode : DEFAULT_APP_PREFERENCES.themeMode,
+    colorThemeId: isRegisteredThemeId(value.colorThemeId)
+      ? value.colorThemeId
+      : DEFAULT_APP_PREFERENCES.colorThemeId,
+    documentStyleId: isRegisteredDocumentStyleId(value.documentStyleId)
+      ? value.documentStyleId
+      : DEFAULT_APP_PREFERENCES.documentStyleId,
     interfaceLanguage: isInterfaceLanguagePreference(value.interfaceLanguage)
       ? value.interfaceLanguage
       : DEFAULT_APP_PREFERENCES.interfaceLanguage,
@@ -346,9 +350,6 @@ export function normalizeAppPreferences(
       90,
       DEFAULT_APP_PREFERENCES.contentWidthPercent,
     ),
-    blockStyle: isBlockStylePreference(value.blockStyle)
-      ? value.blockStyle
-      : DEFAULT_APP_PREFERENCES.blockStyle,
     largeDocumentLimit: clampNumber(
       value.largeDocumentLimit,
       100_000,
@@ -435,37 +436,6 @@ export function normalizeAppPreferences(
   };
 }
 
-export function resolveThemePreference(theme: ThemePreference): EffectiveTheme {
-  if (theme !== 'system') {
-    return theme;
-  }
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'light';
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-export function applyThemeSetting(
-  theme: ThemePreference,
-  options?: { transition?: boolean; effectiveTheme?: EffectiveTheme },
-) {
-  if (options?.transition && !prefersReducedMotion()) {
-    document.documentElement.classList.add(THEME_TRANSITION_CLASS);
-    if (themeTransitionTimer !== null) {
-      window.clearTimeout(themeTransitionTimer);
-    }
-    themeTransitionTimer = window.setTimeout(() => {
-      document.documentElement.classList.remove(THEME_TRANSITION_CLASS);
-      themeTransitionTimer = null;
-    }, THEME_TRANSITION_MS + 40);
-  }
-
-  const effectiveTheme = options?.effectiveTheme ?? resolveThemePreference(theme);
-  document.documentElement.dataset.theme = effectiveTheme === 'dark' ? 'dark' : '';
-  document.documentElement.dataset.themePreference = theme;
-  return effectiveTheme;
-}
-
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -540,13 +510,11 @@ export function applyCodeBlockLineNumberSetting(visible: boolean) {
   document.documentElement.dataset.codeLineNumbers = visible ? 'visible' : 'hidden';
 }
 
-export function applyBlockStyleSetting(blockStyle: BlockStylePreference) {
-  document.documentElement.dataset.blockStyle = blockStyle;
-}
-
 function toPersistedPreferenceEntries(preferences: AppPreferences) {
   return {
-    theme: preferences.theme,
+    themeMode: preferences.themeMode,
+    colorThemeId: preferences.colorThemeId,
+    documentStyleId: preferences.documentStyleId,
     interfaceLanguage: preferences.interfaceLanguage,
     editorMode: preferences.editorMode,
     autoSaveEnabled: preferences.autoSaveEnabled,
@@ -555,7 +523,6 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     fontSize: preferences.fontSize,
     lineHeight: preferences.lineHeight,
     contentWidthPercent: preferences.contentWidthPercent,
-    blockStyle: preferences.blockStyle,
     largeDocumentLimit: preferences.largeDocumentLimit,
     folderOpenDefaultBehavior: preferences.folderOpenDefaultBehavior,
     filePreviewEnabled: preferences.filePreviewEnabled,
@@ -593,53 +560,72 @@ function pickPersistedPreferenceEntries(preferences: AppPreferences, keys?: AppP
   );
 }
 
-async function migrateThemePreferenceToSystem(
+async function migrateAppearancePreferences(
   desktopEnabled: boolean,
   settings: Map<string, string>,
-  storedTheme: unknown,
-): Promise<unknown> {
-  if (isThemeSystemMigrationDone(settings)) {
-    return storedTheme;
+): Promise<AppearancePreferences> {
+  const migrationDone =
+    parseSetting<boolean>(settings, APPEARANCE_THEME_MODEL_MIGRATION_KEY) === true;
+  const storedThemeMode = parseSetting<unknown>(settings, 'themeMode');
+  const storedColorThemeId = parseSetting<unknown>(settings, 'colorThemeId');
+  const storedDocumentStyleId = parseSetting<unknown>(settings, 'documentStyleId');
+
+  if (migrationDone) {
+    const appearance = {
+      themeMode: isThemeMode(storedThemeMode) ? storedThemeMode : 'system',
+      colorThemeId: isRegisteredThemeId(storedColorThemeId)
+        ? storedColorThemeId
+        : DEFAULT_COLOR_THEME_ID,
+      documentStyleId: isRegisteredDocumentStyleId(storedDocumentStyleId)
+        ? storedDocumentStyleId
+        : DEFAULT_DOCUMENT_STYLE_ID,
+    } satisfies AppearancePreferences;
+    const repairEntries: Record<string, unknown> = {};
+    if (appearance.themeMode !== storedThemeMode) {
+      repairEntries.themeMode = appearance.themeMode;
+    }
+    if (appearance.colorThemeId !== storedColorThemeId) {
+      repairEntries.colorThemeId = appearance.colorThemeId;
+    }
+    if (appearance.documentStyleId !== storedDocumentStyleId) {
+      repairEntries.documentStyleId = appearance.documentStyleId;
+    }
+    if (Object.keys(repairEntries).length > 0) {
+      logWarn('settings', '外观设置无效，已回退到内置默认值', repairEntries);
+      if (desktopEnabled) {
+        await updateAppSettings(repairEntries).catch(() => undefined);
+      }
+    }
+    markAppearanceMigrationDone();
+    return appearance;
   }
 
-  markThemeSystemMigrationDone(desktopEnabled);
-  if (storedTheme === 'light' || storedTheme === 'dark') {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('nomo-theme', 'system');
-    }
-    if (desktopEnabled) {
-      updateAppSetting('theme', 'system').catch(() => undefined);
-    }
-    return 'system';
+  const legacyTheme = parseSetting<unknown>(settings, 'theme');
+  const legacyBlockStyle = parseSetting<unknown>(settings, 'blockStyle');
+  const appearance: AppearancePreferences = {
+    themeMode: isThemeMode(legacyTheme) ? legacyTheme : 'system',
+    colorThemeId: DEFAULT_COLOR_THEME_ID,
+    documentStyleId:
+      legacyBlockStyle === 'classic' ? CLASSIC_DOCUMENT_STYLE_ID : DEFAULT_DOCUMENT_STYLE_ID,
+  };
+  markAppearanceMigrationDone();
+  if (desktopEnabled) {
+    await updateAppSettings({
+      ...appearance,
+      [APPEARANCE_THEME_MODEL_MIGRATION_KEY]: true,
+    }).catch((error) => {
+      logWarn('settings', '外观设置迁移写入失败，将在下次启动重试', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
-
-  return storedTheme;
+  return appearance;
 }
 
-function isThemeSystemMigrationDone(settings: Map<string, string>) {
-  const nativeDone = parseSetting<boolean>(settings, THEME_SYSTEM_MIGRATION_KEY);
-  if (nativeDone === true) {
-    return true;
-  }
-  if (typeof localStorage === 'undefined') {
-    return false;
-  }
-  return localStorage.getItem(THEME_SYSTEM_MIGRATION_KEY) === 'true';
-}
-
-function markThemeSystemMigrationDone(desktopEnabled: boolean) {
-  const localAlreadyDone =
-    typeof localStorage !== 'undefined' &&
-    localStorage.getItem(THEME_SYSTEM_MIGRATION_KEY) === 'true';
-
+function markAppearanceMigrationDone() {
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(THEME_SYSTEM_MIGRATION_KEY, 'true');
+    localStorage.setItem(APPEARANCE_THEME_MODEL_MIGRATION_KEY, 'true');
   }
-  if (!desktopEnabled || localAlreadyDone || themeSystemMigrationPersistedInSession) {
-    return;
-  }
-  themeSystemMigrationPersistedInSession = true;
-  updateAppSetting(THEME_SYSTEM_MIGRATION_KEY, true).catch(() => undefined);
 }
 
 function parseSetting<T>(settings: Map<string, string>, key: string): T | null {
@@ -800,16 +786,12 @@ function easeOutCubic(progress: number) {
   return 1 - Math.pow(1 - progress, 3);
 }
 
-function isThemePreference(value: unknown): value is ThemePreference {
+function isThemeMode(value: unknown): value is ThemeMode {
   return value === 'light' || value === 'dark' || value === 'system';
 }
 
 function isEditorModePreference(value: unknown): value is EditorModePreference {
   return value === 'semantic' || value === 'source';
-}
-
-function isBlockStylePreference(value: unknown): value is BlockStylePreference {
-  return value === 'classic' || value === 'modern';
 }
 
 function isFolderOpenDefaultBehavior(value: unknown): value is FolderOpenDefaultBehavior {

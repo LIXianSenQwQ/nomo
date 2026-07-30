@@ -1,7 +1,10 @@
 import './app/styles/theme.css';
 import './app/styles/global.css';
 import { mount } from 'svelte';
+import { bootstrapThemeFromSnapshot } from './app/services/themeManager';
 import { createPerfTimer, initializeLogger, logError, logInfo } from './lib/services/logger';
+
+bootstrapThemeFromSnapshot();
 
 const target = document.getElementById('app');
 const startupTimer = createPerfTimer('App', '前端入口加载');

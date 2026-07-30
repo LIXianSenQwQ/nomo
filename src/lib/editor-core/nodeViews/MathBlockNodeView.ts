@@ -137,7 +137,7 @@ export class MathBlockNodeView {
       if (id !== this.renderId || this.editing) return; // 放弃过期渲染
       if (result.error) {
         this.dom.textContent = `$$\n${tex}\n$$`;
-        this.dom.style.color = 'var(--md-editor-warning, #9a6700)';
+        this.dom.style.color = 'var(--md-editor-warning)';
       } else {
         this.dom.innerHTML = result.html;
         this.dom.style.color = '';
@@ -252,7 +252,10 @@ export class MathBlockNodeView {
     return entry.caret;
   }
 
-  private exitEdit(save: boolean, selection: 'node' | 'before' | 'after' | 'preserve' = 'node'): void {
+  private exitEdit(
+    save: boolean,
+    selection: 'node' | 'before' | 'after' | 'preserve' = 'node',
+  ): void {
     if (!this.editing) return;
 
     const newTex = save && this.textarea ? this.textarea.value : this.originalTex;
@@ -425,7 +428,7 @@ export class MathBlockNodeView {
       if (!this.editing || !this.previewEl) return; // 编辑态已退出
       if (result.error) {
         this.previewEl.textContent = result.error;
-        this.previewEl.style.color = 'var(--md-editor-warning, #9a6700)';
+        this.previewEl.style.color = 'var(--md-editor-warning)';
       } else {
         this.previewEl.innerHTML = result.html;
         this.previewEl.style.color = '';

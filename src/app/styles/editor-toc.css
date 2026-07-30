@@ -3,7 +3,7 @@
   padding: 14px 18px 16px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--md-editor-surface) 96%, #ffffff);
+  background: color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-document-bg));
   box-shadow:
     0 18px 48px rgba(15, 23, 42, 0.16),
     0 2px 8px rgba(15, 23, 42, 0.08);

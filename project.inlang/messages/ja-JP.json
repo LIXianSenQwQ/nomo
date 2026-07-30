@@ -23,6 +23,8 @@
   "settingsSaving": "保存中...",
   "settingsSaveFailed": "設定の保存に失敗しました",
   "settingsLoading": "設定を読み込んでいます...",
+  "themeMode": "明暗モード",
+  "colorTheme": "カラーテーマ",
   "themeDescription": "保存後にメインウィンドウとレンダーサービスへ同期します。",
   "themeLight": "ライト",
   "themeDark": "ダーク",

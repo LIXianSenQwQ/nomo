@@ -133,7 +133,7 @@ function createMathWidget(
   wrapper.className = displayMode ? 'math-widget math-display' : 'math-widget math-inline';
   wrapper.setAttribute('contenteditable', 'false');
   if (error) {
-    wrapper.style.color = 'var(--md-editor-warning, #9a6700)';
+    wrapper.style.color = 'var(--md-editor-warning)';
     wrapper.style.fontSize = '13px';
     wrapper.textContent = error;
   } else {

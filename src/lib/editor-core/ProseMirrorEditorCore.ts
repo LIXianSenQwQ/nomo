@@ -119,6 +119,15 @@ export class ProseMirrorEditorCore implements EditorCore {
   private listeners = new Set<EditorListener>();
 
   constructor(private readonly options: EditorCoreOptions) {
+    const initialTheme = options.theme ?? {
+      name: 'light',
+      colorThemeId: 'nomo-default',
+      shikiTheme: 'github-light',
+      mermaid: { theme: 'default' as const },
+    };
+    this.options.theme = initialTheme;
+    CodeBlockNodeView.updateTheme(initialTheme);
+    MermaidBlockNodeView.updateTheme(initialTheme.mermaid);
     this.target = options.target ?? null;
     this.markdown = updateTocBlocks(options.markdown);
     this.originalMarkdown = this.markdown;
@@ -446,8 +455,8 @@ export class ProseMirrorEditorCore implements EditorCore {
   updateTheme(theme: EditorThemeOptions): void {
     this.assertActive();
     this.options.theme = theme;
-    CodeBlockNodeView.updateTheme();
-    MermaidBlockNodeView.updateTheme();
+    CodeBlockNodeView.updateTheme(theme);
+    MermaidBlockNodeView.updateTheme(theme.mermaid);
     this.emit(`theme:${theme.name}`);
   }
 

@@ -181,7 +181,7 @@
 
 .shortcut {
   font-size: 10.5px;
-  color: var(--md-editor-muted-fg, #888888);
+  color: var(--md-editor-muted-fg);
   margin-left: 24px;
   flex-shrink: 0;
 }
@@ -475,7 +475,7 @@
 }
 
 .tree-folder-root-title svg {
-  color: var(--md-editor-accent, #007acc);
+  color: var(--md-editor-accent);
 }
 
 .recursive-tree-container {
@@ -591,7 +591,7 @@
 
 .file-tree button.tree-file.active {
   background: rgba(0, 122, 204, 0.12) !important;
-  color: var(--md-editor-accent, #007acc) !important;
+  color: var(--md-editor-accent) !important;
   font-weight: 500;
 }
 
@@ -602,7 +602,7 @@
 }
 
 .file-tree button.tree-file.active svg {
-  color: var(--md-editor-accent, #007acc) !important;
+  color: var(--md-editor-accent) !important;
 }
 
 .file-tree button.tree-file svg {

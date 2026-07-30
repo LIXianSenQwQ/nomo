@@ -22,6 +22,8 @@
   "settingsSaving": "保存中...",
   "settingsSaveFailed": "保存设置失败",
   "settingsLoading": "正在读取设置...",
+  "themeMode": "明暗模式",
+  "colorTheme": "配色主题",
   "themeDescription": "保存后同步到主窗口和渲染服务。",
   "themeLight": "浅色",
   "themeDark": "深色",

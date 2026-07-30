@@ -1211,11 +1211,11 @@ function buildJsonDecorations(
 }
 
 const tokenColors: Record<JsonTokenType, string> = {
-  string: 'var(--md-editor-code-string, #22863a)',
-  number: 'var(--md-editor-code-number, #005cc5)',
-  boolean: 'var(--md-editor-code-keyword, #d73a49)',
-  null: 'var(--md-editor-code-keyword, #d73a49)',
-  punctuation: 'var(--md-editor-muted-fg, #6a737d)',
+  string: 'var(--md-editor-code-string)',
+  number: 'var(--md-editor-code-number)',
+  boolean: 'var(--md-editor-code-boolean)',
+  null: 'var(--md-editor-code-keyword)',
+  punctuation: 'var(--md-editor-code-punctuation)',
 };
 
 const jsonHighlightTheme = EditorView.baseTheme({
@@ -1228,6 +1228,11 @@ const jsonHighlightTheme = EditorView.baseTheme({
 
 const segmentedEditorTheme = EditorView.baseTheme({
   '&': { height: '100%' },
-  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--md-editor-monospace-font, monospace)' },
+  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--md-editor-font-mono)' },
   '.cm-content': { minHeight: '100%' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground':
+    { backgroundColor: 'var(--md-editor-selection-bg) !important' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--md-editor-accent)' },
+  '.cm-activeLine': { backgroundColor: 'var(--md-editor-hover-bg)' },
+  '.cm-activeLineGutter': { backgroundColor: 'var(--md-editor-hover-bg)' },
 });

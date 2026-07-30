@@ -1,6 +1,9 @@
 import type { DiagramType } from './diagramTemplates';
 import type { ImageContext } from '../services/render';
 import type { ContextMenuOpenEvent } from './plugins/contextMenu';
+import type { EditorThemeOptions } from '../theme/types';
+
+export type { EditorThemeOptions } from '../theme/types';
 
 export type EditorMode = 'semantic' | 'source';
 export type InlinePendingMarkName =
@@ -11,10 +14,6 @@ export type InlinePendingMarkName =
   | 'underline'
   | 'highlight';
 export type InlinePendingMarks = Record<InlinePendingMarkName, boolean>;
-
-export interface EditorThemeOptions {
-  name: 'light' | 'dark';
-}
 
 export interface EditorRuntimeOptions {
   readonly: boolean;

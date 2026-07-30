@@ -220,8 +220,8 @@
   height: 22px;
   padding: 0 7px;
   font-size: 11px;
-  border-color: var(--md-editor-danger-fg, #e5484d);
-  color: var(--md-editor-danger-fg, #e5484d);
+  border-color: var(--md-editor-danger);
+  color: var(--md-editor-danger);
   opacity: 0;
 }
 
@@ -234,8 +234,8 @@
 
 .delete-row-btn:hover {
   opacity: 1;
-  border-color: var(--md-editor-danger-fg, #e5484d);
-  color: var(--md-editor-danger-fg, #e5484d);
+  border-color: var(--md-editor-danger);
+  color: var(--md-editor-danger);
 }
 
 .delete-col-btn {
@@ -247,8 +247,8 @@
   height: 22px;
   padding: 0 7px;
   font-size: 11px;
-  border-color: var(--md-editor-danger-fg, #e5484d);
-  color: var(--md-editor-danger-fg, #e5484d);
+  border-color: var(--md-editor-danger);
+  color: var(--md-editor-danger);
   opacity: 0;
 }
 
@@ -261,8 +261,8 @@
 
 .delete-col-btn:hover {
   opacity: 1;
-  border-color: var(--md-editor-danger-fg, #e5484d);
-  color: var(--md-editor-danger-fg, #e5484d);
+  border-color: var(--md-editor-danger);
+  color: var(--md-editor-danger);
 }
 
 /* ---- 工具条：表格激活时显示在左上角 ---- */
@@ -458,7 +458,7 @@
 }
 
 .table-util-bar .util-icon-header {
-  font-family: var(--md-editor-font-ui);
+  font-family: var(--md-editor-font-body);
   font-size: 14px;
   font-weight: 850;
   letter-spacing: 0;
@@ -539,9 +539,9 @@
 }
 
 .util-btn-danger:hover {
-  border-color: var(--md-editor-danger-fg, #e5484d) !important;
-  background: color-mix(in srgb, var(--md-editor-danger-fg, #e5484d) 10%, transparent) !important;
-  color: var(--md-editor-danger-fg, #e5484d) !important;
+  border-color: var(--md-editor-danger) !important;
+  background: color-mix(in srgb, var(--md-editor-danger) 10%, transparent) !important;
+  color: var(--md-editor-danger) !important;
 }
 
 .table-resize-popover {

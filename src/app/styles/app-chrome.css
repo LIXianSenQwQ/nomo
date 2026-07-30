@@ -38,12 +38,11 @@
   min-height: 0;
   place-items: center;
   padding: clamp(28px, 6cqw, 80px);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--md-editor-bg) 72%, var(--md-editor-surface)),
-      var(--md-editor-surface)
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--md-editor-bg) 72%, var(--md-editor-surface)),
+    var(--md-editor-surface)
+  );
 }
 
 .empty-workspace-panel {
@@ -314,7 +313,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--md-editor-accent, #007acc);
+  background-color: var(--md-editor-accent);
   flex-shrink: 0;
   transition:
     transform 140ms ease,
@@ -337,7 +336,7 @@
 
 .close-tab-btn:hover {
   background-color: rgba(128, 128, 128, 0.2);
-  color: var(--md-editor-danger, #e81123) !important;
+  color: var(--md-editor-danger) !important;
 }
 
 .tab-add {

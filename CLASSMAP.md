@@ -19,7 +19,7 @@
 
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
-| 前端入口挂载 | `src/main.ts` | `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte` | 添加新入口视图或全局样式加载 |
+| 前端入口挂载 | `src/main.ts` | `src/app/services/themeManager.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte` | 添加新入口视图、主题启动快照或全局样式加载 |
 | 应用装配中心 | `src/app/App.svelte` | 所有 service、editor-core、组件 | 标签页/文件系统/编辑器之间的协调逻辑变更 |
 | 桌面窗口生命周期 | `src/app/services/desktopWindow.ts` | `src-tauri/src/window/` | 窗口事件、关闭行为、托盘交互变更 |
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
@@ -131,8 +131,11 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 设置模型与持久化 | `src/app/services/settings.ts` | `src/lib/desktop/tauriStorage.ts` | AppPreferences 定义/默认值/加载/保存 |
-| 编辑器设置应用 | `src/app/services/editorSettingsController.ts` | `src/app/services/settings.ts` | 字体/主题/布局/模式同步到编辑器 |
-| 设置窗口 UI | `src/app/components/SettingsWindow.svelte` | `src/app/services/settings.ts`, `src/lib/desktop/tauriUpdater.ts` | 设置界面/更新/文件关联/图片配置 |
+| 主题公共契约 | `src/lib/theme/types.ts` | `src/app/services/themeRegistry.ts`, `src/app/services/themeManager.ts`, 编辑器渲染器 | 主题、令牌、文档样式或渲染配置契约变更 |
+| 主题注册表 | `src/app/services/themeRegistry.ts` | `src/lib/theme/types.ts` | 内置配色、文档样式、令牌映射或主题校验变更 |
+| 主题运行时 | `src/app/services/themeManager.ts` | `src/app/services/themeRegistry.ts`, `src/lib/editor-core/EditorCore.ts` | 主题解析、根令牌、启动快照、系统同步或运行时刷新变更 |
+| 编辑器设置应用 | `src/app/services/editorSettingsController.ts` | `src/app/services/settings.ts` | 字体、行高和内容宽度同步到编辑器 |
+| 设置窗口 UI | `src/app/components/SettingsWindow.svelte` | `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/lib/desktop/tauriUpdater.ts` | 设置界面/主题预览/更新/文件关联/图片配置 |
 | Rust 配置管理 | `src-tauri/src/config/mod.rs` | `src-tauri/src/models.rs` | 应用配置 JSON 持久化、设置读写、启动前读取 |
 
 ### 搜索与替换
@@ -245,6 +248,7 @@
 **Owns:**
 - 前端应用入口挂载逻辑
 - 根据 URL 参数 (`view=settings`) 决定加载主应用或设置窗口
+- 在动态加载窗口组件前同步应用经过校验的主题启动快照
 - 全局样式（theme.css, global.css）加载
 - KaTeX 和 ProseMirror 样式在 main 视图下按需加载
 
@@ -254,7 +258,7 @@
 
 **Called by:** `index.html`
 
-**Depends on:** `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
+**Depends on:** `src/app/services/themeManager.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
 
 **Change this when:**
 - 添加新的入口视图
@@ -280,6 +284,7 @@
 - 初始化渲染服务（Shiki、KaTeX、Mermaid、图片加载器）
 - 创建 `EditorCore` 实例
 - 加载设置和 v2 工作区状态，协调草稿恢复与启动冲突选择
+- 协调主题运行时初始化、系统明暗同步、快捷键切换和保存失败回滚
 - 协调打开、保存、自动保存、模式切换、外部文件打开、关闭确认
 - 订阅编辑器内容变化并同步 dirty/统计/大纲状态
 - 工作区恢复后发起一次启动更新检查，并按目标窗口协调通知卡片与安装确认
@@ -347,6 +352,7 @@
 **Owns:**
 - 设置中心 UI：通用、编辑器、外观、文件、图片、统计、高级、关于等设置页
 - 加载/保存 `AppPreferences`
+- 提供明暗模式分段控制、内置主题卡片、即时跨窗口预览与防抖保存
 - 软件更新、文件关联、右键菜单、图片上传配置等设置项交互
 
 **Does not own:**
@@ -355,7 +361,7 @@
 
 **Called by:** `src/main.ts`（当 `view=settings` 时）
 
-**Depends on:** `src/app/services/settings.ts`, `src/app/services/softwareUpdate.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
+**Depends on:** `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/app/services/softwareUpdate.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
 
 **Change this when:**
 - 添加新的设置项 UI
@@ -727,8 +733,8 @@
 
 **Owns:**
 - `AppPreferences` 定义与默认值
-- 设置归一化、加载、保存
-- 主题/排版/布局应用逻辑
+- 设置归一化、加载、保存和外观模型一次性迁移
+- 无效主题、文档样式与旧字段映射的持久化修复
 
 **Does not own：**
 - 不拥有设置 UI（在 SettingsWindow.svelte 中）
@@ -736,19 +742,92 @@
 
 **Called by:** `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/app/services/editorSettingsController.ts`
 
-**Depends on:** `src/lib/desktop/tauriStorage.ts`
+**Depends on:** `src/app/services/themeRegistry.ts`, `src/lib/desktop/tauriStorage.ts`
 
 **Change this when：**
 - 添加新的设置项
 - 修改设置默认值
 - 修改设置归一化逻辑
-- 修改主题/布局应用逻辑
+- 修改外观设置迁移或持久化修复逻辑
 
 **Do not change this when：**
 - 修改设置 UI 展示方式
 - 修改后端配置结构（在 config/mod.rs 中）
 
 **Related tests:** `src/app/services/settings.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/lib/theme/types.ts`
+
+**Kind:** public contract
+
+**Owns:**
+- 明暗模式、有效配色、外观偏好、颜色令牌、主题变体和文档样式的公共类型
+- Shiki 与 Mermaid 的主题渲染配置契约
+
+**Does not own:**
+- 不拥有具体主题色值或注册逻辑
+- 不拥有主题运行时应用与持久化
+
+**Called by:** 主题注册表、主题管理器、设置模型、EditorCore 和代码/图表渲染器
+
+**Change this when:** 修改 v1 主题契约、必填令牌或渲染器主题配置
+
+**Confidence:** high
+
+---
+
+### `src/app/services/themeRegistry.ts`
+
+**Kind:** registry
+
+**Owns:**
+- `nomo-default`、`nomo-amber-paper` 的亮暗变体和预览色
+- `nomo-classic`、`nomo-modern` 文档样式稳定 ID
+- 必填颜色令牌到 CSS 变量的映射与主题完整性校验
+
+**Does not own:**
+- 不拥有用户当前选择或 DOM 应用
+- 不拥有配置持久化
+
+**Called by:** `src/app/services/themeManager.ts`, `src/app/services/settings.ts`, `src/app/components/SettingsWindow.svelte`
+
+**Depends on:** `src/lib/theme/types.ts`
+
+**Change this when:** 新增内置主题、调整主题令牌、文档样式或注册校验
+
+**Related tests:** `src/app/services/themeRegistry.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/services/themeManager.ts`
+
+**Kind:** service
+
+**Owns:**
+- 外观选择归一化、有效明暗解析和无效值回退
+- 根节点主题属性与颜色令牌应用
+- EditorCore、窗口图标和跨窗口运行时主题刷新
+- `ThemeBootSnapshot` 校验、读写与首屏同步应用
+- `matchMedia`、窗口聚焦和页面恢复时的系统主题同步
+
+**Does not own:**
+- 不拥有内置主题定义（在 themeRegistry.ts 中）
+- 不拥有 config.json 持久化（在 settings.ts 中）
+- 不拥有设置界面
+
+**Called by:** `src/main.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`
+
+**Depends on:** `src/app/services/themeRegistry.ts`, `src/lib/editor-core/EditorCore.ts`, `src/app/services/desktopWindow.ts`
+
+**Change this when:** 修改主题解析、启动快照、系统同步、根令牌或运行时刷新
+
+**Related tests:** `src/app/services/themeManager.test.ts`
 
 **Confidence:** high
 
@@ -1165,6 +1244,7 @@
 **Owns：**
 - 调用 Mermaid 渲染图表
 - 为 Mermaid NodeView 提供 SVG
+- 按当前主题传入 Mermaid `theme` 与 `themeVariables`
 
 **Does not own：**
 - 不拥有图表代码编辑交互（在 MermaidBlockNodeView.ts 中）
@@ -2945,11 +3025,11 @@
 **Kind:** controller
 
 **Owns:**
-- 编辑器设置应用控制器：将主题、字体、行高、内容宽度、块样式同步到 EditorCore
-- 加载/持久化编辑器设置
+- 编辑器排版设置应用控制器：将字体、行高和内容宽度同步到 EditorCore
 
 **Does not own:**
 - 不拥有设置模型定义（在 settings.ts 中）
+- 不拥有配色主题或文档样式应用（在 themeManager.ts 中）
 - 不拥有 EditorCore 内部实现
 
 **Called by:** `src/app/App.svelte`
