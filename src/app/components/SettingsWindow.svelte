@@ -1623,11 +1623,11 @@
                       <span class="theme-card-preview" aria-hidden="true">
                         <span
                           class="theme-card-variant"
-                          style={`--preview-bg: ${colorTheme.variants.light.preview.background}; --preview-surface: ${colorTheme.variants.light.preview.surface}; --preview-accent: ${colorTheme.variants.light.preview.accent}; --preview-fg: ${colorTheme.variants.light.preview.foreground}`}
+                          style={`--preview-bg: ${colorTheme.variants.light.preview.background}; --preview-surface: ${colorTheme.variants.light.preview.surface}; --preview-accent: ${colorTheme.variants.light.preview.accent}; --preview-fg: ${colorTheme.variants.light.preview.foreground}; --preview-radius: ${colorTheme.variants.light.styleTokens.radiusMd}; --preview-border-width: ${colorTheme.variants.light.styleTokens.borderWidth}; --preview-shadow: ${colorTheme.variants.light.styleTokens.shadowRaised}; --preview-space: ${colorTheme.variants.light.styleTokens.spaceMd}`}
                         ></span>
                         <span
                           class="theme-card-variant"
-                          style={`--preview-bg: ${colorTheme.variants.dark.preview.background}; --preview-surface: ${colorTheme.variants.dark.preview.surface}; --preview-accent: ${colorTheme.variants.dark.preview.accent}; --preview-fg: ${colorTheme.variants.dark.preview.foreground}`}
+                          style={`--preview-bg: ${colorTheme.variants.dark.preview.background}; --preview-surface: ${colorTheme.variants.dark.preview.surface}; --preview-accent: ${colorTheme.variants.dark.preview.accent}; --preview-fg: ${colorTheme.variants.dark.preview.foreground}; --preview-radius: ${colorTheme.variants.dark.styleTokens.radiusMd}; --preview-border-width: ${colorTheme.variants.dark.styleTokens.borderWidth}; --preview-shadow: ${colorTheme.variants.dark.styleTokens.shadowRaised}; --preview-space: ${colorTheme.variants.dark.styleTokens.spaceMd}`}
                         ></span>
                       </span>
                       <span class="theme-card-footer">
@@ -2410,7 +2410,7 @@
 
   .settings-nav button {
     width: 100%;
-    min-height: 38px;
+    min-height: var(--md-editor-control-height-lg);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -2490,8 +2490,8 @@
   }
 
   .close-button {
-    width: 34px;
-    height: 34px;
+    width: var(--md-editor-control-height-md);
+    height: var(--md-editor-control-height-md);
     display: grid;
     place-items: center;
     border: 0;
@@ -2544,7 +2544,7 @@
   .settings-loading {
     min-height: 0;
     overflow-y: auto;
-    padding: 22px;
+    padding: var(--md-editor-space-xl);
   }
 
   .settings-loading {
@@ -2574,8 +2574,8 @@
   .appearance-theme-row,
   .theme-picker {
     display: grid;
-    gap: 12px;
-    padding: 14px 0;
+    gap: var(--md-editor-space-md);
+    padding: var(--md-editor-space-md) 0;
     border-top: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
   }
 
@@ -2586,8 +2586,8 @@
 
   .theme-card-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--md-editor-space-md);
   }
 
   .theme-card {
@@ -2633,17 +2633,19 @@
   .theme-card-variant::before {
     content: '';
     position: absolute;
-    inset: 12px 11px;
-    border: 1px solid color-mix(in srgb, var(--preview-fg) 15%, transparent);
-    border-radius: 4px;
+    inset: var(--preview-space, 12px);
+    border: var(--preview-border-width, 1px) solid
+      color-mix(in srgb, var(--preview-fg) 15%, transparent);
+    border-radius: var(--preview-radius, 4px);
     background: var(--preview-surface);
+    box-shadow: var(--preview-shadow, none);
   }
 
   .theme-card-variant::after {
     content: '';
     position: absolute;
-    left: 18px;
-    right: 18px;
+    left: calc(var(--preview-space, 12px) + 6px);
+    right: calc(var(--preview-space, 12px) + 6px);
     bottom: 20px;
     height: 5px;
     border-radius: 99px;
@@ -2682,8 +2684,8 @@
     display: grid;
     grid-template-columns: minmax(220px, 1fr) minmax(220px, 300px);
     align-items: center;
-    gap: 22px;
-    padding: 14px 0;
+    gap: var(--md-editor-space-xl);
+    padding: var(--md-editor-space-md) 0;
     border-top: 1px solid color-mix(in srgb, var(--md-editor-border) 72%, transparent);
   }
 
@@ -2749,7 +2751,7 @@
   .triple-control button,
   .quad-control button {
     min-width: 0;
-    min-height: 34px;
+    min-height: var(--md-editor-control-height-md);
     border: 0;
     border-radius: var(--md-editor-radius-sm);
     background: transparent;
@@ -2776,14 +2778,14 @@
   .quad-control button.active {
     background: var(--md-editor-bg);
     color: var(--md-editor-accent-strong);
-    box-shadow: 0 1px 8px color-mix(in srgb, #020617 10%, transparent);
+    box-shadow: var(--md-editor-shadow-raised);
   }
 
   .range-setting {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 74px;
     align-items: center;
-    gap: 12px;
+    gap: var(--md-editor-space-md);
   }
 
   .range-setting input {
@@ -2811,7 +2813,7 @@
   .number-field input {
     width: 100%;
     min-width: 0;
-    height: 34px;
+    height: var(--md-editor-control-height-md);
     padding: 0 10px;
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-sm);
@@ -2834,7 +2836,7 @@
     justify-content: center;
     gap: 6px;
     min-width: 116px;
-    height: 34px;
+    height: var(--md-editor-control-height-md);
     padding: 0 12px;
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-sm);
@@ -2959,7 +2961,7 @@
     height: 18px;
     border-radius: 999px;
     background: var(--md-editor-bg);
-    box-shadow: 0 1px 4px color-mix(in srgb, #020617 20%, transparent);
+    box-shadow: var(--md-editor-shadow-raised);
     transition: transform 160ms ease;
   }
 
@@ -3071,7 +3073,7 @@
     }
 
     .settings-content {
-      padding: 18px;
+      padding: var(--md-editor-space-lg);
     }
   }
 

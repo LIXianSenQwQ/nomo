@@ -1,14 +1,18 @@
 import {
   THEME_COLOR_TOKEN_NAMES,
+  THEME_STYLE_TOKEN_NAMES,
   type ColorScheme,
   type DocumentStyleDefinition,
   type ThemeColorTokens,
   type ThemeDefinition,
+  type ThemeStyleProfile,
+  type ThemeStyleTokens,
   type ThemeVariantDefinition,
 } from '../../lib/theme/types';
 
 export const DEFAULT_COLOR_THEME_ID = 'nomo-default';
 export const AMBER_PAPER_THEME_ID = 'nomo-amber-paper';
+export const CLASSIC_GRAY_THEME_ID = 'nomo-classic-gray';
 export const DEFAULT_DOCUMENT_STYLE_ID = 'nomo-modern';
 export const CLASSIC_DOCUMENT_STYLE_ID = 'nomo-classic';
 
@@ -19,7 +23,25 @@ const SUPPORTED_SHIKI_THEMES = new Set([
   'gruvbox-dark-medium',
 ]);
 const SUPPORTED_MERMAID_THEMES = new Set(['default', 'dark', 'base']);
+const SUPPORTED_STYLE_PROFILES = new Set<ThemeStyleProfile>(['modern', 'paper', 'classic']);
 const THEME_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const STYLE_LENGTH_TOKEN_NAMES = new Set<keyof ThemeStyleTokens>([
+  'radiusXs',
+  'radiusSm',
+  'radiusMd',
+  'radiusLg',
+  'radiusPill',
+  'borderWidth',
+  'spaceXs',
+  'spaceSm',
+  'spaceMd',
+  'spaceLg',
+  'spaceXl',
+  'controlHeightSm',
+  'controlHeightMd',
+  'controlHeightLg',
+]);
+const SAFE_CSS_LENGTH_PATTERN = /^(?:0|\d+(?:\.\d+)?(?:px|rem))$/;
 
 export const THEME_TOKEN_CSS_VARIABLES: Record<keyof ThemeColorTokens, string> = {
   background: '--md-editor-bg',
@@ -87,6 +109,29 @@ export const THEME_TOKEN_CSS_VARIABLES: Record<keyof ThemeColorTokens, string> =
   scrollbarThumb: '--md-scrollbar-thumb',
   scrollbarThumbHover: '--md-scrollbar-thumb-hover',
   scrollbarThumbActive: '--md-scrollbar-thumb-active',
+};
+
+export const THEME_STYLE_TOKEN_CSS_VARIABLES: Record<keyof ThemeStyleTokens, string> = {
+  radiusXs: '--md-editor-radius-xs',
+  radiusSm: '--md-editor-radius-sm',
+  radiusMd: '--md-editor-radius-md',
+  radiusLg: '--md-editor-radius-lg',
+  radiusPill: '--md-editor-radius-pill',
+  borderWidth: '--md-editor-border-width',
+  shadowRaised: '--md-editor-shadow-raised',
+  shadowFloating: '--md-editor-shadow',
+  shadowDialog: '--md-editor-shadow-dialog',
+  spaceXs: '--md-editor-space-xs',
+  spaceSm: '--md-editor-space-sm',
+  spaceMd: '--md-editor-space-md',
+  spaceLg: '--md-editor-space-lg',
+  spaceXl: '--md-editor-space-xl',
+  controlHeightSm: '--md-editor-control-height-sm',
+  controlHeightMd: '--md-editor-control-height-md',
+  controlHeightLg: '--md-editor-control-height-lg',
+  fontUi: '--md-editor-font-body',
+  fontDocument: '--md-editor-font-document',
+  fontMono: '--md-editor-font-mono',
 };
 
 const defaultLightTokens: ThemeColorTokens = {
@@ -351,8 +396,171 @@ const amberDarkTokens: ThemeColorTokens = {
   scrollbarThumbActive: '#CCB18C',
 };
 
+const classicGrayLightTokens: ThemeColorTokens = {
+  ...defaultLightTokens,
+  background: '#EFEFEF',
+  surface: '#FAFAFA',
+  rail: '#E9E9E9',
+  chrome: '#F4F4F4',
+  documentBackground: '#FFFFFF',
+  sidebarActive: '#E1E1E1',
+  foreground: '#2E2E2E',
+  mutedForeground: '#626262',
+  border: '#D4D4D4',
+  selection: 'rgba(80, 80, 80, 0.2)',
+  hoverBackground: '#E6E6E6',
+  heading: '#202020',
+  accent: '#686868',
+  accentStrong: '#3F3F3F',
+  accentFill: '#565656',
+  onAccent: '#FFFFFF',
+  blockquoteBorder: '#8A8A8A',
+  blockquoteForeground: '#515151',
+  blockquoteClassicBackground: '#F0F0F0',
+  calloutNoteClassicBackground: '#F0F0F0',
+  calloutTipClassicBackground: '#F0F0F0',
+  calloutImportantClassicBackground: '#F0F0F0',
+  calloutWarningClassicBackground: '#F0F0F0',
+  calloutCautionClassicBackground: '#F0F0F0',
+  codeBackground: '#DCDCDC',
+  codeForeground: '#444444',
+  codeBorder: '#E4E4E4',
+  tableBorder: '#D2D2D2',
+  tableHeaderBackground: '#EAEAEA',
+  titlebarBackground: '#F4F4F4',
+  titlebarBorder: '#D8D8D8',
+  titlebarForeground: '#333333',
+  dropdownBackground: 'rgba(250, 250, 250, 0.97)',
+  dropdownBorder: '#D0D0D0',
+  scrollbarTrack: 'rgba(0, 0, 0, 0.04)',
+  scrollbarThumbIdle: 'rgba(96, 96, 96, 0.55)',
+  scrollbarThumb: '#777777',
+  scrollbarThumbHover: '#626262',
+  scrollbarThumbActive: '#4D4D4D',
+};
+
+const classicGrayDarkTokens: ThemeColorTokens = {
+  ...defaultDarkTokens,
+  background: '#181818',
+  surface: '#222222',
+  rail: '#1D1D1D',
+  chrome: '#262626',
+  documentBackground: '#222222',
+  sidebarActive: '#343434',
+  foreground: '#E8E8E8',
+  mutedForeground: '#A6A6A6',
+  border: '#3D3D3D',
+  selection: 'rgba(190, 190, 190, 0.24)',
+  hoverBackground: '#2E2E2E',
+  heading: '#F3F3F3',
+  accent: '#A3A3A3',
+  accentStrong: '#D4D4D4',
+  accentFill: '#666666',
+  onAccent: '#FFFFFF',
+  blockquoteBorder: '#858585',
+  blockquoteForeground: '#C8C8C8',
+  blockquoteClassicBackground: '#2A2A2A',
+  calloutNoteClassicBackground: '#2A2A2A',
+  calloutTipClassicBackground: '#2A2A2A',
+  calloutImportantClassicBackground: '#2A2A2A',
+  calloutWarningClassicBackground: '#2A2A2A',
+  calloutCautionClassicBackground: '#2A2A2A',
+  codeBackground: '#303030',
+  codeForeground: '#E0E0E0',
+  codeBorder: '#484848',
+  tableBorder: '#3F3F3F',
+  tableHeaderBackground: '#2B2B2B',
+  titlebarBackground: '#1C1C1C',
+  titlebarBorder: '#363636',
+  titlebarForeground: '#D0D0D0',
+  dropdownBackground: 'rgba(32, 32, 32, 0.97)',
+  dropdownBorder: '#444444',
+  scrollbarTrack: 'rgba(255, 255, 255, 0.04)',
+  scrollbarThumbIdle: 'rgba(166, 166, 166, 0.58)',
+  scrollbarThumb: '#8D8D8D',
+  scrollbarThumbHover: '#AAAAAA',
+  scrollbarThumbActive: '#C4C4C4',
+};
+
+const COMMON_UI_FONT = "'Segoe UI', 'Microsoft YaHei', sans-serif";
+const COMMON_MONO_FONT = "'Cascadia Code', 'JetBrains Mono', Consolas, monospace";
+
+const modernLightStyleTokens: ThemeStyleTokens = {
+  radiusXs: '2px',
+  radiusSm: '4px',
+  radiusMd: '8px',
+  radiusLg: '12px',
+  radiusPill: '999px',
+  borderWidth: '1px',
+  shadowRaised: '0 1px 4px rgba(22, 32, 44, 0.08)',
+  shadowFloating: '0 14px 34px rgba(22, 32, 44, 0.08)',
+  shadowDialog: '0 20px 60px rgba(0, 0, 0, 0.22)',
+  spaceXs: '4px',
+  spaceSm: '8px',
+  spaceMd: '12px',
+  spaceLg: '16px',
+  spaceXl: '24px',
+  controlHeightSm: '28px',
+  controlHeightMd: '34px',
+  controlHeightLg: '38px',
+  fontUi: COMMON_UI_FONT,
+  fontDocument: COMMON_UI_FONT,
+  fontMono: COMMON_MONO_FONT,
+};
+
+const modernDarkStyleTokens: ThemeStyleTokens = {
+  ...modernLightStyleTokens,
+  shadowRaised: '0 1px 4px rgba(0, 0, 0, 0.18)',
+  shadowFloating: '0 16px 44px rgba(0, 0, 0, 0.32)',
+  shadowDialog: '0 20px 60px rgba(0, 0, 0, 0.42)',
+};
+
+const paperLightStyleTokens: ThemeStyleTokens = {
+  ...modernLightStyleTokens,
+  radiusXs: '3px',
+  radiusSm: '6px',
+  radiusMd: '10px',
+  radiusLg: '14px',
+  shadowRaised: '0 1px 3px rgba(74, 58, 39, 0.08)',
+  shadowFloating: '0 10px 28px rgba(74, 58, 39, 0.12)',
+  shadowDialog: '0 18px 48px rgba(74, 58, 39, 0.18)',
+  spaceSm: '10px',
+  spaceMd: '14px',
+  spaceLg: '18px',
+  spaceXl: '26px',
+  controlHeightSm: '30px',
+  controlHeightMd: '36px',
+  controlHeightLg: '40px',
+};
+
+const paperDarkStyleTokens: ThemeStyleTokens = {
+  ...paperLightStyleTokens,
+  shadowRaised: '0 1px 3px rgba(0, 0, 0, 0.18)',
+  shadowFloating: '0 12px 32px rgba(0, 0, 0, 0.32)',
+  shadowDialog: '0 20px 52px rgba(0, 0, 0, 0.42)',
+};
+
+const classicLightStyleTokens: ThemeStyleTokens = {
+  ...modernLightStyleTokens,
+  radiusMd: '6px',
+  radiusLg: '8px',
+  shadowRaised: '0 1px 0 rgba(31, 35, 40, 0.06)',
+  shadowFloating: '0 3px 12px rgba(31, 35, 40, 0.12)',
+  shadowDialog: '0 8px 24px rgba(31, 35, 40, 0.16)',
+  controlHeightMd: '32px',
+  controlHeightLg: '36px',
+};
+
+const classicDarkStyleTokens: ThemeStyleTokens = {
+  ...classicLightStyleTokens,
+  shadowRaised: '0 1px 0 rgba(0, 0, 0, 0.18)',
+  shadowFloating: '0 3px 12px rgba(0, 0, 0, 0.3)',
+  shadowDialog: '0 8px 24px rgba(0, 0, 0, 0.4)',
+};
+
 function createVariant(
   tokens: ThemeColorTokens,
+  styleTokens: ThemeStyleTokens,
   shikiTheme: string,
   mermaidTheme: 'default' | 'dark' | 'base',
 ): ThemeVariantDefinition {
@@ -381,6 +589,7 @@ function createVariant(
 
   return {
     tokens,
+    styleTokens,
     shikiTheme,
     mermaid,
     preview: {
@@ -404,9 +613,10 @@ const BUILTIN_THEME_DEFINITIONS: ThemeDefinition[] = [
       'en-US': 'Nomo Default',
       'ja-JP': 'Nomo デフォルト',
     },
+    styleProfile: 'modern',
     variants: {
-      light: createVariant(defaultLightTokens, 'github-light', 'default'),
-      dark: createVariant(defaultDarkTokens, 'github-dark', 'dark'),
+      light: createVariant(defaultLightTokens, modernLightStyleTokens, 'github-light', 'default'),
+      dark: createVariant(defaultDarkTokens, modernDarkStyleTokens, 'github-dark', 'dark'),
     },
   },
   {
@@ -420,9 +630,47 @@ const BUILTIN_THEME_DEFINITIONS: ThemeDefinition[] = [
       'en-US': 'Amber Paper',
       'ja-JP': '琥珀の紙面',
     },
+    styleProfile: 'paper',
     variants: {
-      light: createVariant(amberLightTokens, 'gruvbox-light-medium', 'base'),
-      dark: createVariant(amberDarkTokens, 'gruvbox-dark-medium', 'base'),
+      light: createVariant(
+        amberLightTokens,
+        paperLightStyleTokens,
+        'gruvbox-light-medium',
+        'base',
+      ),
+      dark: createVariant(
+        amberDarkTokens,
+        paperDarkStyleTokens,
+        'gruvbox-dark-medium',
+        'base',
+      ),
+    },
+  },
+  {
+    schemaVersion: 1,
+    id: CLASSIC_GRAY_THEME_ID,
+    version: '1.0.0',
+    author: 'Nomo',
+    localizedNames: {
+      'zh-CN': '经典灰',
+      'zh-TW': '經典灰',
+      'en-US': 'Classic Gray',
+      'ja-JP': 'クラシックグレー',
+    },
+    styleProfile: 'classic',
+    variants: {
+      light: createVariant(
+        classicGrayLightTokens,
+        classicLightStyleTokens,
+        'github-light',
+        'base',
+      ),
+      dark: createVariant(
+        classicGrayDarkTokens,
+        classicDarkStyleTokens,
+        'github-dark',
+        'base',
+      ),
     },
   },
 ];
@@ -500,6 +748,9 @@ export function validateThemeDefinition(theme: ThemeDefinition) {
   if (!theme.version || !theme.author || Object.keys(theme.localizedNames).length === 0) {
     throw new Error(`主题元数据不完整：${theme.id}`);
   }
+  if (!SUPPORTED_STYLE_PROFILES.has(theme.styleProfile)) {
+    throw new Error(`不支持的主题样式档案：${theme.id}/${theme.styleProfile}`);
+  }
 
   for (const scheme of ['light', 'dark'] as const) {
     const variant = theme.variants?.[scheme];
@@ -529,6 +780,22 @@ function validateThemeVariant(
       throw new Error(`主题令牌值非法：${themeId}/${scheme}/${name}`);
     }
   }
+  const styleTokenKeys = Object.keys(variant.styleTokens);
+  const requiredStyleKeys = new Set<string>(THEME_STYLE_TOKEN_NAMES);
+  const missingStyleTokens = THEME_STYLE_TOKEN_NAMES.filter(
+    (name) => !styleTokenKeys.includes(name),
+  );
+  const unknownStyleTokens = styleTokenKeys.filter((name) => !requiredStyleKeys.has(name));
+  if (missingStyleTokens.length > 0 || unknownStyleTokens.length > 0) {
+    throw new Error(
+      `主题样式令牌不完整：${themeId}/${scheme}; missing=${missingStyleTokens.join(',')}; unknown=${unknownStyleTokens.join(',')}`,
+    );
+  }
+  for (const [name, value] of Object.entries(variant.styleTokens)) {
+    if (!isSafeStyleToken(name as keyof ThemeStyleTokens, value)) {
+      throw new Error(`主题样式令牌值非法：${themeId}/${scheme}/${name}`);
+    }
+  }
   if (!SUPPORTED_SHIKI_THEMES.has(variant.shikiTheme)) {
     throw new Error(`不支持的 Shiki 主题：${variant.shikiTheme}`);
   }
@@ -556,9 +823,19 @@ function isSafeThemeValue(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
-    !/[;{}]/.test(value) &&
-    !/url\s*\(|@import/i.test(value)
+    !/[;{}\r\n]/.test(value) &&
+    !/url\s*\(|@import|!important/i.test(value)
   );
+}
+
+function isSafeStyleToken(name: keyof ThemeStyleTokens, value: unknown): value is string {
+  if (!isSafeThemeValue(value)) {
+    return false;
+  }
+  if (STYLE_LENGTH_TOKEN_NAMES.has(name)) {
+    return SAFE_CSS_LENGTH_PATTERN.test(value);
+  }
+  return true;
 }
 
 export const themeRegistry = new ThemeRegistry();

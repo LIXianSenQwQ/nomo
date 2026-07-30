@@ -110,7 +110,7 @@
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-md);
     background: var(--md-editor-surface);
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+    box-shadow: var(--md-editor-shadow);
     animation: context-menu-in 120ms ease-out forwards;
     color: var(--md-editor-fg);
   }

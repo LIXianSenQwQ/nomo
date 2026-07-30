@@ -4,19 +4,23 @@ import type {
   EditorThemeOptions,
   ThemeColorTokens,
   ThemeMode,
+  ThemeStyleProfile,
+  ThemeStyleTokens,
 } from '../../lib/theme/types';
 import { getDesktopSystemTheme, setDesktopIconTheme } from './desktopWindow';
 import {
   DEFAULT_COLOR_THEME_ID,
   DEFAULT_DOCUMENT_STYLE_ID,
+  THEME_STYLE_TOKEN_CSS_VARIABLES,
   THEME_TOKEN_CSS_VARIABLES,
   isRegisteredDocumentStyleId,
   isRegisteredThemeId,
   themeRegistry,
 } from './themeRegistry';
 
-export const THEME_BOOT_SNAPSHOT_KEY = 'nomo.themeBootSnapshot.v1';
-export const THEME_BOOT_SNAPSHOT_SCHEMA_VERSION = 1;
+export const THEME_BOOT_SNAPSHOT_KEY = 'nomo.themeBootSnapshot.v2';
+export const LEGACY_THEME_BOOT_SNAPSHOT_KEY = 'nomo.themeBootSnapshot.v1';
+export const THEME_BOOT_SNAPSHOT_SCHEMA_VERSION = 2;
 
 const THEME_TRANSITION_CLASS = 'theme-transitioning';
 const THEME_TRANSITION_MS = 180;
@@ -27,10 +31,24 @@ export interface ResolvedTheme {
   effectiveScheme: ColorScheme;
   themeVersion: string;
   tokens: ThemeColorTokens;
+  styleProfile: ThemeStyleProfile;
+  styleTokens: ThemeStyleTokens;
   editorTheme: EditorThemeOptions;
 }
 
 export interface ThemeBootSnapshot {
+  schemaVersion: 2;
+  themeVersion: string;
+  themeMode: ThemeMode;
+  colorThemeId: string;
+  documentStyleId: string;
+  effectiveScheme: ColorScheme;
+  tokens: ThemeColorTokens;
+  styleProfile: ThemeStyleProfile;
+  styleTokens: ThemeStyleTokens;
+}
+
+interface LegacyThemeBootSnapshot {
   schemaVersion: 1;
   themeVersion: string;
   themeMode: ThemeMode;
@@ -102,6 +120,8 @@ export function resolveTheme(
     effectiveScheme,
     themeVersion: theme.version,
     tokens: variant.tokens,
+    styleProfile: theme.styleProfile,
+    styleTokens: variant.styleTokens,
     editorTheme: {
       name: effectiveScheme,
       colorThemeId: theme.id,
@@ -121,6 +141,7 @@ export function applyResolvedTheme(
   root.dataset.theme = resolved.effectiveScheme;
   root.dataset.themePreference = resolved.preferences.themeMode;
   root.dataset.colorTheme = resolved.preferences.colorThemeId;
+  root.dataset.themeStyle = resolved.styleProfile;
   root.dataset.documentStyle = resolved.preferences.documentStyleId;
 
   const documentStyle =
@@ -130,6 +151,9 @@ export function applyResolvedTheme(
 
   for (const [tokenName, cssVariable] of Object.entries(THEME_TOKEN_CSS_VARIABLES)) {
     root.style.setProperty(cssVariable, resolved.tokens[tokenName as keyof ThemeColorTokens]);
+  }
+  for (const [tokenName, cssVariable] of Object.entries(THEME_STYLE_TOKEN_CSS_VARIABLES)) {
+    root.style.setProperty(cssVariable, resolved.styleTokens[tokenName as keyof ThemeStyleTokens]);
   }
   root.style.colorScheme = resolved.effectiveScheme;
   return resolved;
@@ -165,7 +189,12 @@ export function writeThemeBootSnapshot(resolved: ResolvedTheme) {
   if (typeof localStorage === 'undefined') {
     return;
   }
-  const snapshot: ThemeBootSnapshot = {
+  localStorage.setItem(THEME_BOOT_SNAPSHOT_KEY, JSON.stringify(createThemeBootSnapshot(resolved)));
+  localStorage.removeItem(LEGACY_THEME_BOOT_SNAPSHOT_KEY);
+}
+
+function createThemeBootSnapshot(resolved: ResolvedTheme): ThemeBootSnapshot {
+  return {
     schemaVersion: THEME_BOOT_SNAPSHOT_SCHEMA_VERSION,
     themeVersion: resolved.themeVersion,
     themeMode: resolved.preferences.themeMode,
@@ -173,24 +202,46 @@ export function writeThemeBootSnapshot(resolved: ResolvedTheme) {
     documentStyleId: resolved.preferences.documentStyleId,
     effectiveScheme: resolved.effectiveScheme,
     tokens: resolved.tokens,
+    styleProfile: resolved.styleProfile,
+    styleTokens: resolved.styleTokens,
   };
-  localStorage.setItem(THEME_BOOT_SNAPSHOT_KEY, JSON.stringify(snapshot));
 }
 
 export function readThemeBootSnapshot(): ThemeBootSnapshot | null {
   if (typeof localStorage === 'undefined') {
     return null;
   }
-  const value = localStorage.getItem(THEME_BOOT_SNAPSHOT_KEY);
+  const currentSnapshot = parseThemeBootSnapshot(localStorage.getItem(THEME_BOOT_SNAPSHOT_KEY));
+  if (currentSnapshot && isValidThemeBootSnapshot(currentSnapshot)) {
+    return currentSnapshot as ThemeBootSnapshot;
+  }
+
+  return readLegacyThemeBootSnapshot();
+}
+
+function parseThemeBootSnapshot(value: string | null): Partial<ThemeBootSnapshot> | null {
   if (!value) {
     return null;
   }
   try {
-    const snapshot = JSON.parse(value) as Partial<ThemeBootSnapshot>;
-    if (!isValidThemeBootSnapshot(snapshot)) {
+    return JSON.parse(value) as Partial<ThemeBootSnapshot>;
+  } catch {
+    return null;
+  }
+}
+
+function readLegacyThemeBootSnapshot(): ThemeBootSnapshot | null {
+  const value = localStorage.getItem(LEGACY_THEME_BOOT_SNAPSHOT_KEY);
+  if (!value) {
+    return null;
+  }
+  try {
+    const snapshot = JSON.parse(value) as Partial<LegacyThemeBootSnapshot>;
+    if (!isValidLegacyThemeBootSnapshot(snapshot)) {
       return null;
     }
-    return snapshot as ThemeBootSnapshot;
+    const resolved = resolveTheme(snapshot, snapshot.effectiveScheme);
+    return createThemeBootSnapshot(resolved);
   } catch {
     return null;
   }
@@ -202,7 +253,9 @@ export function bootstrapThemeFromSnapshot() {
     const resolved = resolveTheme(snapshot, snapshot.effectiveScheme);
     if (
       resolved.themeVersion === snapshot.themeVersion &&
-      tokensMatch(resolved.tokens, snapshot.tokens)
+      tokensMatch(resolved.tokens, snapshot.tokens) &&
+      resolved.styleProfile === snapshot.styleProfile &&
+      tokensMatch(resolved.styleTokens, snapshot.styleTokens)
     ) {
       return applyResolvedTheme(resolved);
     }
@@ -223,14 +276,19 @@ function readThemeBootSchemeHint(): ColorScheme | null {
   if (typeof localStorage === 'undefined') {
     return null;
   }
-  try {
-    const value = JSON.parse(localStorage.getItem(THEME_BOOT_SNAPSHOT_KEY) ?? 'null') as {
-      effectiveScheme?: unknown;
-    } | null;
-    return isColorScheme(value?.effectiveScheme) ? value.effectiveScheme : null;
-  } catch {
-    return null;
+  for (const key of [THEME_BOOT_SNAPSHOT_KEY, LEGACY_THEME_BOOT_SNAPSHOT_KEY]) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) ?? 'null') as {
+        effectiveScheme?: unknown;
+      } | null;
+      if (isColorScheme(value?.effectiveScheme)) {
+        return value.effectiveScheme;
+      }
+    } catch {
+      // 继续读取另一版本快照。
+    }
   }
+  return null;
 }
 
 export function listenForSystemThemeChanges(sync: () => void | Promise<void>) {
@@ -264,6 +322,31 @@ function isValidThemeBootSnapshot(snapshot: Partial<ThemeBootSnapshot>) {
     !isRegisteredThemeId(snapshot.colorThemeId) ||
     !isRegisteredDocumentStyleId(snapshot.documentStyleId) ||
     !isColorScheme(snapshot.effectiveScheme) ||
+    !snapshot.tokens ||
+    !isThemeStyleProfile(snapshot.styleProfile) ||
+    !snapshot.styleTokens
+  ) {
+    return false;
+  }
+  const resolved = resolveTheme(snapshot, snapshot.effectiveScheme);
+  return (
+    resolved.themeVersion === snapshot.themeVersion &&
+    tokensMatch(resolved.tokens, snapshot.tokens) &&
+    resolved.styleProfile === snapshot.styleProfile &&
+    tokensMatch(resolved.styleTokens, snapshot.styleTokens)
+  );
+}
+
+function isValidLegacyThemeBootSnapshot(
+  snapshot: Partial<LegacyThemeBootSnapshot>,
+): snapshot is LegacyThemeBootSnapshot {
+  if (
+    snapshot.schemaVersion !== 1 ||
+    !snapshot.themeVersion ||
+    !isThemeMode(snapshot.themeMode) ||
+    !isRegisteredThemeId(snapshot.colorThemeId) ||
+    !isRegisteredDocumentStyleId(snapshot.documentStyleId) ||
+    !isColorScheme(snapshot.effectiveScheme) ||
     !snapshot.tokens
   ) {
     return false;
@@ -274,12 +357,16 @@ function isValidThemeBootSnapshot(snapshot: Partial<ThemeBootSnapshot>) {
   );
 }
 
-function tokensMatch(expected: ThemeColorTokens, actual: ThemeColorTokens) {
+function isThemeStyleProfile(value: unknown): value is ThemeStyleProfile {
+  return value === 'modern' || value === 'paper' || value === 'classic';
+}
+
+function tokensMatch<T extends Record<string, string>>(expected: T, actual: T) {
   const expectedEntries = Object.entries(expected);
   const actualKeys = Object.keys(actual);
   return (
     expectedEntries.length === actualKeys.length &&
-    expectedEntries.every(([key, value]) => actual[key as keyof ThemeColorTokens] === value)
+    expectedEntries.every(([key, value]) => actual[key] === value)
   );
 }
 

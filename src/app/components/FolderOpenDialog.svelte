@@ -100,7 +100,7 @@
     background: var(--md-editor-bg);
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-md);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--md-editor-shadow-dialog);
     color: var(--md-editor-fg);
   }
 

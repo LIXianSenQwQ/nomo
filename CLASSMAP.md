@@ -131,9 +131,9 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 设置模型与持久化 | `src/app/services/settings.ts` | `src/lib/desktop/tauriStorage.ts` | AppPreferences 定义/默认值/加载/保存 |
-| 主题公共契约 | `src/lib/theme/types.ts` | `src/app/services/themeRegistry.ts`, `src/app/services/themeManager.ts`, 编辑器渲染器 | 主题、令牌、文档样式或渲染配置契约变更 |
-| 主题注册表 | `src/app/services/themeRegistry.ts` | `src/lib/theme/types.ts` | 内置配色、文档样式、令牌映射或主题校验变更 |
-| 主题运行时 | `src/app/services/themeManager.ts` | `src/app/services/themeRegistry.ts`, `src/lib/editor-core/EditorCore.ts` | 主题解析、根令牌、启动快照、系统同步或运行时刷新变更 |
+| 主题公共契约 | `src/lib/theme/types.ts` | `src/app/services/themeRegistry.ts`, `src/app/services/themeManager.ts`, 编辑器渲染器 | 颜色/样式令牌、样式档案、文档样式或渲染配置契约变更 |
+| 主题注册表 | `src/app/services/themeRegistry.ts` | `src/lib/theme/types.ts` | 内置配色、样式档案、文档样式、令牌映射或主题校验变更 |
+| 主题运行时 | `src/app/services/themeManager.ts` | `src/app/services/themeRegistry.ts`, `src/lib/editor-core/EditorCore.ts` | 主题解析、根颜色/样式令牌、启动快照、系统同步或运行时刷新变更 |
 | 编辑器设置应用 | `src/app/services/editorSettingsController.ts` | `src/app/services/settings.ts` | 字体、行高和内容宽度同步到编辑器 |
 | 设置窗口 UI | `src/app/components/SettingsWindow.svelte` | `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/lib/desktop/tauriUpdater.ts` | 设置界面/主题预览/更新/文件关联/图片配置 |
 | Rust 配置管理 | `src-tauri/src/config/mod.rs` | `src-tauri/src/models.rs` | 应用配置 JSON 持久化、设置读写、启动前读取 |
@@ -352,7 +352,7 @@
 **Owns:**
 - 设置中心 UI：通用、编辑器、外观、文件、图片、统计、高级、关于等设置页
 - 加载/保存 `AppPreferences`
-- 提供明暗模式分段控制、内置主题卡片、即时跨窗口预览与防抖保存
+- 提供明暗模式分段控制、内置主题颜色/造型预览卡片、即时跨窗口预览与防抖保存
 - 软件更新、文件关联、右键菜单、图片上传配置等设置项交互
 
 **Does not own:**
@@ -785,9 +785,9 @@
 **Kind:** registry
 
 **Owns:**
-- `nomo-default`、`nomo-amber-paper` 的亮暗变体和预览色
+- `nomo-default`、`nomo-amber-paper`、`nomo-classic-gray` 的亮暗变体、样式档案和预览
 - `nomo-classic`、`nomo-modern` 文档样式稳定 ID
-- 必填颜色令牌到 CSS 变量的映射与主题完整性校验
+- 必填颜色/样式令牌到 CSS 变量的映射与主题完整性校验
 
 **Does not own:**
 - 不拥有用户当前选择或 DOM 应用
@@ -811,9 +811,9 @@
 
 **Owns:**
 - 外观选择归一化、有效明暗解析和无效值回退
-- 根节点主题属性与颜色令牌应用
+- 根节点主题属性、样式档案及颜色/样式令牌应用
 - EditorCore、窗口图标和跨窗口运行时主题刷新
-- `ThemeBootSnapshot` 校验、读写与首屏同步应用
+- `ThemeBootSnapshot` v2 校验、v1 兼容读取、读写与首屏同步应用
 - `matchMedia`、窗口聚焦和页面恢复时的系统主题同步
 
 **Does not own:**

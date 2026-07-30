@@ -63,7 +63,7 @@
   border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 86%, var(--md-editor-accent) 14%);
   color: var(--md-editor-accent-strong);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--md-editor-shadow-raised);
 }
 
 .empty-workspace-copy {
@@ -103,7 +103,7 @@
   justify-content: center;
   gap: 7px;
   min-width: 108px;
-  min-height: 34px;
+  min-height: var(--md-editor-control-height-md);
   padding: 0 12px;
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
@@ -162,7 +162,7 @@
   display: inline-grid;
   place-items: center;
   min-width: 44px;
-  min-height: 30px;
+  min-height: var(--md-editor-control-height-sm);
   padding: 0 9px;
   border: 0;
   border-radius: var(--md-editor-radius-sm);
@@ -178,7 +178,7 @@
   width: 24px;
   height: 24px;
   margin-right: 10px;
-  border-radius: 6px;
+  border-radius: var(--md-editor-radius-md);
   background: var(--md-editor-accent-strong);
   color: var(--md-editor-surface);
   font-family: var(--md-editor-font-mono);
@@ -255,7 +255,7 @@
   gap: 8px;
   min-width: 120px;
   max-width: 180px;
-  height: 36px;
+  height: var(--md-editor-control-height-lg);
   padding: 0 12px;
   border: 0;
   border-right: 1px solid var(--md-editor-border);
@@ -345,14 +345,14 @@
   justify-content: center;
   min-width: 32px;
   flex-shrink: 0;
-  height: 32px;
+  height: var(--md-editor-control-height-sm);
   margin-left: 4px;
   margin-bottom: 2px;
   border: 0;
   background: transparent;
   color: var(--md-editor-muted-fg);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--md-editor-radius-sm);
   transition: background 0.15s;
 }
 
@@ -375,9 +375,9 @@
   align-items: center;
   justify-content: center;
   min-width: 28px;
-  height: 28px;
+  height: var(--md-editor-control-height-sm);
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--md-editor-radius-sm);
   background: transparent;
   color: var(--md-editor-muted-fg);
   cursor: pointer;
@@ -418,7 +418,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 30px;
+  min-height: var(--md-editor-control-height-sm);
   padding: 4px 10px;
   border: 0;
   border-radius: var(--md-editor-radius-sm);
@@ -477,7 +477,7 @@
   width: var(--mode-indicator-width);
   border-radius: var(--md-editor-radius-sm);
   background: var(--md-editor-surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--md-editor-shadow-raised);
   pointer-events: none;
   transform: translateX(var(--mode-indicator-x));
 }
@@ -488,7 +488,7 @@
   display: inline-grid;
   place-items: center;
   min-width: 32px;
-  min-height: 32px;
+  min-height: var(--md-editor-control-height-sm);
   border: 0;
   border-radius: var(--md-editor-radius-sm);
   background: transparent;
@@ -581,7 +581,7 @@
   border: 1px solid color-mix(in srgb, var(--md-editor-accent) 28%, var(--md-editor-border));
   border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-accent) 4%);
-  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--md-editor-shadow-dialog);
   color: var(--md-editor-fg);
   animation: table-picker-in 140ms ease-out;
 }
@@ -617,7 +617,7 @@
 
 .quick-link-popover input {
   width: 100%;
-  min-height: 34px;
+  min-height: var(--md-editor-control-height-md);
   padding: 0 10px;
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
@@ -641,7 +641,7 @@
   display: inline-grid;
   place-items: center;
   min-width: 32px;
-  min-height: 32px;
+  min-height: var(--md-editor-control-height-sm);
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
   background: var(--md-editor-chrome);
@@ -677,7 +677,7 @@
 .toolbar .diagram-picker-popover button {
   display: flex;
   width: 100%;
-  min-height: 30px;
+  min-height: var(--md-editor-control-height-sm);
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -716,7 +716,7 @@
 
 .toolbar .table-picker-cell {
   min-width: 32px;
-  min-height: 28px;
+  min-height: var(--md-editor-control-height-sm);
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
   background: var(--md-editor-chrome);
@@ -766,7 +766,7 @@
   grid-template-columns: 40px 72px;
   align-items: center;
   gap: 5px;
-  min-height: 34px;
+  min-height: var(--md-editor-control-height-md);
   color: var(--md-editor-muted-fg);
   font-family: var(--md-editor-font-mono);
   font-size: 12px;
@@ -829,7 +829,7 @@
 }
 
 .desktop-alert button {
-  min-height: 28px;
+  min-height: var(--md-editor-control-height-sm);
   padding: 0 10px;
   border: 1px solid var(--md-editor-border);
   border-radius: var(--md-editor-radius-sm);
@@ -883,12 +883,12 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  min-height: 34px;
+  min-height: var(--md-editor-control-height-md);
   padding: 7px 12px;
   border: 1px solid color-mix(in srgb, var(--md-editor-accent) 24%, var(--md-editor-border));
   border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 94%, var(--md-editor-accent) 6%);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--md-editor-shadow);
   color: var(--md-editor-fg);
   font-size: 12.5px;
   pointer-events: none;

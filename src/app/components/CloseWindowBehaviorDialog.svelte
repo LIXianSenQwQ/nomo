@@ -106,7 +106,7 @@
     background: var(--md-editor-bg);
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-md);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--md-editor-shadow-dialog);
   }
 
   .close-choice-header {
@@ -213,7 +213,7 @@
     justify-content: center;
     flex-shrink: 0;
     border: 1px solid var(--md-editor-border);
-    border-radius: 4px;
+    border-radius: var(--md-editor-radius-sm);
     color: var(--md-editor-bg);
     background: var(--md-editor-bg);
     transition:

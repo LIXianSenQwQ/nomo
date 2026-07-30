@@ -2,11 +2,9 @@
   margin: 20px 0 34px;
   padding: 14px 18px 16px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 8px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 96%, var(--md-editor-document-bg));
-  box-shadow:
-    0 18px 48px rgba(15, 23, 42, 0.16),
-    0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--md-editor-shadow-dialog);
   color: var(--md-editor-fg);
 }
 
@@ -34,7 +32,7 @@
   width: 32px;
   height: 32px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--md-editor-radius-sm);
   background: transparent;
   color: var(--md-editor-muted-fg);
   cursor: pointer;
@@ -48,7 +46,7 @@
   position: absolute;
   width: 16px;
   height: 1.5px;
-  border-radius: 99px;
+  border-radius: var(--md-editor-radius-pill);
   background: currentColor;
   content: '';
 }
@@ -91,7 +89,7 @@
   min-height: 30px;
   padding: 2px 12px 2px calc(var(--toc-indent, 0px) + 8px);
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--md-editor-radius-sm);
   background: var(--toc-row-bg);
   color: color-mix(in srgb, var(--md-editor-accent-strong) 78%, var(--md-editor-heading-fg));
   cursor: pointer;
@@ -122,7 +120,7 @@
 .toc-bullet {
   width: 5px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--md-editor-radius-pill);
   background: currentColor;
 }
 
@@ -147,7 +145,7 @@
 .toc-empty {
   margin: 0;
   padding: 14px 12px;
-  border-radius: 5px;
+  border-radius: var(--md-editor-radius-sm);
   background: color-mix(in srgb, var(--md-editor-accent) 8%, transparent);
   color: var(--md-editor-muted-fg);
   font-size: 14px;

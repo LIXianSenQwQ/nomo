@@ -9,11 +9,9 @@
   overflow-x: hidden;
   padding: 14px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 8px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 64%, transparent);
-  box-shadow:
-    0 8px 24px rgba(15, 23, 42, 0.06),
-    0 1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow: var(--md-editor-shadow-raised);
   backdrop-filter: blur(10px);
   color: var(--md-editor-muted-fg);
   font-size: 12px;
@@ -149,9 +147,9 @@ textarea::selection {
   min-height: 28px;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 6px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 94%, var(--md-editor-chrome));
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--md-editor-shadow-raised);
   color: var(--md-editor-heading-fg);
   font-family: var(--md-editor-font-mono);
   font-size: 12px;
@@ -171,7 +169,7 @@ textarea::selection {
 .statusbar-stats-trigger[aria-expanded='true'] {
   border-color: color-mix(in srgb, var(--md-editor-accent) 30%, var(--md-editor-border));
   background: var(--md-editor-surface);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--md-editor-shadow);
   color: var(--md-editor-fg);
   transform: translateY(-1px);
 }
@@ -188,9 +186,9 @@ textarea::selection {
   z-index: 80;
   width: 148px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 8px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 97%, var(--md-editor-chrome));
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--md-editor-shadow-dialog);
   color: var(--md-editor-fg);
   overflow: hidden;
   backdrop-filter: blur(12px);
@@ -233,7 +231,7 @@ textarea::selection {
   column-gap: 10px;
   padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--md-editor-radius-md);
   background: transparent;
   color: var(--md-editor-muted-fg);
   cursor: pointer;
@@ -306,9 +304,9 @@ textarea::selection {
   min-height: 28px;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 6px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 94%, var(--md-editor-chrome));
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--md-editor-shadow-raised);
   color: var(--md-editor-heading-fg);
   font-family: var(--md-editor-font-mono);
   font-size: 12px;
@@ -328,7 +326,7 @@ textarea::selection {
 .statusbar-zoom-trigger[aria-expanded='true'] {
   border-color: color-mix(in srgb, var(--md-editor-accent) 30%, var(--md-editor-border));
   background: var(--md-editor-surface);
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--md-editor-shadow);
   color: var(--md-editor-fg);
   transform: translateY(-1px);
 }
@@ -346,9 +344,9 @@ textarea::selection {
   z-index: 80;
   width: 180px;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 82%, transparent);
-  border-radius: 8px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 97%, var(--md-editor-chrome));
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--md-editor-shadow-dialog);
   color: var(--md-editor-fg);
   overflow: hidden;
   backdrop-filter: blur(12px);
@@ -379,7 +377,7 @@ textarea::selection {
   height: 28px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--md-editor-border) 70%, transparent);
-  border-radius: 6px;
+  border-radius: var(--md-editor-radius-md);
   background: color-mix(in srgb, var(--md-editor-surface) 90%, var(--md-editor-chrome));
   color: var(--md-editor-heading-fg);
   font-size: 16px;

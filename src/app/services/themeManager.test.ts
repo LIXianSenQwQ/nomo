@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  LEGACY_THEME_BOOT_SNAPSHOT_KEY,
   THEME_BOOT_SNAPSHOT_KEY,
   applyResolvedTheme,
   bootstrapThemeFromSnapshot,
@@ -15,6 +16,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('data-theme-preference');
   document.documentElement.removeAttribute('data-color-theme');
+  document.documentElement.removeAttribute('data-theme-style');
   document.documentElement.removeAttribute('data-document-style');
   document.documentElement.removeAttribute('data-block-style');
 });
@@ -52,11 +54,16 @@ describe('themeManager', () => {
       theme: 'light',
       themePreference: 'light',
       colorTheme: 'nomo-amber-paper',
+      themeStyle: 'paper',
       documentStyle: 'nomo-classic',
       blockStyle: 'classic',
     });
     expect(document.documentElement.style.getPropertyValue('--md-editor-bg')).toBe('#F3F0E8');
     expect(document.documentElement.style.getPropertyValue('--md-editor-code-string')).not.toBe('');
+    expect(document.documentElement.style.getPropertyValue('--md-editor-radius-md')).toBe('10px');
+    expect(document.documentElement.style.getPropertyValue('--md-editor-font-document')).toBe(
+      "'Segoe UI', 'Microsoft YaHei', sans-serif",
+    );
   });
 
   it('round-trips a validated boot snapshot and ignores damaged snapshots', () => {
@@ -73,16 +80,50 @@ describe('themeManager', () => {
       themeMode: 'dark',
       colorThemeId: 'nomo-amber-paper',
       effectiveScheme: 'dark',
+      styleProfile: 'paper',
     });
 
     localStorage.setItem(
       THEME_BOOT_SNAPSHOT_KEY,
-      '{"schemaVersion":1,"effectiveScheme":"dark","tokens":{}}',
+      '{"schemaVersion":2,"effectiveScheme":"dark","tokens":{},"styleTokens":{}}',
     );
     expect(readThemeBootSnapshot()).toBeNull();
     const fallback = bootstrapThemeFromSnapshot();
     expect(fallback.preferences.colorThemeId).toBe('nomo-default');
     expect(fallback.effectiveScheme).toBe('dark');
+  });
+
+  it('restores a valid v1 snapshot with registered v2 style tokens', () => {
+    const resolved = resolveTheme(
+      {
+        themeMode: 'dark',
+        colorThemeId: 'nomo-amber-paper',
+        documentStyleId: 'nomo-modern',
+      },
+      'dark',
+    );
+    localStorage.setItem(
+      LEGACY_THEME_BOOT_SNAPSHOT_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        themeVersion: resolved.themeVersion,
+        themeMode: resolved.preferences.themeMode,
+        colorThemeId: resolved.preferences.colorThemeId,
+        documentStyleId: resolved.preferences.documentStyleId,
+        effectiveScheme: resolved.effectiveScheme,
+        tokens: resolved.tokens,
+      }),
+    );
+
+    expect(readThemeBootSnapshot()).toMatchObject({
+      schemaVersion: 2,
+      colorThemeId: 'nomo-amber-paper',
+      styleProfile: 'paper',
+      styleTokens: resolved.styleTokens,
+    });
+    const restored = bootstrapThemeFromSnapshot();
+    expect(restored.styleProfile).toBe('paper');
+    expect(document.documentElement.dataset.themeStyle).toBe('paper');
   });
 
   it('falls back for invalid theme and document style identifiers', () => {

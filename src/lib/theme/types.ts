@@ -21,8 +21,11 @@ export interface ThemePreviewDefinition {
   foreground: string;
 }
 
+export type ThemeStyleProfile = 'modern' | 'paper' | 'classic';
+
 export interface ThemeVariantDefinition {
   tokens: ThemeColorTokens;
+  styleTokens: ThemeStyleTokens;
   shikiTheme: string;
   mermaid: MermaidThemeDefinition;
   preview: ThemePreviewDefinition;
@@ -34,6 +37,7 @@ export interface ThemeDefinition {
   version: string;
   author: string;
   localizedNames: Record<string, string>;
+  styleProfile: ThemeStyleProfile;
   variants: Record<ColorScheme, ThemeVariantDefinition>;
 }
 
@@ -116,6 +120,32 @@ export const THEME_COLOR_TOKEN_NAMES = [
 
 export type ThemeColorTokenName = (typeof THEME_COLOR_TOKEN_NAMES)[number];
 export type ThemeColorTokens = Record<ThemeColorTokenName, string>;
+
+export const THEME_STYLE_TOKEN_NAMES = [
+  'radiusXs',
+  'radiusSm',
+  'radiusMd',
+  'radiusLg',
+  'radiusPill',
+  'borderWidth',
+  'shadowRaised',
+  'shadowFloating',
+  'shadowDialog',
+  'spaceXs',
+  'spaceSm',
+  'spaceMd',
+  'spaceLg',
+  'spaceXl',
+  'controlHeightSm',
+  'controlHeightMd',
+  'controlHeightLg',
+  'fontUi',
+  'fontDocument',
+  'fontMono',
+] as const;
+
+export type ThemeStyleTokenName = (typeof THEME_STYLE_TOKEN_NAMES)[number];
+export type ThemeStyleTokens = Record<ThemeStyleTokenName, string>;
 
 export interface EditorThemeOptions {
   name: ColorScheme;

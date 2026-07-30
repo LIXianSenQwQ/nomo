@@ -11,11 +11,15 @@ describe('ThemeRegistry', () => {
     expect(themeRegistry.listThemes().map((theme) => theme.id)).toEqual([
       'nomo-default',
       'nomo-amber-paper',
+      'nomo-classic-gray',
     ]);
     for (const theme of themeRegistry.listThemes()) {
       expect(() => validateThemeDefinition(theme)).not.toThrow();
+      expect(['modern', 'paper', 'classic']).toContain(theme.styleProfile);
       expect(theme.variants.light.tokens).toBeDefined();
       expect(theme.variants.dark.tokens).toBeDefined();
+      expect(theme.variants.light.styleTokens).toBeDefined();
+      expect(theme.variants.dark.styleTokens).toBeDefined();
     }
   });
 
@@ -52,6 +56,22 @@ describe('ThemeRegistry', () => {
     const unknown = cloneDefaultTheme();
     (unknown.variants.light.tokens as Record<string, string>).unexpected = '#fff';
     expect(() => validateThemeDefinition(unknown)).toThrow(/unknown=unexpected/);
+  });
+
+  it('rejects incomplete, unsafe, and unsupported style definitions', () => {
+    const missing = cloneDefaultTheme();
+    delete (missing.variants.light.styleTokens as Partial<
+      typeof missing.variants.light.styleTokens
+    >).radiusSm;
+    expect(() => validateThemeDefinition(missing)).toThrow(/missing=radiusSm/);
+
+    const unsafe = cloneDefaultTheme();
+    unsafe.variants.dark.styleTokens.shadowDialog = '0 0 1px red; color: red';
+    expect(() => validateThemeDefinition(unsafe)).toThrow(/样式令牌值非法/);
+
+    const unsupported = cloneDefaultTheme();
+    unsupported.styleProfile = 'custom' as typeof unsupported.styleProfile;
+    expect(() => validateThemeDefinition(unsupported)).toThrow(/样式档案/);
   });
 
   it('rejects unsupported Shiki and Mermaid configurations', () => {

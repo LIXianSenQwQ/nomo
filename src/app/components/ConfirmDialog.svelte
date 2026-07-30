@@ -89,7 +89,7 @@
     background: var(--md-editor-bg);
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-md);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--md-editor-shadow-dialog);
     color: var(--md-editor-fg);
     overflow: hidden;
   }
