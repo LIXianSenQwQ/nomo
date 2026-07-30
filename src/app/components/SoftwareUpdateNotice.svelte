@@ -202,14 +202,14 @@
   }
 
   .button.primary {
-    border-color: var(--md-editor-accent);
-    background: var(--md-editor-accent);
-    color: white;
+    border-color: var(--md-editor-accent-fill);
+    background: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
   }
 
   .button.primary:hover {
     border-color: var(--md-editor-accent-strong);
-    background: var(--md-editor-accent-strong);
+    background: color-mix(in srgb, var(--md-editor-accent-fill) 86%, #000000);
   }
 
   button:focus-visible {

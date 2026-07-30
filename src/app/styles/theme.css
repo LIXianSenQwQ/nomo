@@ -14,6 +14,9 @@
   --md-editor-link-fg: #116d8f;
   --md-editor-accent: #2f7d6f;
   --md-editor-accent-strong: #174e45;
+  --md-editor-accent-fill: #2f7d6f;
+  --md-editor-on-accent: #ffffff;
+  --md-editor-success: #166534;
   --md-editor-warning: #9a6700;
   --md-editor-danger: #b42318;
   --md-editor-blockquote-border: #7f9f97;
@@ -90,6 +93,9 @@
   --md-editor-link-fg: #79c9d8;
   --md-editor-accent: #67b7a5;
   --md-editor-accent-strong: #9fd8c7;
+  --md-editor-accent-fill: #2f7d6f;
+  --md-editor-on-accent: #ffffff;
+  --md-editor-success: #86efac;
   --md-editor-warning: #d4a72c;
   --md-editor-danger: #ff8a7a;
   --md-editor-blockquote-border: #6f938b;

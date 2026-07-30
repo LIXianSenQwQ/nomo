@@ -392,9 +392,9 @@
   }
 
   .button.primary {
-    border-color: var(--md-editor-accent);
-    background: var(--md-editor-accent);
-    color: white;
+    border-color: var(--md-editor-accent-fill);
+    background: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
   }
 
   .button:disabled {

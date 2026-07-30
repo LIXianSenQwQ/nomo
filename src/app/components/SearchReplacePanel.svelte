@@ -522,9 +522,9 @@
 
   .search-action-group .primary-action,
   .search-action-group .replace-toggle {
-    border-color: var(--md-editor-accent);
-    background: var(--md-editor-accent);
-    color: white;
+    border-color: var(--md-editor-accent-fill);
+    background: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
     font-weight: 600;
   }
 

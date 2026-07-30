@@ -137,9 +137,9 @@
   }
 
   .folder-dialog-btn.primary {
-    background: var(--md-editor-accent);
-    border-color: var(--md-editor-accent);
-    color: white;
+    background: var(--md-editor-accent-fill);
+    border-color: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
   }
 
   .folder-dialog-btn.primary:hover {

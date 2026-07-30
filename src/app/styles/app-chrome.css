@@ -132,15 +132,15 @@
 }
 
 .empty-workspace-actions button.primary {
-  border-color: var(--md-editor-accent);
-  background: var(--md-editor-accent);
-  color: #ffffff;
+  border-color: var(--md-editor-accent-fill);
+  background: var(--md-editor-accent-fill);
+  color: var(--md-editor-on-accent);
 }
 
 .empty-workspace-actions button.primary:hover {
   border-color: var(--md-editor-accent-strong);
-  background: color-mix(in srgb, var(--md-editor-accent) 86%, #000000);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--md-editor-accent-fill) 86%, #000000);
+  color: var(--md-editor-on-accent);
 }
 
 .menu-bar,
@@ -656,9 +656,9 @@
 }
 
 .quick-link-popover .quick-link-primary {
-  border-color: var(--md-editor-accent);
-  background: var(--md-editor-accent);
-  color: var(--md-editor-surface);
+  border-color: var(--md-editor-accent-fill);
+  background: var(--md-editor-accent-fill);
+  color: var(--md-editor-on-accent);
 }
 
 .quick-link-error {

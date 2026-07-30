@@ -222,8 +222,9 @@
   }
 
   .remember-choice input:checked + .remember-box {
-    border-color: var(--md-editor-accent);
-    background: var(--md-editor-accent);
+    border-color: var(--md-editor-accent-fill);
+    background: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
   }
 
   .choice-button:focus-visible,

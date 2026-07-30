@@ -2642,8 +2642,8 @@
     padding: 0 12px;
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-sm);
-    background: var(--md-editor-accent);
-    color: #ffffff;
+    background: var(--md-editor-accent-fill);
+    color: var(--md-editor-on-accent);
     font: inherit;
     font-size: 12px;
     font-weight: 700;
@@ -2712,21 +2712,21 @@
   }
 
   .association-pill.bound {
-    border-color: color-mix(in srgb, #16a34a 58%, var(--md-editor-border));
-    color: #15803d;
-    background: color-mix(in srgb, #22c55e 12%, var(--md-editor-surface));
+    border-color: color-mix(in srgb, var(--md-editor-success) 58%, var(--md-editor-border));
+    color: var(--md-editor-success);
+    background: color-mix(in srgb, var(--md-editor-success) 6%, var(--md-editor-surface));
   }
 
   .association-pill.pending {
-    border-color: color-mix(in srgb, #d97706 58%, var(--md-editor-border));
-    color: #b45309;
-    background: color-mix(in srgb, #f59e0b 12%, var(--md-editor-surface));
+    border-color: color-mix(in srgb, var(--md-editor-warning) 58%, var(--md-editor-border));
+    color: var(--md-editor-warning);
+    background: color-mix(in srgb, var(--md-editor-warning) 6%, var(--md-editor-surface));
   }
 
   .association-pill.error {
-    border-color: color-mix(in srgb, #dc2626 58%, var(--md-editor-border));
-    color: #b91c1c;
-    background: color-mix(in srgb, #ef4444 10%, var(--md-editor-surface));
+    border-color: color-mix(in srgb, var(--md-editor-danger) 58%, var(--md-editor-border));
+    color: var(--md-editor-danger);
+    background: color-mix(in srgb, var(--md-editor-danger) 6%, var(--md-editor-surface));
   }
 
   .toggle-row input {

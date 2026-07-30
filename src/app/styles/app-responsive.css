@@ -169,8 +169,8 @@
 
 .dropdown-menu button:hover,
 .dropdown-menu .nested-trigger:hover {
-  background: var(--md-editor-accent, #007acc);
-  color: #ffffff !important;
+  background: var(--md-editor-accent-fill);
+  color: var(--md-editor-on-accent) !important;
 }
 
 .dropdown-menu .divider {
@@ -188,7 +188,7 @@
 
 .dropdown-menu button:hover .shortcut,
 .dropdown-menu .nested-trigger:hover svg {
-  color: rgba(255, 255, 255, 0.8) !important;
+  color: color-mix(in srgb, var(--md-editor-on-accent) 80%, transparent) !important;
 }
 
 .nested-trigger {
@@ -334,8 +334,8 @@
   min-width: 16px;
   padding: 0 2px;
   border-radius: 999px;
-  background: var(--md-editor-accent);
-  color: white;
+  background: var(--md-editor-accent-fill);
+  color: var(--md-editor-on-accent);
   font-size: 8px;
   font-weight: 700;
   line-height: 12px;
@@ -608,12 +608,6 @@
 .file-tree button.tree-file svg {
   color: var(--md-editor-muted-fg);
   flex-shrink: 0;
-}
-
-/* 夜晚模式左侧侧边栏修正 */
-[data-theme='dark'] .rail {
-  background: #1e1e1e !important;
-  border-right-color: #2e2e2e !important;
 }
 
 .topbar-spacer {
