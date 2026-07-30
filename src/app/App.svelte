@@ -4064,8 +4064,12 @@
       previewTabId = null;
     }
 
+    const contentStable = event.reason !== 'content-pending';
     dirty = event.dirty;
-    if (!event.dirty) {
+    if (!dirty) {
+      documentActions.cancelPendingAutoSave(activeTab.id);
+    }
+    if (!dirty && contentStable) {
       savedMarkdown = event.markdown;
     }
     version = event.version;
@@ -4074,7 +4078,7 @@
 
     activeTab.dirty = dirty;
     activeTab.version = version;
-    if (!dirty) {
+    if (!dirty && contentStable) {
       activeTab.savedMarkdown = event.markdown;
     }
 
@@ -4092,7 +4096,7 @@
     }
 
     activeTab.markdown = markdown;
-    if (!dirty) {
+    if (!dirty && contentStable) {
       activeTab.savedMarkdown = markdown;
     }
     tabs = [...tabs];
@@ -4100,7 +4104,7 @@
     persistWorkspaceState();
 
     if (autoSaveEnabled && desktopEnabled && dirty && nativePath) {
-      documentActions.debouncedAutoSave(event.markdown);
+      documentActions.debouncedAutoSave(activeTab.id);
     }
 
     if (event.reason === 'source-input') {

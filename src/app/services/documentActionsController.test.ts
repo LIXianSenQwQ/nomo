@@ -113,6 +113,7 @@ function createOptions(initialTabs: Tab[]) {
       getFileInput: () => document.createElement('input'),
       getEditor: () => ({
         getMarkdown,
+        flushMarkdown: getMarkdown,
         setDirty: vi.fn(),
       }),
       getTabs: () => tabs,
@@ -193,7 +194,7 @@ describe('documentActionsController', () => {
 
   it('自动保存只写回当前路径，不根据 H1 隐式重命名文件', async () => {
     vi.useFakeTimers();
-    const tab = createTab();
+    const tab = createTab({ markdown: '# New Title\n\nchanged' });
     const { options, getState } = createOptions([tab]);
     const document: NativeDocument = {
       path: 'C:/docs/old.md',
@@ -206,7 +207,7 @@ describe('documentActionsController', () => {
     vi.mocked(saveNativeMarkdownFile).mockResolvedValue({ document, error: '' });
 
     const controller = createDocumentActionsController(options as any);
-    controller.debouncedAutoSave('# New Title\n\nchanged');
+    controller.debouncedAutoSave(tab.id);
     await vi.advanceTimersByTimeAsync(50);
 
     expect(saveNativeMarkdownFile).toHaveBeenCalledWith(
@@ -219,6 +220,22 @@ describe('documentActionsController', () => {
     expect(getState().tabs[0].fileName).toBe('old.md');
     expect(getState().nativePath).toBe('C:/docs/old.md');
     expect(getState().fileName).toBe('old.md');
+  });
+
+  it('标签恢复保存基线后取消尚未执行的自动保存', async () => {
+    vi.useFakeTimers();
+    const tab = createTab();
+    const { options } = createOptions([tab]);
+    const controller = createDocumentActionsController(options as any);
+
+    controller.debouncedAutoSave(tab.id);
+    tab.markdown = tab.savedMarkdown;
+    tab.dirty = false;
+    controller.cancelPendingAutoSave(tab.id);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('打开小型只读磁盘文件时保持编辑器可编辑并记录磁盘只读', async () => {
@@ -310,7 +327,7 @@ describe('documentActionsController', () => {
     const { options, getState } = createOptions([tab]);
 
     const controller = createDocumentActionsController(options as any);
-    controller.debouncedAutoSave('# New Title\n\nchanged');
+    controller.debouncedAutoSave(tab.id);
     await vi.advanceTimersByTimeAsync(50);
 
     expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
@@ -374,11 +391,85 @@ describe('documentActionsController', () => {
     const { options } = createOptions([tab]);
     const controller = createDocumentActionsController(options as any);
 
-    controller.debouncedAutoSave('must-not-be-normalized');
+    controller.debouncedAutoSave(tab.id);
     await vi.advanceTimersByTimeAsync(100);
 
     expect(saveNativeMarkdownFile).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('自动保存只以标签最新内容收敛且不把在途旧内容标记为已保存', async () => {
+    vi.useFakeTimers();
+    const originalMarkdown = '# Old\n\n';
+    const editedMarkdown = '# Old\n\nchanged';
+    const tab = createTab({
+      markdown: editedMarkdown,
+      savedMarkdown: originalMarkdown,
+      dirty: true,
+    });
+    const { options, getState } = createOptions([tab]);
+    let resolveFirstSave!: (value: { document: NativeDocument | null; error: string }) => void;
+    const firstSave = new Promise<{ document: NativeDocument | null; error: string }>((resolve) => {
+      resolveFirstSave = resolve;
+    });
+    vi.mocked(saveNativeMarkdownFile)
+      .mockImplementationOnce(() => firstSave)
+      .mockResolvedValueOnce({
+        document: {
+          path: tab.nativePath!,
+          fileName: tab.fileName,
+          markdown: originalMarkdown,
+          modifiedAt: 3,
+          sizeBytes: originalMarkdown.length,
+          readonly: false,
+        },
+        error: '',
+      });
+
+    const controller = createDocumentActionsController(options as any);
+    controller.debouncedAutoSave(tab.id);
+    vi.advanceTimersByTime(50);
+    await Promise.resolve();
+    expect(saveNativeMarkdownFile).toHaveBeenCalledTimes(1);
+
+    tab.markdown = originalMarkdown;
+    tab.dirty = false;
+    controller.cancelPendingAutoSave(tab.id);
+    resolveFirstSave({
+      document: {
+        path: tab.nativePath!,
+        fileName: tab.fileName,
+        markdown: `${editedMarkdown}\n\n`,
+        modifiedAt: 2,
+        sizeBytes: editedMarkdown.length + 2,
+        readonly: false,
+      },
+      error: '',
+    });
+    for (let index = 0; index < 5; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(saveNativeMarkdownFile).toHaveBeenNthCalledWith(
+      1,
+      tab.nativePath,
+      `${editedMarkdown}\n\n`,
+      tab.fileName,
+      null,
+    );
+    expect(saveNativeMarkdownFile).toHaveBeenNthCalledWith(
+      2,
+      tab.nativePath,
+      originalMarkdown,
+      tab.fileName,
+      null,
+    );
+    expect(getState().tabs[0]).toMatchObject({
+      markdown: originalMarkdown,
+      savedMarkdown: originalMarkdown,
+      dirty: false,
+      lastKnownModifiedAt: 3,
+    });
   });
 
   it('segmented 标签关闭不由 Markdown controller 处理', async () => {

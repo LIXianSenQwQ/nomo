@@ -536,84 +536,161 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
   let saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
-  function debouncedAutoSave(currentMarkdown: string) {
+  function debouncedAutoSave(tabId: string) {
     if (!options.getAutoSaveEnabled()) return;
 
-    const tabId = options.getActiveTabId();
-    const activeTab = options.getTabs().find((tab) => tab.id === tabId);
-    if (!isMarkdownTab(activeTab)) return;
-    const path = activeTab.nativePath;
-    const fileName = activeTab.fileName;
-
-    if (!tabId || !path) return;
-    if (activeTab.diskReadonly) {
-      if (saveTimers[tabId] !== undefined) {
-        clearTimeout(saveTimers[tabId]);
-        delete saveTimers[tabId];
+    const targetTab = options.getTabs().find((tab) => tab.id === tabId);
+    if (!isMarkdownTab(targetTab) || !targetTab.nativePath) return;
+    if (targetTab.diskReadonly) {
+      cancelPendingAutoSave(tabId);
+      if (options.getActiveTabId() === tabId) {
+        options.setStatusMessage(t.readonlySourceAutoSavePaused());
       }
-      options.setStatusMessage(t.readonlySourceAutoSavePaused());
       return;
     }
-    if (hasExternalFileChange()) {
-      options.setStatusMessage(t.externalChangeAutoSavePaused());
+    if (
+      targetTab.externalFileChange.type !== 'none' ||
+      (options.getActiveTabId() === tabId && hasExternalFileChange())
+    ) {
+      if (options.getActiveTabId() === tabId) {
+        options.setStatusMessage(t.externalChangeAutoSavePaused());
+      }
       return;
     }
 
-    if (saveTimers[tabId] !== undefined) {
-      clearTimeout(saveTimers[tabId]);
-    }
+    cancelPendingAutoSave(tabId);
 
     saveTimers[tabId] = setTimeout(async () => {
       delete saveTimers[tabId];
-      if (!options.getAutoSaveEnabled()) return;
-      if (!options.getDesktopEnabled()) return;
-      if (hasExternalFileChange()) {
-        options.setStatusMessage(t.externalChangeAutoSavePaused());
-        return;
-      }
-
-      const markdownToSave = normalizeMarkdownForSave(currentMarkdown);
-
-      const { document, error } = await saveNativeMarkdownFile(
-        path,
-        markdownToSave,
-        fileName,
-        null,
-      );
-
-      if (error) {
-        if (options.getActiveTabId() === tabId) {
-          options.setStatusMessage(t.autoSaveFailed({ error }));
-        }
-        return;
-      }
-
-      if (document) {
-        if (options.getActiveTabId() === tabId) {
-          options.setStatusMessage(t.saved());
-        }
-
-        const tabs = options.getTabs();
-        const savedTab = tabs.find((tab) => tab.id === tabId);
-        if (isMarkdownTab(savedTab)) {
-          savedTab.markdown = markdownToSave;
-          savedTab.savedMarkdown = markdownToSave;
-          savedTab.dirty = false;
-          savedTab.draftId = null;
-          savedTab.lastKnownModifiedAt = document.modifiedAt;
-
-          if (options.getActiveTabId() === tabId) {
-            options.setDirty(false);
-            options.getEditor().setDirty(false);
-            options.setSavedMarkdown(markdownToSave);
-            options.setLastKnownModifiedAt(document.modifiedAt);
-          }
-          options.setTabs([...tabs]);
-        }
-
-        // 自动保存只更新当前文件内容，不隐式重命名文件，避免用户未确认时改变磁盘路径。
-      }
+      await autoSaveLatestTab(tabId);
     }, options.getAutoSaveDelayMs());
+  }
+
+  async function autoSaveLatestTab(
+    tabId: string,
+    force: boolean = false,
+    diskBaseline?: { markdown: string; modifiedAt: number },
+  ) {
+    if (!options.getAutoSaveEnabled() || !options.getDesktopEnabled()) {
+      if (force && diskBaseline) {
+        applyAutoSaveDiskBaseline(tabId, diskBaseline);
+      }
+      return;
+    }
+
+    flushActiveAutoSaveTab(tabId);
+    const targetTab = options.getTabs().find((tab) => tab.id === tabId);
+    if (!isMarkdownTab(targetTab) || !targetTab.nativePath) return;
+    if (!force && !targetTab.dirty) return;
+    const externalFileChangePending =
+      targetTab.externalFileChange.type !== 'none' ||
+      (options.getActiveTabId() === tabId && hasExternalFileChange());
+    if (targetTab.diskReadonly || externalFileChangePending) {
+      if (force && diskBaseline) {
+        applyAutoSaveDiskBaseline(tabId, diskBaseline);
+      }
+      if (options.getActiveTabId() === tabId) {
+        options.setStatusMessage(
+          targetTab.diskReadonly
+            ? t.readonlySourceAutoSavePaused()
+            : t.externalChangeAutoSavePaused(),
+        );
+      }
+      return;
+    }
+
+    const path = targetTab.nativePath;
+    const fileName = targetTab.fileName;
+    const markdownToSave = normalizeMarkdownForSave(targetTab.markdown);
+    const { document, error } = await saveNativeMarkdownFile(path, markdownToSave, fileName, null);
+
+    if (error) {
+      if (force && diskBaseline) {
+        applyAutoSaveDiskBaseline(tabId, diskBaseline);
+      }
+      if (options.getActiveTabId() === tabId) {
+        options.setStatusMessage(t.autoSaveFailed({ error }));
+      }
+      return;
+    }
+    if (!document) return;
+
+    flushActiveAutoSaveTab(tabId);
+    const tabs = options.getTabs();
+    const latestTab = tabs.find((tab) => tab.id === tabId);
+    if (!isMarkdownTab(latestTab) || latestTab.nativePath !== path) return;
+
+    const latestMarkdownToSave = normalizeMarkdownForSave(latestTab.markdown);
+    if (latestMarkdownToSave !== markdownToSave) {
+      latestTab.lastKnownModifiedAt = document.modifiedAt;
+      if (options.getActiveTabId() === tabId) {
+        options.setLastKnownModifiedAt(document.modifiedAt);
+      }
+      options.setTabs([...tabs]);
+      cancelPendingAutoSave(tabId);
+      await autoSaveLatestTab(tabId, true, {
+        markdown: markdownToSave,
+        modifiedAt: document.modifiedAt,
+      });
+      return;
+    }
+
+    latestTab.markdown = markdownToSave;
+    latestTab.savedMarkdown = markdownToSave;
+    latestTab.dirty = false;
+    latestTab.draftId = null;
+    latestTab.lastKnownModifiedAt = document.modifiedAt;
+    cancelPendingAutoSave(tabId);
+
+    if (options.getActiveTabId() === tabId) {
+      options.setDirty(false);
+      options.getEditor().setDirty(false);
+      options.setSavedMarkdown(markdownToSave);
+      options.setLastKnownModifiedAt(document.modifiedAt);
+      options.setStatusMessage(t.saved());
+    }
+    options.setTabs([...tabs]);
+    // 自动保存只更新当前文件内容，不隐式重命名文件，避免用户未确认时改变磁盘路径。
+  }
+
+  function flushActiveAutoSaveTab(tabId: string) {
+    if (options.getActiveTabId() === tabId) {
+      options.getEditor().flushMarkdown();
+    }
+  }
+
+  function applyAutoSaveDiskBaseline(
+    tabId: string,
+    diskBaseline: { markdown: string; modifiedAt: number },
+  ) {
+    const tabs = options.getTabs();
+    const targetTab = tabs.find((tab) => tab.id === tabId);
+    if (!isMarkdownTab(targetTab)) return;
+
+    targetTab.savedMarkdown = diskBaseline.markdown;
+    targetTab.dirty = normalizeMarkdownForSave(targetTab.markdown) !== diskBaseline.markdown;
+    targetTab.lastKnownModifiedAt = diskBaseline.modifiedAt;
+
+    if (options.getActiveTabId() === tabId) {
+      options.setSavedMarkdown(diskBaseline.markdown);
+      options.setDirty(targetTab.dirty);
+      options.setLastKnownModifiedAt(diskBaseline.modifiedAt);
+      if (targetTab.dirty) {
+        options.getEditor().setMarkdown(targetTab.markdown, {
+          reason: 'programmatic-update',
+          dirty: true,
+          savedMarkdown: diskBaseline.markdown,
+        });
+      }
+    }
+    options.setTabs([...tabs]);
+  }
+
+  function cancelPendingAutoSave(tabId: string) {
+    const timer = saveTimers[tabId];
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    delete saveTimers[tabId];
   }
 
   function cancelPendingAutoSaves() {
@@ -657,6 +734,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     overwriteExternalFile,
     checkExternalFileChange,
     debouncedAutoSave,
+    cancelPendingAutoSave,
     cancelPendingAutoSaves,
   };
 }

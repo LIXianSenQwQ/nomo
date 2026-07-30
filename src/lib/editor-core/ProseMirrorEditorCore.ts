@@ -93,13 +93,21 @@ import { isWholeWordRange } from '../search/textSearch';
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
 const MARKDOWN_SYNC_DEBOUNCE_MS = 120;
 
+function getFrontMatterPrefix(markdown: string): string {
+  const { frontMatter, body } = splitFrontMatter(markdown);
+  const suffix = markdown.slice(frontMatter.length);
+  const bodyOffset = body ? suffix.indexOf(body) : suffix.length;
+  const separator = bodyOffset >= 0 ? suffix.slice(0, bodyOffset) : '';
+  return `${frontMatter}${separator}`;
+}
+
 export class ProseMirrorEditorCore implements EditorCore {
   private target: HTMLElement | null;
   private view: EditorView | null = null;
   private markdown: string;
   private originalMarkdown: string;
   private semanticViewDirty = false;
-  private frontMatter = '';
+  private frontMatterPrefix = '';
   private originalDoc: ProseMirrorNode;
   private pendingMarkdownDoc: ProseMirrorNode | null = null;
   private pendingMarkdownSelection: { anchor: number; head: number } | null = null;
@@ -114,7 +122,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.target = options.target ?? null;
     this.markdown = updateTocBlocks(options.markdown);
     this.originalMarkdown = this.markdown;
-    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
+    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.originalDoc = parseMarkdown(this.markdown);
     this.runtime = {
       readonly: options.readonly ?? false,
@@ -202,7 +210,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       ? null
       : (this.view?.state.doc ?? parseMarkdown(this.markdown));
     this.markdown = updateTocBlocks(markdown);
-    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
+    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.version += 1;
 
     const savedMarkdown =
@@ -783,9 +791,11 @@ export class ProseMirrorEditorCore implements EditorCore {
     const selection = this.pendingMarkdownSelection;
     this.clearPendingMarkdownSync();
 
-    const serializedMarkdown = `${this.frontMatter}${serializeMarkdown(pendingDoc)}`;
+    const serializedMarkdown = pendingDoc.eq(this.originalDoc)
+      ? this.restoreOriginalBodyWithCurrentFrontMatter()
+      : `${this.frontMatterPrefix}${serializeMarkdown(pendingDoc)}`;
     this.markdown = updateTocBlocks(serializedMarkdown);
-    this.frontMatter = splitFrontMatter(this.markdown).frontMatter;
+    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.dirty = this.markdown !== this.originalMarkdown;
     if (this.markdown !== serializedMarkdown) {
       this.replaceViewState(this.markdown, selection ?? undefined);
@@ -794,6 +804,16 @@ export class ProseMirrorEditorCore implements EditorCore {
     }
     this.emit('content-sync');
     return true;
+  }
+
+  private restoreOriginalBodyWithCurrentFrontMatter(): string {
+    const original = splitFrontMatter(this.originalMarkdown);
+    const originalPrefix = getFrontMatterPrefix(this.originalMarkdown);
+    if (this.frontMatterPrefix === originalPrefix) {
+      return this.originalMarkdown;
+    }
+
+    return `${this.frontMatterPrefix}${original.body}`;
   }
 
   private replaceViewState(markdown: string, selection?: { anchor: number; head: number }): void {

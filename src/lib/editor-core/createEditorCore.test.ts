@@ -777,25 +777,32 @@ describe('createEditorCore', () => {
   });
 
   it('clears dirty state when undo restores original content', () => {
+    vi.useFakeTimers();
     const target = document.createElement('div');
-    const editor = createEditorCore({ markdown: '正文', target });
+    const originalMarkdown = '正文\n\n';
+    const editor = createEditorCore({ markdown: originalMarkdown, target });
     const view = (editor as unknown as { view: EditorView }).view;
-    const dirtyEvents: boolean[] = [];
-    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+    const events: Array<{ reason: string; dirty: boolean }> = [];
+    editor.subscribe((event) => events.push({ reason: event.reason, dirty: event.dirty }));
 
     // 输入内容触发 dirty
     view.dispatch(view.state.tr.insertText('1'));
-    expect(dirtyEvents.at(-1)).toBe(true);
+    vi.advanceTimersByTime(120);
+    expect(events.at(-1)).toEqual({ reason: 'content-sync', dirty: true });
 
     // 撤销回到原始内容，dirty 应恢复为 false
     editor.execute({ type: 'undo' });
-    expect(dirtyEvents.at(-1)).toBe(false);
-    expect(editor.getMarkdown()).toBe('正文');
+    expect(events.at(-1)).toEqual({ reason: 'content-pending', dirty: false });
+    vi.advanceTimersByTime(120);
+    expect(events.at(-1)).toEqual({ reason: 'content-sync', dirty: false });
+    expect(editor.getMarkdown()).toBe(originalMarkdown);
   });
 
   it('clears dirty state when deleting typed text restores original content', () => {
+    vi.useFakeTimers();
     const target = document.createElement('div');
-    const editor = createEditorCore({ markdown: '正文', target });
+    const originalMarkdown = '正文\n\n';
+    const editor = createEditorCore({ markdown: originalMarkdown, target });
     const view = (editor as unknown as { view: EditorView }).view;
     const dirtyEvents: boolean[] = [];
     editor.subscribe((event) => dirtyEvents.push(event.dirty));
@@ -804,11 +811,55 @@ describe('createEditorCore', () => {
     const endPos = view.state.doc.content.size;
     view.dispatch(view.state.tr.insertText('1', endPos - 1));
     expect(dirtyEvents.at(-1)).toBe(true);
+    vi.advanceTimersByTime(120);
 
     // 删除输入的 '1' 回到原始内容
     view.dispatch(view.state.tr.delete(endPos - 1, endPos));
     expect(dirtyEvents.at(-1)).toBe(false);
-    expect(editor.getMarkdown()).toBe('正文');
+    vi.advanceTimersByTime(120);
+    expect(editor.getMarkdown()).toBe(originalMarkdown);
+    expect(dirtyEvents.at(-1)).toBe(false);
+  });
+
+  it('preserves unsaved front matter when body content returns to the saved baseline', () => {
+    vi.useFakeTimers();
+    const originalMarkdown = '---\ntitle: saved\n---\n\n正文\n\n';
+    const changedFrontMatterMarkdown = '---\ntitle: draft\n---\n\n正文\n\n';
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: originalMarkdown, target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    editor.setMarkdown(changedFrontMatterMarkdown);
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    const endPos = view.state.doc.content.size;
+    view.dispatch(view.state.tr.insertText('1', endPos - 1));
+    vi.advanceTimersByTime(120);
+    view.dispatch(view.state.tr.delete(endPos - 1, endPos));
+    vi.advanceTimersByTime(120);
+
+    expect(editor.getMarkdown()).toBe(changedFrontMatterMarkdown);
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    const bodyOnlyMarkdown = '正文\n\n';
+    const addedFrontMatterMarkdown = '---\ntitle: draft\n---\n\n正文\n\n';
+    const secondTarget = document.createElement('div');
+    const secondEditor = createEditorCore({ markdown: bodyOnlyMarkdown, target: secondTarget });
+    const secondView = (secondEditor as unknown as { view: EditorView }).view;
+    const secondDirtyEvents: boolean[] = [];
+    secondEditor.subscribe((event) => secondDirtyEvents.push(event.dirty));
+
+    secondEditor.setMarkdown(addedFrontMatterMarkdown);
+    const secondEndPos = secondView.state.doc.content.size;
+    secondView.dispatch(secondView.state.tr.insertText('1', secondEndPos - 1));
+    vi.advanceTimersByTime(120);
+    secondView.dispatch(secondView.state.tr.delete(secondEndPos - 1, secondEndPos));
+    vi.advanceTimersByTime(120);
+
+    expect(secondEditor.getMarkdown()).toBe(addedFrontMatterMarkdown);
+    expect(secondDirtyEvents.at(-1)).toBe(true);
   });
 
   it('clears dirty state when source input restores original markdown', () => {
