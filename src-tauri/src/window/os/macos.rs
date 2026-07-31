@@ -18,11 +18,9 @@ pub(crate) fn system_theme() -> &'static str {
 }
 
 pub(crate) fn setup_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
-    // macOS 使用原生红黄绿按钮。只有文档窗口需要透明叠加标题栏，
-    // 用来在红黄绿右侧承载资源管理器开关等应用内控件；设置窗口保留原生标题栏布局。
-    let _ = window.set_decorations(window_decorations());
+    // macOS 的 decorations 与 titleBarStyle 必须在窗口创建时一次性确定。窗口已创建后
+    // 重设这些属性会重建 AppKit 视图层级，使 WebView first responder 悬挂并在释放时崩溃。
     if uses_overlay_titlebar(window.label()) {
-        let _ = window.set_title_bar_style(tauri::TitleBarStyle::Overlay);
         request_overlay_titlebar_redraw(window);
     }
     let _ = window.set_shadow(true);
