@@ -147,8 +147,8 @@ function tryParseHtmlBlock(block: {
   node: ProseMirrorNode;
   pos: number;
 }): { pos: number; node: ProseMirrorNode; safeHtml: string } | null {
-  // 跳过已由 html_block 节点解析的内容
-  if (block.node.type.name === 'html_block') return null;
+  // 代码块和 html_block 已有各自的渲染职责，不能再生成 HTML widget
+  if (block.node.type.spec.code || block.node.type.name === 'html_block') return null;
   const text = block.node.textContent.trim();
   if (!/^<(\w+)[^>]*>/.test(text)) return null;
   const safeHtml = sanitizeHtml(text);
