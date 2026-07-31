@@ -2364,7 +2364,7 @@
     gap: 10px;
     padding: 0 14px;
     color: var(--md-editor-fg);
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     font-weight: 700;
     border-bottom: 1px solid var(--md-editor-border);
     user-select: none;
@@ -2419,7 +2419,7 @@
     background: transparent;
     color: var(--md-editor-muted-fg);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     font-weight: 600;
     text-align: left;
     cursor: pointer;
@@ -2467,7 +2467,7 @@
   .settings-header h1 {
     margin: 0;
     color: var(--md-editor-heading-fg);
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1.2;
     font-weight: 700;
     letter-spacing: 0;
@@ -2479,7 +2479,7 @@
   .settings-header-title span {
     flex-shrink: 0;
     color: var(--md-editor-muted-fg);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     line-height: 1.2;
     opacity: 0;
     transition: opacity 160ms ease;
@@ -2562,7 +2562,7 @@
     margin: 0;
     padding: 0 0 12px;
     color: var(--md-editor-heading-fg);
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     font-weight: 750;
     letter-spacing: 0;
   }
@@ -2660,7 +2660,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 0 12px;
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 650;
   }
 
@@ -2709,7 +2709,7 @@
   .toggle-title {
     display: block;
     color: var(--md-editor-fg);
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     font-weight: 650;
     line-height: 1.35;
   }
@@ -2720,7 +2720,7 @@
     display: block;
     margin: 4px 0 0;
     color: var(--md-editor-muted-fg);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     line-height: 1.45;
   }
 
@@ -2757,7 +2757,7 @@
     background: transparent;
     color: var(--md-editor-muted-fg);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 650;
     cursor: pointer;
     transition:
@@ -2797,7 +2797,7 @@
   .number-field span {
     color: var(--md-editor-muted-fg);
     font-family: var(--md-editor-font-mono);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     text-align: right;
   }
 
@@ -2820,7 +2820,7 @@
     background: var(--md-editor-surface);
     color: var(--md-editor-fg);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     outline: none;
   }
 
@@ -2843,7 +2843,7 @@
     background: var(--md-editor-accent-fill);
     color: var(--md-editor-on-accent);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 700;
     cursor: pointer;
     transition:
@@ -2903,7 +2903,7 @@
     border-radius: 999px;
     color: var(--md-editor-muted-fg);
     background: color-mix(in srgb, var(--md-editor-surface) 78%, transparent);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 750;
     line-height: 1;
     white-space: nowrap;
@@ -2985,7 +2985,7 @@
     border-radius: 999px;
     color: var(--md-editor-muted-fg);
     background: color-mix(in srgb, var(--md-editor-surface) 72%, transparent);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 650;
     white-space: nowrap;
   }
@@ -3023,14 +3023,14 @@
 
   .about-group dt {
     color: var(--md-editor-muted-fg);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-weight: 650;
   }
 
   .about-group dd {
     margin: 0;
     color: var(--md-editor-fg);
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     line-height: 1.55;
   }
 

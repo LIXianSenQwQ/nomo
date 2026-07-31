@@ -22,6 +22,9 @@
   --md-editor-font-document: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --md-editor-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
   --md-editor-font-size: 16px;
+  --md-editor-ui-font-size: 14px;
+  --md-editor-ui-font-size-sm: 13px;
+  --md-editor-ui-font-size-xs: 12px;
   --md-editor-line-height: 1.7;
   --md-editor-zoom: 1;
   --md-scrollbar-size: 13px;

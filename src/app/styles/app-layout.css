@@ -83,7 +83,7 @@
   padding: 0 14px 0 12px;
   border-bottom: 1px solid var(--md-editor-border);
   color: var(--md-editor-heading-fg);
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: 700;
 }
 
@@ -148,8 +148,8 @@
 .file-tree {
   --explorer-scrollbar-size: 8px;
   --explorer-scrollbar-safe-area: 8px;
-  --explorer-row-height: 26px;
-  --explorer-row-control-height: 24px;
+  --explorer-row-height: 30px;
+  --explorer-row-control-height: 28px;
   --explorer-bottom-padding: 18px;
   min-height: 0;
   overflow-x: hidden;
@@ -225,7 +225,7 @@
   content: '';
   position: absolute;
   left: calc(24px + var(--tree-depth, 0) * 12px);
-  top: 26px;
+  top: var(--explorer-row-height);
   bottom: 2px;
   width: 1px;
   background: var(--md-editor-border);
@@ -374,7 +374,7 @@
   background: var(--md-editor-bg);
   color: var(--md-editor-fg);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: normal;
   outline: none;
   user-select: text;
@@ -415,7 +415,7 @@
   border-radius: var(--md-editor-radius-sm);
   background: color-mix(in srgb, var(--md-editor-accent) 6%, transparent);
   color: var(--md-editor-fg);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size);
   line-height: 1;
   text-align: left;
   box-sizing: border-box;
@@ -468,7 +468,7 @@
 .tree-section-title {
   margin: 22px 8px 8px;
   color: var(--md-editor-muted-fg);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   font-weight: 600;
 }
 

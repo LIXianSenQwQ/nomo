@@ -163,7 +163,7 @@
   let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingClickPath: string | null = null;
 
-  const TREE_ROW_HEIGHT = 26;
+  const TREE_ROW_HEIGHT = 30;
   const TREE_OVERSCAN = 8;
   const TREE_BOTTOM_PADDING = 18;
   let fileTreeElement: HTMLElement;

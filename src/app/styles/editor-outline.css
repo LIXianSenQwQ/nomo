@@ -14,7 +14,7 @@
   box-shadow: var(--md-editor-shadow-raised);
   backdrop-filter: blur(10px);
   color: var(--md-editor-muted-fg);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   will-change: transform, opacity;
 }
 
@@ -22,7 +22,7 @@
   display: block;
   margin-bottom: 12px;
   color: var(--md-editor-heading-fg);
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: 800;
 }
 
@@ -63,7 +63,7 @@
   border: 0;
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   cursor: pointer;
 }
 
@@ -128,7 +128,7 @@ textarea::selection {
   display: inline-flex;
   align-items: center;
   color: var(--md-editor-muted-fg);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   pointer-events: none;
 }
 
@@ -152,7 +152,7 @@ textarea::selection {
   box-shadow: var(--md-editor-shadow-raised);
   color: var(--md-editor-heading-fg);
   font-family: var(--md-editor-font-mono);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
@@ -200,7 +200,7 @@ textarea::selection {
   padding: 11px 12px 9px;
   border-bottom: 1px solid var(--md-editor-border);
   color: var(--md-editor-fg);
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -212,7 +212,7 @@ textarea::selection {
   border-radius: var(--md-editor-radius-sm);
   background: color-mix(in srgb, var(--md-editor-accent) 7%, transparent);
   color: var(--md-editor-muted-fg);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   line-height: 1.45;
 }
 
@@ -254,7 +254,7 @@ textarea::selection {
   min-width: 0;
   overflow: hidden;
   color: inherit;
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   font-weight: 400;
   text-align: left;
   text-overflow: ellipsis;
@@ -264,7 +264,7 @@ textarea::selection {
 .writing-stats-option strong {
   color: var(--md-editor-heading-fg);
   font-family: var(--md-editor-font-mono);
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: 600;
   line-height: 1.3;
   text-align: right;
@@ -309,7 +309,7 @@ textarea::selection {
   box-shadow: var(--md-editor-shadow-raised);
   color: var(--md-editor-heading-fg);
   font-family: var(--md-editor-font-mono);
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   font-weight: 500;
   line-height: 1;
   cursor: pointer;

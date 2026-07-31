@@ -51,7 +51,7 @@
   user-select: none;
   padding: 0;
   box-sizing: border-box;
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   color: var(--md-titlebar-fg);
   z-index: 2000;
 }
@@ -91,7 +91,7 @@
 .app-name {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--md-editor-ui-font-size);
   font-weight: 650;
   line-height: 1;
   letter-spacing: 0.5px;
@@ -115,7 +115,7 @@
   border: none;
   min-height: 32px;
   padding: 0 8px;
-  font-size: 11.5px;
+  font-size: var(--md-editor-ui-font-size-sm);
   color: inherit;
   border-radius: var(--md-editor-radius-sm);
   cursor: pointer;
@@ -154,7 +154,7 @@
   width: 100%;
   text-align: left;
   padding: 6px 16px;
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   color: var(--md-editor-fg);
   cursor: pointer;
   display: flex;
@@ -180,7 +180,7 @@
 }
 
 .shortcut {
-  font-size: 10.5px;
+  font-size: var(--md-editor-ui-font-size-xs);
   color: var(--md-editor-muted-fg);
   margin-left: 24px;
   flex-shrink: 0;
@@ -213,7 +213,7 @@
 }
 
 .disabled-item {
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size-sm);
   color: var(--md-editor-muted-fg);
   padding: 6px 16px;
   font-style: italic;
@@ -258,13 +258,13 @@
 .recent-entry.recent-missing .recent-label::after {
   content: attr(data-missing-label);
   margin-left: 6px;
-  font-size: 11px;
+  font-size: var(--md-editor-ui-font-size-xs);
   color: var(--md-editor-muted-fg);
 }
 
 .recent-clear {
   color: var(--md-editor-muted-fg);
-  font-size: 11.5px;
+  font-size: var(--md-editor-ui-font-size-xs);
   justify-content: center !important;
 }
 
@@ -435,8 +435,8 @@
   text-align: left;
   font-family: inherit;
   font-weight: 700;
-  font-size: 13px;
-  line-height: 1;
+  font-size: var(--md-editor-ui-font-size);
+  line-height: 1.25;
   color: var(--md-editor-fg);
   letter-spacing: 0.2px;
   cursor: pointer;
@@ -506,8 +506,8 @@
   align-items: center;
   gap: 6px;
   padding: 0 8px 0 12px;
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--md-editor-ui-font-size);
+  line-height: 1.25;
   color: var(--md-editor-fg);
   cursor: pointer;
   border-radius: var(--md-editor-radius-sm);
@@ -571,12 +571,12 @@
   cursor: pointer;
   color: var(--md-editor-fg);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--md-editor-ui-font-size);
   min-height: var(--explorer-row-control-height);
   padding: 0 8px 0 12px;
   width: 100%;
   max-width: 100%;
-  line-height: 1;
+  line-height: 1.25;
   transition:
     background 0.15s,
     color 0.15s,

@@ -328,14 +328,14 @@
   .search-replace-panel {
     position: fixed;
     z-index: 50;
-    width: min(500px, calc(100vw - 28px));
+    width: min(520px, calc(100vw - 28px));
     overflow: hidden;
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-lg);
     background: var(--md-editor-surface);
     box-shadow: var(--md-editor-shadow-dialog);
     color: var(--md-editor-fg);
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
   }
 
   .search-replace-panel.dragging {
@@ -366,13 +366,13 @@
   }
 
   .search-dialog-title strong {
-    font-size: 13px;
+    font-size: var(--md-editor-ui-font-size);
     font-weight: 600;
   }
 
   .search-dialog-title span {
     color: var(--md-editor-muted-fg);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
   }
 
   button,
@@ -414,7 +414,7 @@
 
   .search-form-row {
     display: grid;
-    grid-template-columns: 60px minmax(0, 1fr) 144px;
+    grid-template-columns: 64px minmax(0, 1fr) 156px;
     align-items: center;
     gap: var(--md-editor-space-sm);
   }
@@ -425,7 +425,7 @@
 
   .search-form-row > label {
     color: var(--md-editor-muted-fg);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
     text-align: right;
     white-space: nowrap;
   }
@@ -486,7 +486,7 @@
     right: 10px;
     color: var(--md-editor-muted-fg);
     font-family: var(--md-editor-font-mono);
-    font-size: 11px;
+    font-size: var(--md-editor-ui-font-size-xs);
     white-space: nowrap;
     pointer-events: none;
   }
@@ -495,7 +495,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
-    width: 144px;
+    width: 156px;
   }
 
   .search-action-group.find-actions {
@@ -510,7 +510,7 @@
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-md);
     background: var(--md-editor-surface);
-    font-size: 12px;
+    font-size: var(--md-editor-ui-font-size-sm);
   }
 
   .search-action-group button:hover:not(:disabled) {
@@ -588,7 +588,7 @@
     border-radius: var(--md-editor-radius-pill);
     background: var(--md-editor-chrome);
     color: var(--md-editor-muted-fg);
-    font-size: 11px;
+    font-size: var(--md-editor-ui-font-size-xs);
     white-space: nowrap;
     cursor: pointer;
   }
@@ -611,7 +611,7 @@
     border: 0;
     background: transparent;
     color: var(--md-editor-accent-strong);
-    font-size: 11px;
+    font-size: var(--md-editor-ui-font-size-xs);
     white-space: nowrap;
   }
 
@@ -622,7 +622,7 @@
     margin: 7px 2px -4px;
     color: var(--md-editor-muted-fg);
     font-family: var(--md-editor-font-mono);
-    font-size: 11px;
+    font-size: var(--md-editor-ui-font-size-xs);
   }
 
   button:focus-visible,

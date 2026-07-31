@@ -92,7 +92,7 @@
         <span class="context-menu-item-check">
           {#if item.active}✓{/if}
         </span>
-        <span class="context-menu-item-label" style="color: var(--md-editor-fg); font-size: 12.5px;">{item.label}</span>
+        <span class="context-menu-item-label">{item.label}</span>
         {#if item.shortcut}
           <span class="context-menu-item-shortcut">{item.shortcut}</span>
         {/if}
@@ -137,7 +137,7 @@
     border-radius: var(--md-editor-radius-sm);
     background: transparent;
     color: var(--md-editor-fg);
-    font-size: 12.5px;
+    font-size: var(--md-editor-ui-font-size-sm);
     font-family: inherit;
     cursor: pointer;
     text-align: left;
@@ -175,11 +175,12 @@
     min-width: 0;
     display: block;
     overflow: visible;
+    color: var(--md-editor-fg);
   }
 
   .context-menu-item-shortcut {
     color: var(--md-editor-muted-fg);
-    font-size: 11px;
+    font-size: var(--md-editor-ui-font-size-xs);
     flex-shrink: 0;
   }
 
