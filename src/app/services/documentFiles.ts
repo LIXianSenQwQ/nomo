@@ -19,6 +19,7 @@ import {
   type FileTreeNode,
 } from '../types';
 import { t } from '../i18n';
+import type { MarkdownEncoding } from '../../lib/services/storage';
 
 export interface FolderIndexBatch {
   root_path: string;
@@ -65,14 +66,20 @@ export async function saveNativeMarkdownFile(
   markdown: string,
   fileName: string,
   snapshotPath: string | null,
+  encoding: MarkdownEncoding | null = null,
 ) {
   if (snapshotPath) {
     await createDocumentSnapshot(snapshotPath, markdown, 'before-save').catch(() => undefined);
   }
 
-  return saveMarkdownNative(path, markdown, fileName)
+  return saveMarkdownNative(path, markdown, fileName, encoding)
     .catch((error) => ({
-      error: error instanceof Error ? error.message : t.saveFileFailed(),
+      error:
+        typeof error === 'string' && error.trim()
+          ? error
+          : error instanceof Error
+            ? error.message
+            : t.saveFileFailed(),
       document: null,
     }))
     .then((result) => normalizeDocumentResult(result));

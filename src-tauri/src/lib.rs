@@ -167,6 +167,7 @@ pub fn run() {
             crate::export::read_file_as_base64,
             crate::file_system::read_markdown_file,
             crate::file_system::write_markdown_file,
+            crate::file_system::write_markdown_file_with_encoding,
             crate::text_document::commands::open_segmented_document,
             crate::text_document::commands::reload_segmented_session,
             crate::text_document::commands::read_segmented_window,

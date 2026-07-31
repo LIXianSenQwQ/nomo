@@ -1,3 +1,5 @@
+import type { MarkdownEncoding } from '../lib/services/storage';
+
 export type DocumentKind = 'markdown' | 'text' | 'json';
 
 export interface CommonTabState {
@@ -16,6 +18,8 @@ export interface MarkdownTabState extends CommonTabState {
   draftId: string | null;
   markdown: string;
   savedMarkdown: string;
+  /** 兼容旧工作区缺省；磁盘读取成功后会以实际源编码覆盖该值。 */
+  encoding?: MarkdownEncoding;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
   version: number;
@@ -130,6 +134,7 @@ export interface PersistedCommonWorkspaceTab {
 export interface PersistedMarkdownWorkspaceTab extends PersistedCommonWorkspaceTab {
   documentKind: 'markdown';
   draftId: string | null;
+  encoding?: MarkdownEncoding;
   largeDocumentMode: boolean;
   readonlyDocumentMode: boolean;
   version: number;

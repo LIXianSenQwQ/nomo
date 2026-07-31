@@ -19,6 +19,11 @@ import {
   type Tab,
 } from '../types';
 import { getDocumentKindFromPath, isMarkdownTab, isSegmentedTextTab } from './tabs';
+import {
+  DEFAULT_MARKDOWN_ENCODING,
+  normalizeMarkdownEncoding,
+  type MarkdownEncoding,
+} from '../../lib/services/storage';
 
 interface PersistedWorkspaceTabV2 {
   id?: string;
@@ -32,6 +37,7 @@ interface PersistedWorkspaceTabV2 {
   readonlyDocumentMode?: boolean;
   diskReadonly?: boolean;
   version?: number;
+  encoding?: MarkdownEncoding;
 }
 
 interface PersistedWorkspaceStateV2 {
@@ -74,6 +80,7 @@ export interface WorkspaceDraftPersistenceResult {
 
 export interface MarkdownRuntimeTabOptions {
   savedMarkdown?: string;
+  encoding?: MarkdownEncoding;
   dirty?: boolean;
   lastKnownModifiedAt?: number;
   largeDocumentMode?: boolean;
@@ -326,6 +333,7 @@ export function createRuntimeTabFromPersisted(
       draftId: tab.draftId,
       markdown: contentOrSession,
       savedMarkdown: markdownOptions.savedMarkdown ?? contentOrSession,
+      encoding: normalizeMarkdownEncoding(markdownOptions.encoding ?? tab.encoding),
       dirty: markdownOptions.dirty ?? tab.dirty,
       lastKnownModifiedAt: markdownOptions.lastKnownModifiedAt ?? tab.lastKnownModifiedAt,
       largeDocumentMode: markdownOptions.largeDocumentMode ?? tab.largeDocumentMode,
@@ -445,6 +453,7 @@ function normalizePersistedMarkdownWorkspaceTab(
     ...common,
     documentKind: 'markdown',
     draftId: typeof tab.draftId === 'string' && tab.draftId ? tab.draftId : null,
+    encoding: normalizeMarkdownEncoding(tab.encoding ?? DEFAULT_MARKDOWN_ENCODING),
     largeDocumentMode: Boolean(tab.largeDocumentMode),
     readonlyDocumentMode: Boolean(tab.readonlyDocumentMode),
     version: typeof tab.version === 'number' ? tab.version : 0,

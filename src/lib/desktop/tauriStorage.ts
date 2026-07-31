@@ -1,10 +1,16 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { createPerfTimer, logDebug, logInfo, perfAsync } from '../../lib/services/logger';
+import {
+  normalizeMarkdownEncoding,
+  type MarkdownEncoding,
+} from '../../lib/services/storage';
 
 export interface NativeDocument {
   path: string;
   fileName: string;
   markdown: string;
+  /** 兼容旧调用方缺省；真实 Tauri payload 会在规范化后始终提供编码。 */
+  encoding?: MarkdownEncoding;
   modifiedAt: number;
   sizeBytes: number;
   readonly: boolean;
@@ -83,6 +89,7 @@ interface NativeDocumentPayload {
   path: string;
   file_name: string;
   markdown: string;
+  encoding?: MarkdownEncoding;
   modified_at: number;
   size_bytes: number;
   readonly: boolean;
@@ -245,12 +252,14 @@ export async function saveMarkdownNative(
   path: string | null,
   markdown: string,
   fallbackName: string,
+  encoding: MarkdownEncoding | null = null,
 ): Promise<NativeDocument | null> {
   const timer = createPerfTimer('tauriStorage', '保存 Markdown 文件');
   logInfo('tauriStorage', '开始保存 Markdown 文件', {
     path,
     fallbackName,
     bytes: markdown.length,
+    encoding,
   });
   const { invoke } = await import('@tauri-apps/api/core');
   const { save } = await import('@tauri-apps/plugin-dialog');
@@ -273,7 +282,11 @@ export async function saveMarkdownNative(
   }
 
   const document = normalizeDocumentPayload(
-    await invoke<NativeDocumentPayload>('write_markdown_file', { path: targetPath, markdown }),
+    await invoke<NativeDocumentPayload>('write_markdown_file_with_encoding', {
+      path: targetPath,
+      markdown,
+      encoding,
+    }),
   );
   timer.end({ path: targetPath, bytes: document.sizeBytes });
   logInfo('tauriStorage', 'Markdown 文件保存完成', {
@@ -585,7 +598,7 @@ function normalizeEventWindowLabel(
 }
 
 function normalizeDocumentPayload(payload: NativeDocumentPayload): NativeDocument {
-  return {
+  const document: NativeDocument = {
     path: payload.path,
     fileName: payload.file_name,
     markdown: payload.markdown,
@@ -593,6 +606,10 @@ function normalizeDocumentPayload(payload: NativeDocumentPayload): NativeDocumen
     sizeBytes: payload.size_bytes,
     readonly: payload.readonly,
   };
+  if (payload.encoding !== undefined) {
+    document.encoding = normalizeMarkdownEncoding(payload.encoding);
+  }
+  return document;
 }
 
 function normalizeFileStatus(payload: FileStatusPayload): FileStatus {

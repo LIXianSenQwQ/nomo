@@ -87,14 +87,14 @@
 | Markdown 桥接 | `src/lib/markdown/MarkdownBridge.ts` | `src/lib/markdown/frontMatter.ts` | front matter 与正文分离/合并规则变更 |
 | 图片插入协调 | `src/app/services/imageInsertion.ts` | `src/app/services/imageMarkdown.ts`, `src/lib/editor-core/renderers.ts` | 粘贴/拖放图片导入、策略选择、源码插入 |
 | 图片 Markdown 路径 | `src/app/services/imageMarkdown.ts` | `src/app/services/imageInsertion.ts` | 图片文件过滤、路径/Markdown 语法生成 |
-| 文件存储与文档仓库接口 | `src/lib/services/storage.ts` | `src/lib/desktop/tauriStorage.ts` | FileStorage、DocumentRepository 接口定义变更 |
+| 文件存储与文档仓库接口 | `src/lib/services/storage.ts` | `src/lib/desktop/tauriStorage.ts` | FileStorage、DocumentRepository、Markdown 源编码契约变更 |
 | 渲染服务类型接口 | `src/lib/services/render.ts` | `src/lib/services/shikiCodeTokenizer.ts`, `katexMathRenderer.ts`, `mermaidDiagramRenderer.ts` | ImageLoader、CodeTokenizer、MathRenderer、DiagramRenderer 接口变更 |
 | 文档文件 IO | `src/app/services/documentFiles.ts` | `src/lib/desktop/tauriStorage.ts` | 文件读取/保存/最近文件/目录树前端调用 |
 | 文件夹资源管理 | `src/app/services/folderExplorerController.ts` | `src/app/services/folderTree.ts`, `explorerRows.ts` | 目录树加载/展开/同步 |
 | 目录树纯函数 | `src/app/services/folderTree.ts` | — | 树的归一化/查找/更新 |
 | 资源管理器展示 | `src/app/services/explorerRows.ts` | — | 树形拍平为可渲染行 |
 | 资源管理器重命名规则 | `src/app/services/explorerRename.ts` | — | 行内重命名输入框选区范围 |
-| Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写/目录扫描/索引 |
+| Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写、Markdown 编码转换/保持、目录扫描/索引 |
 | 图片资源后端 | `src-tauri/src/file_system/image_assets.rs` | — | 图片导入/解析/PicGo 上传/删除 |
 
 ### 大文件 TXT/JSON 分段编辑
@@ -1472,6 +1472,7 @@
 
 **Owns：**
 - 跨端序列化数据结构：DocumentPayload、RecentEntry、SnapshotRecord、SettingRecord、WindowStateInput、FileTreeEntry、ImageAssetPayload、DesktopActionPayload 等
+- Markdown 文件编码枚举及其 IPC 序列化值
 - 窗口事件通信 payload（如 `WindowLabelPayload`）
 
 **Does not own：**
@@ -1538,6 +1539,7 @@
 
 **Owns：**
 - 后端文件系统：读写 Markdown、创建/重命名/删除文件夹和文件
+- Markdown 的 UTF-8/BOM、UTF-16 BOM、GBK 解码与按源编码安全写回
 - 扫描目录树、后台索引
 - 路径存在性检查
 - 示例文档安装
@@ -1548,7 +1550,7 @@
 
 **Called by:** `src-tauri/src/lib.rs`（注册为 IPC）, 前端 `documentFiles.ts`
 
-**Depends on:** `src-tauri/src/models.rs`
+**Depends on:** `src-tauri/src/models.rs`, `encoding_rs`
 
 **Change this when：**
 - 修改文件读写逻辑
@@ -2745,6 +2747,7 @@
 **Owns:**
 - 文件存储接口定义：`FileStorage`（open/save/saveAs）、`DocumentRepository`（rememberRecentFile/listRecentFiles/createSnapshot）
 - `OpenDocumentResult`、`SaveDocumentInput`、`DocumentSnapshotRecord` 类型
+- Markdown 源编码类型、默认值和兼容归一化规则
 
 **Does not own:**
 - 不拥有具体实现（在 tauriStorage.ts 和 Rust 后端中）

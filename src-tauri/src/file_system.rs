@@ -2,8 +2,9 @@ pub(crate) mod image_assets;
 
 use crate::models::{
     DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo, FolderIndexBatch,
-    FolderIndexFinished,
+    FolderIndexFinished, MarkdownEncoding,
 };
+use encoding_rs::GBK;
 use std::{
     fs::{self, OpenOptions},
     io::Write,
@@ -17,6 +18,9 @@ const FOLDER_INDEX_BATCH_EVENT: &str = "nomo://folder-index-batch";
 const FOLDER_INDEX_FINISHED_EVENT: &str = "nomo://folder-index-finished";
 const FOLDER_INDEX_BATCH_SIZE: usize = 64;
 const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/sample.md";
+const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
+const UTF16_BE_BOM: &[u8] = &[0xFE, 0xFF];
 
 #[tauri::command]
 pub(crate) fn create_folder(path: String) -> Result<(), String> {
@@ -56,9 +60,9 @@ pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String
         return Err(format!("路径不是文件：{path}"));
     }
 
-    let markdown =
-        fs::read_to_string(&path).map_err(|error| format!("读取 Markdown 文件失败：{error}"))?;
-    let payload = document_payload(path, markdown)?;
+    let bytes = fs::read(&path).map_err(|error| format!("读取 Markdown 文件失败：{error}"))?;
+    let (markdown, encoding) = decode_markdown(&bytes)?;
+    let payload = document_payload(path, markdown, encoding)?;
     crate::app_logger::perf("FileSystem", "文档打开", timer.elapsed());
     Ok(payload)
 }
@@ -67,6 +71,22 @@ pub(crate) fn read_markdown_file(path: String) -> Result<DocumentPayload, String
 pub(crate) fn write_markdown_file(
     path: String,
     markdown: String,
+) -> Result<DocumentPayload, String> {
+    let encoding = if Path::new(&path).is_file() {
+        let bytes =
+            fs::read(&path).map_err(|error| format!("读取原 Markdown 文件编码失败：{error}"))?;
+        Some(decode_markdown(&bytes)?.1)
+    } else {
+        None
+    };
+    write_markdown_file_with_encoding(path, markdown, encoding)
+}
+
+#[tauri::command]
+pub(crate) fn write_markdown_file_with_encoding(
+    path: String,
+    markdown: String,
+    encoding: Option<MarkdownEncoding>,
 ) -> Result<DocumentPayload, String> {
     let timer = std::time::Instant::now();
     crate::app_logger::info(
@@ -79,8 +99,10 @@ pub(crate) fn write_markdown_file(
         }
     }
 
-    write_file_atomically(Path::new(&path), markdown.as_bytes())?;
-    let payload = document_payload(path, markdown)?;
+    let encoding = encoding.unwrap_or_default();
+    let bytes = encode_markdown(&markdown, encoding)?;
+    write_file_atomically(Path::new(&path), &bytes)?;
+    let payload = document_payload(path, markdown, encoding)?;
     crate::app_logger::perf("FileSystem", "文档保存", timer.elapsed());
     Ok(payload)
 }
@@ -182,7 +204,11 @@ pub(crate) fn file_modified_at(path: &str) -> i64 {
         .unwrap_or_default()
 }
 
-fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, String> {
+fn document_payload(
+    path: String,
+    markdown: String,
+    encoding: MarkdownEncoding,
+) -> Result<DocumentPayload, String> {
     let file_name = Path::new(&path)
         .file_name()
         .and_then(|name| name.to_str())
@@ -196,7 +222,92 @@ fn document_payload(path: String, markdown: String) -> Result<DocumentPayload, S
         path,
         file_name,
         markdown,
+        encoding,
     })
+}
+
+fn decode_markdown(bytes: &[u8]) -> Result<(String, MarkdownEncoding), String> {
+    if let Some(body) = bytes.strip_prefix(UTF8_BOM) {
+        return std::str::from_utf8(body)
+            .map(|value| (value.to_string(), MarkdownEncoding::Utf8Bom))
+            .map_err(|error| format!("读取 Markdown 文件失败：UTF-8 BOM 文件内容无效：{error}"));
+    }
+
+    if let Some(body) = bytes.strip_prefix(UTF16_LE_BOM) {
+        return decode_utf16(body, true).map(|value| (value, MarkdownEncoding::Utf16LeBom));
+    }
+
+    if let Some(body) = bytes.strip_prefix(UTF16_BE_BOM) {
+        return decode_utf16(body, false).map(|value| (value, MarkdownEncoding::Utf16BeBom));
+    }
+
+    if let Ok(value) = std::str::from_utf8(bytes) {
+        return Ok((value.to_string(), MarkdownEncoding::Utf8));
+    }
+
+    if let Some(value) = GBK.decode_without_bom_handling_and_without_replacement(bytes) {
+        return Ok((value.into_owned(), MarkdownEncoding::Gbk));
+    }
+
+    Err("读取 Markdown 文件失败：文件不是有效的 UTF-8、带 BOM 的 UTF-16 或 GBK 编码".to_string())
+}
+
+fn decode_utf16(bytes: &[u8], little_endian: bool) -> Result<String, String> {
+    if bytes.len() % 2 != 0 {
+        return Err("读取 Markdown 文件失败：UTF-16 文件字节数无效".to_string());
+    }
+
+    let units = bytes
+        .chunks_exact(2)
+        .map(|chunk| {
+            if little_endian {
+                u16::from_le_bytes([chunk[0], chunk[1]])
+            } else {
+                u16::from_be_bytes([chunk[0], chunk[1]])
+            }
+        })
+        .collect::<Vec<_>>();
+
+    String::from_utf16(&units)
+        .map_err(|error| format!("读取 Markdown 文件失败：UTF-16 文件内容无效：{error}"))
+}
+
+fn encode_markdown(markdown: &str, encoding: MarkdownEncoding) -> Result<Vec<u8>, String> {
+    match encoding {
+        MarkdownEncoding::Utf8 => Ok(markdown.as_bytes().to_vec()),
+        MarkdownEncoding::Utf8Bom => {
+            let mut bytes = Vec::with_capacity(UTF8_BOM.len() + markdown.len());
+            bytes.extend_from_slice(UTF8_BOM);
+            bytes.extend_from_slice(markdown.as_bytes());
+            Ok(bytes)
+        }
+        MarkdownEncoding::Utf16LeBom => {
+            let mut bytes = Vec::with_capacity(UTF16_LE_BOM.len() + markdown.len() * 2);
+            bytes.extend_from_slice(UTF16_LE_BOM);
+            for unit in markdown.encode_utf16() {
+                bytes.extend_from_slice(&unit.to_le_bytes());
+            }
+            Ok(bytes)
+        }
+        MarkdownEncoding::Utf16BeBom => {
+            let mut bytes = Vec::with_capacity(UTF16_BE_BOM.len() + markdown.len() * 2);
+            bytes.extend_from_slice(UTF16_BE_BOM);
+            for unit in markdown.encode_utf16() {
+                bytes.extend_from_slice(&unit.to_be_bytes());
+            }
+            Ok(bytes)
+        }
+        MarkdownEncoding::Gbk => {
+            let (bytes, _, had_errors) = GBK.encode(markdown);
+            if had_errors {
+                return Err(
+                    "保存 Markdown 文件失败：文档包含 GBK 无法表示的字符，原文件未被修改"
+                        .to_string(),
+                );
+            }
+            Ok(bytes.into_owned())
+        }
+    }
 }
 
 fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -286,9 +397,13 @@ fn sync_parent_dir(_parent: &Path) {}
 
 fn read_sample_document(resource_path: &Path) -> Result<DocumentPayload, String> {
     // 直接读取安装目录下的实例文档资源，不再复制到用户应用数据目录。
-    let markdown =
-        fs::read_to_string(resource_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
-    document_payload(resource_path.to_string_lossy().to_string(), markdown)
+    let bytes = fs::read(resource_path).map_err(|error| format!("读取实例文档失败：{error}"))?;
+    let (markdown, encoding) = decode_markdown(&bytes)?;
+    document_payload(
+        resource_path.to_string_lossy().to_string(),
+        markdown,
+        encoding,
+    )
 }
 
 fn resolve_sample_document_resource(app: &AppHandle) -> Result<PathBuf, String> {

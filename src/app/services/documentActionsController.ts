@@ -15,6 +15,11 @@ import {
 } from './documentFiles';
 import { normalizeMarkdownForSave } from '../../lib/markdown/normalize';
 import { logInfo } from '../../lib/services/logger';
+import {
+  DEFAULT_MARKDOWN_ENCODING,
+  normalizeMarkdownEncoding,
+  type MarkdownEncoding,
+} from '../../lib/services/storage';
 import { confirmAction } from './confirmAction';
 import {
   createBlankTab,
@@ -40,6 +45,19 @@ function logCloseDiagnostics(message: string, data?: Record<string, unknown>) {
   logInfo('CloseGuard', message, data);
   // eslint-disable-next-line no-console
   console.info('[CloseGuard]', message, data ?? '');
+}
+
+function saveMarkdownWithSourceEncoding(
+  path: string | null,
+  markdown: string,
+  fileName: string,
+  snapshotPath: string | null,
+  sourceEncoding: MarkdownEncoding | undefined,
+) {
+  const encoding = normalizeMarkdownEncoding(sourceEncoding);
+  return encoding !== DEFAULT_MARKDOWN_ENCODING
+    ? saveNativeMarkdownFile(path, markdown, fileName, snapshotPath, encoding)
+    : saveNativeMarkdownFile(path, markdown, fileName, snapshotPath);
 }
 
 interface DocumentActionsOptions {
@@ -196,11 +214,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
         ? options.getFileName()
         : suggestFileNameFromH1(markdownToSave, options.getFileName());
       options.writeRecoveryDraft(saveAsTarget ? 'before-save-as' : 'before-save');
-      const { document, error } = await saveNativeMarkdownFile(
+      const { document, error } = await saveMarkdownWithSourceEncoding(
         path,
         markdownToSave,
         fileName,
         options.getCreateSnapshotBeforeSave() ? options.getNativePath() : null,
+        activeTab.encoding,
       );
       if (error) {
         options.setStatusMessage(error);
@@ -285,6 +304,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.draftId = null;
     targetTab.markdown = document.markdown;
     targetTab.savedMarkdown = document.markdown;
+    targetTab.encoding = normalizeMarkdownEncoding(document.encoding);
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
@@ -339,6 +359,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     targetTab.draftId = null;
     targetTab.markdown = markdownToSave;
     targetTab.savedMarkdown = markdownToSave;
+    targetTab.encoding = normalizeMarkdownEncoding(document.encoding);
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
@@ -512,6 +533,10 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!options.getDesktopEnabled() || !path) {
       return;
     }
+    if (activeTab.diskReadonly) {
+      options.setStatusMessage(t.readonlySourceSaveAsRequired());
+      return;
+    }
     if (options.getExternalFileChange().type !== 'modified') {
       options.setStatusMessage(t.noExternalChangeToOverwrite());
       return;
@@ -519,11 +544,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
     const markdownToSave = normalizeMarkdownForSave(options.getEditor().getMarkdown());
     options.writeRecoveryDraft('before-overwrite-external');
-    const { document, error } = await saveNativeMarkdownFile(
+    const { document, error } = await saveMarkdownWithSourceEncoding(
       path,
       markdownToSave,
       options.getFileName(),
       options.getCreateSnapshotBeforeSave() ? path : null,
+      activeTab.encoding,
     );
     if (error) {
       options.setStatusMessage(error);
@@ -602,7 +628,13 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     const path = targetTab.nativePath;
     const fileName = targetTab.fileName;
     const markdownToSave = normalizeMarkdownForSave(targetTab.markdown);
-    const { document, error } = await saveNativeMarkdownFile(path, markdownToSave, fileName, null);
+    const { document, error } = await saveMarkdownWithSourceEncoding(
+      path,
+      markdownToSave,
+      fileName,
+      null,
+      targetTab.encoding,
+    );
 
     if (error) {
       if (force && diskBaseline) {
@@ -637,6 +669,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
 
     latestTab.markdown = markdownToSave;
     latestTab.savedMarkdown = markdownToSave;
+    latestTab.encoding = normalizeMarkdownEncoding(document.encoding);
     latestTab.dirty = false;
     latestTab.draftId = null;
     latestTab.lastKnownModifiedAt = document.modifiedAt;

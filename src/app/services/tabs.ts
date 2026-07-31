@@ -11,6 +11,10 @@ import {
   type Tab,
 } from '../types';
 import { t } from '../i18n';
+import {
+  DEFAULT_MARKDOWN_ENCODING,
+  type MarkdownEncoding,
+} from '../../lib/services/storage';
 
 export interface ActiveTabState {
   fileName: string;
@@ -35,6 +39,7 @@ export interface MarkdownTabInput {
   draftId?: string | null;
   markdown?: string;
   savedMarkdown?: string;
+  encoding?: MarkdownEncoding;
   dirty?: boolean;
   lastKnownModifiedAt?: number;
   largeDocumentMode?: boolean;
@@ -71,6 +76,7 @@ export interface CreateTabForDocumentInput {
   segmentedSession?: SegmentedSessionOpenData;
   markdown?: string;
   savedMarkdown?: string;
+  encoding?: MarkdownEncoding;
   dirty?: boolean;
   lastKnownModifiedAt?: number;
   diskReadonly?: boolean;
@@ -103,6 +109,7 @@ export function createMarkdownTab(input: MarkdownTabInput = {}): MarkdownTabStat
     draftId: input.draftId ?? null,
     markdown,
     savedMarkdown: input.savedMarkdown ?? markdown,
+    encoding: input.encoding ?? DEFAULT_MARKDOWN_ENCODING,
     dirty: input.dirty ?? false,
     lastKnownModifiedAt: input.lastKnownModifiedAt ?? 0,
     largeDocumentMode: input.largeDocumentMode ?? false,
@@ -149,6 +156,7 @@ export function createTabForDocument(input: CreateTabForDocumentInput): Tab {
       nativePath: input.nativePath,
       markdown: input.markdown,
       savedMarkdown: input.savedMarkdown,
+      encoding: input.encoding,
       dirty: input.dirty,
       lastKnownModifiedAt: input.lastKnownModifiedAt,
       diskReadonly: input.diskReadonly,

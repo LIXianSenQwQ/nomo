@@ -43,6 +43,7 @@
     type DocumentStats,
     type OutlineItem,
   } from '../lib/outline/outlineService';
+  import { normalizeMarkdownEncoding } from '../lib/services/storage';
   import {
     extractFrontMatterBlock,
     removeFrontMatter,
@@ -862,7 +863,8 @@
           dirty: true,
           largeDocumentMode: draft.markdown.length > largeDocumentLimit,
           readonlyDocumentMode: draft.markdown.length > largeDocumentLimit,
-          diskReadonly: false,
+          // 磁盘读取失败时无法确认旧工作区文件的真实编码，禁止覆盖原路径并要求另存为。
+          diskReadonly: true,
         });
       }
       statusMessage = error || t.openRecentFailed();
@@ -880,6 +882,7 @@
     if (!draft) {
       return createRuntimeTabFromPersisted(persistedTab, document.markdown, {
         savedMarkdown: document.markdown,
+        encoding: document.encoding,
         dirty: false,
         lastKnownModifiedAt: document.modifiedAt,
         largeDocumentMode: diskLargeDocument,
@@ -894,6 +897,7 @@
     if (changedOnDisk) {
       const diskTab = createRuntimeTabFromPersisted(persistedTab, document.markdown, {
         savedMarkdown: document.markdown,
+        encoding: document.encoding,
         dirty: false,
         lastKnownModifiedAt: document.modifiedAt,
         largeDocumentMode: diskLargeDocument,
@@ -917,6 +921,7 @@
 
     return createRuntimeTabFromPersisted(persistedTab, draft.markdown, {
       savedMarkdown: document.markdown,
+      encoding: document.encoding,
       dirty: true,
       lastKnownModifiedAt: document.modifiedAt,
       largeDocumentMode: draft.markdown.length > largeDocumentLimit,
@@ -2567,6 +2572,7 @@
     targetTab.draftId = null;
     targetTab.markdown = document.markdown;
     targetTab.savedMarkdown = document.markdown;
+    targetTab.encoding = normalizeMarkdownEncoding(document.encoding);
     targetTab.dirty = false;
     targetTab.lastKnownModifiedAt = document.modifiedAt;
     targetTab.largeDocumentMode = isLargeDocument;
