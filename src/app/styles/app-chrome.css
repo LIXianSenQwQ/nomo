@@ -56,7 +56,7 @@
 
 .editor-shell.has-open-document > .editor-toolbar-region,
 .editor-shell.has-open-document > .editor-toolbar-region .toolbar,
-.editor-shell.has-open-document.toolbar-hidden > .editor-grid,
+.editor-shell.has-open-document > .editor-grid,
 .editor-shell.has-open-document > .segmented-workspace {
   border-top-left-radius: var(--md-editor-radius-lg);
 }
@@ -85,7 +85,7 @@
   justify-content: flex-end;
   padding: 8px 14px 0;
   pointer-events: none;
-  transition: top 180ms ease;
+  transition: top var(--toolbar-transition-duration, 220ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .editor-shell [data-search-panel] > * {
@@ -279,6 +279,55 @@
   overflow: visible;
 }
 
+.tab-active-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: 0;
+  height: var(--md-editor-control-height-lg);
+  border-radius: 10px 10px 0 0;
+  background: var(--editor-card-surface, var(--md-editor-surface));
+  box-shadow:
+    -1px -1px 0 var(--editor-card-edge-color),
+    1px -1px 0 var(--editor-card-edge-color),
+    0 -2px 5px var(--editor-tab-shadow-color),
+    0 1px 0 var(--editor-card-surface, var(--md-editor-surface));
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, width;
+}
+
+.tabs-container[data-indicator-ready='true'] .tab-active-indicator {
+  opacity: 1;
+}
+
+.tab-active-indicator::before,
+.tab-active-indicator::after {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  background: transparent;
+  content: '';
+}
+
+.tab-active-indicator::before {
+  left: -10px;
+  border-radius: 0 0 10px 0;
+  box-shadow:
+    5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
+    4px 4px 0 5px var(--editor-card-edge-color);
+}
+
+.tab-active-indicator::after {
+  right: -10px;
+  border-radius: 0 0 0 10px;
+  box-shadow:
+    -5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
+    -4px 4px 0 5px var(--editor-card-edge-color);
+}
+
 .tab-measure-area {
   position: absolute;
   left: -9999px;
@@ -303,9 +352,8 @@
   font-weight: 500;
   cursor: pointer;
   position: relative;
-  z-index: 1;
+  z-index: 2;
   transition:
-    background 0.15s,
     color 0.15s,
     opacity 0.15s,
     transform 0.15s;
@@ -318,48 +366,12 @@
 }
 
 .doc-tab.active {
-  z-index: 4;
-  isolation: isolate;
-  border-radius: 10px 10px 0 0;
-  background: var(--editor-card-surface, var(--md-editor-surface));
   color: var(--md-editor-heading-fg);
   font-weight: 600;
-  box-shadow:
-    -1px -1px 0 var(--editor-card-edge-color),
-    1px -1px 0 var(--editor-card-edge-color),
-    0 -2px 5px var(--editor-tab-shadow-color),
-    0 1px 0 var(--editor-card-surface, var(--md-editor-surface));
-}
-
-.doc-tab.active::before,
-.doc-tab.active::after {
-  position: absolute;
-  bottom: 0;
-  width: 10px;
-  height: 10px;
-  background: transparent;
-  content: '';
-  pointer-events: none;
-}
-
-.doc-tab.active::before {
-  left: -10px;
-  border-radius: 0 0 10px 0;
-  box-shadow:
-    5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
-    4px 4px 0 5px var(--editor-card-edge-color);
-}
-
-.doc-tab.active::after {
-  right: -10px;
-  border-radius: 0 0 0 10px;
-  box-shadow:
-    -5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
-    -4px 4px 0 5px var(--editor-card-edge-color);
 }
 
 .doc-tab.active:hover {
-  background: var(--editor-card-surface, var(--md-editor-surface));
+  background: transparent;
 }
 
 .tab-title {
@@ -630,17 +642,25 @@
   height: 44px;
   min-width: 0;
   background: var(--editor-card-surface, var(--md-editor-surface));
+  overflow: clip;
+  transition: height var(--toolbar-transition-duration, 220ms) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.editor-toolbar-region.overflow-visible {
   overflow: visible;
-  transition: height 180ms ease;
 }
 
 .editor-toolbar-region.collapsed {
   height: 0;
-  overflow: hidden;
 }
 
 .editor-toolbar-region > div {
+  height: 44px;
   min-width: 0;
+}
+
+.editor-toolbar-region.collapsed > div {
+  pointer-events: none;
 }
 
 .toolbar-group,
@@ -670,6 +690,16 @@
   color: var(--md-editor-muted-fg);
   cursor: pointer;
   opacity: 0.72;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear;
+  transition-duration: 0s !important;
+}
+
+.editor-shell.toolbar-hidden .toolbar-reveal-button {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: var(--toolbar-reveal-delay, 176ms);
 }
 
 .toolbar-reveal-button:hover,

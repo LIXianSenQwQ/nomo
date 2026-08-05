@@ -13,7 +13,12 @@
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import { createEventDispatcher } from 'svelte';
   import { clickOutside } from '../actions/clickOutside';
-  import { motionIn, pulseOnChange, transitionDuration } from '../actions/motion';
+  import {
+    explorerSelectionIndicator,
+    motionIn,
+    pulseOnChange,
+    transitionDuration,
+  } from '../actions/motion';
   import { getExplorerRenameSelectionRange } from '../services/explorerRename';
 
   // 重命名输入框专用：延迟激活点击外部检测，避免菜单关闭时的 click 冒泡误触发取消
@@ -173,6 +178,7 @@
   let virtualRows: ExplorerTreeRow[] = [];
   let virtualTreeHeight = 0;
   let visibleExplorerRowsSignature = '';
+  let renderedExplorerRowsSignature = '';
   let lastAutoScrolledExplorerPath = '';
   let lastRenderedFolderPath = currentFolderPath;
   let activeExplorerScrollToken = 0;
@@ -199,6 +205,12 @@
       TREE_OVERSCAN * 2;
     virtualRows = flattenedRows.slice(start, start + visibleCount);
   }
+  $: renderedExplorerRowsSignature = virtualRows.map((row) => row.key).join('\u001f');
+  $: activeExplorerRowTop = activeExplorerPath
+    ? (flattenedRows.find(
+        (row) => row.type === 'file' && sameExplorerPath(row.node.path, activeExplorerPath),
+      )?.top ?? null)
+    : null;
   $: {
     const autoScrollSignature = [
       currentFolderPath,
@@ -343,6 +355,10 @@
 
   function isPreviewFilePath(path: string) {
     return Boolean(previewNativePath && sameExplorerPath(previewNativePath, path));
+  }
+
+  function isSelectedFilePath(path: string) {
+    return Boolean(activeExplorerPath && sameExplorerPath(activeExplorerPath, path));
   }
 
   function folderCanExpand(node: FileTreeNode) {
@@ -748,7 +764,15 @@
           <div
             class="recent-tree recursive-tree-container virtual-tree-viewport"
             style="height: {virtualTreeHeight}px"
+            data-selection-ready="false"
+            use:explorerSelectionIndicator={{
+              activePath: activeExplorerPath ?? '',
+              top: activeExplorerRowTop,
+              layoutKey: `${currentFolderPath}\u001e${visibleExplorerRowsSignature}`,
+              renderKey: renderedExplorerRowsSignature,
+            }}
           >
+            <span class="explorer-selection-indicator" aria-hidden="true"></span>
             {#each virtualRows as row (row.key)}
               <div class="tree-virtual-row" style="transform: translateY({row.top}px)">
                 {#if row.type === 'folder'}
@@ -882,10 +906,10 @@
                       type="button"
                       class="tree-file"
                       class:active={isActiveFilePath(node.path)}
+                      class:selected={isSelectedFilePath(node.path)}
                       class:preview={isPreviewFilePath(node.path)}
                       style="padding-left: {34 + row.depth * 12}px"
                       title={node.path}
-                      use:pulseOnChange={isActiveFilePath(node.path) || isPreviewFilePath(node.path)}
                       on:click={() => handleFileClick(node.path)}
                       on:dblclick={() => handleFileDblClick(node.path)}
                       on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}

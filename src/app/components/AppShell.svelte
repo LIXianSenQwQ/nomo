@@ -1,11 +1,16 @@
 <script lang="ts">
   import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
-  import type { EditorCommand, EditorMode, EditorThemeOptions, InlinePendingMarks } from '../../lib/editor-core';
+  import type {
+    EditorCommand,
+    EditorMode,
+    EditorThemeOptions,
+    InlinePendingMarks,
+  } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
   import { ChevronDown } from '@lucide/svelte';
-  import { slide } from 'svelte/transition';
+  import { onDestroy } from 'svelte';
   import type { ExternalFileChangeState, FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
   import DocumentTabs from './DocumentTabs.svelte';
@@ -185,6 +190,45 @@
   $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
   $: activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   $: effectiveToolbarHidden = focusMode || toolbarHidden;
+  const toolbarTransitionDuration = transitionDuration('panel');
+  const toolbarRevealDelay = Math.round(toolbarTransitionDuration * 0.8);
+  let toolbarOverflowVisible = !effectiveToolbarHidden;
+  let toolbarOverflowFrame = 0;
+
+  $: if (effectiveToolbarHidden) {
+    toolbarOverflowVisible = false;
+    cancelToolbarOverflowFrame();
+  } else if (activeTab?.documentKind !== 'markdown' || markdownMiniActive) {
+    // 工具栏未参与高度过渡时，直接恢复弹出层的溢出显示。
+    toolbarOverflowVisible = true;
+  }
+
+  function handleToolbarTransitionEnd(event: TransitionEvent) {
+    if (
+      event.target !== event.currentTarget ||
+      event.propertyName !== 'height' ||
+      effectiveToolbarHidden
+    ) {
+      return;
+    }
+
+    cancelToolbarOverflowFrame();
+    // 先让展开后的最终布局完整绘制一帧，再允许工具栏弹出层越界显示。
+    toolbarOverflowFrame = requestAnimationFrame(() => {
+      toolbarOverflowFrame = 0;
+      if (!effectiveToolbarHidden) {
+        toolbarOverflowVisible = true;
+      }
+    });
+  }
+
+  function cancelToolbarOverflowFrame() {
+    if (!toolbarOverflowFrame) return;
+    cancelAnimationFrame(toolbarOverflowFrame);
+    toolbarOverflowFrame = 0;
+  }
+
+  onDestroy(cancelToolbarOverflowFrame);
 </script>
 
 <div
@@ -301,6 +345,7 @@
       class:has-open-document={appBootState === 'ready' && hasOpenDocument}
       class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
       class:toolbar-hidden={effectiveToolbarHidden}
+      style={`--toolbar-transition-duration: ${toolbarTransitionDuration}ms; --toolbar-reveal-delay: ${toolbarRevealDelay}ms`}
       aria-label={t.semanticEditorArea()}
     >
       {#if appBootState !== 'ready'}
@@ -324,33 +369,40 @@
         />
 
         {#if activeTab?.documentKind === 'markdown'}
-          <div class="editor-toolbar-region" class:collapsed={effectiveToolbarHidden}>
-            {#if !effectiveToolbarHidden}
-              <div transition:slide={{ duration: transitionDuration('panel') }}>
-                <EditorToolbar
-                  {interfaceLocale}
-                  {mode}
-                  {contentWidthPercent}
-                  {outlineVisible}
-                  {toolbarShortcut}
-                  {runCommand}
-                  {pendingInlineMarks}
-                  {tablePickerOpen}
-                  {openTablePicker}
-                  {closeTablePicker}
-                  {openLinkPicker}
-                  {insertTableWithSize}
-                  {updateContentWidth}
-                  {setMode}
-                  {toggleOutlineVisible}
-                  {toggleToolbar}
-                  openSearchPanel={() => openSearchPanel(false)}
-                />
-              </div>
-            {/if}
+          <div
+            class="editor-toolbar-region"
+            class:collapsed={effectiveToolbarHidden}
+            class:overflow-visible={toolbarOverflowVisible}
+            on:transitionend={handleToolbarTransitionEnd}
+          >
+            <div
+              aria-hidden={!toolbarOverflowVisible || markdownMiniActive}
+              inert={!toolbarOverflowVisible || markdownMiniActive}
+            >
+              <EditorToolbar
+                {interfaceLocale}
+                {mode}
+                {contentWidthPercent}
+                {outlineVisible}
+                {toolbarShortcut}
+                {runCommand}
+                {pendingInlineMarks}
+                {tablePickerOpen}
+                {openTablePicker}
+                {closeTablePicker}
+                {openLinkPicker}
+                {insertTableWithSize}
+                {updateContentWidth}
+                {setMode}
+                {toggleOutlineVisible}
+                {toggleToolbar}
+                inactive={!toolbarOverflowVisible || markdownMiniActive}
+                openSearchPanel={() => openSearchPanel(false)}
+              />
+            </div>
           </div>
 
-          {#if effectiveToolbarHidden && !focusMode}
+          {#if !focusMode}
             <button
               class="toolbar-reveal-button"
               type="button"

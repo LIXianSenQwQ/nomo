@@ -52,6 +52,7 @@
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleToolbar: () => void;
+  export let inactive = false;
   export let openSearchPanel: () => void;
 
   const tableRows = [1, 2, 3, 4, 5];
@@ -60,6 +61,11 @@
   let previewColumns = 4;
   let diagramPickerOpen = false;
   let widthPickerOpen = false;
+
+  $: if (inactive) {
+    diagramPickerOpen = false;
+    widthPickerOpen = false;
+  }
 
   function toggleTablePicker() {
     if (tablePickerOpen) {

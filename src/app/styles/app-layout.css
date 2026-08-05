@@ -165,12 +165,32 @@
   display: block;
   min-height: 0;
   contain: layout paint;
+  isolation: isolate;
+}
+
+.explorer-selection-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: 2px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--md-editor-accent);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.virtual-tree-viewport[data-selection-ready='true'] .explorer-selection-indicator {
+  opacity: 0.88;
 }
 
 .tree-virtual-row {
   position: absolute;
   left: 0;
   right: 0;
+  z-index: 1;
   height: var(--explorer-row-height);
   min-width: 0;
   will-change: transform;
@@ -229,11 +249,13 @@
   cursor: pointer;
 }
 
-.tree-file.active {
-  position: relative;
-  background: var(--md-editor-sidebar-active);
+.tree-file.selected {
   color: var(--md-editor-accent-strong);
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.tree-file.selected svg {
+  color: var(--md-editor-accent);
 }
 
 /* 当前文件夹高亮反馈 */
@@ -250,20 +272,35 @@
   opacity: 1;
 }
 
-/* 当前文件左侧高亮指示条 */
-.tree-file.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 2px;
-  bottom: 2px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--md-editor-accent);
+.virtual-tree-viewport .tree-file.selected {
+  background: transparent;
 }
 
-.tree-file.active:hover {
-  background: var(--md-editor-sidebar-active);
+.virtual-tree-viewport .tree-file.selected:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.tree-root > .tree-file.active {
+  position: relative;
+  background: transparent;
+  color: var(--md-editor-accent-strong);
+  font-weight: 600;
+}
+
+.tree-root > .tree-file.active::before {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 2px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--md-editor-accent);
+  content: '';
+  transform: translateY(-50%);
+}
+
+.tree-root > .tree-file.active:hover {
+  background: rgba(128, 128, 128, 0.08);
 }
 
 /* 预览中的文件在文件树中显示斜体 */

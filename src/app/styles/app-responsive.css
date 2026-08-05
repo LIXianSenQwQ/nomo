@@ -627,9 +627,13 @@
 }
 
 .file-tree button.tree-file.active {
-  background: rgba(0, 122, 204, 0.12) !important;
+  background: transparent !important;
   color: var(--md-editor-accent) !important;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.file-tree button.tree-file.active:hover {
+  background: rgba(128, 128, 128, 0.08) !important;
 }
 
 .file-tree button.tree-file:active,

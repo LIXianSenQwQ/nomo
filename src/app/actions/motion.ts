@@ -209,54 +209,137 @@ type TabIndicatorParams = {
   activeTabId: string;
   visibleStart: number;
   visibleEnd: number;
+  layoutKey: string;
 };
 
 export function tabIndicator(node: HTMLElement, params: TabIndicatorParams) {
   let frame = 0;
   let initialized = false;
   let tween: gsap.core.Tween | null = null;
+  let currentParams = params;
 
-  function measure() {
+  function measure(animate: boolean) {
     frame = 0;
+    const indicator = node.querySelector<HTMLElement>('.tab-active-indicator');
     const activeTab = node.querySelector<HTMLElement>('.doc-tab.active');
-    if (!activeTab) {
+    if (!indicator || !activeTab) {
+      tween?.kill();
       node.dataset.indicatorReady = 'false';
+      initialized = false;
       return;
     }
 
     const x = activeTab.offsetLeft;
     const width = activeTab.offsetWidth;
-    node.dataset.indicatorReady = 'true';
 
     tween?.kill();
-    if (!initialized || prefersReducedMotion()) {
-      gsap.set(node, {
-        '--tab-indicator-x': `${x}px`,
-        '--tab-indicator-width': `${width}px`,
+    if (!initialized || !animate || prefersReducedMotion()) {
+      gsap.set(indicator, { x, width });
+    } else {
+      tween = gsap.to(indicator, {
+        x,
+        width,
+        duration: motionDuration('row'),
+        ease,
+        overwrite: true,
       });
-      initialized = true;
+    }
+
+    node.dataset.indicatorReady = 'true';
+    initialized = true;
+  }
+
+  function queue(animate: boolean) {
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => measure(animate));
+  }
+
+  const resizeObserver = new ResizeObserver(() => queue(false));
+  resizeObserver.observe(node);
+  queue(false);
+
+  return {
+    update(nextParams: TabIndicatorParams) {
+      const activeTabChanged = nextParams.activeTabId !== currentParams.activeTabId;
+      const visibleRangeUnchanged =
+        nextParams.visibleStart === currentParams.visibleStart &&
+        nextParams.visibleEnd === currentParams.visibleEnd;
+      currentParams = nextParams;
+      queue(initialized && activeTabChanged && visibleRangeUnchanged);
+    },
+    destroy() {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      tween?.kill();
+    },
+  };
+}
+
+type ExplorerSelectionIndicatorParams = {
+  activePath: string;
+  top: number | null;
+  layoutKey: string;
+  renderKey: string;
+};
+
+export function explorerSelectionIndicator(
+  node: HTMLElement,
+  params: ExplorerSelectionIndicatorParams,
+) {
+  let frame = 0;
+  let initialized = false;
+  let tween: gsap.core.Tween | null = null;
+  let currentParams = params;
+
+  function measure(nextParams: ExplorerSelectionIndicatorParams, animate: boolean) {
+    frame = 0;
+    const indicator = node.querySelector<HTMLElement>('.explorer-selection-indicator');
+    const selectedRow = node.querySelector<HTMLElement>('.tree-file.selected');
+    if (!indicator || !selectedRow || nextParams.top === null) {
+      tween?.kill();
+      node.dataset.selectionReady = 'false';
+      initialized = false;
       return;
     }
 
-    tween = gsap.to(node, {
-      '--tab-indicator-x': `${x}px`,
-      '--tab-indicator-width': `${width}px`,
-      duration: motionDuration('mode'),
-      ease,
-      overwrite: true,
-    });
+    const viewportRect = node.getBoundingClientRect();
+    const selectedRect = selectedRow.getBoundingClientRect();
+    const paddingLeft = Number.parseFloat(getComputedStyle(selectedRow).paddingLeft) || 0;
+    const x = Math.max(8, selectedRect.left - viewportRect.left + paddingLeft - 10);
+    const y =
+      selectedRect.top -
+      viewportRect.top +
+      (selectedRect.height - indicator.offsetHeight) / 2;
+    tween?.kill();
+    if (!initialized || !animate || prefersReducedMotion()) {
+      gsap.set(indicator, { x, y });
+    } else {
+      tween = gsap.to(indicator, {
+        x,
+        y,
+        duration: motionDuration('row'),
+        ease,
+        overwrite: true,
+      });
+    }
+
+    node.dataset.selectionReady = 'true';
+    initialized = true;
   }
 
-  function queue() {
+  function queue(nextParams: ExplorerSelectionIndicatorParams, animate: boolean) {
     if (frame) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(measure);
+    frame = requestAnimationFrame(() => measure(nextParams, animate));
   }
 
-  queue();
+  queue(params, false);
 
   return {
-    update(_nextParams: TabIndicatorParams) {
-      queue();
+    update(nextParams: ExplorerSelectionIndicatorParams) {
+      const activePathChanged = nextParams.activePath !== currentParams.activePath;
+      const layoutUnchanged = nextParams.layoutKey === currentParams.layoutKey;
+      currentParams = nextParams;
+      queue(nextParams, initialized && activePathChanged && layoutUnchanged);
     },
     destroy() {
       if (frame) cancelAnimationFrame(frame);

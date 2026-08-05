@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, FileJson2, FileText, FileType2, Plus, X } from '@lucide/svelte';
   import { createEventDispatcher, onMount, tick } from 'svelte';
-  import { motionIn, pulseOnChange } from '../actions/motion';
+  import { motionIn, pulseOnChange, tabIndicator } from '../actions/motion';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
   import ContextMenu from './ContextMenu.svelte';
@@ -314,7 +314,15 @@
     <div
       class="tabs-container"
       bind:this={tabsContainer}
+      data-indicator-ready="false"
+      use:tabIndicator={{
+        activeTabId: visualActiveTabId,
+        visibleStart: visibleRange.start,
+        visibleEnd: visibleRange.end,
+        layoutKey: tabMeasureKey,
+      }}
     >
+      <span class="tab-active-indicator" aria-hidden="true"></span>
       {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
         <button
           type="button"
