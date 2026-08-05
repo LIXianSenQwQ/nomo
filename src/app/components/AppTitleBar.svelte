@@ -21,6 +21,8 @@
   export let missingRecentPaths: Set<string>;
   export let mode: EditorMode;
   export let focusMode: boolean;
+  export let toolbarHidden: boolean;
+  export let toolbarShortcut: string;
   export let getCompactPath: (path: string) => string;
   export let toggleMenu: (menu: string) => void;
   export let closeMenu: (menu: string) => void;
@@ -48,6 +50,7 @@
   export let toggleOutlineVisible: () => void;
   export let outlineVisible: boolean;
   export let toggleFocusMode: () => void;
+  export let toggleToolbar: () => void;
   export let openSettings: () => void;
   export let exportHtml: () => void;
   export let exportPdf: () => void;
@@ -590,6 +593,10 @@
                 <button on:click={() => finish(toggleOutlineVisible, 'view')}
                   >{outlineVisible ? t.hideOutline() : t.showOutline()}</button
                 >
+                <button on:click={() => finish(toggleToolbar, 'view')}>
+                  {toolbarHidden ? t.showToolbar() : t.hideToolbar()}
+                  <span class="shortcut">{toolbarShortcut.split('+').join(' + ')}</span>
+                </button>
                 <button on:click={() => finish(toggleTheme, 'view')}
                   >{t.switchTheme()} <span class="shortcut">Ctrl + Shift + L</span></button
                 >

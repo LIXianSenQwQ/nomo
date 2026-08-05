@@ -188,6 +188,7 @@
     { id: 'toggle-source', labelKey: 'toggleSourceMode' },
     { id: 'toggle-theme', labelKey: 'toggleThemeLightDark' },
     { id: 'toggle-focus', labelKey: 'showHideExplorer' },
+    { id: 'toggle-toolbar', labelKey: 'showHideToolbar' },
     { id: 'insert-code-block', labelKey: 'insertCodeBlock' },
     { id: 'insert-table', labelKey: 'insertTable' },
     { id: 'insert-math-block', labelKey: 'insertMathBlock' },
@@ -309,6 +310,10 @@
           }
           try {
             const saved = await saveAppPreferences(desktopEnabled, settingsToSave, keysToSave);
+            if (desktopEnabled && keysToSave.includes('shortcutPreferences')) {
+              const { invoke } = await import('@tauri-apps/api/core');
+              await invoke('refresh_interface_language_chrome').catch(() => undefined);
+            }
             lastPersistedSettings = normalizeAppPreferences({
               ...lastPersistedSettings,
               ...Object.fromEntries(keysToSave.map((key) => [key, saved[key]])),

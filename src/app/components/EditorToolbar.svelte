@@ -5,6 +5,7 @@
     BookOpenText,
     Braces,
     CheckSquare,
+    ChevronUp,
     Code2,
     CodeXml,
     Heading1,
@@ -39,6 +40,7 @@
   export let mode: EditorMode;
   export let contentWidthPercent: number;
   export let outlineVisible: boolean;
+  export let toolbarShortcut: string;
   export let runCommand: (command: EditorCommand) => void;
   export let pendingInlineMarks: InlinePendingMarks;
   export let tablePickerOpen: boolean;
@@ -49,6 +51,7 @@
   export let updateContentWidth: (event: Event) => void;
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
+  export let toggleToolbar: () => void;
   export let openSearchPanel: () => void;
 
   const tableRows = [1, 2, 3, 4, 5];
@@ -56,6 +59,7 @@
   let previewRows = 3;
   let previewColumns = 4;
   let diagramPickerOpen = false;
+  let widthPickerOpen = false;
 
   function toggleTablePicker() {
     if (tablePickerOpen) {
@@ -64,6 +68,8 @@
     }
     previewRows = 3;
     previewColumns = 4;
+    closeDiagramPicker();
+    closeWidthPicker();
     openTablePicker();
   }
 
@@ -76,6 +82,48 @@
 
   function closeDiagramPicker() {
     diagramPickerOpen = false;
+  }
+
+  function toggleDiagramPicker() {
+    closeTablePicker();
+    closeWidthPicker();
+    diagramPickerOpen = !diagramPickerOpen;
+  }
+
+  function closeWidthPicker() {
+    widthPickerOpen = false;
+  }
+
+  function toggleWidthPicker() {
+    closeTablePicker();
+    closeDiagramPicker();
+    widthPickerOpen = !widthPickerOpen;
+  }
+
+  function handleWidthPickerKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeWidthPicker();
+    }
+  }
+
+  function openLinkEditor() {
+    closeDiagramPicker();
+    closeWidthPicker();
+    openLinkPicker();
+  }
+
+  function openSearch() {
+    closeTablePicker();
+    closeDiagramPicker();
+    closeWidthPicker();
+    openSearchPanel();
+  }
+
+  function closeResponsivePickers() {
+    closeTablePicker();
+    closeDiagramPicker();
+    closeWidthPicker();
   }
 
   function insertBlankDiagram() {
@@ -96,273 +144,324 @@
   }
 </script>
 
+<svelte:window on:resize={closeResponsivePickers} />
+
 {#key interfaceLocale}
   <div class="toolbar" aria-label={t.formatToolbar()} data-interface-locale={interfaceLocale}>
-    <button
-      title={t.title()}
-      aria-label={t.setHeadingOne()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'setHeading', level: 1 })}
-    >
-      <Heading1 size={17} />
-    </button>
-    <button
-      title={t.bold()}
-      aria-label={t.toggleBold()}
-      class:active={pendingInlineMarks.strong}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleBold' })}
-    >
-      <Bold size={17} />
-    </button>
-    <button
-      title={t.italic()}
-      aria-label={t.toggleItalic()}
-      class:active={pendingInlineMarks.em}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleItalic' })}
-    >
-      <Italic size={17} />
-    </button>
-    <button
-      title={t.strikethrough()}
-      aria-label={t.toggleStrikethrough()}
-      class:active={pendingInlineMarks.strikethrough}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleStrikethrough' })}
-    >
-      <Strikethrough size={17} />
-    </button>
-    <button
-      title={t.underline()}
-      aria-label={t.toggleUnderline()}
-      class:active={pendingInlineMarks.underline}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleUnderline' })}
-    >
-      <Underline size={17} />
-    </button>
-    <button
-      title={t.highlight()}
-      aria-label={t.toggleHighlight()}
-      class:active={pendingInlineMarks.highlight}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleHighlight' })}
-    >
-      <Highlighter size={17} />
-    </button>
-    <button
-      title={t.link()}
-      aria-label={t.editLink()}
-      on:mousedown|preventDefault
-      on:click={openLinkPicker}
-    >
-      <Link size={17} />
-    </button>
-    <button
-      title={t.inlineComment()}
-      aria-label={t.insertInlineComment()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'insertCommentInline' })}
-    >
-      <MessageSquare size={17} />
-    </button>
-    <button
-      title={t.quote()}
-      aria-label={t.toggleQuote()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleBlockquote' })}
-    >
-      <Quote size={17} />
-    </button>
-    <button
-      title={t.callout()}
-      aria-label={t.insertCallout()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'insertCallout' })}
-    >
-      <Info size={17} />
-    </button>
-    <button
-      title={t.unorderedList()}
-      aria-label={t.toggleList()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleBulletList' })}
-    >
-      <List size={17} />
-    </button>
-    <button
-      title={t.taskList()}
-      aria-label={t.toggleTaskList()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'toggleTaskList' })}
-    >
-      <CheckSquare size={17} />
-    </button>
-    <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>
+    <div class="toolbar-group toolbar-group-core">
       <button
-        title={t.table()}
-        aria-haspopup="dialog"
-        aria-expanded={tablePickerOpen}
-        aria-label={t.insertTable()}
-        class:active={tablePickerOpen}
-        on:click|stopPropagation={toggleTablePicker}
+        title={t.title()}
+        aria-label={t.setHeadingOne()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'setHeading', level: 1 })}
       >
-        <Table2 size={17} />
+        <Heading1 size={17} />
       </button>
-      {#if tablePickerOpen}
-        <div
-          class="table-picker-popover"
-          role="dialog"
-          aria-label={t.chooseTableSize()}
-          tabindex="-1"
-          on:keydown={handleTablePickerKeydown}
+      <button
+        title={t.bold()}
+        aria-label={t.toggleBold()}
+        class:active={pendingInlineMarks.strong}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleBold' })}
+      >
+        <Bold size={17} />
+      </button>
+      <button
+        title={t.italic()}
+        aria-label={t.toggleItalic()}
+        class:active={pendingInlineMarks.em}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleItalic' })}
+      >
+        <Italic size={17} />
+      </button>
+      <button
+        title={t.strikethrough()}
+        aria-label={t.toggleStrikethrough()}
+        class:active={pendingInlineMarks.strikethrough}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleStrikethrough' })}
+      >
+        <Strikethrough size={17} />
+      </button>
+      <button
+        title={t.underline()}
+        aria-label={t.toggleUnderline()}
+        class:active={pendingInlineMarks.underline}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleUnderline' })}
+      >
+        <Underline size={17} />
+      </button>
+      <button
+        title={t.highlight()}
+        aria-label={t.toggleHighlight()}
+        class:active={pendingInlineMarks.highlight}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleHighlight' })}
+      >
+        <Highlighter size={17} />
+      </button>
+      <button
+        title={t.link()}
+        aria-label={t.editLink()}
+        on:mousedown|preventDefault
+        on:click={openLinkEditor}
+      >
+        <Link size={17} />
+      </button>
+    </div>
+
+    <div class="toolbar-group toolbar-group-medium">
+      <button
+        title={t.inlineComment()}
+        aria-label={t.insertInlineComment()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'insertCommentInline' })}
+      >
+        <MessageSquare size={17} />
+      </button>
+      <button
+        title={t.quote()}
+        aria-label={t.toggleQuote()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleBlockquote' })}
+      >
+        <Quote size={17} />
+      </button>
+      <button
+        title={t.callout()}
+        aria-label={t.insertCallout()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'insertCallout' })}
+      >
+        <Info size={17} />
+      </button>
+      <button
+        title={t.unorderedList()}
+        aria-label={t.toggleList()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleBulletList' })}
+      >
+        <List size={17} />
+      </button>
+      <button
+        title={t.taskList()}
+        aria-label={t.toggleTaskList()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'toggleTaskList' })}
+      >
+        <CheckSquare size={17} />
+      </button>
+    </div>
+
+    <div class="toolbar-group toolbar-group-low">
+      <div class="table-picker-anchor" use:clickOutside={closeTablePicker}>
+        <button
+          title={t.table()}
+          aria-haspopup="dialog"
+          aria-expanded={tablePickerOpen}
+          aria-label={t.insertTable()}
+          class:active={tablePickerOpen}
+          on:click|stopPropagation={toggleTablePicker}
         >
-          <div class="table-picker-header">
-            <span>{t.table()}</span>
-            <strong>{previewRows} × {previewColumns}</strong>
-          </div>
-          <div class="table-picker-grid" aria-label={t.tableRowsColumns()}>
-            {#each tableRows as row}
-              {#each tableColumns as column}
-                <button
-                  type="button"
-                  class="table-picker-cell"
-                  class:active={row <= previewRows && column <= previewColumns}
-                  aria-label={t.insertTableSize({ rows: row, columns: column })}
-                  on:mouseenter={() => {
-                    previewRows = row;
-                    previewColumns = column;
-                  }}
-                  on:focus={() => {
-                    previewRows = row;
-                    previewColumns = column;
-                  }}
-                  on:click={() => insertTableWithSize(row, column)}
-                ></button>
+          <Table2 size={17} />
+        </button>
+        {#if tablePickerOpen}
+          <div
+            class="table-picker-popover"
+            role="dialog"
+            aria-label={t.chooseTableSize()}
+            tabindex="-1"
+            on:keydown={handleTablePickerKeydown}
+          >
+            <div class="table-picker-header">
+              <span>{t.table()}</span>
+              <strong>{previewRows} × {previewColumns}</strong>
+            </div>
+            <div class="table-picker-grid" aria-label={t.tableRowsColumns()}>
+              {#each tableRows as row}
+                {#each tableColumns as column}
+                  <button
+                    type="button"
+                    class="table-picker-cell"
+                    class:active={row <= previewRows && column <= previewColumns}
+                    aria-label={t.insertTableSize({ rows: row, columns: column })}
+                    on:mouseenter={() => {
+                      previewRows = row;
+                      previewColumns = column;
+                    }}
+                    on:focus={() => {
+                      previewRows = row;
+                      previewColumns = column;
+                    }}
+                    on:click={() => insertTableWithSize(row, column)}
+                  ></button>
+                {/each}
               {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+      <button
+        title={t.codeBlock()}
+        aria-label={t.insertCodeBlock()}
+        on:click={() => runCommand({ type: 'insertCodeBlock' })}
+      >
+        <Code2 size={17} />
+      </button>
+      <button
+        title={t.mathFormula()}
+        aria-label={t.insertMathFormula()}
+        on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}
+      >
+        <Sigma size={17} />
+      </button>
+      <div class="diagram-picker-anchor" use:clickOutside={closeDiagramPicker}>
+        <button
+          title={t.diagram()}
+          aria-haspopup="menu"
+          aria-expanded={diagramPickerOpen}
+          aria-label={t.insertDiagram()}
+          class:active={diagramPickerOpen}
+          on:click|stopPropagation={toggleDiagramPicker}
+        >
+          <Braces size={17} />
+        </button>
+        {#if diagramPickerOpen}
+          <div
+            class="diagram-picker-popover"
+            role="menu"
+            aria-label={t.insertDiagram()}
+            tabindex="-1"
+            on:keydown={handleDiagramPickerKeydown}
+          >
+            <div class="diagram-picker-header">{t.diagram()}</div>
+            <button type="button" role="menuitem" on:click={insertBlankDiagram}>
+              <span>{t.blankDiagram()}</span>
+              <small>mermaid</small>
+            </button>
+            <div class="diagram-picker-header">{t.template()}</div>
+            {#each DIAGRAM_TEMPLATES as template}
+              <button type="button" role="menuitem" on:click={() => insertDiagram(template.type)}>
+                <span>{getDiagramTypeLabel(template.type)}</span>
+                <small>{template.type}</small>
+              </button>
             {/each}
           </div>
-        </div>
-      {/if}
-    </div>
-    <button
-      title={t.codeBlock()}
-      aria-label={t.insertCodeBlock()}
-      on:click={() => runCommand({ type: 'insertCodeBlock' })}
-    >
-      <Code2 size={17} />
-    </button>
-    <button
-      title={t.mathFormula()}
-      aria-label={t.insertMathFormula()}
-      on:click={() => runCommand({ type: 'insertMathBlock', tex: 'E = mc^2' })}
-    >
-      <Sigma size={17} />
-    </button>
-    <div class="diagram-picker-anchor" use:clickOutside={closeDiagramPicker}>
+        {/if}
+      </div>
       <button
-        title={t.diagram()}
-        aria-haspopup="menu"
-        aria-expanded={diagramPickerOpen}
-        aria-label={t.insertDiagram()}
-        class:active={diagramPickerOpen}
-        on:click|stopPropagation={() => {
-          diagramPickerOpen = !diagramPickerOpen;
-        }}
+        title={t.insertFootnote()}
+        aria-label={t.insertFootnote()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'insertFootnote' })}
       >
-        <Braces size={17} />
+        <Superscript size={17} />
       </button>
-      {#if diagramPickerOpen}
-        <div
-          class="diagram-picker-popover"
-          role="menu"
-          aria-label={t.insertDiagram()}
-          tabindex="-1"
-          on:keydown={handleDiagramPickerKeydown}
-        >
-          <div class="diagram-picker-header">{t.diagram()}</div>
-          <button type="button" role="menuitem" on:click={insertBlankDiagram}>
-            <span>{t.blankDiagram()}</span>
-            <small>mermaid</small>
-          </button>
-          <div class="diagram-picker-header">{t.template()}</div>
-          {#each DIAGRAM_TEMPLATES as template}
-            <button type="button" role="menuitem" on:click={() => insertDiagram(template.type)}>
-              <span>{getDiagramTypeLabel(template.type)}</span>
-              <small>{template.type}</small>
-            </button>
-          {/each}
-        </div>
-      {/if}
+      <button
+        title={t.insertToc()}
+        aria-label={t.insertToc()}
+        on:mousedown|preventDefault
+        on:click={() => runCommand({ type: 'insertToc' })}
+      >
+        <TableOfContents size={17} />
+      </button>
     </div>
-    <button
-      title={t.insertFootnote()}
-      aria-label={t.insertFootnote()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'insertFootnote' })}
-    >
-      <Superscript size={17} />
-    </button>
-    <button
-      title={t.insertToc()}
-      aria-label={t.insertToc()}
-      on:mousedown|preventDefault
-      on:click={() => runCommand({ type: 'insertToc' })}
-    >
-      <TableOfContents size={17} />
-    </button>
-    <span class="divider"></span>
+    <span class="divider toolbar-actions-divider"></span>
     <span class="toolbar-spacer"></span>
-    <button
-      class="icon-button"
-      title={t.searchReplace()}
-      aria-label={t.searchReplace()}
-      on:click={openSearchPanel}
-    >
-      <Search size={18} />
-    </button>
-    <label class="range-control width-control" title={t.contentWidth()}>
-      <AlignHorizontalSpaceAround size={16} aria-hidden="true" />
-      <span>{contentWidthPercent}%</span>
-      <input
-        type="range"
-        min="45"
-        max="90"
-        step="1"
-        value={contentWidthPercent}
-        on:input={updateContentWidth}
-      />
-    </label>
-    <div class="mode-switch" aria-label={t.mode()} use:modeSwitchIndicator={{ mode }}>
+    <div class="toolbar-utilities">
       <button
-        title={t.semanticEditingTitle()}
-        aria-label={t.semanticEditing()}
-        aria-pressed={mode === 'semantic'}
-        class:active={mode === 'semantic'}
-        on:click={() => setMode('semantic')}
+        class="icon-button"
+        title={t.searchReplace()}
+        aria-label={t.searchReplace()}
+        on:click={openSearch}
       >
-        <BookOpenText size={17} />
+        <Search size={18} />
+      </button>
+      <label class="range-control width-control width-control-expanded" title={t.contentWidth()}>
+        <AlignHorizontalSpaceAround size={16} aria-hidden="true" />
+        <span>{contentWidthPercent}%</span>
+        <input
+          type="range"
+          min="45"
+          max="90"
+          step="1"
+          value={contentWidthPercent}
+          on:input={updateContentWidth}
+        />
+      </label>
+      <div class="width-control-compact-anchor" use:clickOutside={closeWidthPicker}>
+        <button
+          class="width-control-compact"
+          class:active={widthPickerOpen}
+          type="button"
+          title={t.contentWidth()}
+          aria-label={t.contentWidth()}
+          aria-haspopup="dialog"
+          aria-expanded={widthPickerOpen}
+          on:click|stopPropagation={toggleWidthPicker}
+          on:keydown={handleWidthPickerKeydown}
+        >
+          <AlignHorizontalSpaceAround size={15} aria-hidden="true" />
+          <span>{contentWidthPercent}%</span>
+        </button>
+        {#if widthPickerOpen}
+          <div class="width-control-popover" role="dialog" aria-label={t.contentWidth()}>
+            <strong>{t.contentWidth()}</strong>
+            <span>{contentWidthPercent}%</span>
+            <input
+              type="range"
+              min="45"
+              max="90"
+              step="1"
+              value={contentWidthPercent}
+              aria-label={t.contentWidth()}
+              on:input={updateContentWidth}
+              on:keydown={handleWidthPickerKeydown}
+            />
+          </div>
+        {/if}
+      </div>
+      <div class="mode-switch" aria-label={t.mode()} use:modeSwitchIndicator={{ mode }}>
+        <button
+          title={t.semanticEditingTitle()}
+          aria-label={t.semanticEditing()}
+          aria-pressed={mode === 'semantic'}
+          class:active={mode === 'semantic'}
+          on:click={() => setMode('semantic')}
+        >
+          <BookOpenText size={17} />
+        </button>
+        <button
+          title={t.sourceModeTitle()}
+          aria-label={t.sourceMode()}
+          aria-pressed={mode === 'source'}
+          class:active={mode === 'source'}
+          on:click={() => setMode('source')}
+        >
+          <CodeXml size={17} />
+        </button>
+      </div>
+      <button
+        class="icon-button"
+        class:active={outlineVisible}
+        title={outlineVisible ? t.hideOutline() : t.showOutline()}
+        aria-label={outlineVisible ? t.hideOutline() : t.showOutline()}
+        aria-pressed={outlineVisible}
+        on:click={toggleOutlineVisible}
+      >
+        <ListTree size={18} />
       </button>
       <button
-        title={t.sourceModeTitle()}
-        aria-label={t.sourceMode()}
-        aria-pressed={mode === 'source'}
-        class:active={mode === 'source'}
-        on:click={() => setMode('source')}
+        class="toolbar-collapse-button"
+        type="button"
+        title={`${t.hideToolbar()} (${toolbarShortcut})`}
+        aria-label={t.hideToolbar()}
+        on:click={toggleToolbar}
       >
-        <CodeXml size={17} />
+        <ChevronUp size={16} />
       </button>
     </div>
-    <button
-      class="icon-button"
-      class:active={outlineVisible}
-      title={outlineVisible ? t.hideOutline() : t.showOutline()}
-      aria-label={outlineVisible ? t.hideOutline() : t.showOutline()}
-      aria-pressed={outlineVisible}
-      on:click={toggleOutlineVisible}
-    >
-      <ListTree size={18} />
-    </button>
   </div>
 {/key}

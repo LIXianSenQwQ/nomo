@@ -441,6 +441,7 @@ fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Subm
 
 fn build_view_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let locale = i18n::effective_locale(app);
+    let toolbar_accelerator = toolbar_accelerator(app);
     SubmenuBuilder::new(app, tr(locale, "menu_view"))
         .item(&menu_item(
             app,
@@ -456,6 +457,12 @@ fn build_view_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
         )?)
         .item(&menu_item(
             app,
+            "toggle-toolbar",
+            tr(locale, "menu_toggle_toolbar"),
+            Some(toolbar_accelerator.as_str()),
+        )?)
+        .item(&menu_item(
+            app,
             "toggle-theme",
             tr(locale, "menu_toggle_theme"),
             Some("CmdOrCtrl+Shift+L"),
@@ -468,6 +475,64 @@ fn build_view_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
         )?)
         .build()
         .map_err(|e| e.to_string())
+}
+
+fn toolbar_accelerator<R: Runtime>(app: &AppHandle<R>) -> String {
+    crate::config::commands::get_setting_value(app, "shortcutPreferences")
+        .ok()
+        .flatten()
+        .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
+        .and_then(|value| {
+            value
+                .get("toggle-toolbar")
+                .and_then(serde_json::Value::as_str)
+                .and_then(to_native_accelerator)
+        })
+        .unwrap_or_else(|| "CmdOrCtrl+Shift+B".to_string())
+}
+
+fn to_native_accelerator(shortcut: &str) -> Option<String> {
+    let mut parts = shortcut
+        .split('+')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    let key = parts.pop()?;
+    let normalized_key = match key.to_ascii_lowercase().as_str() {
+        "space" => "Space".to_string(),
+        "\\" => "Backslash".to_string(),
+        "[" => "BracketLeft".to_string(),
+        "]" => "BracketRight".to_string(),
+        "`" => "Backquote".to_string(),
+        "-" => "Minus".to_string(),
+        value
+            if value.len() == 1
+                && value
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric()) =>
+        {
+            value.to_ascii_uppercase()
+        }
+        _ => return None,
+    };
+
+    let mut normalized = Vec::new();
+    for modifier in parts {
+        let value = if modifier.eq_ignore_ascii_case("ctrl") {
+            "CmdOrCtrl"
+        } else if modifier.eq_ignore_ascii_case("shift") {
+            "Shift"
+        } else if modifier.eq_ignore_ascii_case("alt") {
+            "Alt"
+        } else {
+            return None;
+        };
+        if !normalized.contains(&value) {
+            normalized.push(value);
+        }
+    }
+    normalized.push(normalized_key.as_str());
+    Some(normalized.join("+"))
 }
 
 fn build_settings_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {

@@ -1,4 +1,5 @@
 .editor-shell {
+  --editor-search-panel-top: 84px;
   container-type: inline-size;
   position: relative;
   display: grid;
@@ -8,6 +9,10 @@
   background: var(--md-editor-surface);
 }
 
+.editor-shell.toolbar-hidden {
+  --editor-search-panel-top: 40px;
+}
+
 .editor-shell.no-open-document {
   grid-template-rows: auto minmax(0, 1fr);
 }
@@ -15,7 +20,7 @@
 /* 搜索面板悬浮在编辑器工作区上方（不占独立布局行） */
 .editor-shell [data-search-panel] {
   position: absolute;
-  top: 84px;
+  top: var(--editor-search-panel-top);
   left: 0;
   right: 0;
   z-index: 70;
@@ -23,6 +28,7 @@
   justify-content: flex-end;
   padding: 8px 14px 0;
   pointer-events: none;
+  transition: top 180ms ease;
 }
 
 .editor-shell [data-search-panel] > * {
@@ -524,9 +530,72 @@
 
 .toolbar {
   gap: 4px;
+  width: 100%;
   min-height: 44px;
   padding: 5px 16px;
   overflow: visible;
+}
+
+.editor-toolbar-region {
+  height: 44px;
+  min-width: 0;
+  overflow: visible;
+  transition: height 180ms ease;
+}
+
+.editor-toolbar-region.collapsed {
+  height: 0;
+  overflow: hidden;
+}
+
+.editor-toolbar-region > div {
+  min-width: 0;
+}
+
+.toolbar-group,
+.toolbar-utilities {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.toolbar-reveal-button {
+  position: absolute;
+  z-index: 72;
+  top: 40px;
+  right: 16px;
+  width: 32px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--md-editor-border);
+  border-top: 0;
+  border-radius: 0 0 var(--md-editor-radius-sm) var(--md-editor-radius-sm);
+  background: color-mix(in srgb, var(--md-editor-chrome) 96%, transparent);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--md-editor-fg) 8%, transparent);
+  color: var(--md-editor-muted-fg);
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.toolbar-reveal-button:hover,
+.toolbar-reveal-button:focus-visible {
+  background: var(--md-editor-selection-bg);
+  color: var(--md-editor-accent-strong);
+  opacity: 1;
+}
+
+.toolbar-collapse-button {
+  margin-left: 2px;
+  border: 1px solid transparent !important;
+  color: var(--md-editor-muted-fg);
+}
+
+.toolbar-collapse-button:hover {
+  border-color: var(--md-editor-border) !important;
 }
 
 .toolbar button {
@@ -538,9 +607,61 @@
   display: inline-grid;
 }
 
-.diagram-picker-anchor {
+.diagram-picker-anchor,
+.width-control-compact-anchor {
   position: relative;
   display: inline-grid;
+}
+
+.width-control-compact-anchor {
+  display: none;
+}
+
+.toolbar .width-control-compact {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid var(--md-editor-border);
+  color: var(--md-editor-muted-fg);
+  font-family: var(--md-editor-font-mono);
+  font-size: var(--md-editor-ui-font-size-xs);
+}
+
+.width-control-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 220px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--md-editor-border);
+  border-radius: var(--md-editor-radius-md);
+  background: var(--md-editor-surface);
+  box-shadow: var(--md-editor-shadow);
+  color: var(--md-editor-fg);
+  animation: table-picker-in 160ms ease-out;
+}
+
+.width-control-popover strong,
+.width-control-popover span {
+  font-size: var(--md-editor-ui-font-size-sm);
+}
+
+.width-control-popover span {
+  color: var(--md-editor-accent-strong);
+  font-family: var(--md-editor-font-mono);
+}
+
+.width-control-popover input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: var(--md-editor-accent);
 }
 
 .table-picker-popover {

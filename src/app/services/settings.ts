@@ -47,6 +47,7 @@ export type ShortcutCommandId =
   | 'toggle-source'
   | 'toggle-theme'
   | 'toggle-focus'
+  | 'toggle-toolbar'
   | 'insert-code-block'
   | 'insert-table'
   | 'insert-math-block'
@@ -79,6 +80,7 @@ export interface AppPreferences {
   closeWindowBehavior: CloseWindowBehavior;
   externalFileChangeBehavior: ExternalFileChangeBehavior;
   sidebarHidden: boolean;
+  toolbarHidden: boolean;
   outlineVisible: boolean;
   writingStatsVisible: boolean;
   writingStatsMetric: WritingStatsMetric;
@@ -115,6 +117,7 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
   'toggle-source': 'Ctrl+E',
   'toggle-theme': 'Ctrl+Shift+L',
   'toggle-focus': 'Ctrl+Shift+F',
+  'toggle-toolbar': 'Ctrl+Shift+B',
   'insert-code-block': 'Ctrl+Shift+K',
   'insert-table': 'Ctrl+Shift+T',
   'insert-math-block': 'Ctrl+Shift+M',
@@ -140,6 +143,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   closeWindowBehavior: 'ask-every-time',
   externalFileChangeBehavior: 'reload-external',
   sidebarHidden: false,
+  toolbarHidden: false,
   outlineVisible: true,
   writingStatsVisible: true,
   writingStatsMetric: 'words',
@@ -248,6 +252,7 @@ export async function loadAppPreferences(
       resolveLegacyCloseWindowBehavior(settings),
     externalFileChangeBehavior: parseSetting<unknown>(settings, 'externalFileChangeBehavior'),
     sidebarHidden: parseSetting<unknown>(settings, 'sidebarHidden'),
+    toolbarHidden: parseSetting<unknown>(settings, 'toolbarHidden'),
     outlineVisible: parseSetting<unknown>(settings, 'outlineVisible'),
     writingStatsVisible: parseSetting<unknown>(settings, 'writingStatsVisible'),
     writingStatsMetric: parseSetting<unknown>(settings, 'writingStatsMetric'),
@@ -373,6 +378,10 @@ export function normalizeAppPreferences(
       typeof value.sidebarHidden === 'boolean'
         ? value.sidebarHidden
         : DEFAULT_APP_PREFERENCES.sidebarHidden,
+    toolbarHidden:
+      typeof value.toolbarHidden === 'boolean'
+        ? value.toolbarHidden
+        : DEFAULT_APP_PREFERENCES.toolbarHidden,
     outlineVisible:
       typeof value.outlineVisible === 'boolean'
         ? value.outlineVisible
@@ -529,6 +538,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     closeWindowBehavior: preferences.closeWindowBehavior,
     externalFileChangeBehavior: preferences.externalFileChangeBehavior,
     sidebarHidden: preferences.sidebarHidden,
+    toolbarHidden: preferences.toolbarHidden,
     outlineVisible: preferences.outlineVisible,
     writingStatsVisible: preferences.writingStatsVisible,
     writingStatsMetric: preferences.writingStatsMetric,

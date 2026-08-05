@@ -4,6 +4,34 @@
   }
 }
 
+@container (max-width: 1040px) {
+  .toolbar-group-low {
+    display: none;
+  }
+}
+
+@container (max-width: 820px) {
+  .toolbar-group-medium,
+  .width-control-expanded {
+    display: none;
+  }
+
+  .width-control-compact-anchor {
+    display: inline-grid;
+  }
+}
+
+@container (max-width: 620px) {
+  .toolbar-group-core,
+  .toolbar-actions-divider {
+    display: none;
+  }
+
+  .toolbar-spacer {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 920px) {
   .rail {
     display: flex;
@@ -21,6 +49,10 @@
     min-height: 44px;
     overflow-x: clip;
     overflow-y: hidden;
+  }
+
+  .toolbar:has(.width-control-popover) {
+    overflow: visible;
   }
 
   .toolbar-spacer {

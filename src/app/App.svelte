@@ -284,7 +284,8 @@
   let fontSize = DEFAULT_APP_PREFERENCES.fontSize,
     lineHeight = DEFAULT_APP_PREFERENCES.lineHeight,
     contentWidthPercent = DEFAULT_APP_PREFERENCES.contentWidthPercent,
-    focusMode = DEFAULT_APP_PREFERENCES.sidebarHidden;
+    focusMode = DEFAULT_APP_PREFERENCES.sidebarHidden,
+    toolbarHidden = DEFAULT_APP_PREFERENCES.toolbarHidden;
   let largeDocumentLimit = DEFAULT_APP_PREFERENCES.largeDocumentLimit;
   let autoSaveDelayMs = DEFAULT_APP_PREFERENCES.autoSaveDelayMs;
   let createSnapshotBeforeSave = DEFAULT_APP_PREFERENCES.createSnapshotBeforeSave;
@@ -1986,8 +1987,33 @@
     updateAppSetting('sidebarHidden', hidden).catch(() => undefined);
   }
 
+  function closeToolbarTransientPanels() {
+    tablePickerOpen = false;
+    linkPickerOpen = false;
+  }
+
   function toggleFocusMode() {
+    if (!focusMode) {
+      closeToolbarTransientPanels();
+    }
     setSidebarHidden(!focusMode);
+  }
+
+  function setToolbarHidden(hidden: boolean) {
+    if (hidden) {
+      closeToolbarTransientPanels();
+    }
+    toolbarHidden = hidden;
+    updateAppSetting('toolbarHidden', hidden).catch(() => undefined);
+  }
+
+  function toggleToolbar() {
+    if (focusMode) {
+      setSidebarHidden(false);
+      setToolbarHidden(false);
+      return;
+    }
+    setToolbarHidden(!toolbarHidden);
   }
 
   function setOutlineVisiblePreference(visible: boolean) {
@@ -2034,6 +2060,7 @@
     getMode: () => mode,
     toggleTheme: () => toggleTheme(),
     toggleFocusMode: () => toggleFocusMode(),
+    toggleToolbar: () => toggleToolbar(),
     toggleOutlineVisible: () => toggleOutlineVisible(),
     getDefaultCodeBlockLanguage: () => defaultCodeBlockLanguage,
     getDefaultDiagramType: () => defaultDiagramType,
@@ -3802,6 +3829,10 @@
     closeWindowBehavior = preferences.closeWindowBehavior;
     externalFileChangeBehavior = preferences.externalFileChangeBehavior;
     focusMode = preferences.sidebarHidden;
+    toolbarHidden = preferences.toolbarHidden;
+    if (focusMode || toolbarHidden) {
+      closeToolbarTransientPanels();
+    }
     outlineVisible = preferences.outlineVisible;
     writingStatsVisible = preferences.writingStatsVisible;
     writingStatsMetric = preferences.writingStatsMetric;
@@ -3884,6 +3915,7 @@
       closeWindowBehavior,
       externalFileChangeBehavior,
       sidebarHidden: focusMode,
+      toolbarHidden,
       outlineVisible,
       writingStatsVisible,
       writingStatsMetric,
@@ -4936,6 +4968,8 @@
   bind:sourceTextarea
   bind:editorHost
   {focusMode}
+  {toolbarHidden}
+  toolbarShortcut={shortcutPreferences['toggle-toolbar']}
   {isResizing}
   {contentWidthPercent}
   {theme}
@@ -5046,6 +5080,7 @@
   {setMode}
   {toggleOutlineVisible}
   {toggleFocusMode}
+  {toggleToolbar}
   {toggleRootFolder}
   {toggleFolderCollapse}
   {startResize}

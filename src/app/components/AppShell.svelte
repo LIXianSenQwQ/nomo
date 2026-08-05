@@ -4,6 +4,8 @@
   import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
+  import { ChevronDown } from '@lucide/svelte';
+  import { slide } from 'svelte/transition';
   import type { ExternalFileChangeState, FileTreeNode, Tab } from '../types';
   import AppTitleBar from './AppTitleBar.svelte';
   import DocumentTabs from './DocumentTabs.svelte';
@@ -15,7 +17,7 @@
   import SearchReplacePanel from './SearchReplacePanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import SegmentedTextEditorWorkspace from './SegmentedTextEditorWorkspace.svelte';
-  import { workspaceSidebarMotion } from '../actions/motion';
+  import { transitionDuration, workspaceSidebarMotion } from '../actions/motion';
   import { t } from '../i18n';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
@@ -23,6 +25,8 @@
 
   export let interfaceLocale: string;
   export let focusMode: boolean;
+  export let toolbarHidden: boolean;
+  export let toolbarShortcut: string;
   export let isResizing: boolean;
   export let contentWidthPercent: number;
   export let fileInput: HTMLInputElement;
@@ -139,6 +143,7 @@
   export let setMode: (mode: EditorMode) => void;
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
+  export let toggleToolbar: () => void;
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (folderPath: string) => void;
   export let startResize: (event: MouseEvent) => void;
@@ -171,6 +176,7 @@
 
   $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
   $: activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  $: effectiveToolbarHidden = focusMode || toolbarHidden;
 </script>
 
 <div
@@ -197,6 +203,8 @@
       {missingRecentPaths}
       {mode}
       {focusMode}
+      toolbarHidden={effectiveToolbarHidden}
+      {toolbarShortcut}
       {outlineVisible}
       {getCompactPath}
       {toggleMenu}
@@ -224,6 +232,7 @@
       {setMode}
       {toggleOutlineVisible}
       {toggleFocusMode}
+      {toggleToolbar}
       {openSettings}
       {exportHtml}
       {exportPdf}
@@ -268,6 +277,7 @@
     <section
       class="editor-shell"
       class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
+      class:toolbar-hidden={effectiveToolbarHidden}
       aria-label={t.semanticEditorArea()}
     >
       {#if appBootState !== 'ready'}
@@ -291,23 +301,43 @@
         />
 
         {#if activeTab?.documentKind === 'markdown'}
-          <EditorToolbar
-            {interfaceLocale}
-            {mode}
-            {contentWidthPercent}
-            {outlineVisible}
-            {runCommand}
-            {pendingInlineMarks}
-            {tablePickerOpen}
-            {openTablePicker}
-            {closeTablePicker}
-            {openLinkPicker}
-            {insertTableWithSize}
-            {updateContentWidth}
-            {setMode}
-            {toggleOutlineVisible}
-            openSearchPanel={() => openSearchPanel(false)}
-          />
+          <div class="editor-toolbar-region" class:collapsed={effectiveToolbarHidden}>
+            {#if !effectiveToolbarHidden}
+              <div transition:slide={{ duration: transitionDuration('panel') }}>
+                <EditorToolbar
+                  {interfaceLocale}
+                  {mode}
+                  {contentWidthPercent}
+                  {outlineVisible}
+                  {toolbarShortcut}
+                  {runCommand}
+                  {pendingInlineMarks}
+                  {tablePickerOpen}
+                  {openTablePicker}
+                  {closeTablePicker}
+                  {openLinkPicker}
+                  {insertTableWithSize}
+                  {updateContentWidth}
+                  {setMode}
+                  {toggleOutlineVisible}
+                  {toggleToolbar}
+                  openSearchPanel={() => openSearchPanel(false)}
+                />
+              </div>
+            {/if}
+          </div>
+
+          {#if effectiveToolbarHidden && !focusMode}
+            <button
+              class="toolbar-reveal-button"
+              type="button"
+              title={`${t.showToolbar()} (${toolbarShortcut})`}
+              aria-label={t.showToolbar()}
+              on:click={toggleToolbar}
+            >
+              <ChevronDown size={15} />
+            </button>
+          {/if}
 
           <div data-search-panel>
             <SearchReplacePanel

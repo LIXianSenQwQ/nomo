@@ -28,6 +28,7 @@ export interface AppCommandHandlers {
   getMode: () => EditorMode;
   toggleTheme: () => void;
   toggleFocusMode: () => void;
+  toggleToolbar?: () => void;
   toggleOutlineVisible: () => void;
   switchToNextTab: () => void;
   switchToPrevTab: () => void;
@@ -174,6 +175,8 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.toggleTheme();
   } else if (command === 'toggle-focus') {
     handlers.toggleFocusMode();
+  } else if (command === 'toggle-toolbar') {
+    handlers.toggleToolbar?.();
   } else if (command === 'export-html') {
     handlers.exportHtml();
   } else if (command === 'export-pdf') {
@@ -186,7 +189,7 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
 export function handleGlobalShortcut(
   event: KeyboardEvent,
   handlers: AppCommandHandlers,
-  shortcuts: ShortcutPreferences = DEFAULT_SHORTCUT_PREFERENCES,
+  shortcuts: Partial<ShortcutPreferences> = DEFAULT_SHORTCUT_PREFERENCES,
 ) {
   if (event.defaultPrevented) {
     return;
@@ -317,10 +320,10 @@ export function handleGlobalShortcut(
 
 function findShortcutCommand(
   event: KeyboardEvent,
-  shortcuts: ShortcutPreferences,
+  shortcuts: Partial<ShortcutPreferences>,
 ): ShortcutCommandId | null {
   for (const commandId of shortcutCommandOrder) {
-    if (matchesShortcut(event, shortcuts[commandId])) {
+    if (matchesShortcut(event, shortcuts[commandId] ?? DEFAULT_SHORTCUT_PREFERENCES[commandId])) {
       return commandId;
     }
   }

@@ -24,6 +24,7 @@
 | 桌面窗口生命周期 | `src/app/services/desktopWindow.ts` | `src-tauri/src/window/` | 窗口事件、关闭行为、托盘交互变更 |
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
 | 自定义标题栏菜单 | `src/app/components/AppTitleBar.svelte` | `src/app/App.svelte`, `src/app/services/appCommands.ts` | 添加/移除菜单项、修改菜单文案 |
+| Markdown 工具栏显示与响应式布局 | `src/app/components/EditorToolbar.svelte` | `src/app/components/AppShell.svelte`, `src/app/styles/app-chrome.css`, `src/app/styles/app-responsive.css`, `src/app/services/settings.ts` | 修改工具栏收展、窄宽度隐藏优先级或内容宽度控件 |
 | 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs`, `src-tauri/src/models.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
 | 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 
@@ -322,6 +323,7 @@
 **Owns:**
 - 应用顶层布局：标题栏、侧边栏、标签栏、编辑区、状态栏、对话框
 - 通过 props 和回调将 App.svelte 的状态下发给子组件
+- Markdown 工具栏的收展区域、右侧展开柄及搜索面板位置联动
 
 **Does not own:**
 - 不拥有业务状态管理（由 App.svelte 传入）
@@ -548,6 +550,7 @@
 **Owns:**
 - 编辑工具栏 UI：标题、行内格式、列表、表格、公式、图表等命令按钮
 - 将按钮操作转换为 `EditorCommand` 传给编辑器核心
+- 按编辑区实际宽度分级隐藏操作按钮，并提供紧凑内容宽度面板和收起入口
 
 **Does not own：**
 - 不拥有命令具体实现（在 editorCommands.ts 中）
@@ -735,6 +738,7 @@
 - `AppPreferences` 定义与默认值
 - 设置归一化、加载、保存和外观模型一次性迁移
 - 无效主题、文档样式与旧字段映射的持久化修复
+- 工具栏显示偏好与可自定义快捷键的默认值和持久化
 
 **Does not own：**
 - 不拥有设置 UI（在 SettingsWindow.svelte 中）
@@ -1644,7 +1648,7 @@
 
 **Called by:** `src-tauri/src/lib.rs`, `src-tauri/src/window/commands.rs`
 
-**Depends on:** `src-tauri/src/i18n.rs`, Tauri menu API
+**Depends on:** `src-tauri/src/i18n.rs`, `src-tauri/src/config/commands.rs`, Tauri menu API
 
 **Change this when：**
 - 添加/修改菜单项
