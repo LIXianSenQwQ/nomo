@@ -484,6 +484,7 @@
 **Owns:**
 - 资源管理器侧边栏 UI
 - 目录树、最近文件、行内重命名、创建文件/文件夹、右键菜单
+- 当前文件选中底板及其虚拟树坐标滑动动画
 - 侧边栏 resize 逻辑
 
 **Does not own:**
@@ -492,7 +493,7 @@
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `src/app/services/explorerRows.ts`, `src/app/services/explorerRename.ts`, `ContextMenu.svelte`, `src/app/types.ts`
+**Depends on:** `src/app/services/explorerRows.ts`, `src/app/services/explorerRename.ts`, `src/app/actions/motion.ts`, `ContextMenu.svelte`, `src/app/types.ts`
 
 **Change this when:**
 - 修改侧边栏布局或交互
@@ -581,6 +582,7 @@
 
 **Owns:**
 - 标签页 UI：展示打开文档、切换标签、关闭标签
+- 活动标签完整底板的定位与 GSAP 滑动动画
 - 固定预览标签状态
 - 右键菜单
 
@@ -589,7 +591,7 @@
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `ContextMenu.svelte`, `src/app/types.ts`
+**Depends on:** `ContextMenu.svelte`, `src/app/actions/motion.ts`, `src/app/types.ts`
 
 **Change this when：**
 - 修改标签页展示样式
