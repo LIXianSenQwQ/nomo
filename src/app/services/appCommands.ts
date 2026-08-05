@@ -29,6 +29,7 @@ export interface AppCommandHandlers {
   toggleTheme: () => void;
   toggleFocusMode: () => void;
   toggleToolbar?: () => void;
+  toggleMarkdownMini?: () => void;
   toggleOutlineVisible: () => void;
   switchToNextTab: () => void;
   switchToPrevTab: () => void;
@@ -177,6 +178,8 @@ export function executeDesktopCommand(command: string, handlers: AppCommandHandl
     handlers.toggleFocusMode();
   } else if (command === 'toggle-toolbar') {
     handlers.toggleToolbar?.();
+  } else if (command === 'toggle-markdown-mini') {
+    handlers.toggleMarkdownMini?.();
   } else if (command === 'export-html') {
     handlers.exportHtml();
   } else if (command === 'export-pdf') {

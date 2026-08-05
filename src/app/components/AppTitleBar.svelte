@@ -1,6 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Download, Moon, PanelLeftClose, PanelLeftOpen, Sun } from '@lucide/svelte';
+  import {
+    ArrowDownLeft,
+    Download,
+    LockKeyhole,
+    Moon,
+    PanelLeftClose,
+    PanelLeftOpen,
+    PictureInPicture2,
+    Pin,
+    PinOff,
+    Sun,
+  } from '@lucide/svelte';
   import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
   import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import {
@@ -23,6 +34,15 @@
   export let focusMode: boolean;
   export let toolbarHidden: boolean;
   export let toolbarShortcut: string;
+  export let markdownMiniShortcut: string;
+  export let markdownMiniAvailable: boolean;
+  export let markdownMiniActive: boolean;
+  export let markdownMiniPinned: boolean;
+  export let markdownMiniExternalChanged: boolean;
+  export let fileName: string;
+  export let filePath: string;
+  export let dirty: boolean;
+  export let largeDocumentMode: boolean;
   export let getCompactPath: (path: string) => string;
   export let toggleMenu: (menu: string) => void;
   export let closeMenu: (menu: string) => void;
@@ -51,6 +71,8 @@
   export let outlineVisible: boolean;
   export let toggleFocusMode: () => void;
   export let toggleToolbar: () => void;
+  export let toggleMarkdownMini: () => void;
+  export let toggleMarkdownMiniPinned: () => void;
   export let openSettings: () => void;
   export let exportHtml: () => void;
   export let exportPdf: () => void;
@@ -155,6 +177,7 @@
       const appWindow = getCurrentWindow();
 
       if (e.detail === 2) {
+        if (markdownMiniActive) return;
         // 双击最大化/还原
         await appWindow.toggleMaximize();
         await syncWindowState();
@@ -200,6 +223,53 @@
     class:is-win={platformCapabilities.isWindows}
     class:is-fullscreen={isFullscreen}
   >
+    {#if markdownMiniActive}
+      <div
+        class="titlebar-row top-row markdown-mini-titlebar-row"
+        data-tauri-drag-region="deep"
+        role="toolbar"
+        tabindex="0"
+        aria-label={t.markdownMiniWindow()}
+      >
+        <div class="markdown-mini-identity">
+          <span class="markdown-mini-file-name" title={filePath}>{fileName}</span>
+          {#if dirty}
+            <span class="markdown-mini-dot is-dirty" title={t.unsavedChanges()}></span>
+          {/if}
+          {#if markdownMiniExternalChanged}
+            <span class="markdown-mini-dot is-external" title={t.markdownMiniExternalChanged()}
+            ></span>
+          {/if}
+          {#if largeDocumentMode}
+            <span class="markdown-mini-readonly" title={t.markdownMiniLargeReadonly()}>
+              <LockKeyhole size={12} />
+            </span>
+          {/if}
+        </div>
+        <span class="titlebar-spacer"></span>
+        <div class="markdown-mini-actions">
+          <button
+            type="button"
+            class:active={markdownMiniPinned}
+            title={markdownMiniPinned ? t.markdownMiniUnpin() : t.markdownMiniPin()}
+            aria-label={markdownMiniPinned ? t.markdownMiniUnpin() : t.markdownMiniPin()}
+            aria-pressed={markdownMiniPinned}
+            on:click={toggleMarkdownMiniPinned}
+          >
+            {#if markdownMiniPinned}<Pin size={14} />{:else}<PinOff size={14} />{/if}
+          </button>
+          <button
+            type="button"
+            class="return-button"
+            title={`${t.markdownMiniReturn()} (${markdownMiniShortcut})`}
+            aria-label={t.markdownMiniReturn()}
+            on:click={toggleMarkdownMini}
+          >
+            <ArrowDownLeft size={15} />
+          </button>
+        </div>
+      </div>
+    {/if}
     <div
       class="titlebar-row top-row"
       data-drag-region
@@ -641,6 +711,19 @@
             {:else}
               <span class="software-update-ready-dot" aria-hidden="true"></span>
             {/if}
+          </button>
+        {/if}
+
+        {#if markdownMiniAvailable}
+          <button
+            class="icon-btn markdown-mini-icon-btn"
+            class:active={markdownMiniActive}
+            title={`${t.markdownMiniShortcut()} (${markdownMiniShortcut})`}
+            aria-label={t.markdownMiniShortcut()}
+            aria-pressed={markdownMiniActive}
+            on:click={toggleMarkdownMini}
+          >
+            <PictureInPicture2 size={15} />
           </button>
         {/if}
 

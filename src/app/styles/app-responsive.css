@@ -330,6 +330,11 @@
   background: rgba(128, 128, 128, 0.15);
 }
 
+.titlebar .markdown-mini-icon-btn.active {
+  background: color-mix(in srgb, var(--md-editor-accent) 14%, transparent);
+  color: var(--md-editor-accent-strong);
+}
+
 .software-update-icon-btn {
   position: relative;
   color: var(--md-editor-accent-strong) !important;

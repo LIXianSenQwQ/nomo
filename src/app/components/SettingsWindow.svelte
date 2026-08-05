@@ -189,6 +189,7 @@
     { id: 'toggle-theme', labelKey: 'toggleThemeLightDark' },
     { id: 'toggle-focus', labelKey: 'showHideExplorer' },
     { id: 'toggle-toolbar', labelKey: 'showHideToolbar' },
+    { id: 'toggle-markdown-mini', labelKey: 'markdownMiniShortcut' },
     { id: 'insert-code-block', labelKey: 'insertCodeBlock' },
     { id: 'insert-table', labelKey: 'insertTable' },
     { id: 'insert-math-block', labelKey: 'insertMathBlock' },

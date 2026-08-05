@@ -172,6 +172,47 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
 }
 
 #[tauri::command]
+pub(crate) fn enter_markdown_mini_mode(
+    window: tauri::WebviewWindow,
+    pinned: bool,
+) -> Result<(), String> {
+    if !crate::window::external_open::is_document_window_label(window.label()) {
+        return Err("只有文档窗口可以进入 Markdown 小窗模式".to_string());
+    }
+    let timer = std::time::Instant::now();
+    crate::app_logger::info(
+        "Window",
+        &format!("主窗口进入 Markdown 小窗模式：{}", window.label()),
+    );
+    crate::window::state::enter_markdown_mini_mode(&window, pinned)?;
+    crate::app_logger::perf("Window", "进入 Markdown 小窗模式", timer.elapsed());
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn exit_markdown_mini_mode(window: tauri::WebviewWindow) -> Result<(), String> {
+    if !crate::window::external_open::is_document_window_label(window.label()) {
+        return Err("当前窗口不是文档窗口".to_string());
+    }
+    let timer = std::time::Instant::now();
+    crate::app_logger::info(
+        "Window",
+        &format!("主窗口退出 Markdown 小窗模式：{}", window.label()),
+    );
+    crate::window::state::exit_markdown_mini_mode(&window)?;
+    crate::app_logger::perf("Window", "退出 Markdown 小窗模式", timer.elapsed());
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn set_markdown_mini_mode_pinned(
+    window: tauri::WebviewWindow,
+    pinned: bool,
+) -> Result<(), String> {
+    crate::window::state::set_markdown_mini_mode_pinned(&window, pinned)
+}
+
+#[tauri::command]
 pub(crate) fn minimize_window(window: tauri::WebviewWindow) -> Result<(), String> {
     crate::app_logger::info("Window", &format!("最小化窗口：{}", window.label()));
     window

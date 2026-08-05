@@ -144,6 +144,47 @@ export async function openSettingsWindow(desktopEnabled: boolean) {
   }
 }
 
+export async function enterMarkdownMiniMode(desktopEnabled: boolean, pinned: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  const timer = createPerfTimer('DesktopWindow', '主窗口切换为 Markdown 小窗');
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('enter_markdown_mini_mode', { pinned });
+    timer.end();
+  } catch (error) {
+    timer.end({ failed: true });
+    throw error;
+  }
+}
+
+export async function exitMarkdownMiniMode(desktopEnabled: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  const timer = createPerfTimer('DesktopWindow', 'Markdown 小窗恢复为主窗口');
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('exit_markdown_mini_mode');
+    timer.end();
+  } catch (error) {
+    timer.end({ failed: true });
+    throw error;
+  }
+}
+
+export async function setMarkdownMiniModePinned(desktopEnabled: boolean, pinned: boolean) {
+  if (!desktopEnabled) {
+    return;
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('set_markdown_mini_mode_pinned', { pinned });
+}
+
 export async function setDesktopIconTheme(desktopEnabled: boolean, theme: 'light' | 'dark') {
   if (!desktopEnabled) {
     return;

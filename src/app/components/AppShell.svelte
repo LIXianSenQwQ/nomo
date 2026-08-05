@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { RecentEntry } from '../../lib/desktop/tauriStorage';
   import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
-  import type { EditorCommand, EditorMode, InlinePendingMarks } from '../../lib/editor-core';
+  import type { EditorCommand, EditorMode, EditorThemeOptions, InlinePendingMarks } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
   import { ChevronDown } from '@lucide/svelte';
@@ -14,6 +14,7 @@
   import EditorWorkspace from './EditorWorkspace.svelte';
   import ExplorerSidebar from './ExplorerSidebar.svelte';
   import LinkQuickEditor from './LinkQuickEditor.svelte';
+  import MarkdownMiniLargePreview from './MarkdownMiniLargePreview.svelte';
   import SearchReplacePanel from './SearchReplacePanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import SegmentedTextEditorWorkspace from './SegmentedTextEditorWorkspace.svelte';
@@ -27,6 +28,10 @@
   export let focusMode: boolean;
   export let toolbarHidden: boolean;
   export let toolbarShortcut: string;
+  export let markdownMiniShortcut: string;
+  export let markdownMiniActive: boolean;
+  export let markdownMiniPinned: boolean;
+  export let markdownMiniExternalChanged: boolean;
   export let isResizing: boolean;
   export let contentWidthPercent: number;
   export let fileInput: HTMLInputElement;
@@ -35,6 +40,7 @@
   export let sourceTextarea: HTMLTextAreaElement;
   export let editorHost: HTMLDivElement;
   export let theme: 'light' | 'dark';
+  export let editorTheme: EditorThemeOptions;
   export let desktopEnabled: boolean;
   export let activeMenu: string | null;
   export let recentFiles: RecentEntry[];
@@ -144,6 +150,8 @@
   export let toggleOutlineVisible: () => void;
   export let toggleFocusMode: () => void;
   export let toggleToolbar: () => void;
+  export let toggleMarkdownMini: () => void;
+  export let toggleMarkdownMiniPinned: () => void;
   export let toggleRootFolder: () => void;
   export let toggleFolderCollapse: (folderPath: string) => void;
   export let startResize: (event: MouseEvent) => void;
@@ -182,6 +190,7 @@
 <div
   class="app-layout"
   class:focus-mode={focusMode}
+  class:markdown-mini-mode={markdownMiniActive}
   class:resizing={isResizing}
   style={`--md-editor-content-width-percent: ${contentWidthPercent}`}
 >
@@ -205,6 +214,15 @@
       {focusMode}
       toolbarHidden={effectiveToolbarHidden}
       {toolbarShortcut}
+      {markdownMiniShortcut}
+      markdownMiniAvailable={activeTab?.documentKind === 'markdown'}
+      {markdownMiniActive}
+      {markdownMiniPinned}
+      {markdownMiniExternalChanged}
+      {fileName}
+      {filePath}
+      {dirty}
+      {largeDocumentMode}
       {outlineVisible}
       {getCompactPath}
       {toggleMenu}
@@ -233,6 +251,8 @@
       {toggleOutlineVisible}
       {toggleFocusMode}
       {toggleToolbar}
+      {toggleMarkdownMini}
+      {toggleMarkdownMiniPinned}
       {openSettings}
       {exportHtml}
       {exportPdf}
@@ -276,6 +296,8 @@
 
     <section
       class="editor-shell"
+      class:markdown-mini={markdownMiniActive}
+      class:markdown-mini-large={markdownMiniActive && largeDocumentMode}
       class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
       class:toolbar-hidden={effectiveToolbarHidden}
       aria-label={t.semanticEditorArea()}
@@ -403,6 +425,10 @@
             {toggleOutlineItemExpanded}
             {jumpToOutlineItem}
           />
+
+          {#if markdownMiniActive && largeDocumentMode}
+            <MarkdownMiniLargePreview {markdown} {nativePath} {editorTheme} />
+          {/if}
 
           <LinkQuickEditor
             {interfaceLocale}

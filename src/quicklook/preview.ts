@@ -65,7 +65,7 @@ const GLOBAL_ATTRS = new Set(['class', 'title']);
 const ATTRS_BY_TAG: Record<string, Set<string>> = {
   a: new Set(['href', 'title', 'target', 'rel']),
   div: new Set(['class', 'data-callout-type']),
-  img: new Set(['src', 'alt', 'title', 'width', 'height', 'class']),
+  img: new Set(['src', 'alt', 'title', 'width', 'height', 'class', 'loading']),
   input: new Set(['class', 'type', 'checked', 'disabled', 'aria-label']),
   span: new Set(['class', 'aria-hidden']),
   td: new Set(['style']),
@@ -91,12 +91,8 @@ type QuickLookBlockState = {
 };
 
 export function renderMarkdownPreview(markdown: string, options: QuickLookPreviewOptions = {}) {
-  const body = markdownIt.render(markdown, {
-    documentDirectory: options.documentDirectory,
-  });
-
   const title = escapeHtml(options.fileName?.trim() || 'Markdown Preview');
-  const sanitizedBody = sanitizePreviewHtml(renderTaskListItems(body));
+  const sanitizedBody = renderMarkdownPreviewBody(markdown, options);
 
   return `
     <article class="quicklook-document">
@@ -228,6 +224,14 @@ function createQuickLookMarkdownIt() {
   };
 
   return md;
+}
+
+/** 只返回经过安全过滤的 Markdown 正文，供不需要 Quick Look 外壳的只读视图复用。 */
+export function renderMarkdownPreviewBody(markdown: string, options: QuickLookPreviewOptions = {}) {
+  const body = markdownIt.render(markdown, {
+    documentDirectory: options.documentDirectory,
+  });
+  return sanitizePreviewHtml(renderTaskListItems(body));
 }
 
 function isBadgeImageSrc(src: string): boolean {

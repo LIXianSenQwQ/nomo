@@ -56,8 +56,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
-                crate::app_logger::debug("Window", &format!("持久化窗口状态：{}", window.label()));
-                crate::window::state::persist_current_window_state(window);
+                crate::window::state::persist_window_state_after_geometry_change(window);
             }
             WindowEvent::Focused(true) => {
                 let label = window.label();
@@ -67,11 +66,12 @@ pub fn run() {
             }
             WindowEvent::Destroyed => {
                 let label = window.label();
+                crate::app_logger::debug("Window", &format!("窗口销毁前持久化状态：{label}"));
+                crate::window::state::persist_window_state_before_destroy(window);
                 if crate::window::external_open::is_document_window_label(label) {
+                    crate::window::state::forget_markdown_mini_mode_window(label);
                     crate::window::tray::forget_window(window.app_handle(), label);
                 }
-                crate::app_logger::debug("Window", &format!("窗口销毁前持久化状态：{label}"));
-                crate::window::state::persist_current_window_state(window);
             }
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
@@ -80,6 +80,11 @@ pub fn run() {
                     return;
                 }
                 if crate::window::commands::consume_next_close(label) {
+                    return;
+                }
+                if crate::window::state::is_markdown_mini_mode_window(label) {
+                    api.prevent_close();
+                    let _ = window.emit("nomo://markdown-mini-request-return", ());
                     return;
                 }
 
@@ -212,6 +217,9 @@ pub fn run() {
             crate::file_system::image_assets::test_picgo_connection,
             crate::window::commands::create_new_window,
             crate::window::commands::open_settings_window,
+            crate::window::commands::enter_markdown_mini_mode,
+            crate::window::commands::exit_markdown_mini_mode,
+            crate::window::commands::set_markdown_mini_mode_pinned,
             crate::window::commands::minimize_window,
             crate::window::commands::maximize_window,
             crate::window::commands::close_window,

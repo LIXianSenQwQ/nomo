@@ -48,6 +48,7 @@ export type ShortcutCommandId =
   | 'toggle-theme'
   | 'toggle-focus'
   | 'toggle-toolbar'
+  | 'toggle-markdown-mini'
   | 'insert-code-block'
   | 'insert-table'
   | 'insert-math-block'
@@ -118,6 +119,7 @@ export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
   'toggle-theme': 'Ctrl+Shift+L',
   'toggle-focus': 'Ctrl+Shift+F',
   'toggle-toolbar': 'Ctrl+Shift+B',
+  'toggle-markdown-mini': 'Ctrl+Alt+M',
   'insert-code-block': 'Ctrl+Shift+K',
   'insert-table': 'Ctrl+Shift+T',
   'insert-math-block': 'Ctrl+Shift+M',

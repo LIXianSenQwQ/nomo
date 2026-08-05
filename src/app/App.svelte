@@ -37,6 +37,7 @@
     type InlinePendingMarks,
     type EditorMode,
     type EditorSearchMatch,
+    type EditorThemeOptions,
   } from '../lib/editor-core';
   import {
     analyzeMarkdown,
@@ -78,11 +79,14 @@
   import {
     closeAppWindow as closeDesktopWindow,
     createAppWindow,
+    enterMarkdownMiniMode,
     exitApp as exitDesktopApp,
+    exitMarkdownMiniMode,
     maximizeAppWindow,
     minimizeAppWindow,
     openSettingsWindow,
     refreshInterfaceLanguageChrome,
+    setMarkdownMiniModePinned,
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
@@ -261,6 +265,7 @@
   let colorThemeId = bootAppearance.colorThemeId;
   let documentStyleId = bootAppearance.documentStyleId;
   let theme: 'light' | 'dark' = initialResolvedTheme.effectiveScheme;
+  let currentEditorTheme: EditorThemeOptions = initialResolvedTheme.editorTheme;
   let interfaceLanguage: InterfaceLanguagePreference = DEFAULT_APP_PREFERENCES.interfaceLanguage;
   let interfaceLocale: EffectiveInterfaceLocale =
     applyInterfaceLanguagePreference(interfaceLanguage);
@@ -458,6 +463,11 @@
   let externalFileChangeBehavior = DEFAULT_APP_PREFERENCES.externalFileChangeBehavior;
   let windowLabel = '';
   let developerMode = DEFAULT_APP_PREFERENCES.developerMode;
+
+  let markdownMiniActive = false;
+  let markdownMiniPinned = true;
+  let markdownMiniTransitioning = false;
+  let markdownMiniPreviousMode: EditorMode | null = null;
 
   function hasPersistableReadingPositionPath(path: string) {
     return Boolean(desktopEnabled && path && path !== t.untitledMarkdown());
@@ -1007,6 +1017,99 @@
     return currentMarkdown;
   }
 
+  async function toggleMarkdownMini() {
+    if (markdownMiniActive) {
+      await requestMarkdownMiniReturn();
+      return;
+    }
+    await enterCurrentWindowMarkdownMini();
+  }
+
+  async function enterCurrentWindowMarkdownMini() {
+    if (markdownMiniActive || markdownMiniTransitioning || !desktopEnabled || !windowLabel) return;
+
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!isMarkdownTab(activeTab)) return;
+
+    syncActiveTabMarkdownFromEditor();
+    markdownMiniTransitioning = true;
+    markdownMiniPreviousMode = mode;
+    activeMenu = null;
+    closeToolbarTransientPanels();
+    if (searchPanelOpen) closeSearchPanel();
+    if (externalChangeDialogOpen) closeExternalChangeDialog();
+    frontMatterEditing = false;
+    markdownMiniActive = true;
+
+    const shouldUseSemanticEditor = !largeDocumentMode && mode === 'source';
+    const nativeTransition = enterMarkdownMiniMode(desktopEnabled, markdownMiniPinned);
+
+    try {
+      await tick();
+      await Promise.all([
+        nativeTransition,
+        shouldUseSemanticEditor ? changeEditorMode('semantic', false) : Promise.resolve(true),
+      ]);
+      requestAnimationFrame(() => {
+        refreshEditorViewportLayout();
+        if (!largeDocumentMode && !readonlyDocumentMode) editor.focus();
+      });
+    } catch (error) {
+      await exitMarkdownMiniMode(desktopEnabled).catch(() => undefined);
+      markdownMiniActive = false;
+      const previousMode = markdownMiniPreviousMode;
+      markdownMiniPreviousMode = null;
+      if (previousMode && mode !== previousMode) {
+        await changeEditorMode(previousMode, false);
+      }
+      showVisibleError(error, 'Markdown 小窗打开失败');
+    } finally {
+      markdownMiniTransitioning = false;
+      await tick();
+      refreshEditorViewportLayout();
+    }
+  }
+
+  async function toggleMarkdownMiniPinned() {
+    if (!markdownMiniActive || markdownMiniTransitioning) return;
+    const nextPinned = !markdownMiniPinned;
+    try {
+      await setMarkdownMiniModePinned(desktopEnabled, nextPinned);
+      markdownMiniPinned = nextPinned;
+    } catch (error) {
+      showVisibleError(error, 'Markdown 小窗置顶状态切换失败');
+    }
+  }
+  async function requestMarkdownMiniReturn(options?: { showExternalChange?: boolean }) {
+    if (!markdownMiniActive) return true;
+    if (markdownMiniTransitioning) return false;
+    markdownMiniTransitioning = true;
+    const previousMode = markdownMiniPreviousMode;
+
+    try {
+      await Promise.all([
+        exitMarkdownMiniMode(desktopEnabled),
+        previousMode && mode !== previousMode
+          ? changeEditorMode(previousMode, false)
+          : Promise.resolve(true),
+      ]);
+      markdownMiniActive = false;
+      markdownMiniPreviousMode = null;
+      await tick();
+      refreshEditorViewportLayout();
+      if (mode === 'semantic' && !readonlyDocumentMode) editor.focus();
+
+      if (options?.showExternalChange !== false && externalFileChange.type !== 'none') {
+        openExternalChangeDialog(externalFileChange);
+      }
+      return true;
+    } catch (error) {
+      showVisibleError(error, 'Markdown 小窗返回失败');
+      return false;
+    } finally {
+      markdownMiniTransitioning = false;
+    }
+  }
   // 保存当前活跃 Tab 的状态
   function saveActiveTabState() {
     if (!activeTabId) return;
@@ -1166,6 +1269,10 @@
     invalidatePendingPreviewOpen();
     if (!tabId || activeTabId === tabId) return;
     if (tabSwitchInProgress) return;
+    if (markdownMiniActive) {
+      if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
+      if (activeTabId === tabId) return;
+    }
     // 冲突对话框只属于发起检查的活动标签，切换后不能让操作落到另一文档。
     closeExternalChangeDialog();
     tabSwitchInProgress = true;
@@ -1440,6 +1547,7 @@
   }
 
   async function openFolderInCurrentWindow(folderPath: string) {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
     if (!currentFolderPath || !sameFileSystemPath(currentFolderPath, folderPath)) {
       // 切换文件夹前保存当前文件夹状态，避免清空标签后的空状态覆盖已有记录
       if (currentFolderPath && tabs.length > 0) {
@@ -1557,12 +1665,14 @@
   }
 
   async function closeCurrentFile() {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab) return;
     await closeTab(activeTab.id);
   }
 
   async function closeCurrentWindow() {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
     const closeBehavior = await resolveCloseWindowBehaviorForCloseRequest();
     if (!closeBehavior) {
       return;
@@ -1829,6 +1939,7 @@
   }
 
   async function requestExitApp() {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
     const dirtyTabs = getDirtyTabs(tabs);
     let discardDirtySegmented = false;
     if (dirtyTabs.length > 0) {
@@ -1965,21 +2076,23 @@
     updateAppSetting('editorMode', nextMode).catch(() => undefined);
   }
 
-  function setMode(nextMode: EditorMode) {
+  async function changeEditorMode(nextMode: EditorMode, persistPreference: boolean) {
     if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
-      return;
+      return false;
     }
     const previousMode = mode;
     const anchor = getCurrentReadingAnchor(previousMode);
     saveCurrentReadingPositionToMemoryOnly(previousMode, anchor);
-    editorInteraction
-      .setMode(nextMode, anchor)
-      .then(() => {
-        if (!(largeDocumentMode && nextMode === 'semantic')) {
-          persistEditorModePreference(nextMode);
-        }
-      })
-      .catch(() => undefined);
+    await editorInteraction.setMode(nextMode, anchor);
+    if (persistPreference && !(largeDocumentMode && nextMode === 'semantic')) {
+      persistEditorModePreference(nextMode);
+    }
+    return true;
+  }
+
+  function setMode(nextMode: EditorMode) {
+    if (markdownMiniActive) return;
+    void changeEditorMode(nextMode, true).catch(() => undefined);
   }
 
   function setSidebarHidden(hidden: boolean) {
@@ -2061,6 +2174,9 @@
     toggleTheme: () => toggleTheme(),
     toggleFocusMode: () => toggleFocusMode(),
     toggleToolbar: () => toggleToolbar(),
+    toggleMarkdownMini: () => {
+      void toggleMarkdownMini();
+    },
     toggleOutlineVisible: () => toggleOutlineVisible(),
     getDefaultCodeBlockLanguage: () => defaultCodeBlockLanguage,
     getDefaultDiagramType: () => defaultDiagramType,
@@ -2815,6 +2931,10 @@
     getExternalFileChange: () => externalFileChange,
     setExternalFileChange: (value) => {
       setExternalFileChangeState(value);
+      if (markdownMiniActive) {
+        // 小窗观看期间只标记冲突并暂停自动保存，返回主窗口后再让用户处理。
+        return;
+      }
       // 检测到外部变更时，优先按偏好设置中的默认行为处理。
       if (value.type !== 'none' && !externalChangeDialogOpen) {
         if (!tryHandleExternalFileChangeByPreference(value)) {
@@ -2945,6 +3065,7 @@
       editor,
     });
     theme = resolved.effectiveScheme;
+    currentEditorTheme = resolved.editorTheme;
     themeMode = resolved.preferences.themeMode;
     colorThemeId = resolved.preferences.colorThemeId;
     documentStyleId = resolved.preferences.documentStyleId;
@@ -2994,6 +3115,7 @@
 
   async function createNewFile() {
     try {
+      if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
       await flushSegmentedDocumentBeforeTransition(
         tabs.find((tab) => tab.id === activeTabId),
         segmentedWorkspace,
@@ -3009,6 +3131,7 @@
     path: string,
     options: { message: string; fallbackMessage: string },
   ) {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
     invalidatePendingPreviewOpen();
     const existingTab = tabs.find(
       (tab) => tab.nativePath != null && sameNativePath(tab.nativePath, path),
@@ -3451,6 +3574,9 @@
   // 包装 closeTab：预览标签页直接关闭无需确认
   async function closeTab(tabId: string, event?: Event) {
     event?.stopPropagation();
+    if (markdownMiniActive && activeTabId === tabId) {
+      if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
+    }
     invalidatePendingPreviewOpen();
     if (externalChangeDialogTargetTabId === tabId) {
       closeExternalChangeDialog();
@@ -4258,7 +4384,6 @@
       // 隐藏的 Markdown EditorCore 仍可能在主题或布局更新时发事件；分段标签必须彻底忽略。
       return;
     }
-
     const markdownChanged = event.markdown !== markdown;
 
     // 预览标签页开始编辑 → 自动固定
@@ -4645,25 +4770,32 @@
     }
 
     const { listen } = await import('@tauri-apps/api/event');
-    const [exitRequestUnlisten, closeRequestUnlisten] = await Promise.all([
-      listen('nomo://request-exit-app', () => {
-        requestExitApp().catch(() => undefined);
-      }).catch(() => null),
-      listen<{ windowLabel?: string; window_label?: string }>(
-        'nomo://request-close-window',
-        (event) => {
-          // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
-          const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
-          if (requestedWindowLabel !== windowLabel) return;
-          closeCurrentWindow().catch(() => undefined);
-        },
-      ).catch(() => null),
-    ]);
+    const [exitRequestUnlisten, closeRequestUnlisten, markdownMiniReturnUnlisten] =
+      await Promise.all([
+        listen('nomo://request-exit-app', () => {
+          requestExitApp().catch(() => undefined);
+        }).catch(() => null),
+        listen<{ windowLabel?: string; window_label?: string }>(
+          'nomo://request-close-window',
+          (event) => {
+            // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
+            const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
+            if (requestedWindowLabel !== windowLabel) return;
+            closeCurrentWindow().catch(() => undefined);
+          },
+        ).catch(() => null),
+        listen('nomo://markdown-mini-request-return', () => {
+          void requestMarkdownMiniReturn();
+        }).catch(() => null),
+      ]);
 
     criticalDesktopEventsReady = true;
-    desktopUnlisteners = [...desktopUnlisteners, exitRequestUnlisten, closeRequestUnlisten].filter(
-      (value): value is () => void => Boolean(value),
-    );
+    desktopUnlisteners = [
+      ...desktopUnlisteners,
+      exitRequestUnlisten,
+      closeRequestUnlisten,
+      markdownMiniReturnUnlisten,
+    ].filter((value): value is () => void => Boolean(value));
   }
 
   async function setupDesktopEvents() {
@@ -4970,9 +5102,14 @@
   {focusMode}
   {toolbarHidden}
   toolbarShortcut={shortcutPreferences['toggle-toolbar']}
+  markdownMiniShortcut={shortcutPreferences['toggle-markdown-mini']}
+  {markdownMiniActive}
+  {markdownMiniPinned}
+  markdownMiniExternalChanged={externalFileChange.type !== 'none'}
   {isResizing}
   {contentWidthPercent}
   {theme}
+  editorTheme={currentEditorTheme}
   {desktopEnabled}
   {activeMenu}
   {recentFiles}
@@ -5081,6 +5218,8 @@
   {toggleOutlineVisible}
   {toggleFocusMode}
   {toggleToolbar}
+  {toggleMarkdownMini}
+  {toggleMarkdownMiniPinned}
   {toggleRootFolder}
   {toggleFolderCollapse}
   {startResize}
