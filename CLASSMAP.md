@@ -26,6 +26,8 @@
 | 自定义标题栏菜单 | `src/app/components/AppTitleBar.svelte` | `src/app/App.svelte`, `src/app/services/appCommands.ts` | 添加/移除菜单项、修改菜单文案 |
 | Markdown 工具栏显示与响应式布局 | `src/app/components/EditorToolbar.svelte` | `src/app/components/AppShell.svelte`, `src/app/styles/app-chrome.css`, `src/app/styles/app-responsive.css`, `src/app/services/settings.ts` | 修改工具栏收展、窄宽度隐藏优先级或内容宽度控件 |
 | 窗口状态持久化 | `src-tauri/src/window/state.rs` | `src-tauri/src/lib.rs`, `src-tauri/src/models.rs` | 窗口位置/尺寸/最大化状态恢复逻辑变更 |
+| Markdown 文档小窗 | `src/app/App.svelte` | `src/app/components/AppShell.svelte`, `src/app/components/AppTitleBar.svelte`, `src/app/components/MarkdownMiniLargePreview.svelte`, `src/app/services/desktopWindow.ts`, `src-tauri/src/window/state.rs` | 修改小窗进入/返回、置顶、只读降级、快捷键或窗口几何恢复 |
+| 全局滚动条显隐 | `src/app/services/scrollbarVisibility.ts` | `src/main.ts`, `src/app/styles/global.css`, `src/app/styles/app-layout.css`, `src/app/styles/editor-segmented.css` | 修改滚动时显示、边缘触发、延时隐藏或局部滚动容器覆盖 |
 | 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 
 ### 编辑器核心（ProseMirror）
@@ -252,6 +254,7 @@
 - 在动态加载窗口组件前同步应用经过校验的主题启动快照
 - 全局样式（theme.css, global.css）加载
 - KaTeX 和 ProseMirror 样式在 main 视图下按需加载
+- 安装全局滚动条显隐交互并在卸载时清理监听器
 
 **Does not own:**
 - 不拥有具体业务组件逻辑（委派给 App.svelte / SettingsWindow.svelte）
@@ -259,16 +262,43 @@
 
 **Called by:** `index.html`
 
-**Depends on:** `src/app/services/themeManager.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
+**Depends on:** `src/app/services/themeManager.ts`, `src/app/services/scrollbarVisibility.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
 
 **Change this when:**
 - 添加新的入口视图
 - 修改全局样式加载顺序
 - 调整入口挂载逻辑
+- 修改页面级全局交互的安装与清理
 
 **Do not change this when:**
 - 修改具体业务组件行为
 - 修改编辑器功能
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src/app/services/scrollbarVisibility.ts`
+
+**Kind:** DOM interaction service
+
+**Owns:**
+- 捕获任意滚动容器的滚动事件，并在停止滚动后延时隐藏滚动条
+- 逐帧判断鼠标是否接近可滚动区域的右侧或底部边缘
+- 管理 `is-scrollbar-visible` 状态类、窗口失焦清理和全局监听器生命周期
+
+**Does not own:**
+- 不拥有滚动条颜色、宽度或具体视觉样式（在全局及局部 CSS 中）
+- 不改变滚动位置、编辑器内容或窗口模式
+
+**Called by:** `src/main.ts`
+
+**Depends on:** Browser DOM APIs
+
+**Change this when:**
+- 修改全局滚动条的触发区域、显隐时机或交互清理规则
 
 **Related tests:** —
 
@@ -289,6 +319,7 @@
 - 协调打开、保存、自动保存、模式切换、外部文件打开、关闭确认
 - 订阅编辑器内容变化并同步 dirty/统计/大纲状态
 - 工作区恢复后发起一次启动更新检查，并按目标窗口协调通知卡片与安装确认
+- 协调当前文档在同一窗口内进入/返回 Markdown 小窗，并复用原编辑器、撤销栈和自动保存状态
 
 **Does not own:**
 - 不拥有具体 UI 子组件渲染逻辑（委派给 AppShell.svelte）
@@ -305,6 +336,7 @@
 - 修改文件打开/保存/自动保存协调逻辑
 - 修改工作区恢复、草稿冲突选择、标签页恢复流程
 - 修改标签页管理流程
+- 修改 Markdown 小窗进入、返回、置顶或快捷键协调
 
 **Do not change this when:**
 - 修改纯 UI 组件内部样式或布局
@@ -324,6 +356,7 @@
 - 应用顶层布局：标题栏、侧边栏、标签栏、编辑区、状态栏、对话框
 - 通过 props 和回调将 App.svelte 的状态下发给子组件
 - Markdown 工具栏的收展区域、右侧展开柄及搜索面板位置联动
+- 在 Markdown 小窗模式下隐藏常规 chrome，并在可编辑编辑器与大文档只读预览之间选择内容视图
 
 **Does not own:**
 - 不拥有业务状态管理（由 App.svelte 传入）
@@ -331,7 +364,7 @@
 
 **Called by:** `src/app/App.svelte`
 
-**Depends on:** `AppTitleBar.svelte`, `ExplorerSidebar.svelte`, `DocumentTabs.svelte`, `EditorToolbar.svelte`, `EditorWorkspace.svelte`, `StatusBar.svelte`, `ConfirmDialog.svelte`, `CloseWindowBehaviorDialog.svelte`, `FolderOpenDialog.svelte`, `EmptyWorkspace.svelte`, `SearchReplacePanel.svelte`
+**Depends on:** `AppTitleBar.svelte`, `MarkdownMiniLargePreview.svelte`, `ExplorerSidebar.svelte`, `DocumentTabs.svelte`, `EditorToolbar.svelte`, `EditorWorkspace.svelte`, `StatusBar.svelte`, `ConfirmDialog.svelte`, `CloseWindowBehaviorDialog.svelte`, `FolderOpenDialog.svelte`, `EmptyWorkspace.svelte`, `SearchReplacePanel.svelte`
 
 **Change this when:**
 - 调整整体应用布局结构
@@ -342,6 +375,32 @@
 - 修改编辑器内部行为
 
 **Related tests:** `src/app/App.layout.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/components/MarkdownMiniLargePreview.svelte`
+
+**Kind:** component / read-only renderer
+
+**Owns:**
+- 大文档小窗的安全只读 HTML 渲染
+- 延迟加载代码高亮与 Mermaid 渲染器，并在主题变化时刷新预览
+- 正文渲染完成前保持轻量加载状态
+
+**Does not own:**
+- 不拥有普通文档编辑器
+- 不决定窗口状态、文件保存或外部冲突处理
+
+**Called by:** `src/app/components/AppShell.svelte`
+
+**Depends on:** `src/quicklook/preview.ts`, `src/lib/editor-core/renderers.ts`
+
+**Change this when:**
+- 修改大文档小窗的只读渲染、加载状态或主题刷新行为
+
+**Related tests:** —
 
 **Confidence:** high
 
@@ -459,6 +518,7 @@
 **Owns:**
 - Windows / Linux 自定义标题栏：窗口控制按钮、应用菜单（文件、编辑、段落、格式、查看、设置）。
 - 将菜单点击转换为应用命令或调用传入的业务处理函数。
+- Markdown 小窗的文件名、冲突/只读状态、置顶和返回按钮，以及覆盖整行的原生拖动区域。
 
 **Does not own：**
 - 不拥有具体业务逻辑（由 App.svelte 通过 props 注入）。
@@ -471,6 +531,7 @@
 **Change this when：**
 - 添加/移除自定义标题栏菜单项。
 - 修改菜单快捷键展示文案。
+- 修改 Markdown 小窗标题栏信息、按钮或拖动区域。
 
 **Do not change this when：**
 - 修改菜单命令后端处理逻辑。
@@ -1416,11 +1477,12 @@
 - Quick Look Markdown 渲染
 - 支持 Callout、公式、图片属性、任务列表、Mermaid 占位和链接安全处理
 - 生成经过 sanitizer 过滤的预览 HTML
+- 导出可供大文档小窗复用的安全正文 HTML
 
 **Does not own：**
 - 不拥有主编辑器 Markdown 解析（在 markdown.ts 中）
 
-**Called by:** `src/quicklook/preview-entry.ts`
+**Called by:** `src/quicklook/preview-entry.ts`, `src/app/components/MarkdownMiniLargePreview.svelte`
 
 **Depends on:** `katex`, `markdown-it`, `src/lib/editor-core/callout/calloutParser.ts`, `src/lib/editor-core/link.ts`
 
@@ -2959,7 +3021,7 @@
 **Kind:** service
 
 **Owns:**
-- 窗口相关 IPC 命令：`update_window_state`、`open_settings_window`、`install_window_menu`、`force_close_window`
+- 窗口相关 IPC 命令：常规窗口状态更新、设置窗口、菜单、强制关闭，以及 Markdown 小窗进入/返回/置顶
 
 **Does not own:**
 - 不拥有窗口状态持久化逻辑（在 window/state.rs 中）
@@ -2967,10 +3029,36 @@
 
 **Called by:** `src-tauri/src/lib.rs`（注册为 IPC）
 
-**Depends on:** `src-tauri/src/window/menu.rs`, `src-tauri/src/window/tray.rs`, `src-tauri/src/config/commands.rs`
+**Depends on:** `src-tauri/src/window/state.rs`, `src-tauri/src/window/menu.rs`, `src-tauri/src/window/tray.rs`, `src-tauri/src/config/commands.rs`
 
 **Change this when:**
 - 新增窗口相关 IPC 命令
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src-tauri/src/window/state.rs`
+
+**Kind:** window state service
+
+**Owns:**
+- 普通窗口与 Markdown 小窗的位置、尺寸和最大化状态持久化
+- 进入小窗前的运行时窗口快照，以及返回普通模式时的几何恢复
+- 小窗最小尺寸、置顶、任务栏可见性与目标屏幕边界约束
+
+**Does not own:**
+- 不拥有前端小窗内容和标题栏 UI
+- 不拥有 IPC 命令注册
+
+**Called by:** `src-tauri/src/lib.rs`, `src-tauri/src/window/commands.rs`
+
+**Depends on:** Tauri window and monitor APIs, `src-tauri/src/models.rs`, `src-tauri/src/config/mod.rs`
+
+**Change this when:**
+- 修改窗口几何保存/恢复、小窗定位、置顶或模式切换的原生行为
 
 **Related tests:** —
 
@@ -3008,6 +3096,7 @@
 **Owns:**
 - 桌面窗口操作：最小化、最大化、关闭
 - 新窗口创建时的 chrome 选项（macOS overlay / Windows custom）
+- Markdown 小窗进入、返回和置顶 IPC 的前端适配
 
 **Does not own:**
 - 不拥有窗口状态持久化（在 Rust window/state.rs 中）
@@ -3015,11 +3104,12 @@
 
 **Called by:** `src/app/App.svelte`, `src/app/components/AppShell.svelte`
 
-**Depends on:** `@tauri-apps/api/window`, `@tauri-apps/api/dpi`, `src/app/services/platform.ts`
+**Depends on:** `@tauri-apps/api/window`, `@tauri-apps/api/dpi`, `@tauri-apps/api/core`, `src/app/services/platform.ts`
 
 **Change this when:**
 - 修改窗口操作行为
 - 修改新窗口 chrome 选项
+- 修改 Markdown 小窗的前端原生窗口调用
 
 **Related tests:** —
 

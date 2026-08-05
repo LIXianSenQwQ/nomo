@@ -1,6 +1,7 @@
 import './app/styles/theme.css';
 import './app/styles/global.css';
 import { mount } from 'svelte';
+import { installAutoHideScrollbars } from './app/services/scrollbarVisibility';
 import { bootstrapThemeFromSnapshot } from './app/services/themeManager';
 import { createPerfTimer, initializeLogger, logError, logInfo } from './lib/services/logger';
 
@@ -14,6 +15,9 @@ if (!target) {
   logError('App', 'Nomo app root was not found.');
   throw new Error('Nomo app root was not found.');
 }
+
+const uninstallAutoHideScrollbars = installAutoHideScrollbars();
+window.addEventListener('beforeunload', uninstallAutoHideScrollbars, { once: true });
 
 const searchParams = new URLSearchParams(window.location.search);
 const isSettingsView = searchParams.get('view') === 'settings';
