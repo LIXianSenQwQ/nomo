@@ -1,5 +1,5 @@
 .editor-shell {
-  --editor-search-panel-top: 84px;
+  --editor-search-panel-top: 44px;
   container-type: inline-size;
   position: relative;
   display: grid;
@@ -18,26 +18,25 @@
   --editor-card-edge-color: color-mix(in srgb, var(--md-editor-border) 76%, transparent);
   --editor-card-shadow-color: color-mix(in srgb, var(--md-editor-border) 34%, transparent);
   --editor-tab-shadow-color: color-mix(in srgb, var(--md-editor-border) 42%, transparent);
+  grid-template-rows: auto minmax(0, 1fr);
   border-top-left-radius: 0;
   background: var(--md-editor-rail);
   box-shadow: none;
 }
 
-.editor-shell.has-open-document::before {
-  position: absolute;
-  z-index: 0;
-  top: 40px;
-  right: 0;
-  bottom: 0;
-  left: 0;
+.editor-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
   border-top-left-radius: var(--md-editor-radius-lg);
   background: var(--editor-card-surface);
   box-shadow:
     -1px 0 0 var(--editor-card-edge-color),
-    0 -1px 0 var(--editor-card-edge-color),
     -6px -3px 16px var(--editor-card-shadow-color);
-  content: '';
-  pointer-events: none;
+  overflow: hidden;
 }
 
 .editor-shell.has-open-document > .topbar {
@@ -47,27 +46,13 @@
   background: transparent;
 }
 
-.editor-shell.has-open-document > .editor-toolbar-region,
-.editor-shell.has-open-document > .editor-grid,
-.editor-shell.has-open-document > .segmented-workspace {
-  position: relative;
-  z-index: 1;
-}
-
-.editor-shell.has-open-document > .editor-toolbar-region,
-.editor-shell.has-open-document > .editor-toolbar-region .toolbar,
-.editor-shell.has-open-document > .editor-grid,
-.editor-shell.has-open-document > .segmented-workspace {
-  border-top-left-radius: var(--md-editor-radius-lg);
-}
-
 .editor-shell > .topbar,
 .editor-shell > .empty-workspace {
   border-top-left-radius: inherit;
 }
 
 .editor-shell.toolbar-hidden {
-  --editor-search-panel-top: 40px;
+  --editor-search-panel-top: 0px;
 }
 
 .editor-shell.no-open-document {
@@ -102,6 +87,8 @@
   place-items: center;
   padding: clamp(28px, 6cqw, 80px);
   background: var(--md-editor-surface);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .empty-workspace-panel {
@@ -262,7 +249,7 @@
 .topbar {
   display: flex;
   align-items: flex-end;
-  min-height: 40px;
+  min-height: 28px;
   padding: 0 10px 0 18px;
   background: var(--md-editor-rail);
   border-bottom: 0;
@@ -285,14 +272,10 @@
   left: 0;
   z-index: 1;
   width: 0;
-  height: var(--md-editor-control-height-lg);
+  height: var(--md-editor-tab-height);
   border-radius: 10px 10px 0 0;
   background: var(--editor-card-surface, var(--md-editor-surface));
-  box-shadow:
-    -1px -1px 0 var(--editor-card-edge-color),
-    1px -1px 0 var(--editor-card-edge-color),
-    0 -2px 5px var(--editor-tab-shadow-color),
-    0 1px 0 var(--editor-card-surface, var(--md-editor-surface));
+  box-shadow: 0 1px 0 var(--editor-card-surface, var(--md-editor-surface));
   opacity: 0;
   pointer-events: none;
   will-change: transform, width;
@@ -315,17 +298,13 @@
 .tab-active-indicator::before {
   left: -10px;
   border-radius: 0 0 10px 0;
-  box-shadow:
-    5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
-    4px 4px 0 5px var(--editor-card-edge-color);
+  box-shadow: 5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface));
 }
 
 .tab-active-indicator::after {
   right: -10px;
   border-radius: 0 0 0 10px;
-  box-shadow:
-    -5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
-    -4px 4px 0 5px var(--editor-card-edge-color);
+  box-shadow: -5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface));
 }
 
 .tab-measure-area {
@@ -343,7 +322,7 @@
   gap: 8px;
   min-width: 120px;
   max-width: 180px;
-  height: var(--md-editor-control-height-lg);
+  height: var(--md-editor-tab-height);
   padding: 0 12px;
   border: 0;
   background: transparent;
@@ -358,6 +337,8 @@
     opacity 0.15s,
     transform 0.15s;
   box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .doc-tab:hover {
@@ -503,6 +484,8 @@
   background: var(--md-editor-surface);
   box-shadow: var(--md-editor-shadow);
   animation: table-picker-in 160ms ease-out;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 通过 Portal 渲染到 body 的下拉菜单，避免被父容器 overflow:hidden 裁剪 */
@@ -636,6 +619,8 @@
   border-bottom-color: color-mix(in srgb, var(--md-editor-border) 52%, transparent);
   background: var(--editor-card-surface, var(--md-editor-surface));
   overflow: visible;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .editor-toolbar-region {
@@ -675,7 +660,7 @@
 .toolbar-reveal-button {
   position: absolute;
   z-index: 72;
-  top: 40px;
+  top: 0;
   right: 16px;
   width: 32px;
   height: 18px;

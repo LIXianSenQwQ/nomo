@@ -17,7 +17,7 @@
   --md-editor-control-height-sm: 28px;
   --md-editor-control-height-md: 34px;
   --md-editor-control-height-lg: 38px;
-  --md-window-border: color-mix(in srgb, var(--md-editor-rail) 76%, var(--md-editor-border));
+  --md-editor-tab-height: 30px;
   --md-editor-font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --md-editor-font-document: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --md-editor-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
@@ -64,6 +64,7 @@
 :root.theme-transitioning .titlebar,
 :root.theme-transitioning .rail,
 :root.theme-transitioning .editor-shell,
+:root.theme-transitioning .editor-card,
 :root.theme-transitioning .menu-bar,
 :root.theme-transitioning .topbar,
 :root.theme-transitioning .toolbar,
@@ -122,6 +123,7 @@
   :root.theme-transitioning .titlebar,
   :root.theme-transitioning .rail,
   :root.theme-transitioning .editor-shell,
+  :root.theme-transitioning .editor-card,
   :root.theme-transitioning .menu-bar,
   :root.theme-transitioning .topbar,
   :root.theme-transitioning .toolbar,

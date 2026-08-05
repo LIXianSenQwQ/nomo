@@ -309,6 +309,8 @@
     min-height: 0;
     overflow-y: auto;
     padding: 22px;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .release-notes :global(h1),

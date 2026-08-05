@@ -124,8 +124,8 @@ fn append_to_log_file(line: &str) -> Result<(), String> {
 }
 
 fn current_log_path() -> Result<PathBuf, String> {
-    let current_dir = std::env::current_dir()
-        .map_err(|error| format!("定位当前目录失败：{error}"))?;
+    let current_dir =
+        std::env::current_dir().map_err(|error| format!("定位当前目录失败：{error}"))?;
 
     // dev 模式下当前目录为 src-tauri/，日志放到项目根目录避免触发 Cargo 重建
     let logs_dir = if current_dir.file_name() == Some(OsStr::new("src-tauri")) {

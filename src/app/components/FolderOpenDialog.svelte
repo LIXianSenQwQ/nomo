@@ -116,6 +116,8 @@
     color: var(--md-editor-muted-fg);
     word-break: break-all;
     font-family: var(--md-editor-font-mono);
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .folder-dialog-actions {

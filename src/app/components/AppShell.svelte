@@ -107,9 +107,6 @@
   export let toggleMenu: (menu: string) => void;
   export let closeMenu: (menu: string) => void;
   export let toggleTheme: () => void;
-  export let minimizeWindow: () => void;
-  export let maximizeWindow: () => void;
-  export let closeAppWindow: () => void;
   export let exitApp: () => void;
   export let createNewWindow: () => void;
   export let createNewFile: () => void;
@@ -272,9 +269,6 @@
       {toggleMenu}
       {closeMenu}
       {toggleTheme}
-      {minimizeWindow}
-      {maximizeWindow}
-      {closeAppWindow}
       {exitApp}
       {createNewWindow}
       {createNewFile}
@@ -368,6 +362,7 @@
           on:closeAllTabs
         />
 
+        <div class="editor-card">
         {#if activeTab?.documentKind === 'markdown'}
           <div
             class="editor-toolbar-region"
@@ -510,6 +505,7 @@
             />
           {/key}
         {/if}
+        </div>
       {:else}
         <EmptyWorkspace {interfaceLocale} {createNewFile} {openFileDialog} {openFolderDialog} />
       {/if}

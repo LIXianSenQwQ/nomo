@@ -352,6 +352,8 @@
     background: var(--md-editor-chrome);
     cursor: move;
     touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .search-dialog-title {
@@ -489,6 +491,8 @@
     font-size: var(--md-editor-ui-font-size-xs);
     white-space: nowrap;
     pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .search-action-group {
@@ -623,6 +627,8 @@
     color: var(--md-editor-muted-fg);
     font-family: var(--md-editor-font-mono);
     font-size: var(--md-editor-ui-font-size-xs);
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   button:focus-visible,

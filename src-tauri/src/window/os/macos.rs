@@ -17,13 +17,16 @@ pub(crate) fn system_theme() -> &'static str {
     }
 }
 
-pub(crate) fn setup_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+pub(crate) fn setup_window<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+) -> Result<(), String> {
     // macOS 的 decorations 与 titleBarStyle 必须在窗口创建时一次性确定。窗口已创建后
     // 重设这些属性会重建 AppKit 视图层级，使 WebView first responder 悬挂并在释放时崩溃。
     if uses_overlay_titlebar(window.label()) {
         request_overlay_titlebar_redraw(window);
     }
     let _ = window.set_shadow(true);
+    Ok(())
 }
 
 fn uses_overlay_titlebar(label: &str) -> bool {

@@ -85,6 +85,8 @@
       0 22px 50px rgba(23, 34, 44, 0.14),
       0 4px 14px rgba(23, 34, 44, 0.08);
     animation: notice-in 220ms cubic-bezier(0.2, 0.85, 0.35, 1);
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .notice-accent {

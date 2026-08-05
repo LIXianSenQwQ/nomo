@@ -162,6 +162,9 @@
     message: '',
   };
   let updateDecisionUnlisten: (() => void) | null = null;
+  let settingsCloseUnlisten: (() => void) | null = null;
+  let settingsCloseListenerCancelled = false;
+  let closeInProgress = false;
 
   // 响应式派生：强制 Svelte 追踪 updateState 的变化
   $: updateStatus = updateState.status;
@@ -201,7 +204,12 @@
     logToTerminal('info', 'SettingsWindow', '设置窗口打开');
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
-    void loadPreferences();
+    settingsCloseListenerCancelled = false;
+    if (desktopEnabled) {
+      void initializeDesktopSettingsWindow();
+    } else {
+      void loadPreferences();
+    }
     const unsubscribeSoftwareUpdate = softwareUpdateState.subscribe(applySharedSoftwareUpdateState);
     void initializeSoftwareUpdateCoordinator();
     window.addEventListener('focus', handleWindowFocus);
@@ -221,12 +229,49 @@
       if (updateDecisionUnlisten) {
         updateDecisionUnlisten();
       }
+      settingsCloseListenerCancelled = true;
+      settingsCloseUnlisten?.();
+      settingsCloseUnlisten = null;
       unsubscribeSoftwareUpdate();
       stopSystemThemeSync();
       void disposeSoftwareUpdateCoordinator();
       window.removeEventListener('focus', handleWindowFocus);
     };
   });
+
+  async function initializeDesktopSettingsWindow() {
+    await installSettingsCloseListener();
+    if (!settingsCloseListenerCancelled) {
+      await loadPreferences();
+    }
+  }
+
+  async function installSettingsCloseListener() {
+    try {
+      const { listen } = await import('@tauri-apps/api/event');
+      const unlisten = await listen<number>('nomo://settings-request-close', (event) => {
+        void handleClose(event.payload);
+      });
+      if (settingsCloseListenerCancelled) {
+        unlisten();
+        return;
+      }
+      settingsCloseUnlisten = unlisten;
+      const { invoke } = await import('@tauri-apps/api/core');
+      if (settingsCloseListenerCancelled) {
+        settingsCloseUnlisten?.();
+        settingsCloseUnlisten = null;
+        return;
+      }
+      await invoke('mark_settings_close_handler_ready');
+    } catch (error) {
+      settingsCloseUnlisten?.();
+      settingsCloseUnlisten = null;
+      logToTerminal('error', 'SettingsWindow', '监听设置窗口关闭请求失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   function handleWindowFocus() {
     logToTerminal('debug', 'SettingsWindow', '设置窗口获得焦点', { activeCategory });
@@ -351,6 +396,7 @@
               error: error instanceof Error ? error.message : String(error),
             });
             showStatus(error instanceof Error ? error.message : t.settingsSaveFailed());
+            throw error;
           }
         } while (saveQueued);
       } finally {
@@ -373,7 +419,7 @@
     showStatus(t.settingsSaving());
     autoSaveTimer = window.setTimeout(() => {
       autoSaveTimer = null;
-      void saveLatestSettings();
+      void saveLatestSettings().catch(() => undefined);
     }, 350);
   }
 
@@ -386,10 +432,30 @@
     await saveLatestSettings();
   }
 
-  async function handleClose() {
-    logToTerminal('info', 'SettingsWindow', '用户点击关闭按钮');
-    await flushPendingSettingsSave();
-    await closeCurrentWindow();
+  async function handleClose(requestId?: number) {
+    if (closeInProgress) {
+      return;
+    }
+    closeInProgress = true;
+    logToTerminal('info', 'SettingsWindow', '收到设置窗口关闭请求');
+    try {
+      if (desktopEnabled && requestId !== undefined) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('acknowledge_settings_close_request', { requestId });
+      }
+      await flushPendingSettingsSave();
+      await closeCurrentWindow();
+    } catch (error) {
+      closeInProgress = false;
+      if (desktopEnabled && requestId !== undefined) {
+        await import('@tauri-apps/api/core')
+          .then(({ invoke }) => invoke('cancel_settings_close_request', { requestId }))
+          .catch(() => undefined);
+      }
+      logToTerminal('error', 'SettingsWindow', '关闭设置窗口失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async function emitSettingsUpdated(patch: AppPreferencesPatch) {
@@ -410,7 +476,7 @@
       return;
     }
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('close_window').catch(() => undefined);
+    await invoke('close_window');
   }
 
   async function applySettingsToThisWindow(settings: AppPreferences) {
@@ -701,15 +767,6 @@
         ...patch,
       },
     });
-  }
-
-  async function minimizeCurrentWindow() {
-    if (!desktopEnabled) {
-      return;
-    }
-    logToTerminal('info', 'SettingsWindow', '最小化窗口');
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('minimize_window').catch(() => undefined);
   }
 
   async function handleWindowDrag(event: MouseEvent) {
@@ -1306,31 +1363,13 @@
           <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
           <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
         </div>
-        {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
-          <div class="settings-window-controls" aria-label={t.windowControls()}>
-            <button
-              type="button"
-              class="settings-control-button"
-              title={t.minimize()}
-              aria-label={t.minimize()}
-              on:click={minimizeCurrentWindow}
-            >
-              <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true">
-                <line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" stroke-width="1.5" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="settings-control-button close"
-              title={t.close()}
-              aria-label={t.close()}
-              on:click={handleClose}
-            >
-              <X size={15} aria-hidden="true" />
-            </button>
-          </div>
-        {:else if !desktopEnabled}
-          <button type="button" class="close-button" aria-label={t.close()} on:click={handleClose}>
+        {#if !desktopEnabled}
+          <button
+            type="button"
+            class="close-button"
+            aria-label={t.close()}
+            on:click={() => void handleClose()}
+          >
             <X size={18} />
           </button>
         {/if}
@@ -2361,6 +2400,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .settings-brand {
@@ -2513,44 +2554,13 @@
     color: var(--md-editor-fg);
   }
 
-  .settings-window-controls {
-    display: flex;
-    align-self: stretch;
-    align-items: stretch;
-    flex-shrink: 0;
-  }
-
-  .settings-control-button {
-    width: 46px;
-    height: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--md-editor-muted-fg);
-    cursor: pointer;
-    transition:
-      background-color 150ms ease,
-      color 150ms ease;
-  }
-
-  .settings-control-button:hover {
-    background: rgba(128, 128, 128, 0.15);
-    color: var(--md-editor-fg);
-  }
-
-  .settings-control-button.close:hover {
-    background: #e81123;
-    color: #ffffff;
-  }
-
   .settings-content,
   .settings-loading {
     min-height: 0;
     overflow-y: auto;
     padding: var(--md-editor-space-xl);
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   .settings-loading {

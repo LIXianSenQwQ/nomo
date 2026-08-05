@@ -234,8 +234,18 @@ fn build_file_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submen
 fn build_edit_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let locale = i18n::effective_locale(app);
     SubmenuBuilder::new(app, tr(locale, "menu_edit"))
-        .item(&menu_item(app, "undo", tr(locale, "menu_undo"), Some("CmdOrCtrl+Z"))?)
-        .item(&menu_item(app, "redo", tr(locale, "menu_redo"), redo_accelerator())?)
+        .item(&menu_item(
+            app,
+            "undo",
+            tr(locale, "menu_undo"),
+            Some("CmdOrCtrl+Z"),
+        )?)
+        .item(&menu_item(
+            app,
+            "redo",
+            tr(locale, "menu_redo"),
+            redo_accelerator(),
+        )?)
         .separator()
         .cut()
         .copy()
@@ -341,7 +351,12 @@ fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::S
             tr(locale, "menu_callout"),
             Some("CmdOrCtrl+Shift+A"),
         )?)
-        .item(&menu_item(app, "menu-comment-block", tr(locale, "menu_comment_block"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-comment-block",
+            tr(locale, "menu_comment_block"),
+            None,
+        )?)
         .item(&menu_item(
             app,
             "toggle-ordered-list",
@@ -375,14 +390,24 @@ fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::S
         )?)
         .separator()
         .item(&diagram_menu)
-        .item(&menu_item(app, "menu-footnote", tr(locale, "menu_footnote"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-footnote",
+            tr(locale, "menu_footnote"),
+            None,
+        )?)
         .item(&menu_item(
             app,
             "menu-horizontal-rule",
             tr(locale, "menu_horizontal_rule"),
             Some("CmdOrCtrl+Shift+H"),
         )?)
-        .item(&menu_item(app, "menu-content-directory", tr(locale, "menu_toc"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-content-directory",
+            tr(locale, "menu_toc"),
+            None,
+        )?)
         .item(&menu_item(
             app,
             "menu-yaml-front-matter",
@@ -396,7 +421,12 @@ fn build_paragraph_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::S
 fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let locale = i18n::effective_locale(app);
     SubmenuBuilder::new(app, tr(locale, "menu_format"))
-        .item(&menu_item(app, "toggle-bold", tr(locale, "menu_bold"), Some("CmdOrCtrl+B"))?)
+        .item(&menu_item(
+            app,
+            "toggle-bold",
+            tr(locale, "menu_bold"),
+            Some("CmdOrCtrl+B"),
+        )?)
         .item(&menu_item(
             app,
             "toggle-italic",
@@ -415,7 +445,12 @@ fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Subm
             tr(locale, "menu_inline_code"),
             Some("CmdOrCtrl+`"),
         )?)
-        .item(&menu_item(app, "menu-inline-math", tr(locale, "menu_inline_math"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-inline-math",
+            tr(locale, "menu_inline_math"),
+            None,
+        )?)
         .separator()
         .item(&menu_item(
             app,
@@ -423,11 +458,31 @@ fn build_format_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Subm
             tr(locale, "menu_strike"),
             Some("Alt+Shift+5"),
         )?)
-        .item(&menu_item(app, "menu-highlight", tr(locale, "menu_highlight"), None)?)
-        .item(&menu_item(app, "menu-comment", tr(locale, "menu_comment"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-highlight",
+            tr(locale, "menu_highlight"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-comment",
+            tr(locale, "menu_comment"),
+            None,
+        )?)
         .separator()
-        .item(&menu_item(app, "menu-link", tr(locale, "menu_link"), Some("CmdOrCtrl+K"))?)
-        .item(&menu_item(app, "menu-image", tr(locale, "menu_image"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-link",
+            tr(locale, "menu_link"),
+            Some("CmdOrCtrl+K"),
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-image",
+            tr(locale, "menu_image"),
+            None,
+        )?)
         .separator()
         .item(&menu_item(
             app,
@@ -538,7 +593,12 @@ fn to_native_accelerator(shortcut: &str) -> Option<String> {
 fn build_settings_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let locale = i18n::effective_locale(app);
     SubmenuBuilder::new(app, tr(locale, "menu_settings"))
-        .item(&menu_item(app, "open-settings", tr(locale, "menu_preferences"), None)?)
+        .item(&menu_item(
+            app,
+            "open-settings",
+            tr(locale, "menu_preferences"),
+            None,
+        )?)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -546,19 +606,54 @@ fn build_settings_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Su
 fn build_diagram_menu<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::menu::Submenu<R>, String> {
     let locale = i18n::effective_locale(app);
     SubmenuBuilder::new(app, tr(locale, "menu_chart"))
-        .item(&menu_item(app, "menu-chart", tr(locale, "menu_chart_blank"), None)?)
-        .item(&menu_item(app, "menu-chart:flowchart", tr(locale, "menu_chart_flowchart"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-chart",
+            tr(locale, "menu_chart_blank"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-chart:flowchart",
+            tr(locale, "menu_chart_flowchart"),
+            None,
+        )?)
         .item(&menu_item(
             app,
             "menu-chart:sequenceDiagram",
             tr(locale, "menu_chart_sequence"),
             None,
         )?)
-        .item(&menu_item(app, "menu-chart:classDiagram", tr(locale, "menu_chart_class"), None)?)
-        .item(&menu_item(app, "menu-chart:stateDiagram", tr(locale, "menu_chart_state"), None)?)
-        .item(&menu_item(app, "menu-chart:pie", tr(locale, "menu_chart_pie"), None)?)
-        .item(&menu_item(app, "menu-chart:gantt", tr(locale, "menu_chart_gantt"), None)?)
-        .item(&menu_item(app, "menu-chart:erDiagram", tr(locale, "menu_chart_er"), None)?)
+        .item(&menu_item(
+            app,
+            "menu-chart:classDiagram",
+            tr(locale, "menu_chart_class"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-chart:stateDiagram",
+            tr(locale, "menu_chart_state"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-chart:pie",
+            tr(locale, "menu_chart_pie"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-chart:gantt",
+            tr(locale, "menu_chart_gantt"),
+            None,
+        )?)
+        .item(&menu_item(
+            app,
+            "menu-chart:erDiagram",
+            tr(locale, "menu_chart_er"),
+            None,
+        )?)
         .build()
         .map_err(|e| e.to_string())
 }

@@ -76,3 +76,21 @@ textarea {
 button {
   color: inherit;
 }
+
+button,
+label,
+[role='button'],
+[role='menuitem'],
+[role='dialog'],
+[role='alertdialog'] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}

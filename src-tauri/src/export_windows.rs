@@ -19,7 +19,7 @@ pub(crate) async fn print_html_to_pdf(
     let html_path = write_temp_html(&app, &input.html_content).map_err(|e| e.to_string())?;
     let pdf_path = input.file_path.clone();
 
-    let result = print_with_edge(&html_path,&pdf_path, &input).await;
+    let result = print_with_edge(&html_path, &pdf_path, &input).await;
 
     cleanup_temp_dir(&html_path);
     result
@@ -79,7 +79,9 @@ async fn print_with_edge(
     // Edge/Chromium headless 默认会按 CSS 打印背景色；print_background=false 暂无可靠命令行开关。
     let _ = input.print_background;
 
-    let output = cmd.output().map_err(|e| format!("启动 Edge 打印失败：{e}"))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("启动 Edge 打印失败：{e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -94,7 +96,10 @@ async fn print_with_edge(
         .map(|m| m.len() as usize)
         .unwrap_or(0);
 
-    crate::app_logger::info("Export", &format!("已通过 Edge 生成 PDF：{pdf_path} ({bytes_written} bytes)"));
+    crate::app_logger::info(
+        "Export",
+        &format!("已通过 Edge 生成 PDF：{pdf_path} ({bytes_written} bytes)"),
+    );
 
     Ok(ExportResult {
         file_path: pdf_path.to_string(),
@@ -137,7 +142,9 @@ fn find_edge_executable() -> Option<PathBuf> {
 }
 
 fn path_to_file_url(path: &Path) -> Result<String, String> {
-    let canonical = path.canonicalize().map_err(|e| format!("解析临时 HTML 路径失败：{e}"))?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("解析临时 HTML 路径失败：{e}"))?;
     let path_str = canonical.to_string_lossy();
     // Windows canonicalize 返回 \\?\C:\...，需要去掉前缀。
     let clean_path = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);

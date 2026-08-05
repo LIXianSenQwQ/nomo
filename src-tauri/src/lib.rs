@@ -68,6 +68,34 @@ pub fn run() {
                 let label = window.label();
                 crate::app_logger::debug("Window", &format!("窗口销毁前持久化状态：{label}"));
                 crate::window::state::persist_window_state_before_destroy(window);
+                if label == crate::window::commands::SETTINGS_WINDOW_LABEL {
+                    crate::window::commands::reset_settings_close_handler_ready();
+                    crate::window::commands::clear_pending_settings_close_request();
+                    crate::window::commands::forget_settings_owner();
+                    match crate::window::commands::take_deferred_settings_action() {
+                        Some(crate::window::commands::DeferredSettingsAction::CloseOwner(
+                            owner_label,
+                        )) => {
+                            if let Err(error) =
+                                crate::window::commands::resume_owner_close_after_settings(
+                                    window.app_handle(),
+                                    &owner_label,
+                                )
+                            {
+                                crate::app_logger::warn(
+                                    "Window",
+                                    &format!(
+                                        "偏好设置关闭后继续关闭 owner 失败：label={owner_label} error={error}"
+                                    ),
+                                );
+                            }
+                        }
+                        Some(crate::window::commands::DeferredSettingsAction::ExitApp) => {
+                            window.app_handle().exit(0);
+                        }
+                        None => {}
+                    }
+                }
                 if crate::window::external_open::is_document_window_label(label) {
                     crate::window::state::forget_markdown_mini_mode_window(label);
                     crate::window::tray::forget_window(window.app_handle(), label);
@@ -76,13 +104,73 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } => {
                 let label = window.label();
                 crate::app_logger::info("Window", &format!("收到窗口关闭请求：{label}"));
+                let returns_from_markdown_mini =
+                    crate::window::external_open::is_document_window_label(label)
+                        && crate::window::state::is_markdown_mini_mode_window(label);
+                if crate::window::commands::consume_next_close(label) {
+                    if label == crate::window::commands::SETTINGS_WINDOW_LABEL {
+                        crate::window::commands::reset_settings_close_handler_ready();
+                        return;
+                    }
+                    if returns_from_markdown_mini {
+                        return;
+                    }
+                    match crate::window::commands::request_settings_close_before_owner(
+                        window.app_handle(),
+                        label,
+                    ) {
+                        Ok(true) => {
+                            api.prevent_close();
+                            return;
+                        }
+                        Ok(false) => {}
+                        Err(error) => {
+                            api.prevent_close();
+                            crate::app_logger::warn(
+                                "Settings",
+                                &format!(
+                                    "关闭 owner 前保存偏好设置失败，已取消关闭：label={label} error={error}"
+                                ),
+                            );
+                            return;
+                        }
+                    }
+                    return;
+                }
+                if label == crate::window::commands::SETTINGS_WINDOW_LABEL {
+                    if crate::window::commands::settings_close_handler_ready() {
+                        if let Some(request_id) =
+                            crate::window::commands::begin_settings_close_request()
+                        {
+                            match window.emit("nomo://settings-request-close", request_id) {
+                                Ok(()) => {
+                                    api.prevent_close();
+                                    crate::window::commands::schedule_settings_close_fallback(
+                                        window.clone(),
+                                        request_id,
+                                    );
+                                }
+                                Err(error) => {
+                                    crate::window::commands::clear_pending_settings_close_request();
+                                    crate::app_logger::warn(
+                                        "Settings",
+                                        &format!(
+                                            "通知前端保存设置失败，直接关闭偏好设置窗口：{error}"
+                                        ),
+                                    );
+                                    crate::window::commands::reset_settings_close_handler_ready();
+                                }
+                            }
+                        } else {
+                            api.prevent_close();
+                        }
+                    }
+                    return;
+                }
                 if !crate::window::external_open::is_document_window_label(label) {
                     return;
                 }
-                if crate::window::commands::consume_next_close(label) {
-                    return;
-                }
-                if crate::window::state::is_markdown_mini_mode_window(label) {
+                if returns_from_markdown_mini {
                     api.prevent_close();
                     let _ = window.emit("nomo://markdown-mini-request-return", ());
                     return;
@@ -118,7 +206,12 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 crate::app_logger::info("Window", "初始化主窗口系统适配和菜单");
-                crate::window::os::setup_window(&window);
+                if let Err(error) = crate::window::os::setup_window(&window) {
+                    crate::app_logger::warn(
+                        "Window",
+                        &format!("初始化主窗口原生 chrome 失败，继续使用系统标题栏：{error}"),
+                    );
+                }
                 crate::window::menu::install_window_menu(app.handle(), &window)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
@@ -201,6 +294,7 @@ pub fn run() {
             crate::config::commands::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
+            crate::window::commands::get_window_chrome_metrics,
             crate::window::commands::report_window_title,
             crate::window::commands::refresh_interface_language_chrome,
             crate::window::commands::set_desktop_icon_theme,
@@ -217,11 +311,12 @@ pub fn run() {
             crate::file_system::image_assets::test_picgo_connection,
             crate::window::commands::create_new_window,
             crate::window::commands::open_settings_window,
+            crate::window::commands::mark_settings_close_handler_ready,
+            crate::window::commands::cancel_settings_close_request,
+            crate::window::commands::acknowledge_settings_close_request,
             crate::window::commands::enter_markdown_mini_mode,
             crate::window::commands::exit_markdown_mini_mode,
             crate::window::commands::set_markdown_mini_mode_pinned,
-            crate::window::commands::minimize_window,
-            crate::window::commands::maximize_window,
             crate::window::commands::close_window,
             crate::window::commands::hide_window_to_tray,
             crate::window::commands::request_exit_app,

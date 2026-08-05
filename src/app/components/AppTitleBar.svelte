@@ -47,9 +47,6 @@
   export let toggleMenu: (menu: string) => void;
   export let closeMenu: (menu: string) => void;
   export let toggleTheme: () => void;
-  export let minimizeWindow: () => void;
-  export let maximizeWindow: () => void;
-  export let closeAppWindow: () => void;
   export let exitApp: () => void;
   export let createNewWindow: () => void;
   export let createNewFile: () => void;
@@ -81,12 +78,11 @@
 
   let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
-  let isMaximized = false;
   let unlistenResized: (() => void) | null = null;
   let canSyncWindowState = false;
   let windowStateListenerReady = false;
 
-  $: shouldShowWindowMenu = !platformCapabilities.usesNativeWindowControls;
+  $: shouldShowWindowMenu = platformCapabilities.showsInAppWindowMenu;
 
   async function syncWindowState() {
     if (!desktopEnabled || !canSyncWindowState) {
@@ -96,14 +92,10 @@
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const appWindow = getCurrentWindow();
-      const [fullscreen, maximized] = await Promise.all([
-        appWindow.isFullscreen(),
-        appWindow.isMaximized(),
-      ]);
+      const fullscreen = await appWindow.isFullscreen();
 
       if (canSyncWindowState) {
         isFullscreen = fullscreen;
-        isMaximized = maximized;
       }
     } catch {
       // ignore
@@ -180,7 +172,6 @@
         if (markdownMiniActive) return;
         // 双击最大化/还原
         await appWindow.toggleMaximize();
-        await syncWindowState();
       } else {
         await appWindow.startDragging();
       }
@@ -207,11 +198,6 @@
   function insertDiagram(diagramType: DiagramType, menu: string) {
     runCommand({ type: 'insertDiagramBlock', diagramType });
     closeMenu(menu);
-  }
-
-  async function handleMaximizeWindow() {
-    await Promise.resolve(maximizeWindow());
-    await syncWindowState();
   }
 </script>
 
@@ -739,83 +725,6 @@
             <Sun size={14} />
           {/if}
         </button>
-
-        {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
-          <div class="window-controls">
-            <button
-              class="control-btn"
-              title={t.minimize()}
-              aria-label={t.minimize()}
-              on:click={minimizeWindow}
-            >
-              <svg width="10" height="1" viewBox="0 0 10 1" aria-hidden="true"
-                ><line
-                  x1="0"
-                  y1="0.5"
-                  x2="10"
-                  y2="0.5"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                /></svg
-              >
-            </button>
-            <button
-              class="control-btn"
-              title={isMaximized ? t.restoreWindow() : t.maximize()}
-              aria-label={isMaximized ? t.restoreWindow() : t.maximize()}
-              on:click={handleMaximizeWindow}
-            >
-              {#if isMaximized}
-                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                  <rect
-                    x="3.5"
-                    y="1.5"
-                    width="7"
-                    height="7"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.1"
-                  />
-                  <path
-                    d="M1.5 3.5h7v7h-7z"
-                    fill="var(--md-titlebar-bg)"
-                    stroke="currentColor"
-                    stroke-width="1.1"
-                  />
-                </svg>
-              {:else}
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
-                  ><rect
-                    x="0.5"
-                    y="0.5"
-                    width="9"
-                    height="9"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.2"
-                  /></svg
-                >
-              {/if}
-            </button>
-            <button
-              class="control-btn close"
-              title={t.close()}
-              aria-label={t.close()}
-              on:click={closeAppWindow}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"
-                ><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" /><line
-                  x1="9"
-                  y1="1"
-                  x2="1"
-                  y2="9"
-                  stroke="currentColor"
-                  stroke-width="1.2"
-                /></svg
-              >
-            </button>
-          </div>
-        {/if}
       </div>
     </div>
   </header>

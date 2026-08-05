@@ -20,34 +20,6 @@ function getNewWindowChromeOptions() {
   };
 }
 
-export async function minimizeAppWindow(desktopEnabled: boolean) {
-  if (!desktopEnabled) {
-    return;
-  }
-
-  try {
-    logInfo('DesktopWindow', '最小化窗口');
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('minimize_window');
-  } catch (error) {
-    logError('DesktopWindow', 'Failed to minimize window', { error: formatError(error) });
-  }
-}
-
-export async function maximizeAppWindow(desktopEnabled: boolean) {
-  if (!desktopEnabled) {
-    return;
-  }
-
-  try {
-    logInfo('DesktopWindow', '切换窗口最大化');
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('maximize_window');
-  } catch (error) {
-    logError('DesktopWindow', 'Failed to maximize window', { error: formatError(error) });
-  }
-}
-
 export async function closeAppWindow(desktopEnabled: boolean, closeToTrayEnabled = false) {
   if (!desktopEnabled) {
     return;
@@ -88,6 +60,7 @@ export async function createAppWindow(
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   const timer = createPerfTimer('DesktopWindow', '创建新窗口');
   try {
+    const platformCapabilities = getPlatformCapabilities();
     logInfo('DesktopWindow', '开始创建新窗口', { pendingFolder });
     const windowId = await invoke<string>('create_new_window', { pendingFolder });
     const appWindow = new WebviewWindow(windowId, {
@@ -98,7 +71,7 @@ export async function createAppWindow(
       minWidth: 920,
       minHeight: 640,
       center: true,
-      visible: true,
+      visible: !platformCapabilities.usesWindowsNativeOverlay,
       ...getNewWindowChromeOptions(),
       resizable: true,
       maximizable: true,
@@ -185,7 +158,12 @@ export async function setMarkdownMiniModePinned(desktopEnabled: boolean, pinned:
   await invoke('set_markdown_mini_mode_pinned', { pinned });
 }
 
-export async function setDesktopIconTheme(desktopEnabled: boolean, theme: 'light' | 'dark') {
+export async function setDesktopIconTheme(
+  desktopEnabled: boolean,
+  theme: 'light' | 'dark',
+  captionBackground: string,
+  captionForeground: string,
+) {
   if (!desktopEnabled) {
     return;
   }
@@ -193,7 +171,7 @@ export async function setDesktopIconTheme(desktopEnabled: boolean, theme: 'light
   try {
     logInfo('DesktopWindow', '同步桌面图标主题', { theme });
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('set_desktop_icon_theme', { theme });
+    await invoke('set_desktop_icon_theme', { theme, captionBackground, captionForeground });
   } catch (error) {
     logError('DesktopWindow', 'Failed to sync desktop icon theme', { error: formatError(error) });
   }

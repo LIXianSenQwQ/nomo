@@ -9,6 +9,10 @@
   color: var(--md-editor-fg);
 }
 
+.editor-card > .segmented-workspace {
+  grid-row: 1 / -1;
+}
+
 .segmented-status {
   display: flex;
   align-items: center;
@@ -16,6 +20,8 @@
   min-width: 0;
   border-bottom: 1px solid var(--md-editor-border);
   background: var(--md-editor-chrome);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cancel-task {
@@ -226,6 +232,8 @@
   color: var(--md-editor-danger);
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .segmented-workspace .sr-only {

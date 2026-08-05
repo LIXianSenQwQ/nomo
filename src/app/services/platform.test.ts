@@ -8,16 +8,20 @@ describe('platform', () => {
     expect(detectAppPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux');
   });
 
-  it('keeps Windows on custom chrome and macOS on native chrome', () => {
+  it('uses native decorations while keeping the Nomo menu in the Windows overlay', () => {
     expect(getPlatformCapabilities('windows')).toMatchObject({
-      usesCustomWindowsTitlebar: true,
-      usesNativeWindowControls: false,
-      windowDecorations: false,
+      windowChromeMode: 'windows-native-overlay',
+      usesNativeWindowControls: true,
+      usesWindowsNativeOverlay: true,
+      showsInAppWindowMenu: true,
+      windowDecorations: true,
     });
 
     expect(getPlatformCapabilities('macos')).toMatchObject({
-      usesCustomWindowsTitlebar: false,
+      windowChromeMode: 'native',
       usesNativeWindowControls: true,
+      usesWindowsNativeOverlay: false,
+      showsInAppWindowMenu: false,
       windowDecorations: true,
     });
   });

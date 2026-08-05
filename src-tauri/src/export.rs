@@ -10,8 +10,7 @@ use crate::models::{
 pub(crate) async fn export_html(input: ExportHtmlInput) -> Result<ExportResult, String> {
     let path = Path::new(&input.file_path);
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("创建导出目录失败：{error}"))?;
+        std::fs::create_dir_all(parent).map_err(|error| format!("创建导出目录失败：{error}"))?;
     }
 
     std::fs::write(path, input.html_content.as_bytes())
@@ -33,9 +32,7 @@ pub(crate) async fn export_html(input: ExportHtmlInput) -> Result<ExportResult, 
 }
 
 #[tauri::command]
-pub(crate) async fn read_file_as_base64(
-    input: ReadFileInput,
-) -> Result<Base64FileResult, String> {
+pub(crate) async fn read_file_as_base64(input: ReadFileInput) -> Result<Base64FileResult, String> {
     let path = Path::new(&input.path);
     if !path.exists() {
         return Err(format!("文件不存在：{}", input.path));
@@ -61,8 +58,7 @@ pub(crate) async fn export_pdf_from_html(
 ) -> Result<ExportResult, String> {
     let pdf_path = Path::new(&input.file_path);
     if let Some(parent) = pdf_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("创建导出目录失败：{error}"))?;
+        std::fs::create_dir_all(parent).map_err(|error| format!("创建导出目录失败：{error}"))?;
     }
 
     #[cfg(target_os = "windows")]
@@ -81,10 +77,7 @@ pub(crate) async fn export_pdf_from_html(
     }
 }
 
-pub(crate) fn write_temp_html(
-    app: &AppHandle,
-    html_content: &str,
-) -> Result<PathBuf, String> {
+pub(crate) fn write_temp_html(app: &AppHandle, html_content: &str) -> Result<PathBuf, String> {
     let temp_dir = app
         .path()
         .temp_dir()

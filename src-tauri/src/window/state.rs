@@ -1,7 +1,7 @@
 use crate::models::WindowStateInput;
 use crate::window::commands::update_window_state;
 use std::sync::{Mutex, OnceLock};
-use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 const MIN_WINDOW_WIDTH: u32 = 920;
 const MIN_WINDOW_HEIGHT: u32 = 640;
@@ -16,6 +16,9 @@ const MARKDOWN_MINI_MIN_WINDOW_WIDTH: u32 = 320;
 const MARKDOWN_MINI_MIN_WINDOW_HEIGHT: u32 = 240;
 const MARKDOWN_MINI_DEFAULT_WINDOW_WIDTH: u32 = 460;
 const MARKDOWN_MINI_DEFAULT_WINDOW_HEIGHT: u32 = 560;
+const MARKDOWN_MINI_CAPTION_HEIGHT: f64 = 34.0;
+const NORMAL_WINDOW_CAPTION_HEIGHT: f64 = 42.0;
+const WINDOW_CHROME_CHANGED_EVENT: &str = "nomo://window-chrome-changed";
 const MIN_VISIBLE_SIZE: i32 = 80;
 
 static MARKDOWN_MINI_RUNTIME_STATE: OnceLock<Mutex<Option<MarkdownMiniRuntimeState>>> =
@@ -140,6 +143,7 @@ pub(crate) fn enter_markdown_mini_mode(window: &WebviewWindow, pinned: bool) -> 
         window
             .set_minimizable(false)
             .map_err(|error| format!("禁用 Markdown 小窗最小化失败：{error}"))?;
+        update_window_caption_height(window, MARKDOWN_MINI_CAPTION_HEIGHT)?;
         window
             .set_always_on_top(pinned)
             .map_err(|error| format!("设置 Markdown 小窗置顶失败：{error}"))?;
@@ -358,6 +362,7 @@ fn restore_normal_window_geometry(
             MIN_WINDOW_HEIGHT as f64,
         ))))
         .map_err(|error| format!("恢复主窗口最小尺寸失败：{error}"))?;
+    update_window_caption_height(window, NORMAL_WINDOW_CAPTION_HEIGHT)?;
     window
         .set_fullscreen(false)
         .map_err(|error| format!("退出 Markdown 小窗全屏状态失败：{error}"))?;
@@ -387,6 +392,13 @@ fn restore_normal_window_geometry(
     window
         .set_focus()
         .map_err(|error| format!("聚焦主窗口失败：{error}"))
+}
+
+fn update_window_caption_height(window: &WebviewWindow, height: f64) -> Result<(), String> {
+    crate::window::os::set_window_caption_height(window, height)?;
+    window
+        .emit(WINDOW_CHROME_CHANGED_EVENT, ())
+        .map_err(|error| format!("通知窗口 chrome 更新失败：{error}"))
 }
 
 fn persist_markdown_mini_window_state(window: &tauri::Window) {

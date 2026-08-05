@@ -16,6 +16,8 @@
   color: var(--md-editor-muted-fg);
   font-size: var(--md-editor-ui-font-size-sm);
   will-change: transform, opacity;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .content-outline strong {
@@ -130,6 +132,8 @@ textarea::selection {
   color: var(--md-editor-muted-fg);
   font-size: var(--md-editor-ui-font-size-sm);
   pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .statusbar-stats {

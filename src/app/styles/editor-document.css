@@ -121,6 +121,8 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .front-matter-kicker,

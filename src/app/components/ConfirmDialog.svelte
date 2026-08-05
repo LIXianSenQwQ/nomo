@@ -145,6 +145,8 @@
     font-family: var(--md-editor-font-mono);
     color: var(--md-editor-muted-fg);
     word-break: break-all;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .confirm-actions {

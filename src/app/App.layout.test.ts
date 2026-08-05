@@ -60,6 +60,10 @@ describe('App outline layout', () => {
     resolve(__dirname, 'services/desktopWindow.ts'),
     'utf-8',
   );
+  const windowChromeSource = readFileSync(
+    resolve(__dirname, 'services/windowChrome.ts'),
+    'utf-8',
+  );
   const tauriMenuSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/menu.rs'),
     'utf-8',
@@ -105,6 +109,10 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/src/window/os/macos.rs'),
     'utf-8',
   );
+  const tauriWindowsTitlebarSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/os/windows/titlebar.rs'),
+    'utf-8',
+  );
   const tauriImageAssetsSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/file_system/image_assets.rs'),
     'utf-8',
@@ -146,6 +154,7 @@ describe('App outline layout', () => {
     'styles/app-layout.css',
     'styles/app-chrome.css',
     'styles/app-responsive.css',
+    'styles/window-chrome.css',
     'styles/editor-document.css',
     'styles/editor-outline.css',
     'styles/editor-table-controls.css',
@@ -803,7 +812,7 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('PanelLeftClose');
     expect(titleBarSource).toContain('PanelLeftOpen');
     expect(titleBarSource).toContain(
-      'shouldShowWindowMenu = !platformCapabilities.usesNativeWindowControls',
+      'shouldShowWindowMenu = platformCapabilities.showsInAppWindowMenu',
     );
     expect(titleBarSource).toContain('{#if shouldShowWindowMenu}');
     expect(titleBarSource).not.toContain('nomoAppIcon');
@@ -814,9 +823,9 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('t.showExplorerSidebar()');
     expect(titleBarSource).toContain('t.hideExplorerSidebar()');
     expect(titleBarSource).toContain('export let focusMode: boolean');
-    expect(titleBarSource).toContain('title={isMaximized ? t.restoreWindow() : t.maximize()}');
-    expect(titleBarSource).toContain('aria-label={isMaximized ? t.restoreWindow() : t.maximize()}');
-    expect(titleBarSource).toContain('handleMaximizeWindow');
+    expect(titleBarSource).not.toContain('class="window-controls"');
+    expect(titleBarSource).not.toContain('class="control-btn"');
+    expect(titleBarSource).not.toContain('handleMaximizeWindow');
     expect(titleBarSource).toContain('syncWindowState');
     expect(desktopWindowSource).toContain("title: 'Nomo'");
     expect(desktopWindowSource).toContain('} - Nomo');
@@ -824,6 +833,12 @@ describe('App outline layout', () => {
     expect(desktopWindowSource).toContain("titleBarStyle: 'overlay'");
     expect(desktopWindowSource).toContain('trafficLightPosition: new LogicalPosition(16, 24)');
     expect(desktopWindowSource).toContain('hiddenTitle: true');
+    expect(desktopWindowSource).toContain('visible: !platformCapabilities.usesWindowsNativeOverlay');
+    expect(windowChromeSource).toContain("'get_window_chrome_metrics'");
+    expect(windowChromeSource).toContain("'nomo://window-chrome-changed'");
+    expect(tauriWindowsTitlebarSource).toContain('SetWindowSubclass');
+    expect(tauriWindowsTitlebarSource).toContain('DwmExtendFrameIntoClientArea');
+    expect(tauriWindowsTitlebarSource).toContain('DwmDefWindowProc');
     expect(tauriMacosSource).toContain('uses_overlay_titlebar(window.label())');
     expect(tauriMacosSource).toContain('label != "window-settings"');
     expect(tauriConfigSource).toContain('"y": 24');
@@ -834,6 +849,9 @@ describe('App outline layout', () => {
     );
     const titlebarIconStyles = styles.match(/\.titlebar \.icon-btn\s*\{[^}]*\}/)?.[0] ?? '';
     expect(titlebarIconStyles).toContain('height: 32px;');
+    expect(styles).not.toContain('.window-controls {');
+    expect(styles).not.toContain('.control-btn {');
+    expect(settingsWindowSource).not.toContain('settings-window-controls');
     expect(styles).toMatch(/\.sidebar-toggle-btn\s*\{[\s\S]*?flex-shrink:\s*0;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).not.toContain('.app-logo');

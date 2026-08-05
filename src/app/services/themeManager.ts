@@ -172,9 +172,12 @@ export async function applyThemeRuntime(
   applyResolvedTheme(resolved, { transition: options?.transition });
   options?.editor?.updateTheme(resolved.editorTheme);
   if (options?.desktopEnabled !== undefined) {
-    await setDesktopIconTheme(options.desktopEnabled, resolved.effectiveScheme).catch(
-      () => undefined,
-    );
+    await setDesktopIconTheme(
+      options.desktopEnabled,
+      resolved.effectiveScheme,
+      resolved.tokens.titlebarBackground,
+      resolved.tokens.titlebarForeground,
+    ).catch(() => undefined);
   }
   return resolved;
 }

@@ -82,8 +82,6 @@
     enterMarkdownMiniMode,
     exitApp as exitDesktopApp,
     exitMarkdownMiniMode,
-    maximizeAppWindow,
-    minimizeAppWindow,
     openSettingsWindow,
     refreshInterfaceLanguageChrome,
     setMarkdownMiniModePinned,
@@ -1440,9 +1438,6 @@
     activeMenu = closeActiveMenu(activeMenu, menu);
   }
 
-  const minimizeWindow = () => minimizeAppWindow(desktopEnabled);
-  const maximizeWindow = () => maximizeAppWindow(desktopEnabled);
-  const closeAppWindow = () => closeCurrentWindow();
   const exitApp = () => requestExitApp();
   const createNewWindow = (folderPath?: string) => createAppWindow(desktopEnabled, folderPath);
 
@@ -5171,9 +5166,6 @@
   {toggleMenu}
   {closeMenu}
   {toggleTheme}
-  {minimizeWindow}
-  {maximizeWindow}
-  {closeAppWindow}
   {exitApp}
   {createNewWindow}
   {createNewFile}

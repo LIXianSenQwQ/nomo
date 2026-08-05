@@ -3,7 +3,6 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  border: 1px solid var(--md-window-border);
   overflow: hidden;
   background: var(--md-editor-rail);
 }
@@ -111,7 +110,6 @@
 .action-btn:focus-visible,
 .explorer-actions button:focus-visible,
 .titlebar .icon-btn:focus-visible,
-.control-btn:focus-visible,
 .menu-btn:focus-visible,
 .menu-bar button:focus-visible,
 .mode-switch button:focus-visible,

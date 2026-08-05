@@ -229,7 +229,10 @@ pub(crate) fn unregister_markdown_file_association<R: Runtime>(
         &["/v", NOMO_MARKDOWN_PROG_ID, "/f"],
     );
     // 步骤6：删除 Capabilities 和 RegisteredApplications
-    let _ = run_reg_delete("HKCU\\Software\\Nomo\\Capabilities\\FileAssociations", &["/f"]);
+    let _ = run_reg_delete(
+        "HKCU\\Software\\Nomo\\Capabilities\\FileAssociations",
+        &["/f"],
+    );
     let _ = run_reg_delete("HKCU\\Software\\Nomo\\Capabilities", &["/f"]);
     let _ = run_reg_delete(REGISTERED_APPLICATIONS_KEY, &["/v", APP_NAME, "/f"]);
 
@@ -617,7 +620,9 @@ fn run_reg_delete(key: &str, args: &[&str]) -> Result<(), String> {
         return Ok(());
     }
 
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_ascii_lowercase();
+    let stderr = String::from_utf8_lossy(&output.stderr)
+        .trim()
+        .to_ascii_lowercase();
     // 键或值不存在时视为成功（已经清理过了）
     if stderr.contains("error:") || stderr.contains("找不到") || stderr.contains("unable to find")
     {

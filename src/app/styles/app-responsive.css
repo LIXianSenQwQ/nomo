@@ -401,37 +401,6 @@
   color: var(--md-editor-accent-strong);
 }
 
-.window-controls {
-  display: flex;
-  height: 100%;
-  align-items: center;
-}
-
-.control-btn {
-  background: transparent;
-  border: none;
-  width: 46px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-  pointer-events: auto;
-}
-
-.control-btn:hover {
-  background: rgba(128, 128, 128, 0.15);
-}
-
-.control-btn.close:hover {
-  background: #e81123 !important;
-  color: #ffffff !important;
-}
-
 .chevron-placeholder {
   display: inline-flex;
   width: 12px;

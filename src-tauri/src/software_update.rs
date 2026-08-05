@@ -192,9 +192,8 @@ pub(crate) fn get_software_update_state<R: Runtime>(
     let installation_kind = current_installation_kind()?;
     let current_version = env!("CARGO_PKG_VERSION");
     let cached_update = if installation_kind == SoftwareUpdateInstallationKind::Installer {
-        get_cached_software_update(app.clone())?.filter(|cached| {
-            is_release_newer(current_version, &cached.version).unwrap_or(false)
-        })
+        get_cached_software_update(app.clone())?
+            .filter(|cached| is_release_newer(current_version, &cached.version).unwrap_or(false))
     } else {
         None
     };
@@ -303,7 +302,10 @@ async fn perform_software_update_check(
     installation_kind: SoftwareUpdateInstallationKind,
 ) -> Result<SoftwareUpdateCheckPayload, String> {
     let current_version = env!("CARGO_PKG_VERSION").to_string();
-    crate::app_logger::info("Update", &format!("开始检查软件更新，当前版本：{current_version}"));
+    crate::app_logger::info(
+        "Update",
+        &format!("开始检查软件更新，当前版本：{current_version}"),
+    );
 
     let timer = std::time::Instant::now();
 
@@ -324,7 +326,10 @@ async fn perform_software_update_check(
 
     // 步骤2：创建 HTTP 客户端并请求 GitHub Release
     let client = release_http_client()?;
-    crate::app_logger::info("Update", &format!("正在请求 GitHub Release API：{GITHUB_LATEST_RELEASE_API}"));
+    crate::app_logger::info(
+        "Update",
+        &format!("正在请求 GitHub Release API：{GITHUB_LATEST_RELEASE_API}"),
+    );
     let request_timer = std::time::Instant::now();
     let release = client
         .get(GITHUB_LATEST_RELEASE_API)
@@ -345,12 +350,22 @@ async fn perform_software_update_check(
             crate::app_logger::error("Update", &format!("解析 GitHub Release 响应失败：{error}"));
             format!("解析 GitHub Release 更新信息失败：{error}")
         })?;
-    crate::app_logger::info("Update", &format!("GitHub Release 请求完成，耗时：{:?}，tag：{}", request_timer.elapsed(), release.tag_name));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "GitHub Release 请求完成，耗时：{:?}，tag：{}",
+            request_timer.elapsed(),
+            release.tag_name
+        ),
+    );
 
     // 步骤3：比较版本号
     let release_version = normalize_release_version(&release.tag_name)?;
     let date = release.published_at.clone().or(release.created_at.clone());
-    crate::app_logger::info("Update", &format!("版本比较：当前 {current_version}，远端 {release_version}"));
+    crate::app_logger::info(
+        "Update",
+        &format!("版本比较：当前 {current_version}，远端 {release_version}"),
+    );
     if !is_release_newer(&current_version, &release_version)? {
         crate::app_logger::info("Update", "当前已是最新版本，无需更新");
         return Ok(SoftwareUpdateCheckPayload {
@@ -366,7 +381,10 @@ async fn perform_software_update_check(
     }
 
     // 步骤4：根据当前安装形态选择安装包或免安装 zip
-    crate::app_logger::info("Update", &format!("发现新版本 {release_version}，正在查找对应资产"));
+    crate::app_logger::info(
+        "Update",
+        &format!("发现新版本 {release_version}，正在查找对应资产"),
+    );
     let (asset_kind, update_asset) = match installation_kind {
         SoftwareUpdateInstallationKind::Installer => (
             SoftwareUpdateAssetKind::WindowsInstaller,
@@ -383,10 +401,17 @@ async fn perform_software_update_check(
         crate::app_logger::error("Update", &format!("缺少更新资产：{expected_name}"));
         format!("GitHub Release 缺少 Windows 更新资产：{expected_name}")
     })?;
-    crate::app_logger::info("Update", &format!("找到更新资产：{}（{} bytes）", update_asset.name, update_asset.size.unwrap_or(0)));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "找到更新资产：{}（{} bytes）",
+            update_asset.name,
+            update_asset.size.unwrap_or(0)
+        ),
+    );
 
-    let checksums_asset = find_asset_by_name(&release.assets, CHECKSUMS_ASSET_NAME)
-        .ok_or_else(|| {
+    let checksums_asset =
+        find_asset_by_name(&release.assets, CHECKSUMS_ASSET_NAME).ok_or_else(|| {
             crate::app_logger::error("Update", "缺少 checksums.md5 校验清单");
             "GitHub Release 缺少 MD5 校验清单 checksums.md5".to_string()
         })?;
@@ -413,13 +438,18 @@ async fn perform_software_update_check(
             crate::app_logger::error("Update", &format!("读取校验清单内容失败：{error}"));
             format!("读取 MD5 校验清单失败：{error}")
         })?;
-    crate::app_logger::info("Update", &format!("校验清单下载完成，耗时：{:?}", checksum_timer.elapsed()));
+    crate::app_logger::info(
+        "Update",
+        &format!("校验清单下载完成，耗时：{:?}", checksum_timer.elapsed()),
+    );
 
-    let expected_md5 = find_md5_for_file(&checksums, &update_asset.name)
-        .ok_or_else(|| {
-            crate::app_logger::error("Update", &format!("校验清单中未找到 {} 的 MD5", update_asset.name));
-            format!("MD5 校验清单缺少更新资产条目：{}", update_asset.name)
-        })?;
+    let expected_md5 = find_md5_for_file(&checksums, &update_asset.name).ok_or_else(|| {
+        crate::app_logger::error(
+            "Update",
+            &format!("校验清单中未找到 {} 的 MD5", update_asset.name),
+        );
+        format!("MD5 校验清单缺少更新资产条目：{}", update_asset.name)
+    })?;
     crate::app_logger::info("Update", &format!("MD5 校验通过：{}", &expected_md5[..8]));
 
     let candidate = SoftwareUpdateCandidate {
@@ -433,7 +463,13 @@ async fn perform_software_update_check(
         md5: expected_md5,
     };
 
-    crate::app_logger::info("Update", &format!("更新检查完成，新版本 {release_version} 可用，总耗时：{:?}", timer.elapsed()));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "更新检查完成，新版本 {release_version} 可用，总耗时：{:?}",
+            timer.elapsed()
+        ),
+    );
 
     Ok(SoftwareUpdateCheckPayload {
         supported: true,
@@ -466,8 +502,7 @@ pub(crate) async fn download_software_update<R: Runtime>(
         state.error = None;
     })?;
 
-    let result =
-        download_software_update_inner(app.clone(), candidate, request_id).await;
+    let result = download_software_update_inner(app.clone(), candidate, request_id).await;
     match &result {
         Ok(downloaded) => {
             update_shared_state(&app, |state| {
@@ -493,7 +528,14 @@ async fn download_software_update_inner<R: Runtime>(
     candidate: SoftwareUpdateCandidate,
     request_id: String,
 ) -> Result<DownloadedSoftwareUpdate, String> {
-    crate::app_logger::info("Update", &format!("开始下载更新包：{}（{} bytes）", candidate.asset_name, candidate.asset_size.unwrap_or(0)));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "开始下载更新包：{}（{} bytes）",
+            candidate.asset_name,
+            candidate.asset_size.unwrap_or(0)
+        ),
+    );
     let timer = std::time::Instant::now();
 
     if candidate.asset_kind != SoftwareUpdateAssetKind::WindowsInstaller
@@ -505,12 +547,14 @@ async fn download_software_update_inner<R: Runtime>(
     validate_md5(&candidate.md5)?;
 
     let update_dir = software_update_cache_dir(&app)?;
-    fs::create_dir_all(&update_dir)
-        .map_err(|error| format!("创建更新缓存目录失败：{error}"))?;
+    fs::create_dir_all(&update_dir).map_err(|error| format!("创建更新缓存目录失败：{error}"))?;
     let target_path = update_dir.join(&candidate.asset_name);
     let temp_path = update_dir.join(format!("{}.download", candidate.asset_name));
     let _ = fs::remove_file(&temp_path);
-    crate::app_logger::info("Update", &format!("下载目标路径：{}", target_path.display()));
+    crate::app_logger::info(
+        "Update",
+        &format!("下载目标路径：{}", target_path.display()),
+    );
 
     let client = release_http_client()?;
     crate::app_logger::info("Update", "正在发起下载请求");
@@ -528,7 +572,10 @@ async fn download_software_update_inner<R: Runtime>(
             format!("更新安装包下载接口返回异常：{error}")
         })?;
     let total_bytes = response.content_length().or(candidate.asset_size);
-    crate::app_logger::info("Update", &format!("下载连接建立成功，总大小：{:?} bytes", total_bytes));
+    crate::app_logger::info(
+        "Update",
+        &format!("下载连接建立成功，总大小：{:?} bytes", total_bytes),
+    );
 
     let mut file =
         File::create(&temp_path).map_err(|error| format!("创建更新安装包缓存失败：{error}"))?;
@@ -536,14 +583,10 @@ async fn download_software_update_inner<R: Runtime>(
     let mut downloaded_bytes = 0_u64;
 
     emit_download_progress(&app, &request_id, downloaded_bytes, total_bytes);
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("读取下载内容失败：{error}"));
-            format!("读取更新安装包下载内容失败：{error}")
-        })?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(|error| {
+        crate::app_logger::error("Update", &format!("读取下载内容失败：{error}"));
+        format!("读取更新安装包下载内容失败：{error}")
+    })? {
         file.write_all(&chunk)
             .map_err(|error| format!("写入更新安装包缓存失败：{error}"))?;
         context.consume(&chunk);
@@ -552,11 +595,20 @@ async fn download_software_update_inner<R: Runtime>(
     }
     file.flush()
         .map_err(|error| format!("刷新更新安装包缓存失败：{error}"))?;
-    crate::app_logger::info("Update", &format!("下载完成：{downloaded_bytes} bytes，耗时：{:?}", timer.elapsed()));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "下载完成：{downloaded_bytes} bytes，耗时：{:?}",
+            timer.elapsed()
+        ),
+    );
 
     let actual_md5 = format!("{:x}", context.compute());
     if !actual_md5.eq_ignore_ascii_case(&candidate.md5) {
-        crate::app_logger::error("Update", &format!("MD5 校验失败：期望 {}，实际 {}", candidate.md5, actual_md5));
+        crate::app_logger::error(
+            "Update",
+            &format!("MD5 校验失败：期望 {}，实际 {}", candidate.md5, actual_md5),
+        );
         let _ = fs::remove_file(&temp_path);
         return Err(format!(
             "更新包校验失败：Release 记录的 MD5 为 {}，实际下载文件 MD5 为 {}。",
@@ -565,9 +617,15 @@ async fn download_software_update_inner<R: Runtime>(
     }
     crate::app_logger::info("Update", "MD5 校验通过");
 
-    fs::rename(&temp_path, &target_path)
-        .map_err(|error| format!("保存更新安装包失败：{error}"))?;
-    crate::app_logger::info("Update", &format!("更新包已保存：{}，总耗时：{:?}", target_path.display(), timer.elapsed()));
+    fs::rename(&temp_path, &target_path).map_err(|error| format!("保存更新安装包失败：{error}"))?;
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "更新包已保存：{}，总耗时：{:?}",
+            target_path.display(),
+            timer.elapsed()
+        ),
+    );
 
     let downloaded = DownloadedSoftwareUpdate {
         version: candidate.version,
@@ -606,7 +664,10 @@ fn install_software_update_inner<R: Runtime>(
     app: AppHandle<R>,
     downloaded_update: DownloadedSoftwareUpdate,
 ) -> Result<(), String> {
-    crate::app_logger::info("Update", &format!("开始安装更新：{}", downloaded_update.version));
+    crate::app_logger::info(
+        "Update",
+        &format!("开始安装更新：{}", downloaded_update.version),
+    );
 
     if !is_current_windows_installer_installation()? {
         crate::app_logger::error("Update", "非安装版环境，拒绝安装更新");
@@ -619,11 +680,20 @@ fn install_software_update_inner<R: Runtime>(
         &update_dir,
         &downloaded_update.asset_name,
     )?;
-    crate::app_logger::info("Update", &format!("安装包路径验证通过：{}", installer_path.display()));
+    crate::app_logger::info(
+        "Update",
+        &format!("安装包路径验证通过：{}", installer_path.display()),
+    );
 
     let actual_md5 = calculate_file_md5(&installer_path)?;
     if !actual_md5.eq_ignore_ascii_case(&downloaded_update.md5) {
-        crate::app_logger::error("Update", &format!("安装前 MD5 校验失败：期望 {}，实际 {}", downloaded_update.md5, actual_md5));
+        crate::app_logger::error(
+            "Update",
+            &format!(
+                "安装前 MD5 校验失败：期望 {}，实际 {}",
+                downloaded_update.md5, actual_md5
+            ),
+        );
         return Err(format!(
             "更新包校验失败：Release 记录的 MD5 为 {}，实际安装文件 MD5 为 {}。",
             downloaded_update.md5, actual_md5
@@ -671,14 +741,31 @@ fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String>
 #[cfg(target_os = "windows")]
 fn is_windows_installer_installation_for_path(exe_path: &Path) -> Result<bool, String> {
     let timer = std::time::Instant::now();
-    crate::app_logger::info("Update", &format!("开始查询注册表安装位置，可执行文件：{}", exe_path.display()));
+    crate::app_logger::info(
+        "Update",
+        &format!("开始查询注册表安装位置，可执行文件：{}", exe_path.display()),
+    );
 
     let hkcu_location = query_install_location("HKCU")?;
-    crate::app_logger::info("Update", &format!("HKCU 安装位置：{:?}，耗时：{:?}", hkcu_location, timer.elapsed()));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "HKCU 安装位置：{:?}，耗时：{:?}",
+            hkcu_location,
+            timer.elapsed()
+        ),
+    );
 
     let hkcu_elapsed = timer.elapsed();
     let hklm_location = query_install_location("HKLM")?;
-    crate::app_logger::info("Update", &format!("HKLM 安装位置：{:?}，耗时：{:?}", hklm_location, timer.elapsed() - hkcu_elapsed));
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "HKLM 安装位置：{:?}，耗时：{:?}",
+            hklm_location,
+            timer.elapsed() - hkcu_elapsed
+        ),
+    );
 
     let install_locations = [hkcu_location, hklm_location];
 
@@ -689,7 +776,10 @@ fn is_windows_installer_installation_for_path(exe_path: &Path) -> Result<bool, S
         }
     }
 
-    crate::app_logger::info("Update", &format!("未检测到安装版环境，总耗时：{:?}", timer.elapsed()));
+    crate::app_logger::info(
+        "Update",
+        &format!("未检测到安装版环境，总耗时：{:?}", timer.elapsed()),
+    );
     Ok(false)
 }
 
@@ -746,13 +836,22 @@ fn query_reg_value(root: &str, key: &str, value: &str) -> Result<Option<String>,
 
     let elapsed = timer.elapsed();
     if !output.status.success() {
-        crate::app_logger::debug("Update", &format!("注册表键不存在：{reg_path}，耗时：{elapsed:?}"));
+        crate::app_logger::debug(
+            "Update",
+            &format!("注册表键不存在：{reg_path}，耗时：{elapsed:?}"),
+        );
         return Ok(None);
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result = parse_reg_value(&stdout, value);
-    crate::app_logger::debug("Update", &format!("注册表查询完成：{reg_path}，结果：{:?}，耗时：{elapsed:?}", result));
+    crate::app_logger::debug(
+        "Update",
+        &format!(
+            "注册表查询完成：{reg_path}，结果：{:?}，耗时：{elapsed:?}",
+            result
+        ),
+    );
     Ok(result)
 }
 
@@ -876,23 +975,23 @@ fn save_cached_update_info(
     let json_path = update_dir.join(CACHED_UPDATE_INFO_FILE);
     let json = serde_json::to_string(downloaded)
         .map_err(|error| format!("序列化更新缓存信息失败：{error}"))?;
-    fs::write(&json_path, json)
-        .map_err(|error| format!("写入更新缓存信息失败：{error}"))?;
-    crate::app_logger::debug("Update", &format!("更新缓存信息已保存：{}", json_path.display()));
+    fs::write(&json_path, json).map_err(|error| format!("写入更新缓存信息失败：{error}"))?;
+    crate::app_logger::debug(
+        "Update",
+        &format!("更新缓存信息已保存：{}", json_path.display()),
+    );
     Ok(())
 }
 
-fn read_cached_update_info(
-    update_dir: &Path,
-) -> Result<Option<DownloadedSoftwareUpdate>, String> {
+fn read_cached_update_info(update_dir: &Path) -> Result<Option<DownloadedSoftwareUpdate>, String> {
     let json_path = update_dir.join(CACHED_UPDATE_INFO_FILE);
     if !json_path.is_file() {
         return Ok(None);
     }
-    let json = fs::read_to_string(&json_path)
-        .map_err(|error| format!("读取更新缓存信息失败：{error}"))?;
-    let info: DownloadedSoftwareUpdate = serde_json::from_str(&json)
-        .map_err(|error| format!("解析更新缓存信息失败：{error}"))?;
+    let json =
+        fs::read_to_string(&json_path).map_err(|error| format!("读取更新缓存信息失败：{error}"))?;
+    let info: DownloadedSoftwareUpdate =
+        serde_json::from_str(&json).map_err(|error| format!("解析更新缓存信息失败：{error}"))?;
     Ok(Some(info))
 }
 
@@ -1002,7 +1101,10 @@ fn launch_windows_installer_and_exit<R: Runtime>(
         )
     };
     if result as isize <= 32 {
-        return Err(format!("启动更新安装器失败，系统错误码：{}", result as isize));
+        return Err(format!(
+            "启动更新安装器失败，系统错误码：{}",
+            result as isize
+        ));
     }
 
     app.exit(0);
@@ -1051,13 +1153,15 @@ not-md5  Nomo_0.1.4_x64-setup.exe
 dddddddddddddddddddddddddddddddd
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  Nomo_0.1.4_x64.zip";
 
-        assert_eq!(find_md5_for_file(checksums, "Nomo_0.1.4_x64-setup.exe"), None);
+        assert_eq!(
+            find_md5_for_file(checksums, "Nomo_0.1.4_x64-setup.exe"),
+            None
+        );
     }
 
     #[test]
     fn supports_asset_names_with_spaces() {
-        let checksums =
-            "ffffffffffffffffffffffffffffffff  Nomo Setup 0.1.4 x64.exe";
+        let checksums = "ffffffffffffffffffffffffffffffff  Nomo Setup 0.1.4 x64.exe";
 
         assert_eq!(
             find_md5_for_file(checksums, "Nomo Setup 0.1.4 x64.exe").as_deref(),

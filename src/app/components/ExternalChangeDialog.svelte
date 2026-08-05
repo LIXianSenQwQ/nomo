@@ -122,6 +122,8 @@
     color: var(--md-editor-muted-fg);
     font-size: 12.5px;
     line-height: 1.5;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   .actions {
