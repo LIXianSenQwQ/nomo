@@ -298,6 +298,7 @@
       class="editor-shell"
       class:markdown-mini={markdownMiniActive}
       class:markdown-mini-large={markdownMiniActive && largeDocumentMode}
+      class:has-open-document={appBootState === 'ready' && hasOpenDocument}
       class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
       class:toolbar-hidden={effectiveToolbarHidden}
       aria-label={t.semanticEditorArea()}

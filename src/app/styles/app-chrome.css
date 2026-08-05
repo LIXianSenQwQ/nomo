@@ -6,7 +6,64 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+  border-top-left-radius: var(--md-editor-radius-lg);
   background: var(--md-editor-surface);
+  box-shadow:
+    -1px -1px 0 color-mix(in srgb, var(--md-editor-border) 76%, transparent),
+    -6px -3px 16px color-mix(in srgb, var(--md-editor-border) 34%, transparent);
+}
+
+.editor-shell.has-open-document {
+  --editor-card-surface: var(--md-editor-surface);
+  --editor-card-edge-color: color-mix(in srgb, var(--md-editor-border) 76%, transparent);
+  --editor-card-shadow-color: color-mix(in srgb, var(--md-editor-border) 34%, transparent);
+  --editor-tab-shadow-color: color-mix(in srgb, var(--md-editor-border) 42%, transparent);
+  border-top-left-radius: 0;
+  background: var(--md-editor-rail);
+  box-shadow: none;
+}
+
+.editor-shell.has-open-document::before {
+  position: absolute;
+  z-index: 0;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-top-left-radius: var(--md-editor-radius-lg);
+  background: var(--editor-card-surface);
+  box-shadow:
+    -1px 0 0 var(--editor-card-edge-color),
+    0 -1px 0 var(--editor-card-edge-color),
+    -6px -3px 16px var(--editor-card-shadow-color);
+  content: '';
+  pointer-events: none;
+}
+
+.editor-shell.has-open-document > .topbar {
+  position: relative;
+  z-index: 2;
+  border-top-left-radius: 0;
+  background: transparent;
+}
+
+.editor-shell.has-open-document > .editor-toolbar-region,
+.editor-shell.has-open-document > .editor-grid,
+.editor-shell.has-open-document > .segmented-workspace {
+  position: relative;
+  z-index: 1;
+}
+
+.editor-shell.has-open-document > .editor-toolbar-region,
+.editor-shell.has-open-document > .editor-toolbar-region .toolbar,
+.editor-shell.has-open-document.toolbar-hidden > .editor-grid,
+.editor-shell.has-open-document > .segmented-workspace {
+  border-top-left-radius: var(--md-editor-radius-lg);
+}
+
+.editor-shell > .topbar,
+.editor-shell > .empty-workspace {
+  border-top-left-radius: inherit;
 }
 
 .editor-shell.toolbar-hidden {
@@ -44,11 +101,7 @@
   min-height: 0;
   place-items: center;
   padding: clamp(28px, 6cqw, 80px);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--md-editor-bg) 72%, var(--md-editor-surface)),
-    var(--md-editor-surface)
-  );
+  background: var(--md-editor-surface);
 }
 
 .empty-workspace-panel {
@@ -155,13 +208,14 @@
   align-items: center;
   min-width: 0;
   border-bottom: 1px solid var(--md-editor-border);
-  background: var(--md-editor-chrome);
+  background: var(--md-editor-surface);
 }
 
 .menu-bar {
   gap: 10px;
   min-height: 54px;
   padding: 0 18px 0 22px;
+  background: var(--md-editor-chrome);
 }
 
 .menu-bar button {
@@ -209,41 +263,20 @@
   display: flex;
   align-items: flex-end;
   min-height: 40px;
-  padding: 0 10px;
-  background: var(--md-editor-chrome);
-  border-bottom: 1px solid var(--md-editor-border);
+  padding: 0 10px 0 18px;
+  background: var(--md-editor-rail);
+  border-bottom: 0;
   overflow: hidden;
 }
 
 .tabs-container {
-  --tab-indicator-x: 0px;
-  --tab-indicator-width: 0px;
   position: relative;
   display: flex;
   align-items: flex-end;
   flex: 1;
   min-width: 0;
   height: 100%;
-  overflow: hidden;
-}
-
-.tabs-container::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  z-index: 3;
-  width: var(--tab-indicator-width);
-  height: 2px;
-  border-radius: 999px 999px 0 0;
-  background: var(--md-editor-accent);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(var(--tab-indicator-x));
-}
-
-.tabs-container[data-indicator-ready='true']::after {
-  opacity: 1;
+  overflow: visible;
 }
 
 .tab-measure-area {
@@ -264,7 +297,6 @@
   height: var(--md-editor-control-height-lg);
   padding: 0 12px;
   border: 0;
-  border-right: 1px solid var(--md-editor-border);
   background: transparent;
   color: var(--md-editor-muted-fg);
   font-size: var(--md-editor-ui-font-size);
@@ -286,13 +318,48 @@
 }
 
 .doc-tab.active {
-  background: var(--md-editor-surface);
+  z-index: 4;
+  isolation: isolate;
+  border-radius: 10px 10px 0 0;
+  background: var(--editor-card-surface, var(--md-editor-surface));
   color: var(--md-editor-heading-fg);
   font-weight: 600;
+  box-shadow:
+    -1px -1px 0 var(--editor-card-edge-color),
+    1px -1px 0 var(--editor-card-edge-color),
+    0 -2px 5px var(--editor-tab-shadow-color),
+    0 1px 0 var(--editor-card-surface, var(--md-editor-surface));
+}
+
+.doc-tab.active::before,
+.doc-tab.active::after {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  background: transparent;
+  content: '';
+  pointer-events: none;
+}
+
+.doc-tab.active::before {
+  left: -10px;
+  border-radius: 0 0 10px 0;
+  box-shadow:
+    5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
+    4px 4px 0 5px var(--editor-card-edge-color);
+}
+
+.doc-tab.active::after {
+  right: -10px;
+  border-radius: 0 0 0 10px;
+  box-shadow:
+    -5px 5px 0 5px var(--editor-card-surface, var(--md-editor-surface)),
+    -4px 4px 0 5px var(--editor-card-edge-color);
 }
 
 .doc-tab.active:hover {
-  background: var(--md-editor-surface);
+  background: var(--editor-card-surface, var(--md-editor-surface));
 }
 
 .tab-title {
@@ -311,8 +378,12 @@
 }
 
 .doc-tab svg:first-child {
-  color: var(--md-editor-accent);
+  color: var(--md-editor-muted-fg);
   flex-shrink: 0;
+}
+
+.doc-tab.active svg:first-child {
+  color: var(--md-editor-accent);
 }
 
 .dirty-indicator {
@@ -338,6 +409,15 @@
     background-color 0.15s,
     color 0.15s;
   flex-shrink: 0;
+}
+
+.doc-tab:not(.active) .close-tab-btn {
+  opacity: 0;
+}
+
+.doc-tab:not(.active):hover .close-tab-btn,
+.doc-tab:not(.active):focus-within .close-tab-btn {
+  opacity: 1;
 }
 
 .close-tab-btn:hover {
@@ -518,6 +598,14 @@
   color: var(--md-editor-accent-strong);
 }
 
+.toolbar button:hover {
+  background: var(--md-editor-hover-bg);
+}
+
+.toolbar button.active {
+  background: color-mix(in srgb, var(--md-editor-accent) 10%, var(--md-editor-surface));
+}
+
 .mode-switch button.active {
   background: transparent;
 }
@@ -533,12 +621,15 @@
   width: 100%;
   min-height: 44px;
   padding: 5px 16px;
+  border-bottom-color: color-mix(in srgb, var(--md-editor-border) 52%, transparent);
+  background: var(--editor-card-surface, var(--md-editor-surface));
   overflow: visible;
 }
 
 .editor-toolbar-region {
   height: 44px;
   min-width: 0;
+  background: var(--editor-card-surface, var(--md-editor-surface));
   overflow: visible;
   transition: height 180ms ease;
 }

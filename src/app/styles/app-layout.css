@@ -3,11 +3,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  border: 0.5px solid var(--md-window-border);
-  border-top-width: 1px;
-  border-left-color: transparent;
+  border: 1px solid var(--md-window-border);
   overflow: hidden;
-  background: var(--md-editor-bg);
+  background: var(--md-editor-rail);
 }
 
 .app-layout.resizing {
@@ -27,7 +25,7 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
-  background: var(--md-editor-bg);
+  background: var(--md-editor-rail);
   transition: grid-template-columns 220ms cubic-bezier(0.2, 0, 0, 1);
   will-change: grid-template-columns;
 }
@@ -51,7 +49,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--md-editor-border);
+  border-right: 0;
   background: var(--md-editor-rail);
   will-change: transform, opacity;
 }
@@ -67,27 +65,24 @@
   background: transparent;
   cursor: col-resize;
   z-index: 30;
+}
+
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 2px;
+  background: transparent;
   transition: background-color 0.15s;
 }
 
-.sidebar-resizer:hover,
-.sidebar-resizer.active {
+.sidebar-resizer:hover::before,
+.sidebar-resizer.active::before {
   background-color: var(--md-editor-accent);
 }
 
-.explorer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 40px;
-  padding: 0 14px 0 12px;
-  border-bottom: 1px solid var(--md-editor-border);
-  color: var(--md-editor-heading-fg);
-  font-size: var(--md-editor-ui-font-size);
-  font-weight: 700;
-}
-
-.explorer-header button,
 .explorer-actions button {
   display: inline-grid;
   place-items: center;
@@ -100,20 +95,6 @@
   cursor: pointer;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.explorer-header .header-actions button {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0;
-}
-
-.explorer-header button:hover,
 .explorer-actions button:hover {
   background: var(--md-editor-surface);
   color: var(--md-editor-accent-strong);
@@ -124,11 +105,10 @@
 }
 
 .app-layout.focus-mode .rail {
-  border-right-color: transparent;
   pointer-events: none;
 }
 
-.explorer-header button:focus-visible,
+.action-btn:focus-visible,
 .explorer-actions button:focus-visible,
 .titlebar .icon-btn:focus-visible,
 .control-btn:focus-visible,
@@ -316,6 +296,8 @@
 
 .tree-folder:hover .folder-actions,
 .tree-folder-root-title:hover .folder-actions,
+.tree-folder:focus-within .folder-actions,
+.tree-folder-root-title:focus-within .folder-actions,
 .tree-folder.active .folder-actions,
 .tree-folder-root-title.active .folder-actions {
   opacity: 1;
@@ -461,6 +443,5 @@
   min-height: 60px;
   margin-top: auto;
   padding: 0 18px;
-  border-top: 1px solid var(--md-editor-border);
-  background: var(--md-editor-chrome);
+  background: transparent;
 }
