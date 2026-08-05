@@ -616,28 +616,6 @@
 
 {#key interfaceLocale}
 <aside class="rail" aria-label={t.explorer()} data-interface-locale={interfaceLocale}>
-  <header class="explorer-header">
-    <span>{t.explorer()}</span>
-    <div class="header-actions">
-      <button
-        type="button"
-        class="action-btn"
-        title={t.refresh()}
-        on:click={() => dispatch('refreshFolder')}
-      >
-        <RefreshCw size={13} />
-      </button>
-      <button
-        type="button"
-        class="action-btn"
-        title={t.collapseAll()}
-        on:click={() => dispatch('collapseAll')}
-      >
-        <ChevronsUp size={13} />
-      </button>
-    </div>
-  </header>
-
   <section
     bind:this={fileTreeElement}
     class="file-tree"
@@ -716,6 +694,28 @@
               on:click={(e) => startCreating(currentFolderPath, 'folder', e)}
             >
               <FolderPlus size={12} />
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              title={t.refresh()}
+              on:click={(event) => {
+                event.stopPropagation();
+                dispatch('refreshFolder');
+              }}
+            >
+              <RefreshCw size={12} />
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              title={t.collapseAll()}
+              on:click={(event) => {
+                event.stopPropagation();
+                dispatch('collapseAll');
+              }}
+            >
+              <ChevronsUp size={12} />
             </button>
           </div>
         </div>
@@ -920,7 +920,31 @@
             >
           </span>
           <FolderOpen size={14} />
-          <span>{getFolderName(getDirectoryLabel(filePath))}</span>
+          <span class="node-name">{getFolderName(getDirectoryLabel(filePath))}</span>
+          <div class="folder-actions">
+            <button
+              type="button"
+              class="action-btn"
+              title={t.refresh()}
+              on:click={(event) => {
+                event.stopPropagation();
+                dispatch('refreshFolder');
+              }}
+            >
+              <RefreshCw size={12} />
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              title={t.collapseAll()}
+              on:click={(event) => {
+                event.stopPropagation();
+                dispatch('collapseAll');
+              }}
+            >
+              <ChevronsUp size={12} />
+            </button>
+          </div>
         </div>
 
         {#if rootFolderExpanded}

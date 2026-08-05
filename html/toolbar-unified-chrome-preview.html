@@ -1,0 +1,1654 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Nomo 编辑器四种工具栏视觉方案的交互式对比原型" />
+    <title>Nomo · 四种工具栏方案对比</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --stage: #e7eaeb;
+        --shell: #f1f3f4;
+        --chrome: #f7f8f8;
+        --canvas: #ffffff;
+        --foreground: #20272c;
+        --muted: #68757e;
+        --muted-soft: #8a959c;
+        --line: rgba(49, 64, 73, 0.11);
+        --line-soft: rgba(49, 64, 73, 0.07);
+        --accent: #2e8275;
+        --accent-strong: #23695f;
+        --accent-soft: #e7f1ef;
+        --hover: rgba(49, 64, 73, 0.065);
+        --window-shadow: 0 24px 70px rgba(53, 68, 75, 0.18);
+        --workspace-shadow:
+          -1px -1px 0 rgba(66, 82, 89, 0.16), -7px -4px 18px rgba(57, 75, 82, 0.11);
+        --font-ui: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        place-items: center;
+        gap: 13px;
+        overflow: hidden;
+        padding: 14px 16px 16px;
+        background: var(--stage);
+        color: var(--foreground);
+        font-family: var(--font-ui);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        color: inherit;
+        font: inherit;
+      }
+
+      .app-window {
+        width: min(1520px, calc(100vw - 32px));
+        height: 100%;
+        min-height: 540px;
+        overflow: hidden;
+        border: 1px solid rgba(24, 33, 38, 0.7);
+        border-radius: 14px;
+        background: var(--shell);
+        box-shadow: var(--window-shadow);
+      }
+
+      .window-titlebar {
+        display: flex;
+        height: 54px;
+        align-items: center;
+        gap: 22px;
+        padding-left: 14px;
+        background: var(--shell);
+        user-select: none;
+      }
+
+      .brand {
+        font-size: 17px;
+        font-weight: 670;
+        letter-spacing: -0.02em;
+      }
+
+      .app-menu {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .menu-item,
+      .window-control {
+        border: 0;
+        background: transparent;
+        cursor: default;
+      }
+
+      .menu-item {
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+
+      .menu-item:hover,
+      .window-control:hover {
+        background: var(--hover);
+      }
+
+      .window-controls {
+        display: flex;
+        height: 100%;
+        margin-left: auto;
+      }
+
+      .window-control {
+        display: grid;
+        width: 48px;
+        height: 100%;
+        place-items: center;
+        color: #30383d;
+      }
+
+      .window-control.close:hover {
+        background: #c9363f;
+        color: #fff;
+      }
+
+      .window-control svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .app-body {
+        display: grid;
+        height: calc(100% - 54px);
+        grid-template-columns: 250px minmax(0, 1fr);
+        min-height: 0;
+      }
+
+      .explorer {
+        min-width: 0;
+        overflow: hidden;
+        padding: 17px 12px 16px 0;
+        background: var(--shell);
+      }
+
+      .root-row,
+      .file-row {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        gap: 8px;
+        border: 0;
+        border-radius: 0 7px 7px 0;
+        background: transparent;
+        color: #424c53;
+        text-align: left;
+      }
+
+      .root-row {
+        height: 34px;
+        padding: 0 12px 0 4px;
+        color: #172126;
+        font-size: 16px;
+        font-weight: 650;
+      }
+
+      .file-row {
+        height: 36px;
+        padding: 0 12px 0 18px;
+        font-size: 14px;
+      }
+
+      .file-row:hover,
+      .file-row.active {
+        background: rgba(255, 255, 255, 0.48);
+      }
+
+      .file-row.active {
+        color: var(--accent-strong);
+        font-weight: 590;
+      }
+
+      .row-icon {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        color: var(--muted);
+      }
+
+      .root-row .row-icon {
+        color: var(--accent);
+      }
+
+      .row-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tree-indent {
+        margin-left: 16px;
+      }
+
+      .editor-shell {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+        border-top-left-radius: 13px;
+        background: var(--canvas);
+        box-shadow: var(--workspace-shadow);
+      }
+
+      /* 标签栏与工具栏共享同一个承载面，不再形成两层横条。 */
+      .editor-chrome {
+        position: relative;
+        z-index: 2;
+        overflow: hidden;
+        border-top-left-radius: inherit;
+        border-bottom: 1px solid var(--line);
+        background: var(--chrome);
+      }
+
+      .tabbar {
+        display: flex;
+        height: 40px;
+        align-items: flex-end;
+        padding-left: 10px;
+      }
+
+      .tab {
+        position: relative;
+        display: flex;
+        min-width: 120px;
+        max-width: 180px;
+        height: 38px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border: 0;
+        background: transparent;
+        color: #4c5860;
+        font-size: 14px;
+        font-weight: 520;
+        letter-spacing: -0.01em;
+      }
+
+      .tab.active {
+        color: #20292e;
+        font-weight: 620;
+      }
+
+      .tab:not(.active):hover {
+        background: rgba(255, 255, 255, 0.38);
+      }
+
+      .tab.active::after {
+        position: absolute;
+        right: 12px;
+        bottom: 0;
+        left: 12px;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+        background: var(--accent);
+        content: '';
+      }
+
+      .tab-icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+      }
+
+      .tab-close {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+      }
+
+      .tab-icon {
+        color: var(--accent);
+      }
+
+      .tab:not(.active) .tab-icon {
+        color: #859198;
+      }
+
+      .tab-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab-close {
+        display: grid;
+        margin-left: 0;
+        place-items: center;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--accent-strong);
+        font-size: 15px;
+        transition:
+          opacity 140ms ease,
+          background-color 140ms ease;
+      }
+
+      .tab:not(.active) .tab-close {
+        color: #77838a;
+        opacity: 0;
+      }
+
+      .tab:not(.active):hover .tab-close,
+      .tab:not(.active):focus-within .tab-close {
+        opacity: 1;
+      }
+
+      .tab-close:hover {
+        background: var(--hover);
+      }
+
+      .new-tab {
+        display: grid;
+        width: 32px;
+        height: 28px;
+        margin-bottom: 2px;
+        margin-left: 4px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .new-tab:hover {
+        background: var(--hover);
+      }
+
+      .toolbar {
+        display: flex;
+        height: 44px;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 16px;
+        /* 与 tabbar 同色，也没有二者之间的 border。 */
+        background: transparent;
+      }
+
+      .tool-button {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition:
+          background-color 150ms ease,
+          color 150ms ease,
+          transform 120ms ease;
+      }
+
+      .tool-button:hover {
+        background: var(--hover);
+        color: #3f4b53;
+      }
+
+      .tool-button:active {
+        transform: translateY(1px);
+      }
+
+      .tool-button:focus-visible,
+      .tab-close:focus-visible,
+      .new-tab:focus-visible,
+      .menu-item:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+        outline-offset: -2px;
+      }
+
+      .tool-button.selected {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .tool-button svg {
+        width: 21px;
+        height: 21px;
+        stroke-width: 1.75;
+      }
+
+      .tool-text {
+        font-size: 17px;
+        line-height: 1;
+      }
+
+      .tool-text.bold {
+        font-weight: 700;
+      }
+
+      .tool-text.italic {
+        font-family: Georgia, serif;
+        font-size: 22px;
+        font-style: italic;
+      }
+
+      .tool-divider {
+        width: 1px;
+        height: 24px;
+        margin: 0 8px;
+        background: var(--line);
+      }
+
+      .toolbar-spacer {
+        min-width: 16px;
+        flex: 1 1 auto;
+      }
+
+      .zoom-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .zoom-track {
+        position: relative;
+        width: 88px;
+        height: 4px;
+        border-radius: 999px;
+        background: #c8ced1;
+      }
+
+      .zoom-track::before {
+        position: absolute;
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+        content: '';
+      }
+
+      .zoom-track::after {
+        position: absolute;
+        top: 50%;
+        left: 42%;
+        width: 17px;
+        height: 17px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 1px 3px rgba(31, 74, 68, 0.2);
+        content: '';
+        transform: translate(-50%, -50%);
+      }
+
+      .view-switcher {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+
+      .document-viewport {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+        background: var(--canvas);
+      }
+
+      .document {
+        width: min(760px, calc(100% - 380px));
+        margin: 54px 310px 120px auto;
+        font-size: 17px;
+        line-height: 1.78;
+      }
+
+      .document h1 {
+        margin: 0 0 24px;
+        color: #12191d;
+        font-size: clamp(31px, 3.1vw, 43px);
+        font-weight: 720;
+        letter-spacing: -0.045em;
+        line-height: 1.2;
+        text-wrap: balance;
+      }
+
+      .document h2 {
+        margin: 38px 0 14px;
+        font-size: 23px;
+        letter-spacing: -0.025em;
+      }
+
+      .document ul {
+        margin: 0;
+        padding-left: 1.5em;
+      }
+
+      .document li {
+        margin: 8px 0;
+      }
+
+      .document code {
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: 0.88em;
+      }
+
+      .outline-panel {
+        position: absolute;
+        top: 50px;
+        right: 34px;
+        width: 236px;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 8px 22px rgba(57, 73, 80, 0.09);
+      }
+
+      .outline-panel h2 {
+        margin: 0 0 14px;
+        font-size: 16px;
+      }
+
+      .outline-item {
+        overflow: hidden;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-size: 14px;
+        font-weight: 620;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .design-note {
+        position: absolute;
+        right: 28px;
+        bottom: 22px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--muted-soft);
+        font-size: 12px;
+        backdrop-filter: blur(8px);
+      }
+
+      .design-note::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        content: '';
+      }
+
+      .comparison-header {
+        display: grid;
+        width: min(1520px, calc(100vw - 32px));
+        grid-template-columns: minmax(250px, 0.72fr) minmax(620px, 1.5fr);
+        align-items: center;
+        gap: 24px;
+      }
+
+      .concept-copy {
+        min-width: 0;
+      }
+
+      .concept-kicker {
+        margin: 0 0 2px;
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .concept-copy h1 {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 680;
+        letter-spacing: -0.025em;
+        line-height: 1.25;
+      }
+
+      .concept-description {
+        overflow: hidden;
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .variant-switcher {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+        padding: 5px;
+        border: 1px solid rgba(49, 64, 73, 0.1);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.52);
+        box-shadow: 0 8px 24px rgba(56, 70, 77, 0.06);
+      }
+
+      .variant-button {
+        display: flex;
+        min-width: 0;
+        height: 42px;
+        align-items: center;
+        gap: 9px;
+        padding: 0 11px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: #556169;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          background-color 160ms ease,
+          color 160ms ease,
+          box-shadow 160ms ease;
+      }
+
+      .variant-button:hover {
+        background: rgba(255, 255, 255, 0.64);
+        color: #303a40;
+      }
+
+      .variant-button.active {
+        background: #fff;
+        color: #20292e;
+        box-shadow:
+          0 1px 2px rgba(44, 57, 63, 0.08),
+          0 5px 14px rgba(44, 57, 63, 0.07);
+      }
+
+      .variant-index {
+        display: grid;
+        width: 23px;
+        height: 23px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 6px;
+        background: rgba(49, 64, 73, 0.07);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .variant-button.active .variant-index {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .variant-label {
+        overflow: hidden;
+        font-size: 12px;
+        font-weight: 630;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .recommended-mark {
+        margin-left: auto;
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 650;
+      }
+
+      .editor-shell,
+      .editor-chrome,
+      .tabbar,
+      .toolbar,
+      .tab,
+      .document-viewport {
+        transition:
+          background-color 180ms ease,
+          border-color 180ms ease,
+          border-radius 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .context-toolbar,
+      .insertion-guide {
+        display: none;
+      }
+
+      /* 方案 1：极浅承载色配合微边界，仍保持传统编辑器结构。 */
+      .app-window[data-variant='micro'] .editor-chrome {
+        overflow: visible;
+        border-bottom: 1px solid rgba(49, 64, 73, 0.1);
+        background: var(--canvas);
+        box-shadow: none;
+      }
+
+      .app-window[data-variant='micro'] .tabbar {
+        background: var(--shell);
+      }
+
+      .app-window[data-variant='micro'] .tab.active {
+        background: #fafbfb;
+      }
+
+      .app-window[data-variant='micro'] .toolbar {
+        border-top: 1px solid rgba(49, 64, 73, 0.055);
+        background: #fafbfb;
+        box-shadow: none;
+      }
+
+      .app-window[data-variant='micro'] .document-viewport {
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      /* 方案 2：边界由柔和投影表达，工具栏成为轻量悬浮层。 */
+      .app-window[data-variant='elevation'] .editor-chrome {
+        overflow: visible;
+        border-bottom: 0;
+        background: var(--shell);
+        box-shadow: none;
+      }
+
+      .app-window[data-variant='elevation'] .tabbar {
+        background: var(--shell);
+      }
+
+      .app-window[data-variant='elevation'] .tab.active {
+        background: #fbfcfc;
+      }
+
+      .app-window[data-variant='elevation'] .toolbar {
+        position: relative;
+        z-index: 3;
+        background: #fbfcfc;
+        box-shadow:
+          0 1px 0 rgba(49, 64, 73, 0.07),
+          0 9px 20px rgba(55, 72, 79, 0.13);
+      }
+
+      .app-window[data-variant='elevation'] .document-viewport {
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      /* 方案 3：灰色承载菜单和标签区；激活 Tab、工具栏与正文组成一张连续白卡。 */
+      .app-window[data-variant='unified'] .editor-shell {
+        background: var(--shell);
+        box-shadow: none;
+      }
+
+      .app-window[data-variant='unified'] .editor-chrome {
+        overflow: visible;
+        border-bottom: 0;
+        background: var(--shell);
+        box-shadow: none;
+      }
+
+      .app-window[data-variant='unified'] .tabbar {
+        background: var(--shell);
+      }
+
+      .app-window[data-variant='unified'] .tab.active {
+        z-index: 4;
+        isolation: isolate;
+        border-radius: 10px 10px 0 0;
+        background: var(--canvas);
+        box-shadow: 0 1px 0 var(--canvas);
+      }
+
+      .app-window[data-variant='unified'] .tab.active::before,
+      .app-window[data-variant='unified'] .tab.active::after {
+        position: absolute;
+        bottom: 0;
+        display: block;
+        width: 10px;
+        height: 10px;
+        background: transparent;
+        content: '';
+        pointer-events: none;
+      }
+
+      .app-window[data-variant='unified'] .tab.active::before {
+        right: auto;
+        left: -10px;
+        border-radius: 0 0 10px 0;
+        box-shadow: 5px 5px 0 5px var(--canvas);
+      }
+
+      .app-window[data-variant='unified'] .tab.active::after {
+        right: -10px;
+        left: auto;
+        border-radius: 0 0 0 10px;
+        box-shadow: -5px 5px 0 5px var(--canvas);
+      }
+
+      .app-window[data-variant='unified'] .toolbar {
+        position: relative;
+        z-index: 3;
+        border-bottom: 1px solid rgba(49, 64, 73, 0.085);
+        border-top-left-radius: 0;
+        background: var(--canvas);
+        box-shadow:
+          -1px -1px 0 rgba(66, 82, 89, 0.13),
+          -7px -4px 18px rgba(57, 75, 82, 0.09);
+      }
+
+      .app-window[data-variant='unified'] .document-viewport {
+        z-index: 1;
+        border-radius: 0;
+        background: var(--canvas);
+        box-shadow: none;
+      }
+
+      /* 方案 4：常驻栏只保留高频命令，其余格式能力按上下文浮现。 */
+      .app-window[data-variant='floating'] .editor-chrome {
+        border-bottom: 1px solid rgba(49, 64, 73, 0.09);
+        background: var(--shell);
+      }
+
+      .app-window[data-variant='floating'] .tabbar {
+        background: var(--shell);
+      }
+
+      .app-window[data-variant='floating'] .tab.active {
+        background: #fafbfb;
+      }
+
+      .app-window[data-variant='floating'] .toolbar {
+        height: 44px;
+        background: #fafbfb;
+      }
+
+      .app-window[data-variant='floating']
+        .toolbar
+        > .tool-button:nth-of-type(n + 6):nth-of-type(-n + 16),
+      .app-window[data-variant='floating'] .toolbar > .tool-divider {
+        display: none;
+      }
+
+      .app-window[data-variant='floating'] .context-toolbar {
+        position: absolute;
+        z-index: 4;
+        top: 166px;
+        left: clamp(92px, 18%, 260px);
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 5px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        background: #303533;
+        color: #eef3f1;
+        box-shadow:
+          0 12px 30px rgba(25, 35, 34, 0.2),
+          0 3px 9px rgba(25, 35, 34, 0.15);
+      }
+
+      .app-window[data-variant='floating'] .context-toolbar::after {
+        position: absolute;
+        bottom: -5px;
+        left: 17px;
+        width: 10px;
+        height: 10px;
+        background: #303533;
+        content: '';
+        transform: rotate(45deg);
+      }
+
+      .context-button {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 29px;
+        height: 27px;
+        place-items: center;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #dce4e1;
+        cursor: pointer;
+        font-size: 13px;
+      }
+
+      .context-button:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+
+      .context-button.emphasis {
+        font-weight: 720;
+      }
+
+      .context-button.slant {
+        font-family: Georgia, serif;
+        font-style: italic;
+      }
+
+      .context-separator {
+        width: 1px;
+        height: 17px;
+        margin: 0 2px;
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .app-window[data-variant='floating'] .insertion-guide {
+        position: absolute;
+        z-index: 3;
+        top: 217px;
+        left: clamp(70px, calc(18% - 22px), 238px);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .insert-button {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border: 1px solid rgba(46, 130, 117, 0.3);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--accent);
+        font-size: 17px;
+        line-height: 1;
+      }
+
+      .fake-caret {
+        width: 1.5px;
+        height: 25px;
+        border-radius: 2px;
+        background: var(--accent);
+      }
+
+      .svg-symbols {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+
+      @media (max-width: 1080px) {
+        .comparison-header {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .concept-copy {
+          display: none;
+        }
+
+        .app-body {
+          grid-template-columns: 210px minmax(0, 1fr);
+        }
+
+        .tool-button:nth-of-type(n + 12):nth-of-type(-n + 15),
+        .toolbar > .tool-divider:nth-of-type(2) {
+          display: none;
+        }
+
+        .document {
+          width: min(680px, calc(100% - 90px));
+          margin-right: auto;
+          margin-left: 54px;
+        }
+
+        .outline-panel {
+          display: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        body {
+          gap: 0;
+          padding: 0;
+        }
+
+        .comparison-header {
+          width: 100%;
+          padding: 6px;
+          background: var(--stage);
+        }
+
+        .variant-switcher {
+          padding: 3px;
+        }
+
+        .variant-button {
+          justify-content: center;
+          height: 36px;
+          padding: 0 6px;
+        }
+
+        .variant-label,
+        .recommended-mark {
+          display: none;
+        }
+
+        .app-window {
+          width: 100vw;
+          height: 100%;
+          min-height: 0;
+          border: 0;
+          border-radius: 0;
+        }
+
+        .app-menu,
+        .explorer,
+        .zoom-control,
+        .tool-button.secondary,
+        .tool-divider {
+          display: none;
+        }
+
+        .app-body {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .editor-shell {
+          border-top-left-radius: 0;
+        }
+
+        .document {
+          width: auto;
+          margin: 38px 30px 90px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="comparison-header">
+      <div class="concept-copy" aria-live="polite">
+        <p class="concept-kicker">Toolbar study</p>
+        <h1 id="concept-title">方案 1 · 微边界融合</h1>
+        <p class="concept-description" id="concept-description">
+          极浅承载色与微边界共同分组，最接近传统编辑器，改动成本最低。
+        </p>
+      </div>
+
+      <nav class="variant-switcher" aria-label="切换工具栏设计方案">
+        <button
+          class="variant-button active"
+          type="button"
+          data-target-variant="micro"
+          aria-pressed="true"
+        >
+          <span class="variant-index">01</span>
+          <span class="variant-label">微边界融合</span>
+        </button>
+        <button
+          class="variant-button"
+          type="button"
+          data-target-variant="elevation"
+          aria-pressed="false"
+        >
+          <span class="variant-index">02</span>
+          <span class="variant-label">轻量悬浮</span>
+        </button>
+        <button
+          class="variant-button"
+          type="button"
+          data-target-variant="unified"
+          aria-pressed="false"
+        >
+          <span class="variant-index">03</span>
+          <span class="variant-label">卡片式整合</span>
+          <span class="recommended-mark">推荐</span>
+        </button>
+        <button
+          class="variant-button"
+          type="button"
+          data-target-variant="floating"
+          aria-pressed="false"
+        >
+          <span class="variant-index">04</span>
+          <span class="variant-label">Markdown 浮动</span>
+        </button>
+      </nav>
+    </header>
+
+    <main class="app-window" data-variant="micro" aria-label="Nomo 编辑器四种工具栏设计方案预览">
+      <header class="window-titlebar">
+        <div class="brand">Nomo</div>
+        <nav class="app-menu" aria-label="应用菜单">
+          <button class="menu-item" type="button">文件</button>
+          <button class="menu-item" type="button">编辑</button>
+          <button class="menu-item" type="button">段落</button>
+          <button class="menu-item" type="button">格式</button>
+          <button class="menu-item" type="button">查看</button>
+          <button class="menu-item" type="button">设置</button>
+        </nav>
+        <div class="window-controls" aria-label="窗口控制">
+          <button class="window-control" type="button" aria-label="切换主题" title="切换主题">
+            <svg aria-hidden="true"><use href="#icon-moon" /></svg>
+          </button>
+          <button class="window-control" type="button" aria-label="最小化">
+            <svg aria-hidden="true"><use href="#icon-minus" /></svg>
+          </button>
+          <button class="window-control" type="button" aria-label="最大化">
+            <svg aria-hidden="true"><use href="#icon-square" /></svg>
+          </button>
+          <button class="window-control close" type="button" aria-label="关闭">
+            <svg aria-hidden="true"><use href="#icon-close" /></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="app-body">
+        <aside class="explorer" aria-label="资源管理器">
+          <button class="root-row" type="button">
+            <svg class="row-icon" aria-hidden="true"><use href="#icon-folder" /></svg>
+            <span class="row-label">2026-07</span>
+          </button>
+          <div class="tree-indent">
+            <button class="file-row" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-folder" /></svg>
+              <span class="row-label">宁夏治超联网项目</span>
+            </button>
+            <button class="file-row" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+              <span class="row-label">1-14.md</span>
+            </button>
+            <button class="file-row" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+              <span class="row-label">1-15(1).md</span>
+            </button>
+            <button class="file-row" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+              <span class="row-label">1-15.md</span>
+            </button>
+            <button class="file-row" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+              <span class="row-label">16-17(1).md</span>
+            </button>
+            <button class="file-row active" type="button">
+              <svg class="row-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+              <span class="row-label">7-10 树木平台修改.md</span>
+            </button>
+          </div>
+        </aside>
+
+        <section class="editor-shell" aria-label="文档编辑区">
+          <div class="editor-chrome">
+            <div class="tabbar" role="tablist" aria-label="打开的文档">
+              <div class="tab" role="tab" aria-selected="false">
+                <svg class="tab-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+                <span class="tab-title">接口联调记录.md</span>
+                <button class="tab-close" type="button" aria-label="关闭接口联调记录">×</button>
+              </div>
+              <div class="tab active" role="tab" aria-selected="true">
+                <svg class="tab-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+                <span class="tab-title">7-10 树木平台修改.md</span>
+                <button class="tab-close" type="button" aria-label="关闭文档">×</button>
+              </div>
+              <div class="tab" role="tab" aria-selected="false">
+                <svg class="tab-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+                <span class="tab-title">项目周报.md</span>
+                <button class="tab-close" type="button" aria-label="关闭项目周报">×</button>
+              </div>
+              <div class="tab" role="tab" aria-selected="false">
+                <svg class="tab-icon" aria-hidden="true"><use href="#icon-file" /></svg>
+                <span class="tab-title">产品需求.md</span>
+                <button class="tab-close" type="button" aria-label="关闭产品需求">×</button>
+              </div>
+              <button class="new-tab" type="button" aria-label="新建标签页" title="新建标签页">
+                <svg class="tab-icon" aria-hidden="true"><use href="#icon-plus" /></svg>
+              </button>
+            </div>
+
+            <div class="toolbar" role="toolbar" aria-label="文档编辑工具栏">
+              <button class="tool-button" type="button" aria-label="一级标题" title="一级标题">
+                <span class="tool-text">H₁</span>
+              </button>
+              <button class="tool-button" type="button" aria-label="粗体" title="粗体">
+                <span class="tool-text bold">B</span>
+              </button>
+              <button class="tool-button" type="button" aria-label="斜体" title="斜体">
+                <span class="tool-text italic">I</span>
+              </button>
+              <button class="tool-button" type="button" aria-label="删除线" title="删除线">
+                <svg aria-hidden="true"><use href="#icon-strike" /></svg>
+              </button>
+              <button class="tool-button" type="button" aria-label="下划线" title="下划线">
+                <svg aria-hidden="true"><use href="#icon-underline" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="高亮" title="高亮">
+                <svg aria-hidden="true"><use href="#icon-highlight" /></svg>
+              </button>
+              <button class="tool-button" type="button" aria-label="链接" title="链接">
+                <svg aria-hidden="true"><use href="#icon-link" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="批注" title="批注">
+                <svg aria-hidden="true"><use href="#icon-comment" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="引用" title="引用">
+                <svg aria-hidden="true"><use href="#icon-quote" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="提示" title="提示">
+                <svg aria-hidden="true"><use href="#icon-info" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="列表" title="列表">
+                <svg aria-hidden="true"><use href="#icon-list" /></svg>
+              </button>
+              <button
+                class="tool-button secondary"
+                type="button"
+                aria-label="任务列表"
+                title="任务列表"
+              >
+                <svg aria-hidden="true"><use href="#icon-check" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="表格" title="表格">
+                <svg aria-hidden="true"><use href="#icon-table" /></svg>
+              </button>
+              <button
+                class="tool-button secondary"
+                type="button"
+                aria-label="行内代码"
+                title="行内代码"
+              >
+                <svg aria-hidden="true"><use href="#icon-code" /></svg>
+              </button>
+              <button class="tool-button secondary" type="button" aria-label="公式" title="公式">
+                <span class="tool-text">Σ</span>
+              </button>
+              <button
+                class="tool-button secondary"
+                type="button"
+                aria-label="代码块"
+                title="代码块"
+              >
+                <span class="tool-text">{ }</span>
+              </button>
+              <div class="tool-divider" aria-hidden="true"></div>
+              <div class="toolbar-spacer"></div>
+              <button class="tool-button" type="button" aria-label="搜索" title="搜索">
+                <svg aria-hidden="true"><use href="#icon-search" /></svg>
+              </button>
+              <button
+                class="tool-button secondary"
+                type="button"
+                aria-label="视图设置"
+                title="视图设置"
+              >
+                <svg aria-hidden="true"><use href="#icon-sliders" /></svg>
+              </button>
+              <div class="zoom-control" aria-label="缩放比例 60%">
+                <span>60%</span>
+                <span class="zoom-track" aria-hidden="true"></span>
+              </div>
+              <div class="view-switcher" aria-label="编辑视图">
+                <button
+                  class="tool-button selected"
+                  type="button"
+                  aria-pressed="true"
+                  title="阅读视图"
+                >
+                  <svg aria-hidden="true"><use href="#icon-book" /></svg>
+                </button>
+                <button class="tool-button" type="button" aria-pressed="false" title="源码视图">
+                  <svg aria-hidden="true"><use href="#icon-code" /></svg>
+                </button>
+                <button class="tool-button" type="button" aria-pressed="false" title="文档大纲">
+                  <svg aria-hidden="true"><use href="#icon-outline" /></svg>
+                </button>
+              </div>
+              <button class="tool-button" type="button" aria-label="收起工具栏" title="收起工具栏">
+                <svg aria-hidden="true"><use href="#icon-chevron-up" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="document-viewport">
+            <div class="context-toolbar" role="toolbar" aria-label="Markdown 上下文格式工具栏">
+              <button class="context-button emphasis" type="button" aria-label="粗体">B</button>
+              <button class="context-button slant" type="button" aria-label="斜体">I</button>
+              <button class="context-button" type="button" aria-label="一级标题">H₁</button>
+              <span class="context-separator" aria-hidden="true"></span>
+              <button class="context-button" type="button" aria-label="列表">☷</button>
+              <button class="context-button" type="button" aria-label="表格">▦</button>
+            </div>
+            <div class="insertion-guide" aria-hidden="true">
+              <button class="insert-button" type="button" tabindex="-1">+</button>
+              <span class="fake-caret"></span>
+            </div>
+
+            <article class="document">
+              <h1>7-10 树木平台修改</h1>
+              <ul>
+                <li>确认树木平台大屏最下角接口和对比替换的接口。</li>
+                <li>整理设备在线状态与告警数据的展示逻辑。</li>
+                <li>统一文档编辑区的视觉层级，减少重复边框。</li>
+              </ul>
+              <h2>设计处理</h2>
+              <p id="document-explanation">
+                工具栏使用极浅承载色与微边界完成分组，保留传统编辑器的结构，同时降低横向色带的存在感。
+              </p>
+            </article>
+
+            <aside class="outline-panel" aria-label="文档大纲">
+              <h2>文档大纲</h2>
+              <div class="outline-item">7-10 树木平台修改</div>
+            </aside>
+
+            <div class="design-note" id="design-note">微边界替代厚重色块</div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <svg class="svg-symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <symbol
+        id="icon-file"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 3.5h7l5 5V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+        <path d="M13 3.5v5h5M8.5 13h6M8.5 16.5h5" />
+      </symbol>
+      <symbol
+        id="icon-folder"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M3.5 6.5h6l2 2H20a1 1 0 0 1 1 1v8.5a1.5 1.5 0 0 1-1.5 1.5h-16A1.5 1.5 0 0 1 2 18V8a1.5 1.5 0 0 1 1.5-1.5Z"
+        />
+      </symbol>
+      <symbol
+        id="icon-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      >
+        <path d="M12 5v14M5 12h14" />
+      </symbol>
+      <symbol
+        id="icon-close"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      >
+        <path d="m6 6 12 12M18 6 6 18" />
+      </symbol>
+      <symbol
+        id="icon-minus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      >
+        <path d="M5 12h14" />
+      </symbol>
+      <symbol
+        id="icon-square"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.7"
+      >
+        <rect x="5" y="5" width="14" height="14" />
+      </symbol>
+      <symbol
+        id="icon-moon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M19.5 15.3A8 8 0 0 1 8.7 4.5 8 8 0 1 0 19.5 15.3Z" />
+      </symbol>
+      <symbol
+        id="icon-strike"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path
+          d="M16.7 6.7c-1.1-1.1-2.6-1.7-4.4-1.7-2.8 0-4.8 1.4-4.8 3.5 0 1.6 1.2 2.6 3.4 3.1M7.1 17.1c1.3 1.2 3 1.9 5 1.9 2.9 0 4.9-1.4 4.9-3.6 0-1.2-.7-2.1-2.1-2.7M4 12h16"
+        />
+      </symbol>
+      <symbol
+        id="icon-underline"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14" />
+      </symbol>
+      <symbol
+        id="icon-highlight"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m14.5 4 5.5 5.5-8.8 8.8H5.7v-5.5L14.5 4ZM12.8 5.7l5.5 5.5M4 21h16" />
+      </symbol>
+      <symbol
+        id="icon-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path
+          d="m9.5 14.5 5-5M7.2 16.8l-1.4 1.4a3.5 3.5 0 0 1-5-5l3.3-3.3a3.5 3.5 0 0 1 5 0M16.8 7.2l1.4-1.4a3.5 3.5 0 0 1 5 5l-3.3 3.3a3.5 3.5 0 0 1-5 0"
+          transform="translate(-1)"
+        />
+      </symbol>
+      <symbol
+        id="icon-comment"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linejoin="round"
+      >
+        <path d="M4 5.5h16v11H9l-5 4v-15Z" />
+      </symbol>
+      <symbol
+        id="icon-quote"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 7h5v6c0 3-1.5 5-4 6M14 7h5v6c0 3-1.5 5-4 6" />
+      </symbol>
+      <symbol
+        id="icon-info"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 11v6M12 7.5v.1" />
+      </symbol>
+      <symbol
+        id="icon-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path d="M9 6h11M9 12h11M9 18h11M4 6h.1M4 12h.1M4 18h.1" />
+      </symbol>
+      <symbol
+        id="icon-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="m8 12 2.7 2.7L16.5 9" />
+      </symbol>
+      <symbol
+        id="icon-table"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3.5" y="4" width="17" height="16" rx="1.5" />
+        <path d="M3.5 9h17M9 4v16" />
+      </symbol>
+      <symbol
+        id="icon-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m8.5 6-6 6 6 6M15.5 6l6 6-6 6M14 3l-4 18" />
+      </symbol>
+      <symbol
+        id="icon-search"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m15.5 15.5 5 5" />
+      </symbol>
+      <symbol
+        id="icon-sliders"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path d="M6 4v16M18 4v16M3 9h6M15 15h6" />
+      </symbol>
+      <symbol
+        id="icon-book"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M3 5.5c3-1.2 6-.8 9 1.2v13c-3-2-6-2.4-9-1.2v-13ZM21 5.5c-3-1.2-6-.8-9 1.2v13c3-2 6-2.4 9-1.2v-13Z"
+        />
+      </symbol>
+      <symbol
+        id="icon-outline"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+      >
+        <path d="M4 5h3M10 5h10M4 12h3M10 12h10M4 19h3M10 19h10" />
+      </symbol>
+      <symbol
+        id="icon-chevron-up"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 15 6-6 6 6" />
+      </symbol>
+    </svg>
+
+    <script>
+      const concepts = {
+        micro: {
+          title: '方案 1 · 微边界融合',
+          description: '极浅承载色与微边界共同分组，最接近传统编辑器，改动成本最低。',
+          explanation:
+            '工具栏使用极浅承载色与微边界完成分组，保留传统编辑器的结构，同时降低横向色带的存在感。',
+          note: '微边界替代厚重色块',
+        },
+        elevation: {
+          title: '方案 2 · 轻量悬浮',
+          description: '取消硬分隔线，通过着色阴影让工具栏轻轻抬升，层次更明确。',
+          explanation:
+            '工具栏作为轻量浮层覆盖在正文入口上方，边界由柔和的主题色阴影表达，视觉反馈明显但层级感更强。',
+          note: '投影承担工具栏边界',
+        },
+        unified: {
+          title: '方案 3 · 卡片式模块化（整合顶层）',
+          description: '系统菜单与标签区保持浅灰，激活 Tab、工具栏和正文连接成一张完整白卡。',
+          explanation:
+            '灰色只承担软件框架；当前激活的标签页以白色向下连接工具栏和编辑器，三者之间没有色块断层，仅在工具栏与正文之间保留一条微边界。',
+          note: '背景层与白色内容卡两层结构',
+        },
+        floating: {
+          title: '方案 4 · Markdown 浮动',
+          description: '常驻栏只保留高频能力，其余格式命令随选区浮现，正文最纯净。',
+          explanation:
+            '顶部只保留基础格式、搜索和视图控制；复杂格式能力在选区或光标附近出现，更适合强调沉浸写作的 Markdown 模式。',
+          note: '低频命令按上下文浮现',
+        },
+      };
+
+      const appWindow = document.querySelector('.app-window');
+      const conceptTitle = document.querySelector('#concept-title');
+      const conceptDescription = document.querySelector('#concept-description');
+      const documentExplanation = document.querySelector('#document-explanation');
+      const designNote = document.querySelector('#design-note');
+      const variantButtons = [...document.querySelectorAll('[data-target-variant]')];
+
+      function selectVariant(variant) {
+        const concept = concepts[variant];
+        if (!concept) return;
+
+        appWindow.dataset.variant = variant;
+        conceptTitle.textContent = concept.title;
+        conceptDescription.textContent = concept.description;
+        documentExplanation.textContent = concept.explanation;
+        designNote.textContent = concept.note;
+
+        variantButtons.forEach((button) => {
+          const selected = button.dataset.targetVariant === variant;
+          button.classList.toggle('active', selected);
+          button.setAttribute('aria-pressed', String(selected));
+        });
+
+        try {
+          history.replaceState(null, '', `#${variant}`);
+        } catch {
+          // 本地文件协议不允许改写历史时，方案切换本身仍然可用。
+        }
+      }
+
+      variantButtons.forEach((button) => {
+        button.addEventListener('click', () => selectVariant(button.dataset.targetVariant));
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const variantByKey = ['micro', 'elevation', 'unified', 'floating'][Number(event.key) - 1];
+        if (variantByKey) selectVariant(variantByKey);
+      });
+
+      const requestedVariant = location.hash.slice(1);
+      selectVariant(concepts[requestedVariant] ? requestedVariant : 'micro');
+    </script>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, FileJson2, FileText, FileType2, Plus, X } from '@lucide/svelte';
   import { createEventDispatcher, onMount, tick } from 'svelte';
-  import { motionIn, pulseOnChange, tabIndicator } from '../actions/motion';
+  import { motionIn, pulseOnChange } from '../actions/motion';
   import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
   import ContextMenu from './ContextMenu.svelte';
@@ -11,7 +11,7 @@
   export let tabs: Tab[];
   export let activeTabId: string;
   export let previewTabId: string | null = null;
-  export let switchTab: (tabId: string) => void;
+  export let switchTab: (tabId: string) => void | Promise<void>;
   export let closeTab: (tabId: string, event?: Event) => void;
   export let pinPreviewTab: () => void;
   export let createNewFile: () => void;
@@ -46,6 +46,11 @@
   let resizeObserver: ResizeObserver | null = null;
   let measureQueued = false;
   let dropdownMenuStyle = '';
+  let pendingActiveTabId: string | null = null;
+  let visualActiveTabId = activeTabId;
+  let tabMeasureKey = '';
+  let activeTabIndex = -1;
+  let activeTabOutsideVisibleRange = false;
 
   // 标签栏右键菜单状态
   let tabContextMenuOpen = false;
@@ -135,7 +140,9 @@
     if (!tabsContainer || !measureArea) return;
 
     if (tabs.length === 0) {
-      visibleRange = { start: 0, end: 0 };
+      if (visibleRange.start !== 0 || visibleRange.end !== 0) {
+        visibleRange = { start: 0, end: 0 };
+      }
       showAddButton = true;
       overflowState = false;
       return;
@@ -182,10 +189,14 @@
       }
     }
 
-    visibleRange = { start: Math.min(start, Math.max(0, end - 1)), end: Math.max(start + 1, end) };
+    const nextStart = Math.min(start, Math.max(0, end - 1));
+    const nextEnd = Math.max(start + 1, end);
+    if (visibleRange.start !== nextStart || visibleRange.end !== nextEnd) {
+      visibleRange = { start: nextStart, end: nextEnd };
+    }
 
     // 根据溢出状态更新按钮显示，不干预用户手动打开的下拉菜单
-    const isOverflowing = !(visibleRange.start === 0 && visibleRange.end === tabs.length);
+    const isOverflowing = !(nextStart === 0 && nextEnd === tabs.length);
     if (isOverflowing) {
       showAddButton = false;
       overflowState = true;
@@ -210,9 +221,22 @@
     }
   }
 
+  async function requestTabSwitch(tabId: string) {
+    if (!tabId || tabId === activeTabId || pendingActiveTabId !== null) return;
+
+    pendingActiveTabId = tabId;
+    try {
+      await switchTab(tabId);
+    } finally {
+      if (activeTabId !== tabId) {
+        pendingActiveTabId = null;
+      }
+    }
+  }
+
   function selectHiddenTab(tabId: string) {
     showDropdown = false;
-    switchTab(tabId);
+    void requestTabSwitch(tabId);
   }
 
   // 点击外部关闭下拉菜单
@@ -227,9 +251,22 @@
     showDropdown = false;
   }
 
+  $: if (pendingActiveTabId === activeTabId) {
+    pendingActiveTabId = null;
+  }
+  $: visualActiveTabId = pendingActiveTabId ?? activeTabId;
+  $: tabMeasureKey = `${previewTabId ?? ''}|${tabs
+    .map((tab) => `${tab.id}:${tab.documentKind}:${tab.fileName}:${tab.dirty ? '1' : '0'}`)
+    .join('|')}`;
+  $: activeTabIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+  $: activeTabOutsideVisibleRange =
+    activeTabIndex >= 0 &&
+    (activeTabIndex < visibleRange.start || activeTabIndex >= visibleRange.end);
   $: {
-    tabs;
-    activeTabId;
+    tabMeasureKey;
+    void tick().then(queueMeasureTabs);
+  }
+  $: if (activeTabOutsideVisibleRange) {
     void tick().then(queueMeasureTabs);
   }
 
@@ -277,21 +314,16 @@
     <div
       class="tabs-container"
       bind:this={tabsContainer}
-      use:tabIndicator={{
-        activeTabId,
-        visibleStart: visibleRange.start,
-        visibleEnd: visibleRange.end,
-      }}
     >
       {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
         <button
           type="button"
           class="doc-tab"
-          class:active={activeTabId === tab.id}
+          class:active={visualActiveTabId === tab.id}
           class:preview={previewTabId === tab.id}
           title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
           use:motionIn={{ kind: 'row', y: 5 }}
-          on:click={() => switchTab(tab.id)}
+          on:click={() => void requestTabSwitch(tab.id)}
           on:dblclick={() => {
             if (previewTabId === tab.id) pinPreviewTab();
           }}

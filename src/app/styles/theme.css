@@ -17,7 +17,7 @@
   --md-editor-control-height-sm: 28px;
   --md-editor-control-height-md: 34px;
   --md-editor-control-height-lg: 38px;
-  --md-window-border: rgba(0, 0, 0, 0.72);
+  --md-window-border: color-mix(in srgb, var(--md-editor-rail) 76%, var(--md-editor-border));
   --md-editor-font-body: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --md-editor-font-document: 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --md-editor-font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
@@ -47,7 +47,6 @@
   --md-editor-shadow-raised: 0 1px 4px rgba(0, 0, 0, 0.18);
   --md-editor-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
   --md-editor-shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.42);
-  --md-window-border: rgba(0, 0, 0, 0.86);
 }
 
 :root[data-theme-style='classic'] {

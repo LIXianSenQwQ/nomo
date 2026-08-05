@@ -276,6 +276,7 @@
 
     <section
       class="editor-shell"
+      class:has-open-document={appBootState === 'ready' && hasOpenDocument}
       class:no-open-document={appBootState === 'ready' && !hasOpenDocument}
       class:toolbar-hidden={effectiveToolbarHidden}
       aria-label={t.semanticEditorArea()}
