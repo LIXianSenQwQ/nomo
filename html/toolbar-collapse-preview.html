@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nomo 工具栏收起交互原型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #edf0f3;
+        --surface: #ffffff;
+        --chrome: #f7f8fa;
+        --rail: #f3f5f7;
+        --text: #24292f;
+        --heading: #171b20;
+        --muted: #68717b;
+        --faint: #929aa3;
+        --border: #dce1e6;
+        --border-strong: #c8d0d8;
+        --accent: #2f7d6f;
+        --accent-strong: #1f5e53;
+        --accent-soft: #e7f1ee;
+        --shadow: 0 18px 55px rgba(28, 37, 45, 0.15);
+        --font-ui: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #11151a;
+        --surface: #1c2229;
+        --chrome: #20262d;
+        --rail: #181e24;
+        --text: #e7ecf0;
+        --heading: #ffffff;
+        --muted: #9aa5af;
+        --faint: #737e89;
+        --border: #323b45;
+        --border-strong: #46515d;
+        --accent: #67b7a5;
+        --accent-strong: #98d4c5;
+        --accent-soft: #203a34;
+        --shadow: 0 20px 62px rgba(0, 0, 0, 0.42);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 13px;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        color: inherit;
+      }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .stage {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        transition: padding 220ms ease;
+      }
+
+      .app-frame {
+        width: 100%;
+        height: 100%;
+        min-width: 520px;
+        display: grid;
+        grid-template-rows: 42px minmax(0, 1fr) 25px;
+        overflow: hidden;
+        background: var(--surface);
+        transition:
+          width 260ms cubic-bezier(0.2, 0.8, 0.3, 1),
+          height 260ms cubic-bezier(0.2, 0.8, 0.3, 1),
+          border-radius 220ms ease,
+          box-shadow 220ms ease;
+      }
+
+      .stage.simulate-narrow {
+        padding: 28px;
+      }
+
+      .stage.simulate-narrow .app-frame {
+        width: min(820px, 100%);
+        height: min(700px, 100%);
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+      }
+
+      .titlebar {
+        z-index: 10;
+        display: grid;
+        grid-template-columns: auto minmax(80px, 1fr) auto;
+        align-items: center;
+        min-width: 0;
+        padding: 0 8px 0 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        user-select: none;
+      }
+
+      .titlebar-left,
+      .titlebar-right,
+      .menus,
+      .window-buttons {
+        display: flex;
+        align-items: center;
+      }
+
+      .titlebar-left {
+        min-width: 0;
+        gap: 9px;
+      }
+
+      .app-mark {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #ffffff;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .menus {
+        gap: 1px;
+      }
+
+      .menu-button,
+      .title-icon,
+      .window-button {
+        display: inline-grid;
+        place-items: center;
+        background: transparent;
+        color: var(--muted);
+        cursor: default;
+      }
+
+      .menu-button {
+        min-height: 30px;
+        padding: 0 8px;
+        border-radius: 5px;
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      .menu-button:hover,
+      .title-icon:hover,
+      .window-button:hover {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .document-name {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .titlebar-right {
+        gap: 3px;
+      }
+
+      .title-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .title-icon svg,
+      .window-button svg,
+      .tool-button svg,
+      .reveal-handle svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.75;
+      }
+
+      .window-buttons {
+        margin-left: 3px;
+      }
+
+      .window-button {
+        width: 38px;
+        height: 30px;
+      }
+
+      .workspace {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 232px minmax(0, 1fr);
+      }
+
+      .explorer {
+        min-width: 0;
+        overflow: hidden;
+        border-right: 1px solid var(--border);
+        background: var(--rail);
+      }
+
+      .explorer-title {
+        height: 39px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+
+      .folder-row,
+      .file-row {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        overflow: hidden;
+        padding: 0 11px;
+        white-space: nowrap;
+      }
+
+      .folder-row {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .file-row {
+        padding-left: 31px;
+        color: var(--muted);
+      }
+
+      .file-row.active {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .file-row span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .twisty {
+        color: var(--faint);
+        font-size: 10px;
+      }
+
+      .file-kind {
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .editor-shell {
+        container-name: editor;
+        container-type: inline-size;
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: var(--surface);
+      }
+
+      .editor-header {
+        position: relative;
+        z-index: 6;
+        min-width: 0;
+        background: var(--chrome);
+      }
+
+      .tabs {
+        height: 37px;
+        display: flex;
+        align-items: stretch;
+        min-width: 0;
+        overflow: hidden;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+      }
+
+      .tab {
+        width: min(210px, 36%);
+        min-width: 128px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 11px;
+        border-right: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 88%, var(--chrome));
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      .tab.inactive {
+        background: var(--chrome);
+        color: var(--muted);
+      }
+
+      .tab-name {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab-close {
+        color: var(--faint);
+        font-size: 15px;
+      }
+
+      .toolbar-shell {
+        height: 44px;
+        min-width: 0;
+        overflow: hidden;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        transition:
+          height 190ms cubic-bezier(0.2, 0.8, 0.25, 1),
+          border-color 160ms ease;
+      }
+
+      .toolbar {
+        height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 0;
+        padding: 5px 12px;
+        opacity: 1;
+        transform: translateY(0);
+        transition:
+          opacity 120ms ease,
+          transform 190ms cubic-bezier(0.2, 0.8, 0.25, 1);
+      }
+
+      .editor-shell[data-toolbar-collapsed='true'] .toolbar-shell {
+        height: 0;
+        border-bottom-color: transparent;
+      }
+
+      .editor-shell[data-toolbar-collapsed='true'] .toolbar {
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+
+      .tool-group,
+      .utility-group,
+      .mode-switch,
+      .width-control {
+        display: flex;
+        align-items: center;
+      }
+
+      .tool-group {
+        flex: 0 0 auto;
+        gap: 2px;
+      }
+
+      .tool-spacer {
+        min-width: 8px;
+        flex: 1 1 24px;
+      }
+
+      .toolbar-divider {
+        width: 1px;
+        height: 23px;
+        flex: 0 0 auto;
+        margin: 0 4px;
+        background: var(--border);
+      }
+
+      .tool-button {
+        width: 30px;
+        height: 30px;
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 auto;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition:
+          background 130ms ease,
+          color 130ms ease,
+          transform 120ms ease;
+      }
+
+      .tool-button:hover,
+      .tool-button.active {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .tool-button:active {
+        transform: translateY(1px);
+      }
+
+      .tool-glyph {
+        font-family: var(--font-ui);
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      .tool-glyph.heading {
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .tool-glyph.bold {
+        font-weight: 850;
+      }
+
+      .tool-glyph.italic {
+        font-family: Georgia, serif;
+        font-size: 17px;
+        font-style: italic;
+        font-weight: 700;
+      }
+
+      .tool-glyph.strike {
+        text-decoration: line-through;
+      }
+
+      .tool-glyph.underline {
+        text-decoration: underline;
+      }
+
+      .utility-group {
+        flex: 0 0 auto;
+        gap: 3px;
+      }
+
+      .width-control {
+        height: 30px;
+        gap: 7px;
+        padding: 0 8px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      .width-control span {
+        width: 28px;
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .width-control input {
+        width: 64px;
+        accent-color: var(--accent);
+      }
+
+      .mode-switch {
+        position: relative;
+        height: 32px;
+        padding: 2px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--rail) 78%, transparent);
+      }
+
+      .mode-switch button {
+        width: 32px;
+        height: 26px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .mode-switch button.active {
+        background: var(--surface);
+        box-shadow: 0 1px 3px rgba(30, 40, 48, 0.12);
+        color: var(--accent-strong);
+      }
+
+      .collapse-button {
+        margin-left: 2px;
+        border: 1px solid transparent;
+        color: var(--faint);
+      }
+
+      .collapse-button:hover {
+        border-color: var(--border);
+        background: var(--surface);
+      }
+
+      .reveal-handle {
+        position: absolute;
+        z-index: 9;
+        top: 100%;
+        right: 12px;
+        width: 30px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--border);
+        border-top: 0;
+        border-radius: 0 0 8px 8px;
+        background: color-mix(in srgb, var(--chrome) 96%, transparent);
+        box-shadow: 0 3px 8px rgba(28, 37, 45, 0.08);
+        color: var(--faint);
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-8px);
+        transition:
+          opacity 140ms ease 80ms,
+          color 130ms ease,
+          background 130ms ease,
+          transform 190ms cubic-bezier(0.2, 0.8, 0.25, 1);
+      }
+
+      .editor-shell[data-toolbar-collapsed='true'] .reveal-handle {
+        opacity: 0.72;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
+      .reveal-handle:hover {
+        background: var(--accent-soft);
+        box-shadow: 0 4px 10px rgba(28, 37, 45, 0.12);
+        color: var(--accent-strong);
+        opacity: 1 !important;
+      }
+
+      .reveal-handle svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .editor-canvas {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 190px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+
+      .document-scroll {
+        min-width: 0;
+        overflow: auto;
+      }
+
+      .document {
+        width: min(720px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 48px 18px 110px;
+      }
+
+      .document .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.06em;
+      }
+
+      .document h1 {
+        margin: 0 0 14px;
+        color: var(--heading);
+        font-size: clamp(27px, 3vw, 39px);
+        font-weight: 730;
+        letter-spacing: -0.035em;
+      }
+
+      .document .lead {
+        max-width: 620px;
+        margin: 0 0 32px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .document h2 {
+        margin: 28px 0 10px;
+        color: var(--heading);
+        font-size: 19px;
+      }
+
+      .document p,
+      .document li {
+        font-size: 15px;
+        line-height: 1.8;
+      }
+
+      .document p {
+        margin: 0 0 14px;
+      }
+
+      .document ul {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      .document code {
+        padding: 2px 5px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--rail);
+        color: var(--accent-strong);
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+      }
+
+      .outline {
+        padding: 34px 14px 0;
+        border-left: 1px solid var(--border);
+        background: color-mix(in srgb, var(--surface) 96%, var(--rail));
+      }
+
+      .outline-title {
+        margin-bottom: 11px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 750;
+      }
+
+      .outline-item {
+        min-height: 28px;
+        display: flex;
+        align-items: center;
+        padding: 0 7px;
+        border-left: 2px solid transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .outline-item.active {
+        border-left-color: var(--accent);
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .statusbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        border-top: 1px solid var(--border);
+        background: var(--chrome);
+        color: var(--muted);
+        font-size: 11px;
+        user-select: none;
+      }
+
+      .statusbar > div {
+        display: flex;
+        gap: 14px;
+      }
+
+      .preview-controls {
+        position: fixed;
+        z-index: 30;
+        right: 18px;
+        bottom: 40px;
+        width: 282px;
+        padding: 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: 11px;
+        background: color-mix(in srgb, var(--surface) 95%, transparent);
+        box-shadow: 0 12px 34px rgba(27, 37, 45, 0.14);
+        backdrop-filter: blur(12px);
+      }
+
+      .preview-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .preview-title strong {
+        color: var(--heading);
+        font-size: 12px;
+      }
+
+      .shortcut-badge {
+        padding: 2px 6px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        background: var(--chrome);
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 10px;
+      }
+
+      .control-row {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .control-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--chrome);
+      }
+
+      .segmented button {
+        min-height: 27px;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .segmented button.active {
+        background: var(--surface);
+        box-shadow: 0 1px 3px rgba(28, 37, 45, 0.11);
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .preview-note {
+        margin: 10px 1px 0;
+        padding-top: 9px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.55;
+      }
+
+      .toast {
+        position: fixed;
+        z-index: 40;
+        left: 50%;
+        bottom: 38px;
+        padding: 8px 13px;
+        border-radius: 7px;
+        background: var(--heading);
+        box-shadow: 0 8px 24px rgba(27, 37, 45, 0.2);
+        color: var(--surface);
+        font-size: 11px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 8px);
+        transition:
+          opacity 150ms ease,
+          transform 150ms ease;
+      }
+
+      .toast.visible {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+
+      @container editor (max-width: 930px) {
+        .tool-group.priority-low {
+          display: none;
+        }
+      }
+
+      @container editor (max-width: 770px) {
+        .tool-group.priority-medium,
+        .toolbar > .priority-medium-divider {
+          display: none;
+        }
+
+        .width-control input {
+          display: none;
+        }
+
+        .width-control {
+          padding: 0 6px;
+        }
+      }
+
+      @container editor (max-width: 610px) {
+        .tool-group.priority-core .responsive-extra {
+          display: none;
+        }
+
+        .width-control {
+          display: none;
+        }
+
+        .toolbar {
+          padding-inline: 8px;
+        }
+      }
+
+      @media (max-width: 780px) {
+        .workspace {
+          grid-template-columns: 42px minmax(0, 1fr);
+        }
+
+        .explorer {
+          font-size: 0;
+        }
+
+        .explorer-title,
+        .folder-row,
+        .file-row {
+          justify-content: center;
+          padding: 0;
+        }
+
+        .explorer-title::before {
+          content: '文';
+          color: var(--accent-strong);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .explorer-title > *,
+        .folder-row > *,
+        .file-row > * {
+          display: none;
+        }
+
+        .file-row.active::before {
+          content: 'M';
+          color: var(--accent-strong);
+          font-family: var(--font-mono);
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .outline {
+          display: none;
+        }
+
+        .editor-canvas {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .menus .menu-button:nth-last-child(-n + 2) {
+          display: none;
+        }
+
+        .preview-controls {
+          right: 10px;
+          bottom: 34px;
+          width: min(282px, calc(100vw - 62px));
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <div class="app-frame">
+        <header class="titlebar">
+          <div class="titlebar-left">
+            <span class="app-mark" aria-hidden="true">N</span>
+            <nav class="menus" aria-label="应用菜单">
+              <button class="menu-button" type="button">文件</button>
+              <button class="menu-button" type="button">编辑</button>
+              <button class="menu-button" type="button">段落</button>
+              <button class="menu-button" type="button">格式</button>
+              <button class="menu-button" type="button">查看</button>
+              <button class="menu-button" type="button">帮助</button>
+            </nav>
+          </div>
+          <div class="document-name">工具栏收起方案.md — Nomo</div>
+          <div class="titlebar-right">
+            <button
+              class="title-icon"
+              id="themeToggle"
+              type="button"
+              title="切换明暗主题"
+              aria-label="切换明暗主题"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"
+                />
+                <circle cx="12" cy="12" r="4" />
+              </svg>
+            </button>
+            <div class="window-buttons" aria-hidden="true">
+              <button class="window-button" type="button" tabindex="-1">
+                <svg viewBox="0 0 24 24"><path d="M6 12h12" /></svg>
+              </button>
+              <button class="window-button" type="button" tabindex="-1">
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" /></svg>
+              </button>
+              <button class="window-button" type="button" tabindex="-1">
+                <svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" /></svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main class="workspace">
+          <aside class="explorer">
+            <div class="explorer-title"><span>资源管理器</span><span>•••</span></div>
+            <div class="folder-row"><span class="twisty">▼</span><span>NOMO</span></div>
+            <div class="file-row active">
+              <span class="file-kind">M</span><span>工具栏收起方案.md</span>
+            </div>
+            <div class="file-row">
+              <span class="file-kind">M</span><span>编辑器设计说明.md</span>
+            </div>
+            <div class="file-row">
+              <span class="file-kind">T</span><span>Todo&amp;&amp;Bug.md</span>
+            </div>
+          </aside>
+
+          <section class="editor-shell" id="editorShell" data-toolbar-collapsed="false">
+            <div class="editor-header">
+              <div class="tabs" aria-label="文档标签">
+                <div class="tab">
+                  <span class="file-kind">M</span>
+                  <span class="tab-name">工具栏收起方案.md</span>
+                  <span class="tab-close" aria-hidden="true">×</span>
+                </div>
+                <div class="tab inactive">
+                  <span class="file-kind">M</span>
+                  <span class="tab-name">编辑器设计说明.md</span>
+                  <span class="tab-close" aria-hidden="true">×</span>
+                </div>
+              </div>
+
+              <div class="toolbar-shell">
+                <div class="toolbar" role="toolbar" aria-label="格式工具栏">
+                  <div class="tool-group priority-core">
+                    <button class="tool-button" type="button" title="一级标题">
+                      <span class="tool-glyph heading">H1</span>
+                    </button>
+                    <button class="tool-button" type="button" title="粗体">
+                      <span class="tool-glyph bold">B</span>
+                    </button>
+                    <button class="tool-button" type="button" title="斜体">
+                      <span class="tool-glyph italic">I</span>
+                    </button>
+                    <button class="tool-button responsive-extra" type="button" title="删除线">
+                      <span class="tool-glyph strike">S</span>
+                    </button>
+                    <button class="tool-button responsive-extra" type="button" title="下划线">
+                      <span class="tool-glyph underline">U</span>
+                    </button>
+                    <button class="tool-button responsive-extra" type="button" title="高亮">
+                      <span class="tool-glyph">▰</span>
+                    </button>
+                    <button class="tool-button responsive-extra" type="button" title="链接">
+                      <span class="tool-glyph">↗</span>
+                    </button>
+                  </div>
+
+                  <span class="toolbar-divider priority-medium-divider"></span>
+
+                  <div class="tool-group priority-medium">
+                    <button class="tool-button" type="button" title="行内注释">
+                      <span class="tool-glyph">◰</span>
+                    </button>
+                    <button class="tool-button" type="button" title="引用">
+                      <span class="tool-glyph">❞</span>
+                    </button>
+                    <button class="tool-button" type="button" title="提示块">
+                      <span class="tool-glyph">ⓘ</span>
+                    </button>
+                    <button class="tool-button" type="button" title="无序列表">
+                      <span class="tool-glyph">≡</span>
+                    </button>
+                    <button class="tool-button" type="button" title="任务列表">
+                      <span class="tool-glyph">☑</span>
+                    </button>
+                  </div>
+
+                  <div class="tool-group priority-low">
+                    <button class="tool-button" type="button" title="表格">
+                      <span class="tool-glyph">▦</span>
+                    </button>
+                    <button class="tool-button" type="button" title="代码块">
+                      <span class="tool-glyph">&lt;/&gt;</span>
+                    </button>
+                    <button class="tool-button" type="button" title="公式">
+                      <span class="tool-glyph">∑</span>
+                    </button>
+                    <button class="tool-button" type="button" title="图表">
+                      <span class="tool-glyph">◇</span>
+                    </button>
+                    <button class="tool-button" type="button" title="脚注">
+                      <span class="tool-glyph">¹</span>
+                    </button>
+                    <button class="tool-button" type="button" title="目录">
+                      <span class="tool-glyph">☷</span>
+                    </button>
+                  </div>
+
+                  <span class="tool-spacer"></span>
+
+                  <div class="utility-group">
+                    <button
+                      class="tool-button"
+                      type="button"
+                      title="查找与替换"
+                      aria-label="查找与替换"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="6" />
+                        <path d="m16 16 4 4" />
+                      </svg>
+                    </button>
+                    <label class="width-control" title="内容宽度">
+                      <span>60%</span>
+                      <input type="range" min="45" max="90" value="60" aria-label="内容宽度" />
+                    </label>
+                    <div class="mode-switch" aria-label="编辑模式">
+                      <button class="active" type="button" title="语义编辑" aria-label="语义编辑">
+                        <span>阅</span>
+                      </button>
+                      <button type="button" title="源码模式" aria-label="源码模式">
+                        <span>&lt;/&gt;</span>
+                      </button>
+                    </div>
+                    <button
+                      class="tool-button"
+                      type="button"
+                      title="文档大纲"
+                      aria-label="文档大纲"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 6h2M9 6h11M4 12h2M9 12h11M4 18h2M9 18h11" />
+                      </svg>
+                    </button>
+                    <button
+                      class="tool-button collapse-button"
+                      id="collapseButton"
+                      type="button"
+                      title="收起工具栏（Ctrl+Shift+B）"
+                      aria-label="收起工具栏"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 14 5-5 5 5" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                class="reveal-handle"
+                id="revealHandle"
+                type="button"
+                title="展开工具栏（Ctrl+Shift+B）"
+                aria-label="展开工具栏"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
+              </button>
+            </div>
+
+            <div class="editor-canvas">
+              <div class="document-scroll">
+                <article class="document">
+                  <p class="eyebrow">交互提案</p>
+                  <h1>工具栏应该随时可用，也可以安静退场</h1>
+                  <p class="lead">
+                    收起工具栏时不改动标签页宽度，也不向标签栏里增加固定按钮。一个贴在分隔线下方的小把手负责恢复，既可发现，又尽量不打扰正文。
+                  </p>
+
+                  <h2>收起之后</h2>
+                  <p>
+                    工具栏以轻微上移的方式隐藏，编辑区立即获得更多纵向空间。展开把手覆盖在正文顶部留白上，不参与标签栏布局，因此标签文字和关闭按钮不会发生位移。
+                  </p>
+
+                  <h2>窄宽度策略</h2>
+                  <ul>
+                    <li>先隐藏图表、脚注、目录等低频插入操作。</li>
+                    <li>继续变窄后，再隐藏引用、提示块和列表等次级操作。</li>
+                    <li>搜索、编辑模式、大纲和收起按钮保持可见。</li>
+                  </ul>
+
+                  <h2>状态记忆</h2>
+                  <p>原型会记住工具栏状态。刷新页面后，仍保持上次选择。</p>
+                </article>
+              </div>
+
+              <aside class="outline" aria-label="文档大纲">
+                <div class="outline-title">文档大纲</div>
+                <div class="outline-item active">工具栏应该随时可用</div>
+                <div class="outline-item">收起之后</div>
+                <div class="outline-item">窄宽度策略</div>
+                <div class="outline-item">状态记忆</div>
+              </aside>
+            </div>
+          </section>
+        </main>
+
+        <footer class="statusbar">
+          <div><span>第 1 行，第 1 列</span><span>214 字</span></div>
+          <div><span>Markdown</span><span>100%</span></div>
+        </footer>
+      </div>
+    </div>
+
+    <aside class="preview-controls" aria-label="原型控制">
+      <div class="preview-title">
+        <strong>工具栏原型控制</strong>
+        <span class="shortcut-badge">Ctrl+Shift+B</span>
+      </div>
+      <div class="control-row">
+        <span class="control-label">工具栏</span>
+        <div class="segmented" id="toolbarControls">
+          <button class="active" type="button" data-collapsed="false">展开</button>
+          <button type="button" data-collapsed="true">收起</button>
+        </div>
+      </div>
+      <div class="control-row">
+        <span class="control-label">窗口宽度</span>
+        <div class="segmented" id="widthControls">
+          <button class="active" type="button" data-narrow="false">正常</button>
+          <button type="button" data-narrow="true">模拟窄屏</button>
+        </div>
+      </div>
+      <p class="preview-note">
+        可点击工具栏最右侧箭头、收起后的把手，或按快捷键切换。此文件仅为交互原型。
+      </p>
+    </aside>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      (() => {
+        const STORAGE_KEY = 'nomo.toolbar-collapse-preview.v2';
+        const editorShell = document.querySelector('#editorShell');
+        const collapseButton = document.querySelector('#collapseButton');
+        const revealHandle = document.querySelector('#revealHandle');
+        const stage = document.querySelector('#stage');
+        const toolbarControls = document.querySelector('#toolbarControls');
+        const widthControls = document.querySelector('#widthControls');
+        const themeToggle = document.querySelector('#themeToggle');
+        const toast = document.querySelector('#toast');
+        let toastTimer = 0;
+
+        const defaults = {
+          collapsed: false,
+          narrow: false,
+          theme: 'light',
+        };
+
+        function loadState() {
+          try {
+            return { ...defaults, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') };
+          } catch {
+            return { ...defaults };
+          }
+        }
+
+        let state = loadState();
+
+        function saveState() {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function selectControl(container, selector) {
+          container.querySelectorAll('button').forEach((button) => {
+            button.classList.toggle('active', button.matches(selector));
+          });
+        }
+
+        function render() {
+          editorShell.dataset.toolbarCollapsed = String(state.collapsed);
+          stage.classList.toggle('simulate-narrow', state.narrow);
+          document.documentElement.dataset.theme = state.theme;
+          selectControl(toolbarControls, `[data-collapsed="${state.collapsed}"]`);
+          selectControl(widthControls, `[data-narrow="${state.narrow}"]`);
+          collapseButton.setAttribute('aria-expanded', String(!state.collapsed));
+          revealHandle.setAttribute('aria-expanded', String(!state.collapsed));
+        }
+
+        function showToast(message) {
+          window.clearTimeout(toastTimer);
+          toast.textContent = message;
+          toast.classList.add('visible');
+          toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 1200);
+        }
+
+        function setCollapsed(collapsed, notify = true) {
+          state.collapsed = collapsed;
+          saveState();
+          render();
+          if (notify) showToast(collapsed ? '工具栏已收起' : '工具栏已展开');
+        }
+
+        collapseButton.addEventListener('click', () => setCollapsed(true));
+        revealHandle.addEventListener('click', () => setCollapsed(false));
+
+        toolbarControls.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-collapsed]');
+          if (button) setCollapsed(button.dataset.collapsed === 'true');
+        });
+
+        widthControls.addEventListener('click', (event) => {
+          const button = event.target.closest('button[data-narrow]');
+          if (!button) return;
+          state.narrow = button.dataset.narrow === 'true';
+          saveState();
+          render();
+          showToast(state.narrow ? '已模拟窄窗口' : '已恢复正常宽度');
+        });
+
+        themeToggle.addEventListener('click', () => {
+          state.theme = state.theme === 'light' ? 'dark' : 'light';
+          saveState();
+          render();
+        });
+
+        document.querySelectorAll('.mode-switch button').forEach((button) => {
+          button.addEventListener('click', () => {
+            document
+              .querySelectorAll('.mode-switch button')
+              .forEach((item) => item.classList.remove('active'));
+            button.classList.add('active');
+          });
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.ctrlKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
+            event.preventDefault();
+            setCollapsed(!state.collapsed);
+          }
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
