@@ -23,7 +23,11 @@
   import SearchReplacePanel from './SearchReplacePanel.svelte';
   import StatusBar from './StatusBar.svelte';
   import SegmentedTextEditorWorkspace from './SegmentedTextEditorWorkspace.svelte';
-  import { transitionDuration, workspaceSidebarMotion } from '../actions/motion';
+  import {
+    toolbarVisibilityMotion,
+    transitionDuration,
+    workspaceSidebarMotion,
+  } from '../actions/motion';
   import { t } from '../i18n';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
@@ -373,6 +377,7 @@
             <div
               aria-hidden={!toolbarOverflowVisible || markdownMiniActive}
               inert={!toolbarOverflowVisible || markdownMiniActive}
+              use:toolbarVisibilityMotion={{ hidden: effectiveToolbarHidden }}
             >
               <EditorToolbar
                 {interfaceLocale}

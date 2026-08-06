@@ -205,6 +205,63 @@ export function workspaceSidebarMotion(node: HTMLElement, params: SidebarParams)
   };
 }
 
+type ToolbarVisibilityParams = {
+  hidden: boolean;
+};
+
+export function toolbarVisibilityMotion(node: HTMLElement, params: ToolbarVisibilityParams) {
+  let previousHidden = params.hidden;
+  let initialized = false;
+  let tween: gsap.core.Tween | null = null;
+
+  function sync(nextParams: ToolbarVisibilityParams) {
+    const hidden = nextParams.hidden;
+
+    if (initialized && hidden === previousHidden) return;
+
+    tween?.kill();
+    if (!initialized || prefersReducedMotion()) {
+      if (hidden) {
+        gsap.set(node, { autoAlpha: 0, y: -6 });
+      } else {
+        gsap.set(node, { clearProps: 'transform,opacity,visibility,willChange' });
+      }
+      initialized = true;
+      previousHidden = hidden;
+      return;
+    }
+
+    tween = gsap.to(node, {
+      autoAlpha: hidden ? 0 : 1,
+      y: hidden ? -6 : 0,
+      willChange: 'transform, opacity',
+      duration: motionDuration('panel'),
+      ease,
+      overwrite: true,
+      ...(hidden
+        ? {
+            onComplete: () => gsap.set(node, { clearProps: 'willChange' }),
+          }
+        : {
+            clearProps: 'transform,opacity,visibility,willChange',
+          }),
+    });
+    previousHidden = hidden;
+  }
+
+  sync(params);
+
+  return {
+    update(nextParams: ToolbarVisibilityParams) {
+      sync(nextParams);
+    },
+    destroy() {
+      tween?.kill();
+      gsap.set(node, { clearProps: 'transform,opacity,visibility,willChange' });
+    },
+  };
+}
+
 type TabIndicatorParams = {
   activeTabId: string;
   visibleStart: number;
