@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { renderMarkdownPreview, resolvePreviewAssetSrc } from './preview';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  applyQuickLookAppearance,
+  renderMarkdownPreview,
+  renderQuickLookMermaidBlocks,
+  resolvePreviewAssetSrc,
+} from './preview';
 
 describe('quicklook preview renderer', () => {
   it('renders markdown with callouts, task lists, tables and math', () => {
@@ -26,6 +31,61 @@ describe('quicklook preview renderer', () => {
     expect(html).toContain('任务状态');
     expect(html).toContain('<table>');
     expect(html).toContain('katex');
+  });
+
+  it('renders Mermaid fences to themed SVG diagrams', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = renderMarkdownPreview(
+      '```mermaid\nflowchart TB\n  A["项目台账"] --> B["项目验收"]\n```',
+    );
+    const renderMermaid = vi.fn(async () => ({
+      svg: '<svg viewBox="0 0 100 40" data-diagram="ready"></svg>',
+    }));
+
+    const bindings = await renderQuickLookMermaidBlocks(
+      root,
+      { theme: 'dark' },
+      { renderMermaid },
+    );
+
+    expect(renderMermaid).toHaveBeenCalledWith('flowchart TB\n  A["项目台账"] --> B["项目验收"]', {
+      theme: { theme: 'dark' },
+    });
+    expect(root.querySelector('.mermaid-block')?.classList.contains('is-rendered')).toBe(true);
+    expect(root.querySelector('.mermaid-block-rendered svg')?.getAttribute('data-diagram')).toBe(
+      'ready',
+    );
+    expect(bindings).toHaveLength(1);
+    root.querySelector<HTMLButtonElement>('.mermaid-block-fullscreen-button')?.click();
+    expect(document.body.querySelector('.mermaid-fullscreen-overlay')).not.toBeNull();
+    expect(document.body.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('125%');
+    document.body
+      .querySelector<HTMLButtonElement>('.mermaid-fullscreen-control-button:last-child')
+      ?.click();
+    expect(document.body.querySelector('.mermaid-fullscreen-zoom-badge')?.textContent).toBe('135%');
+    bindings[0]?.dispose();
+    expect(document.body.querySelector('.mermaid-fullscreen-overlay')).toBeNull();
+  });
+
+  it('keeps Mermaid source visible when diagram rendering fails', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = renderMarkdownPreview('```mermaid\nnot-a-diagram\n```');
+
+    await renderQuickLookMermaidBlocks(
+      root,
+      { theme: 'default' },
+      {
+        async renderMermaid() {
+          throw new Error('UnknownDiagramError');
+        },
+      },
+    );
+
+    expect(root.querySelector('.mermaid-block')?.classList.contains('is-error')).toBe(true);
+    expect(root.querySelector('.mermaid-block-rendered')?.textContent).toContain(
+      'UnknownDiagramError',
+    );
+    expect(root.querySelector('.mermaid-block-source')?.textContent).toContain('not-a-diagram');
   });
 
   it('blocks dangerous links and script html', () => {
@@ -67,5 +127,25 @@ describe('quicklook preview renderer', () => {
     expect(resolvePreviewAssetSrc('/Users/qingyu/Pictures/a.png')).toBe(
       'file:///Users/qingyu/Pictures/a.png',
     );
+  });
+
+  it('applies the same registered appearance tokens as the main app', () => {
+    const root = document.createElement('div');
+
+    const resolved = applyQuickLookAppearance(
+      {
+        themeMode: 'dark',
+        colorThemeId: 'nomo-github',
+        documentStyleId: 'nomo-modern',
+      },
+      root,
+    );
+
+    expect(resolved?.effectiveScheme).toBe('dark');
+    expect(root.dataset.theme).toBe('dark');
+    expect(root.dataset.colorTheme).toBe('nomo-github');
+    expect(root.dataset.documentStyle).toBe('nomo-modern');
+    expect(resolved.tokens.documentBackground).toBe('#0D1117');
+    expect(root.style.getPropertyValue('--md-editor-document-bg')).toBe('#0D1117');
   });
 });

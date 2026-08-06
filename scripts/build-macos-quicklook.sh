@@ -26,7 +26,10 @@ cp "$EXTENSION_SRC_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp -R "$RENDERER_DIR" "$RESOURCES_DIR/quicklook-renderer"
 
 APP_VERSION="$(node -p "require('./package.json').version")"
+APP_BUNDLE_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').bundle.macOS.bundleVersion || require('./src-tauri/tauri.conf.json').version")"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$CONTENTS_DIR/Info.plist"
+# 扩展构建版本必须与主 App 的 CFBundleVersion 一致，覆盖同一营销版本时也让 PlugInKit 刷新扩展。
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUNDLE_VERSION" "$CONTENTS_DIR/Info.plist"
 
 ARCH="${QUICKLOOK_ARCH:-$(uname -m)}"
 case "$ARCH" in
@@ -64,11 +67,12 @@ xcrun swiftc \
   -framework WebKit
 
 ENTITLEMENTS="$EXTENSION_SRC_DIR/NomoQuickLookPreview.entitlements"
-
-if [[ -n "${APPLE_CODESIGN_IDENTITY:-}" ]]; then
-  /usr/bin/codesign --force --sign "$APPLE_CODESIGN_IDENTITY" --entitlements "$ENTITLEMENTS" "$OUTPUT_DIR"
-else
-  /usr/bin/codesign --force --sign - --entitlements "$ENTITLEMENTS" "$OUTPUT_DIR"
-fi
+# Tauri 使用 APPLE_SIGNING_IDENTITY；保留旧变量作为显式扩展签名覆盖，并确保嵌套扩展与主 App 同身份。
+CODESIGN_IDENTITY="${APPLE_CODESIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:--}}"
+/usr/bin/codesign \
+  --force \
+  --sign "$CODESIGN_IDENTITY" \
+  --entitlements "$ENTITLEMENTS" \
+  "$OUTPUT_DIR"
 
 echo "Built $OUTPUT_DIR"

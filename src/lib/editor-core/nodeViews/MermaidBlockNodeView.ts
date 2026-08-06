@@ -4,6 +4,12 @@ import type { EditorView } from 'prosemirror-view';
 import { onInterfaceLocaleChanged, t } from '../../../app/i18n';
 import { getDiagramRenderer } from '../renderers';
 import type { MermaidThemeDefinition } from '../../theme/types';
+import {
+  bindMermaidFullscreen,
+  normalizeMermaidSvgSize,
+  normalizeRenderedMermaidViewport,
+  type MermaidFullscreenBinding,
+} from '../../services/mermaidDiagramView';
 
 /**
  * Mermaid 图表块 NodeView。
@@ -17,10 +23,6 @@ export class MermaidBlockNodeView {
   private static instances = new Set<MermaidBlockNodeView>();
   private static currentTheme: MermaidThemeDefinition = { theme: 'default' };
   private static readonly PREVIEW_DEBOUNCE_MS = 250;
-  private static readonly FULLSCREEN_DEFAULT_SCALE = 1.25;
-  private static readonly FULLSCREEN_MIN_SCALE = 0.5;
-  private static readonly FULLSCREEN_MAX_SCALE = 3;
-  private static readonly FULLSCREEN_SCALE_STEP = 0.1;
 
   dom: HTMLElement;
 
@@ -36,21 +38,8 @@ export class MermaidBlockNodeView {
   private previewEl: HTMLElement | null = null;
   private previewSnapshotEl: HTMLElement | null = null;
   private editSurfaceEl: HTMLElement | null = null;
-  private fullscreenOverlayEl: HTMLElement | null = null;
-  private fullscreenViewportEl: HTMLElement | null = null;
-  private fullscreenZoomSurfaceEl: HTMLElement | null = null;
-  private fullscreenZoomBadgeEl: HTMLElement | null = null;
-  private fullscreenSvgBaseSize: { width: number; height: number } | null = null;
-  private fullscreenScale = MermaidBlockNodeView.FULLSCREEN_DEFAULT_SCALE;
-  private fullscreenKeydown: ((event: KeyboardEvent) => void) | null = null;
+  private fullscreenBinding: MermaidFullscreenBinding | null = null;
   private unsubscribeLocale: () => void = () => undefined;
-  private fullscreenDrag: {
-    pointerId: number;
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
-  } | null = null;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
     this.node = node;
@@ -155,7 +144,7 @@ export class MermaidBlockNodeView {
   }
 
   destroy(): void {
-    this.closeFullscreen();
+    this.disposeFullscreen();
     this.cleanupEdit();
     this.unsubscribeLocale();
     MermaidBlockNodeView.instances.delete(this);
@@ -175,6 +164,7 @@ export class MermaidBlockNodeView {
 
     const renderer = getDiagramRenderer();
     if (!renderer) {
+      this.disposeFullscreen();
       this.dom.textContent = `\`\`\`mermaid\n${code}\n\`\`\``;
       return;
     }
@@ -185,7 +175,7 @@ export class MermaidBlockNodeView {
       if (result.error) {
         this.renderError(result.error, code);
       } else {
-        this.renderDisplayDiagram(this.normalizeMermaidSvgSize(result.svg));
+        this.renderDisplayDiagram(normalizeMermaidSvgSize(result.svg));
       }
     } catch (error) {
       if (this.editing || id !== this.renderId) return;
@@ -198,7 +188,7 @@ export class MermaidBlockNodeView {
     this.editing = true;
     this.renderId += 1;
     this.previewRenderId += 1;
-    this.closeFullscreen();
+    this.disposeFullscreen();
     this.originalCode = this.node.attrs.code as string;
     this.previewSnapshotEl = this.takeRenderedPreviewSnapshot('mermaid-block-preview-snapshot');
     this.dom.classList.add('is-editing');
@@ -388,7 +378,7 @@ export class MermaidBlockNodeView {
       if (result.error) {
         this.setPreviewContent(result.error, { error: true, renderId: id });
       } else {
-        this.setPreviewContent(this.normalizeMermaidSvgSize(result.svg), {
+        this.setPreviewContent(normalizeMermaidSvgSize(result.svg), {
           error: false,
           html: true,
           renderId: id,
@@ -432,7 +422,7 @@ export class MermaidBlockNodeView {
       this.previewEl.textContent = '';
       if (options.html) {
         this.previewEl.innerHTML = content;
-        this.normalizeRenderedMermaidViewport(this.previewEl);
+        normalizeRenderedMermaidViewport(this.previewEl);
       } else {
         this.previewEl.textContent = content;
       }
@@ -448,12 +438,13 @@ export class MermaidBlockNodeView {
     }
     this.previewEl.replaceChildren(renderedEl);
     if (options.html) {
-      this.normalizeRenderedMermaidViewport(renderedEl);
+      normalizeRenderedMermaidViewport(renderedEl);
     }
     this.previewSnapshotEl = null;
   }
 
   private renderError(error: string, code: string): void {
+    this.disposeFullscreen();
     this.dom.textContent = '';
     const errorEl = document.createElement('div');
     errorEl.className = 'mermaid-block-error';
@@ -465,6 +456,7 @@ export class MermaidBlockNodeView {
   }
 
   private renderEmptyDiagram(): void {
+    this.disposeFullscreen();
     this.dom.textContent = '';
     const emptyEl = document.createElement('div');
     emptyEl.className = 'mermaid-block-empty';
@@ -472,342 +464,32 @@ export class MermaidBlockNodeView {
   }
 
   private renderDisplayDiagram(svg: string): void {
+    this.disposeFullscreen();
     this.dom.textContent = '';
 
     const renderedEl = document.createElement('div');
     renderedEl.className = 'mermaid-block-rendered';
     renderedEl.innerHTML = svg;
+    this.dom.appendChild(renderedEl);
+    normalizeRenderedMermaidViewport(renderedEl);
 
-    const fullscreenButton = this.createIconButton(
-      'mermaid-block-fullscreen-button',
-      t.fullscreenDiagram(),
-      t.enlarge(),
-      'maximize',
-    );
-    fullscreenButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.openFullscreen();
-    });
-
-    this.dom.append(renderedEl, fullscreenButton);
-    this.normalizeRenderedMermaidViewport(renderedEl);
-  }
-
-  private normalizeMermaidSvgSize(svg: string): string {
-    const template = document.createElement('template');
-    template.innerHTML = svg.trim();
-
-    const svgEl = template.content.querySelector('svg');
-    const viewBox = svgEl?.getAttribute('viewBox');
-    if (!svgEl || !viewBox) return svg;
-
-    const [, , width, height] = viewBox
-      .trim()
-      .split(/\s+/)
-      .map((value) => Number.parseFloat(value));
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-      return template.innerHTML;
-    }
-
-    // Mermaid 默认输出 width="100%"，会让编辑器卡片继承一整行画布。
-    // 用 viewBox 的真实尺寸作为 SVG 内在尺寸，再交给 CSS 做最大宽高约束。
-    svgEl.setAttribute('width', String(Math.ceil(width)));
-    svgEl.setAttribute('height', String(Math.ceil(height)));
-
-    const inlineStyle = svgEl.getAttribute('style');
-    if (inlineStyle) {
-      const nextStyle = inlineStyle
-        .split(';')
-        .map((part) => part.trim())
-        .filter((part) => part && !part.toLowerCase().startsWith('max-width'))
-        .join('; ');
-      if (nextStyle) {
-        svgEl.setAttribute('style', nextStyle);
-      } else {
-        svgEl.removeAttribute('style');
-      }
-    }
-
-    return template.innerHTML;
-  }
-
-  private normalizeRenderedMermaidViewport(container: HTMLElement): void {
-    const svgEl = container.querySelector<SVGSVGElement>('svg');
-    const rootGroupEl = svgEl?.querySelector<SVGGElement>('g.root');
-    const viewBox = svgEl?.getAttribute('viewBox');
-    if (!svgEl || !rootGroupEl || !viewBox) return;
-
-    const [viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight] = viewBox
-      .trim()
-      .split(/\s+/)
-      .map((value) => Number.parseFloat(value));
-    const svgBounds = svgEl.getBoundingClientRect();
-    const rootBounds = rootGroupEl.getBoundingClientRect();
-    if (
-      ![viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight].every(Number.isFinite) ||
-      viewBoxWidth <= 0 ||
-      viewBoxHeight <= 0 ||
-      svgBounds.width <= 0 ||
-      svgBounds.height <= 0 ||
-      rootBounds.width <= 0 ||
-      rootBounds.height <= 0
-    ) {
-      return;
-    }
-
-    const scaleX = svgBounds.width / viewBoxWidth;
-    const scaleY = svgBounds.height / viewBoxHeight;
-    const contentX = viewBoxX + (rootBounds.left - svgBounds.left) / scaleX;
-    const contentY = viewBoxY + (rootBounds.top - svgBounds.top) / scaleY;
-    const contentWidth = rootBounds.width / scaleX;
-    const contentHeight = rootBounds.height / scaleY;
-    const padding = 8;
-    const normalizedWidth = Math.ceil(contentWidth + padding * 2);
-    const normalizedHeight = Math.ceil(contentHeight + padding * 2);
-
-    // Mermaid 11 在部分 WebView 中会把 foreignObject 文本计入错误的 SVG 边界，
-    // 导致简单图表产生数千像素 viewBox。用已布局的根图形边界回正视口。
-    svgEl.setAttribute(
-      'viewBox',
-      [
-        Math.floor(contentX - padding),
-        Math.floor(contentY - padding),
-        normalizedWidth,
-        normalizedHeight,
-      ].join(' '),
-    );
-    svgEl.setAttribute('width', String(normalizedWidth));
-    svgEl.setAttribute('height', String(normalizedHeight));
-  }
-
-  private openFullscreen(): void {
-    if (this.editing || this.fullscreenOverlayEl) return;
-
-    const renderedContent = this.dom.querySelector<HTMLElement>('.mermaid-block-rendered');
-    if (!renderedContent?.hasChildNodes()) return;
-
-    const overlayEl = document.createElement('div');
-    overlayEl.className = 'mermaid-fullscreen-overlay';
-    overlayEl.setAttribute('role', 'dialog');
-    overlayEl.setAttribute('aria-modal', 'true');
-    overlayEl.setAttribute('aria-label', t.fullscreenDiagramPreview());
-
-    const panelEl = document.createElement('div');
-    panelEl.className = 'mermaid-fullscreen-panel';
-
-    const closeButton = this.createIconButton(
-      'mermaid-fullscreen-close-button',
-      t.closeFullscreenDiagram(),
-      t.close(),
-      'close',
-    );
-    closeButton.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.closeFullscreen();
-    });
-
-    const viewportEl = document.createElement('div');
-    viewportEl.className = 'mermaid-fullscreen-viewport';
-
-    const zoomSurfaceEl = document.createElement('div');
-    zoomSurfaceEl.className = 'mermaid-fullscreen-zoom-surface';
-    zoomSurfaceEl.appendChild(renderedContent.cloneNode(true));
-
-    const zoomBadgeEl = document.createElement('div');
-    zoomBadgeEl.className = 'mermaid-fullscreen-zoom-badge';
-
-    viewportEl.appendChild(zoomSurfaceEl);
-    viewportEl.addEventListener(
-      'wheel',
-      (event) => {
-        this.handleFullscreenWheel(event);
-      },
-      { passive: false },
-    );
-    viewportEl.addEventListener('pointerdown', (event) => this.handleFullscreenPointerDown(event));
-    viewportEl.addEventListener('pointermove', (event) => this.handleFullscreenPointerMove(event));
-    viewportEl.addEventListener('pointerup', (event) => this.finishFullscreenDrag(event));
-    viewportEl.addEventListener('pointercancel', (event) => this.finishFullscreenDrag(event));
-
-    panelEl.append(closeButton, viewportEl, zoomBadgeEl);
-    overlayEl.appendChild(panelEl);
-    overlayEl.addEventListener('click', (event) => {
-      if (event.target === overlayEl) {
-        this.closeFullscreen();
-      }
-    });
-
-    this.fullscreenKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        this.closeFullscreen();
-      }
-    };
-    document.addEventListener('keydown', this.fullscreenKeydown);
-    document.body.appendChild(overlayEl);
-    document.body.classList.add('has-mermaid-fullscreen');
-    this.fullscreenOverlayEl = overlayEl;
-    this.fullscreenViewportEl = viewportEl;
-    this.fullscreenZoomSurfaceEl = zoomSurfaceEl;
-    this.fullscreenZoomBadgeEl = zoomBadgeEl;
-    this.setFullscreenScale(MermaidBlockNodeView.FULLSCREEN_DEFAULT_SCALE);
-
-    requestAnimationFrame(() => {
-      this.centerFullscreenContent();
-      closeButton.focus({ preventScroll: true });
+    this.fullscreenBinding = bindMermaidFullscreen(this.dom, renderedEl, {
+      open: t.fullscreenDiagram(),
+      dialog: t.fullscreenDiagramPreview(),
+      close: t.closeFullscreenDiagram(),
+      zoomIn: t.increaseZoom(),
+      zoomOut: t.decreaseZoom(),
+      reset: t.reset(),
     });
   }
 
   private closeFullscreen(): void {
-    if (this.fullscreenKeydown) {
-      document.removeEventListener('keydown', this.fullscreenKeydown);
-      this.fullscreenKeydown = null;
-    }
-    this.fullscreenOverlayEl?.remove();
-    this.fullscreenOverlayEl = null;
-    this.fullscreenViewportEl = null;
-    this.fullscreenZoomSurfaceEl = null;
-    this.fullscreenZoomBadgeEl = null;
-    this.fullscreenSvgBaseSize = null;
-    this.fullscreenDrag = null;
-    document.body.classList.remove('has-mermaid-fullscreen');
+    this.fullscreenBinding?.close();
   }
 
-  private handleFullscreenWheel(event: WheelEvent): void {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-
-    const viewportEl = this.fullscreenViewportEl;
-    if (!viewportEl) return;
-
-    const oldScale = this.fullscreenScale;
-    const direction = event.deltaY < 0 ? 1 : -1;
-    const nextScale = this.clampFullscreenScale(
-      oldScale + direction * MermaidBlockNodeView.FULLSCREEN_SCALE_STEP,
-    );
-    if (nextScale === oldScale) return;
-
-    const viewportRect = viewportEl.getBoundingClientRect();
-    const pointerX = event.clientX - viewportRect.left;
-    const pointerY = event.clientY - viewportRect.top;
-    const contentX = viewportEl.scrollLeft + pointerX;
-    const contentY = viewportEl.scrollTop + pointerY;
-    const scaleRatio = nextScale / oldScale;
-
-    this.setFullscreenScale(nextScale);
-    viewportEl.scrollLeft = contentX * scaleRatio - pointerX;
-    viewportEl.scrollTop = contentY * scaleRatio - pointerY;
-  }
-
-  private handleFullscreenPointerDown(event: PointerEvent): void {
-    if (event.button !== 0 || !this.fullscreenViewportEl) return;
-    event.preventDefault();
-    this.fullscreenDrag = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: this.fullscreenViewportEl.scrollLeft,
-      scrollTop: this.fullscreenViewportEl.scrollTop,
-    };
-    this.fullscreenViewportEl.classList.add('is-dragging');
-    this.fullscreenViewportEl.setPointerCapture?.(event.pointerId);
-  }
-
-  private handleFullscreenPointerMove(event: PointerEvent): void {
-    if (!this.fullscreenViewportEl || !this.fullscreenDrag) return;
-    if (event.pointerId !== this.fullscreenDrag.pointerId) return;
-    event.preventDefault();
-    this.fullscreenViewportEl.scrollLeft =
-      this.fullscreenDrag.scrollLeft - (event.clientX - this.fullscreenDrag.startX);
-    this.fullscreenViewportEl.scrollTop =
-      this.fullscreenDrag.scrollTop - (event.clientY - this.fullscreenDrag.startY);
-  }
-
-  private finishFullscreenDrag(event: PointerEvent): void {
-    if (!this.fullscreenViewportEl || !this.fullscreenDrag) return;
-    if (event.pointerId !== this.fullscreenDrag.pointerId) return;
-    if (this.fullscreenViewportEl.hasPointerCapture?.(event.pointerId)) {
-      this.fullscreenViewportEl.releasePointerCapture(event.pointerId);
-    }
-    this.fullscreenViewportEl.classList.remove('is-dragging');
-    this.fullscreenDrag = null;
-  }
-
-  private centerFullscreenContent(): void {
-    const viewportEl = this.fullscreenViewportEl;
-    if (!viewportEl) return;
-    viewportEl.scrollLeft = Math.max(0, (viewportEl.scrollWidth - viewportEl.clientWidth) / 2);
-    viewportEl.scrollTop = Math.max(0, (viewportEl.scrollHeight - viewportEl.clientHeight) / 2);
-  }
-
-  private clampFullscreenScale(scale: number): number {
-    return Math.min(
-      MermaidBlockNodeView.FULLSCREEN_MAX_SCALE,
-      Math.max(MermaidBlockNodeView.FULLSCREEN_MIN_SCALE, scale),
-    );
-  }
-
-  private setFullscreenScale(scale: number): void {
-    this.fullscreenScale = this.clampFullscreenScale(scale);
-
-    const roundedScale = Number(this.fullscreenScale.toFixed(2));
-    this.applyFullscreenSvgScale(roundedScale);
-    if (this.fullscreenZoomBadgeEl) {
-      this.fullscreenZoomBadgeEl.textContent = `${Math.round(roundedScale * 100)}%`;
-    }
-  }
-
-  private applyFullscreenSvgScale(scale: number): void {
-    const svgEl = this.fullscreenZoomSurfaceEl?.querySelector<SVGElement>('svg');
-    if (!svgEl) return;
-
-    const baseSize = this.fullscreenSvgBaseSize ?? this.readSvgIntrinsicSize(svgEl);
-    if (!baseSize) return;
-
-    this.fullscreenSvgBaseSize = baseSize;
-    svgEl.setAttribute('width', String(Math.ceil(baseSize.width * scale)));
-    svgEl.setAttribute('height', String(Math.ceil(baseSize.height * scale)));
-  }
-
-  private readSvgIntrinsicSize(svgEl: SVGElement): { width: number; height: number } | null {
-    const viewBox = svgEl.getAttribute('viewBox');
-    if (viewBox) {
-      const [, , width, height] = viewBox
-        .trim()
-        .split(/\s+/)
-        .map((value) => Number.parseFloat(value));
-      if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-        return { width, height };
-      }
-    }
-
-    const width = Number.parseFloat(svgEl.getAttribute('width') ?? '');
-    const height = Number.parseFloat(svgEl.getAttribute('height') ?? '');
-    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-      return { width, height };
-    }
-
-    return null;
-  }
-
-  private createIconButton(
-    className: string,
-    ariaLabel: string,
-    title: string,
-    icon: 'maximize' | 'close',
-  ): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = className;
-    button.setAttribute('aria-label', ariaLabel);
-    button.title = title;
-    button.innerHTML =
-      icon === 'maximize'
-        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"/><path d="M21 3l-7 7"/><path d="M9 21H3v-6"/><path d="M3 21l7-7"/></svg>'
-        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-    return button;
+  private disposeFullscreen(): void {
+    this.fullscreenBinding?.dispose();
+    this.fullscreenBinding = null;
   }
 
   private getTheme(): MermaidThemeDefinition {

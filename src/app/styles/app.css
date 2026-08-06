@@ -1,6 +1,7 @@
 @import './app-layout.css';
 @import './app-chrome.css';
 @import './editor-document.css';
+@import '../../lib/services/mermaidDiagramView.css';
 @import './editor-table-controls.css';
 @import './editor-source.css';
 @import './editor-toc.css';

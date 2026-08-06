@@ -3,14 +3,31 @@ import MarkdownIt from 'markdown-it';
 import Token from 'markdown-it/lib/token.mjs';
 import { transformCalloutTokens } from '../lib/editor-core/callout/calloutParser';
 import { normalizeLinkHref } from '../lib/editor-core/link';
+import { createMermaidDiagramRenderer } from '../lib/services/mermaidDiagramRenderer';
+import {
+  bindMermaidFullscreen,
+  normalizeMermaidSvgSize,
+  normalizeRenderedMermaidViewport,
+  type MermaidFullscreenBinding,
+} from '../lib/services/mermaidDiagramView';
+import type { DiagramRenderer } from '../lib/services/render';
+import type { AppearancePreferences, MermaidThemeDefinition } from '../lib/theme/types';
+import { applyResolvedTheme, resolveTheme } from '../app/services/themeManager';
 
+/** Quick Look 渲染器可选的文件上下文，用于标题展示和相对资源解析。 */
 export interface QuickLookPreviewOptions {
+  /** 原始文档文件名；缺失或仅含空白时使用通用的 Markdown Preview 标题。 */
   fileName?: string;
+  /** 原始文档父目录的绝对路径；缺失时不解析相对图片路径。 */
   documentDirectory?: string;
 }
 
+/** 原生 Quick Look 扩展传给内嵌渲染器的完整数据。 */
 export interface QuickLookPreviewPayload extends QuickLookPreviewOptions {
+  /** 待渲染的完整 Markdown UTF-8 文本；允许空字符串。 */
   markdown: string;
+  /** Nomo 原生配置中的外观偏好；配置不可读时缺失并回退到系统明暗模式。 */
+  appearance?: Partial<AppearancePreferences>;
 }
 
 const CALLOUT_LABELS: Record<string, string> = {
@@ -90,6 +107,105 @@ type QuickLookBlockState = {
   push(type: string, tag: string, nesting: number): Token;
 };
 
+/**
+ * 将主应用保存的外观偏好应用到 Quick Look 文档根节点。
+ *
+ * 颜色和样式 token 仍由 Nomo 的主题注册表解析，本函数不维护第二套 Quick Look 主题。
+ * 当偏好缺失时按系统明暗模式解析默认主题，确保正文和 Mermaid 使用同一有效主题。
+ *
+ * @param appearance 主应用配置中的主题模式、颜色主题和文档样式；允许缺失。
+ * @param root 接收主题 dataset 与 CSS 变量的文档根节点；默认使用当前页面根节点。
+ * @returns 已应用到根节点的完整解析主题，包含 Mermaid 对应主题配置。
+ */
+export function applyQuickLookAppearance(
+  appearance: Partial<AppearancePreferences> | undefined,
+  root: HTMLElement = document.documentElement,
+) {
+  const resolved = resolveTheme(appearance ?? {});
+  return applyResolvedTheme(resolved, { root });
+}
+
+/**
+ * 将 Quick Look 正文中的 Mermaid 占位块异步替换为 SVG 图表。
+ *
+ * 每个图表使用主应用的 Mermaid renderer 和当前颜色主题。单个图表语法错误不会阻断其他图表；
+ * 失败块会显示错误及原始源码，避免静默丢失文档内容。
+ *
+ * @param root 已插入 Markdown HTML 的 Quick Look 根节点。
+ * @param theme 当前解析主题携带的 Mermaid 配置。
+ * @param renderer Mermaid 渲染器；默认复用主应用实现，测试可注入确定性实现。
+ * @returns 所有成功图表的放大查看器绑定；调用方替换预览内容前必须逐个 `dispose()`。
+ */
+export async function renderQuickLookMermaidBlocks(
+  root: HTMLElement,
+  theme: MermaidThemeDefinition,
+  renderer: DiagramRenderer = createMermaidDiagramRenderer(),
+): Promise<MermaidFullscreenBinding[]> {
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid-block'));
+  const bindings = await Promise.all(
+    blocks.map(async (block): Promise<MermaidFullscreenBinding | null> => {
+      const target = block.querySelector<HTMLElement>('.mermaid-block-rendered');
+      const source = block.querySelector<HTMLElement>('.mermaid-block-source code');
+      if (!target || !source) return null;
+
+      const code = source.textContent?.replace(/\n$/, '') ?? '';
+      if (!code.trim()) {
+        showMermaidError(block, target, 'Mermaid 图表内容为空');
+        return null;
+      }
+
+      try {
+        const result = await renderer.renderMermaid(code, { theme });
+        if (!result.svg) {
+          showMermaidError(block, target, result.error || 'Mermaid 渲染失败');
+          return null;
+        }
+        target.innerHTML = normalizeMermaidSvgSize(result.svg);
+        block.classList.remove('is-pending', 'is-error');
+        block.classList.add('is-rendered');
+        normalizeRenderedMermaidViewport(target);
+        return bindMermaidFullscreen(block, target, {
+          open: '放大查看图表',
+          dialog: '图表放大预览',
+          close: '关闭图表预览',
+          zoomIn: '放大',
+          zoomOut: '缩小',
+          reset: '重置缩放',
+        });
+      } catch (error) {
+        showMermaidError(
+          block,
+          target,
+          error instanceof Error ? error.message : 'Mermaid 渲染失败',
+        );
+      }
+      return null;
+    }),
+  );
+  return bindings.filter((binding): binding is MermaidFullscreenBinding => binding !== null);
+}
+
+/**
+ * 将 Mermaid 块切换到可诊断的失败状态，并保留源码供用户查看。
+ *
+ * @param block 当前 Mermaid 图表外壳。
+ * @param target 原本承载 SVG 的状态区域。
+ * @param message Mermaid 返回或捕获到的错误信息；通过 `textContent` 写入，不能注入 HTML。
+ * @returns 无返回值；副作用是更新块状态类和错误文本。
+ */
+function showMermaidError(block: HTMLElement, target: HTMLElement, message: string): void {
+  target.textContent = `Mermaid 渲染失败：${message}`;
+  block.classList.remove('is-pending', 'is-rendered');
+  block.classList.add('is-error');
+}
+
+/**
+ * 将 Markdown 渲染为经过安全过滤的 Quick Look 正文外壳。
+ *
+ * @param markdown 完整 Markdown 源文；允许空字符串。
+ * @param options 文件名和父目录上下文；缺失时使用通用标题且不解析相对资源。
+ * @returns 可直接写入 Quick Look 根节点的 HTML 字符串。
+ */
 export function renderMarkdownPreview(markdown: string, options: QuickLookPreviewOptions = {}) {
   const title = escapeHtml(options.fileName?.trim() || 'Markdown Preview');
   const sanitizedBody = renderMarkdownPreviewBody(markdown, options);
@@ -197,13 +313,13 @@ function createQuickLookMarkdownIt() {
     const code = escapeHtml(token.content.replace(/\n$/, ''));
 
     if (language === 'mermaid') {
-      return `<figure class="mermaid-block"><figcaption>Mermaid</figcaption><pre><code>${code}</code></pre></figure>`;
+      return `<figure class="mermaid-block is-pending"><figcaption>Mermaid</figcaption><div class="mermaid-block-rendered">正在渲染图表…</div><pre class="mermaid-block-source"><code>${code}</code></pre></figure>`;
     }
 
     return `<figure class="code-card"><figcaption>${escapeHtml(language)}</figcaption><pre><code class="language-${escapeHtml(language)}">${code}</code></pre></figure>`;
   };
 
-  md.renderer.rules.link_open = (tokens, index, options, env, self) => {
+  md.renderer.rules.link_open = (tokens, index, options, _env, self) => {
     const token = tokens[index];
     const href = normalizeLinkHref(token.attrGet('href'));
     if (!href) {
@@ -215,7 +331,7 @@ function createQuickLookMarkdownIt() {
     token.attrSet('rel', 'noreferrer noopener');
     return self.renderToken(tokens, index, options);
   };
-  md.renderer.rules.link_close = (tokens, index, options, env, self) => {
+  md.renderer.rules.link_close = (tokens, index, options, _env, self) => {
     const previousOpen = findPreviousOpenToken(tokens, index, 'link_open');
     if (previousOpen && (previousOpen.attrs?.length ?? 0) === 0) {
       return '</span>';
@@ -287,7 +403,10 @@ function parseMathInline(state: QuickLookInlineState, silent: boolean) {
   }
   if (end >= src.length || end === pos + 1) return false;
 
-  const tex = src.slice(pos + 1, end).trim().replace(/\\\$/g, '$');
+  const tex = src
+    .slice(pos + 1, end)
+    .trim()
+    .replace(/\\\$/g, '$');
   if (!tex) return false;
 
   if (!silent) {

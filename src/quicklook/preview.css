@@ -1,3 +1,5 @@
+@import '../lib/services/mermaidDiagramView.css';
+
 :root {
   color-scheme: light;
   --md-editor-bg: #f6f7f9;
@@ -32,8 +34,7 @@
   --md-editor-radius-md: 8px;
   --md-editor-font-body:
     ui-serif, 'Songti SC', 'STSong', 'Times New Roman', 'Microsoft YaHei', serif;
-  --md-editor-font-mono:
-    'SF Mono', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  --md-editor-font-mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
   --md-editor-font-size: 16px;
   --md-editor-line-height: 1.72;
 }
@@ -76,6 +77,10 @@ body,
 .quicklook-root {
   min-height: 100%;
   margin: 0;
+}
+
+html {
+  background: var(--md-editor-document-bg);
 }
 
 body {
@@ -342,11 +347,49 @@ body {
 }
 
 .code-card code,
-.mermaid-block code {
+.mermaid-block-source code {
   display: block;
   min-width: max-content;
   padding: 13px 15px;
   white-space: pre;
+}
+
+.mermaid-block-rendered {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  overflow: auto;
+  padding: 18px;
+  background: var(--md-editor-surface);
+  color: var(--md-editor-muted-fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.mermaid-block-rendered svg {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  background: transparent;
+}
+
+.mermaid-block-source {
+  display: none;
+}
+
+.mermaid-block.is-error .mermaid-block-rendered {
+  min-height: 0;
+  place-items: start;
+  color: var(--md-editor-warning);
+  font-family: var(--md-editor-font-mono);
+  white-space: pre-wrap;
+}
+
+.mermaid-block.is-error .mermaid-block-source {
+  display: block;
+  border-top: 1px solid var(--md-editor-code-border);
 }
 
 .task-list-item {

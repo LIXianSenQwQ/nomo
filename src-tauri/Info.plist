@@ -4,6 +4,14 @@
 <plist version="1.0">
 <dict>
   <!--
+    明确声明内嵌扩展，使 App 首次被 LaunchServices 注册（通常是安装后首次启动）时交给 PlugInKit 扫描。
+    注册必须以最终安装路径为准；主应用不主动执行 pluginkit，避免构建目录和安装目录重复登记。
+  -->
+  <key>CFBundlePlugIns</key>
+  <array>
+    <string>Contents/PlugIns/NomoQuickLookPreview.appex</string>
+  </array>
+  <!--
     Tauri v2 会把本文件合并进生成的 Info.plist。
     这里导出 net.daringfireball.markdown UTI，让系统知道 .md 文件的类型归属，
     Quick Look 扩展（NomoQuickLookPreview.appex）的 QLSupportedContentTypes 才能匹配上。

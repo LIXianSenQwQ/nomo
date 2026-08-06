@@ -1,4 +1,5 @@
 import Cocoa
+import Darwin
 import QuickLookUI
 import WebKit
 
@@ -7,9 +8,12 @@ import WebKit
 /// 控制器由系统扩展进程通过 `NSExtensionPrincipalClass` 创建；渲染期间只读取传入文件，
 /// 不写入源文件或扩展 bundle。无法生成预览时会在面板内显示错误页，而不是让扩展进程退出。
 @objc(PreviewViewController)
-final class PreviewViewController: NSViewController, QLPreviewingController {
+final class PreviewViewController: NSViewController, QLPreviewingController, WKNavigationDelegate {
     /// 承载预览页面的非持久化 WebView；在 `loadView()` 中初始化，并随控制器视图生命周期释放。
     private var webView: WKWebView!
+
+    /// 等待静态渲染页接收的结构化预览数据；页面提交后立即清空，避免跨文档保留完整正文。
+    private var pendingPayload: [String: Any]?
 
     /// 创建铺满 Quick Look 面板的非持久化 WebView 视图层级。
     ///
@@ -23,8 +27,8 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         configuration.websiteDataStore = .nonPersistent()
 
         let previewWebView = WKWebView(frame: .zero, configuration: configuration)
+        previewWebView.navigationDelegate = self
         previewWebView.translatesAutoresizingMaskIntoConstraints = false
-        previewWebView.setValue(false, forKey: "drawsBackground")
         rootView.addSubview(previewWebView)
 
         NSLayoutConstraint.activate([
@@ -57,12 +61,12 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
 
     /// 加载 Markdown 文件并渲染预览。
     ///
-    /// 渲染器是构建期内联好的单文件 HTML（见 vite.quicklook.config.ts），
-    /// 因此这里只需把预览数据注入占位符后用 loadHTMLString 加载，
-    /// 不需要也不能改写扩展自身 bundle 内的资源（沙盒只读，且会破块代码签名）。
+    /// 渲染器是构建期内联好的单文件 HTML（见 vite.quicklook.config.ts）。静态页面直接从签名后的
+    /// bundle 加载，Markdown 则在导航完成后通过 WebKit 的结构化参数桥传入，避免把大正文和约 1.8 MB
+    /// 渲染器拼成一份 HTML 字符串而触发 `loadHTMLString` 的内存峰值或内容截断。
     ///
     /// - Parameter url: Quick Look 传入的待预览 Markdown 文件 URL（沙盒内只读）。
-    /// - Throws: 文件读取失败、渲染资源缺失或数据编码失败时抛出。
+    /// - Throws: 文件读取失败、渲染资源缺失或 WebKit 拒绝创建导航时抛出。
     private func loadMarkdownPreview(for url: URL) throws {
         let markdown = try String(contentsOf: url, encoding: .utf8)
 
@@ -76,37 +80,145 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
             throw PreviewError.rendererMissing
         }
 
-        let htmlTemplate = try String(contentsOf: rendererIndexUrl, encoding: .utf8)
-        let payload = try makePreviewPayload(markdown: markdown, fileUrl: url)
-
-        let hydratedHtml = htmlTemplate.replacingOccurrences(
-            of: "window.__NOMO_QUICKLOOK_PAYLOAD__ = null;",
-            with: "window.__NOMO_QUICKLOOK_PAYLOAD__ = \(payload);"
-        )
-
-        // 单文件 HTML 无外部资源依赖，baseURL 传 nil；
-        // 代价是 Markdown 里引用的本地相对路径图片无法加载（沙盒未授权访问文件目录）
-        webView.loadHTMLString(hydratedHtml, baseURL: nil)
+        pendingPayload = makePreviewPayload(markdown: markdown, fileUrl: url)
+        let rendererDirectory = rendererIndexUrl.deletingLastPathComponent()
+        guard webView.loadFileURL(rendererIndexUrl, allowingReadAccessTo: rendererDirectory) != nil else {
+            pendingPayload = nil
+            throw PreviewError.rendererNavigationFailed
+        }
     }
 
-    /// 将文档内容和文件上下文编码为可直接嵌入 JavaScript 的 JSON。
+    /// 组装要通过 WebKit 结构化参数桥传输的文档数据和文件上下文。
     ///
     /// - Parameters:
     ///   - markdown: 完整 Markdown 源文；允许空字符串。
     ///   - fileUrl: 当前文档 URL，用于提供文件名和父目录上下文，不会在此方法中读取文件。
-    /// - Returns: UTF-8 JSON 对象文本，可替换渲染器中的 payload 占位符。
-    /// - Throws: JSON 序列化失败或结果无法转换为 UTF-8 字符串时抛出。
-    private func makePreviewPayload(markdown: String, fileUrl: URL) throws -> String {
-        let payload: [String: String] = [
+    /// - Returns: 只包含 Foundation/WebKit 可桥接值的字典；主题不可读时省略 `appearance`。
+    private func makePreviewPayload(markdown: String, fileUrl: URL) -> [String: Any] {
+        var payload: [String: Any] = [
             "markdown": markdown,
             "fileName": fileUrl.lastPathComponent,
             "documentDirectory": fileUrl.deletingLastPathComponent().path,
         ]
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [])
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw PreviewError.payloadEncodingFailed
+        do {
+            if let appearance = try readAppearancePreferences() {
+                payload["appearance"] = appearance
+            }
+        } catch {
+            // 主题配置不可读不应阻断正文预览；保留系统明暗模式回退，并在统一日志中暴露原因。
+            NSLog("Nomo Quick Look could not read appearance preferences: %@", String(describing: error))
         }
-        return json
+
+        return payload
+    }
+
+    /// 在静态渲染页加载完成后，通过 WebKit 参数桥交付正文并触发前端渲染。
+    ///
+    /// - Parameters:
+    ///   - webView: 已完成主文档导航的 Quick Look WebView。
+    ///   - navigation: 本次完成的导航对象；仅作为 `WKNavigationDelegate` 回调上下文。
+    /// - Returns: 无返回值；交付成功或失败后都会清空待处理数据。
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let payload = pendingPayload else { return }
+        pendingPayload = nil
+        webView.callAsyncJavaScript(
+            """
+            if (typeof window.__NOMO_RENDER_QUICKLOOK__ !== 'function') {
+              throw new Error('Quick Look renderer bridge is unavailable');
+            }
+            window.__NOMO_RENDER_QUICKLOOK__(payload);
+            """,
+            arguments: ["payload": payload],
+            in: nil,
+            in: .page,
+            completionHandler: { [weak self] result in
+                if case let .failure(error) = result {
+                    self?.loadErrorPreview(error)
+                }
+            }
+        )
+    }
+
+    /// 在静态渲染页导航失败时显示可见错误，并释放尚未交付的完整 Markdown 数据。
+    ///
+    /// - Parameters:
+    ///   - webView: 导航失败的 Quick Look WebView。
+    ///   - navigation: 失败的导航对象；可能为空。
+    ///   - error: WebKit 提供的具体导航错误。
+    /// - Returns: 无返回值；副作用是清空待处理数据并展示错误页。
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        pendingPayload = nil
+        loadErrorPreview(error)
+    }
+
+    /// 在静态渲染页提交前失败时显示可见错误，并释放尚未交付的完整 Markdown 数据。
+    ///
+    /// - Parameters:
+    ///   - webView: 临时导航失败的 Quick Look WebView。
+    ///   - navigation: 失败的导航对象；可能为空。
+    ///   - error: WebKit 提供的具体导航错误。
+    /// - Returns: 无返回值；副作用是清空待处理数据并展示错误页。
+    func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        pendingPayload = nil
+        loadErrorPreview(error)
+    }
+
+    /// 从 Nomo 原生配置中读取 Quick Look 所需的外观偏好。
+    ///
+    /// 扩展只读取主应用配置中的三个主题标识，颜色与样式 token 仍由内嵌前端的同一主题注册表解析。
+    /// 精确的只读沙盒例外由扩展 entitlements 限定到 Nomo 的 Application Support 目录。
+    ///
+    /// - Returns: 至少包含一个有效字符串设置时返回外观偏好字典；配置尚未包含主题设置时返回 `nil`。
+    /// - Throws: 无法定位用户主目录、读取配置或解析配置 JSON 时抛出。
+    private func readAppearancePreferences() throws -> [String: String]? {
+        let configUrl = try resolveUserHomeDirectory()
+            .appendingPathComponent("Library/Application Support/com.nomo.desktop", isDirectory: true)
+            .appendingPathComponent("config.json", isDirectory: false)
+        let data = try Data(contentsOf: configUrl)
+        guard
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let app = root["app"] as? [String: Any],
+            let settings = app["settings"] as? [String: Any]
+        else {
+            throw PreviewError.appearanceConfigurationMalformed
+        }
+
+        var appearance: [String: String] = [:]
+        for key in ["themeMode", "colorThemeId", "documentStyleId"] {
+            guard
+                let record = settings[key] as? [String: Any],
+                let encodedValue = record["value_json"] as? String,
+                let encodedData = encodedValue.data(using: .utf8),
+                let value = try JSONSerialization.jsonObject(with: encodedData) as? String
+            else {
+                continue
+            }
+            appearance[key] = value
+        }
+        return appearance.isEmpty ? nil : appearance
+    }
+
+    /// 获取 App Sandbox 容器外的真实用户主目录。
+    ///
+    /// Foundation 的 home-directory API 在沙盒扩展中可能返回扩展容器目录，无法与
+    /// home-relative 临时只读例外对应。POSIX 账户记录保留真实主目录，且本方法只用于
+    /// 拼接固定的 Nomo 配置相对路径，不接受文档内容或其他外部输入。
+    ///
+    /// - Returns: 当前有效用户的绝对主目录 URL，已按目录语义创建。
+    /// - Throws: 账户记录缺失、主目录不是有效 UTF-8 或返回空路径时抛出 `userHomeUnavailable`。
+    private func resolveUserHomeDirectory() throws -> URL {
+        guard
+            let passwordEntry = getpwuid(getuid()),
+            let homePath = String(validatingUTF8: passwordEntry.pointee.pw_dir),
+            !homePath.isEmpty
+        else {
+            throw PreviewError.userHomeUnavailable
+        }
+        return URL(fileURLWithPath: homePath, isDirectory: true)
     }
 
     /// 在当前 WebView 中显示经过 HTML 转义的预览错误。
@@ -135,15 +247,21 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
 /// Quick Look 渲染准备阶段可向内部调用方报告的确定性错误。
 private enum PreviewError: Error, CustomStringConvertible {
     case rendererMissing
-    case payloadEncodingFailed
+    case rendererNavigationFailed
+    case userHomeUnavailable
+    case appearanceConfigurationMalformed
 
     /// 面向 Quick Look 用户的简短中文错误说明，不包含文件内容或路径等敏感信息。
     var description: String {
         switch self {
         case .rendererMissing:
             return "Quick Look 渲染资源缺失"
-        case .payloadEncodingFailed:
-            return "Markdown 预览数据编码失败"
+        case .rendererNavigationFailed:
+            return "Quick Look 渲染页加载失败"
+        case .userHomeUnavailable:
+            return "无法定位用户主目录"
+        case .appearanceConfigurationMalformed:
+            return "Nomo 外观配置格式无效"
         }
     }
 }
