@@ -20,7 +20,7 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 前端入口挂载 | `src/main.ts` | `src/app/services/themeManager.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte` | 添加新入口视图、主题启动快照或全局样式加载 |
-| Windows 原生窗口 chrome | `src-tauri/src/window/os/windows/titlebar.rs` | `src/app/services/windowChrome.ts`, `src/app/services/platform.ts`, `src/app/styles/window-chrome.css`, `src/app/components/AppTitleBar.svelte` | 修改 DWM 标题栏覆盖、系统按钮安全区、DPI/全屏刷新或标准标题栏回退 |
+| Windows 自绘窗口 chrome | `src/app/components/WindowsCaptionControls.svelte` | `src/app/components/AppTitleBar.svelte`, `src/app/components/SettingsWindow.svelte`, `src/app/services/platform.ts`, `src-tauri/tauri.windows.conf.json`, `src-tauri/src/window/os/windows.rs` | 修改 Windows 自绘按钮、无边框窗口或标题栏布局 |
 | 应用装配中心 | `src/app/App.svelte` | 所有 service、editor-core、组件 | 标签页/文件系统/编辑器之间的协调逻辑变更 |
 | 桌面窗口生命周期 | `src/app/services/desktopWindow.ts` | `src-tauri/src/window/` | 窗口事件、关闭行为、托盘交互变更 |
 | Rust 后端入口 | `src-tauri/src/lib.rs` | `src-tauri/src/main.rs` | 新增 IPC 命令、插件、窗口事件 |
@@ -218,7 +218,7 @@
 | 系统托盘 | `src-tauri/src/window/tray.rs` | `src-tauri/src/window/commands.rs` | 托盘安装/刷新/关闭到托盘 |
 | 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 | Windows 文件关联 | `src-tauri/src/window/file_association.rs` | — | 注册/注销默认打开方式和右键菜单 |
-| 平台适配 | `src-tauri/src/window/os/macos.rs`, `os/windows.rs` | `src-tauri/src/window/os/mod.rs`, `src-tauri/src/window/os/windows/titlebar.rs` | macOS/Windows 窗口行为差异与 Windows 原生 chrome |
+| 平台适配 | `src-tauri/src/window/os/macos.rs`, `os/windows.rs` | `src-tauri/src/window/os/mod.rs` | macOS/Windows 窗口行为差异与 Windows 无边框/阴影设置 |
 | 外部链接安全 | `src-tauri/src/external_link.rs` | — | 打开外部链接/文件管理器定位 |
 | 配置命令 IPC | `src-tauri/src/config/commands.rs` | `src-tauri/src/config/mod.rs` | 设置读写/最近文件/快照/应用设置 IPC |
 | 窗口命令 IPC | `src-tauri/src/window/commands.rs` | `src-tauri/src/window/menu.rs`, `src-tauri/src/window/tray.rs` | 窗口状态保存/设置窗口/菜单安装/强制关闭 IPC |
@@ -233,6 +233,7 @@
 | 空工作区 | `src/app/components/EmptyWorkspace.svelte` | — | 无文档时的新建/打开引导 |
 | 文件夹打开对话框 | `src/app/components/FolderOpenDialog.svelte` | `src/app/services/folderExplorerController.ts` | 打开文件夹窗口选择 UI |
 | 链接快速编辑器 | `src/app/components/LinkQuickEditor.svelte` | `src/lib/editor-core/plugins/linkInteraction.ts` | 链接文字/地址编辑弹出层 |
+| Windows 窗口控制按钮 | `src/app/components/WindowsCaptionControls.svelte` | `AppTitleBar.svelte`, `SettingsWindow.svelte`, `src/app/services/platform.ts` | 最小化、最大化/还原、关闭/返回按钮及状态同步 |
 
 ### Svelte Actions
 
@@ -256,7 +257,6 @@
 - 全局样式（theme.css, global.css）加载
 - KaTeX 和 ProseMirror 样式在 main 视图下按需加载
 - 安装全局滚动条显隐交互并在卸载时清理监听器
-- 安装 Windows 原生标题栏按钮安全区同步并在卸载时清理监听器
 
 **Does not own:**
 - 不拥有具体业务组件逻辑（委派给 App.svelte / SettingsWindow.svelte）
@@ -264,7 +264,7 @@
 
 **Called by:** `index.html`
 
-**Depends on:** `src/app/services/themeManager.ts`, `src/app/services/scrollbarVisibility.ts`, `src/app/services/windowChrome.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
+**Depends on:** `src/app/services/themeManager.ts`, `src/app/services/scrollbarVisibility.ts`, `src/app/App.svelte`, `src/app/components/SettingsWindow.svelte`, `src/lib/services/logger.ts`
 
 **Change this when:**
 - 添加新的入口视图
@@ -417,6 +417,7 @@
 - 加载/保存 `AppPreferences`
 - 提供明暗模式分段控制、内置主题颜色/造型预览卡片、即时跨窗口预览与防抖保存
 - 软件更新、文件关联、右键菜单、图片上传配置等设置项交互
+- Windows 设置窗口标题栏与共享自绘窗口按钮的接入
 
 **Does not own:**
 - 不拥有设置持久化后端逻辑（通过 settings.ts）
@@ -424,7 +425,7 @@
 
 **Called by:** `src/main.ts`（当 `view=settings` 时）
 
-**Depends on:** `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/app/services/softwareUpdate.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`
+**Depends on:** `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/app/services/softwareUpdate.ts`, `src/lib/desktop/tauriStorage.ts`, `src/app/i18n.ts`, `WindowsCaptionControls.svelte`
 
 **Change this when:**
 - 添加新的设置项 UI
@@ -519,18 +520,18 @@
 **Kind:** component
 
 **Owns:**
-- Nomo 标题栏内容与 Windows 应用内菜单（文件、编辑、段落、格式、查看、设置）；窗口控制按钮由系统绘制。
+- Nomo 标题栏内容、Windows 应用内菜单及共享自绘窗口按钮的接入。
 - 将菜单点击转换为应用命令或调用传入的业务处理函数。
-- Markdown 小窗的文件名、冲突/只读状态、置顶和返回按钮，以及覆盖整行的原生拖动区域。
+- Markdown 小窗的文件名、冲突/只读状态、置顶和返回按钮，以及覆盖整行的单一路径拖动区域。
 
 **Does not own：**
 - 不拥有具体业务逻辑（由 App.svelte 通过 props 注入）。
 - 不拥有 macOS 原生菜单（在 Rust `window/menu.rs` 中）。
-- 不拥有 Windows DWM frame、系统按钮和按钮安全区测量。
+- 不拥有 Windows 无边框窗口、阴影与缩放边界（由 Tauri/Tao 及 `os/windows.rs` 负责）。
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `src/app/i18n.ts`, `src/app/services/platform.ts`, `@lucide/svelte`
+**Depends on:** `src/app/i18n.ts`, `src/app/services/platform.ts`, `WindowsCaptionControls.svelte`, `@lucide/svelte`
 
 **Change this when：**
 - 添加/移除自定义标题栏菜单项。
@@ -541,6 +542,31 @@
 - 修改菜单命令后端处理逻辑。
 
 **Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src/app/components/WindowsCaptionControls.svelte`
+
+**Kind:** component
+
+**Owns:**
+- Windows 自绘最小化、最大化/还原和关闭/返回按钮。
+- 当前窗口最大化状态查询、resize 后图标同步和监听器清理。
+- Windows 风格 hover、active、focus 与关闭按钮危险态样式。
+
+**Does not own:**
+- 不决定关闭业务；关闭或返回操作始终调用父组件传入的 `onClose`。
+- 不拥有窗口拖动、原生阴影、缩放边界或 Snap 行为。
+
+**Called by:** `AppTitleBar.svelte`, `SettingsWindow.svelte`
+
+**Depends on:** `@tauri-apps/api/window`, `src/app/i18n.ts`, `src/lib/services/logger.ts`
+
+**Change this when:** 修改 Windows 窗口按钮行为、图标、状态同步或交互样式。
+
+**Related tests:** `src/app/App.layout.test.ts`
 
 **Confidence:** high
 
@@ -2033,7 +2059,7 @@
 
 **Owns:**
 - 平台检测（macOS / Windows / Linux）
-- `PlatformCapabilities` 计算：窗口 chrome 模式、原生控件、Windows overlay 与应用内菜单能力
+- `PlatformCapabilities` 计算：Windows 自绘标题栏、窗口装饰与应用内菜单能力
 
 **Does not own:**
 - 不拥有具体窗口操作（在 desktopWindow.ts 中）
@@ -2047,34 +2073,6 @@
 - 修改窗口 chrome 模式判断
 
 **Related tests:** `src/app/services/platform.test.ts`
-
-**Confidence:** high
-
----
-
-### `src/app/services/windowChrome.ts`
-
-**Kind:** service
-
-**Owns:**
-- Windows Tauri 当前窗口的原生按钮左右安全区与标题栏高度同步
-- `<html>` chrome 状态、CSS inset 变量及原生窗口监听器清理
-- resize、DPI 与 `nomo://window-chrome-changed` 高频事件合并查询
-- 原生 metrics 查询前的保守安全区和标准标题栏回退状态
-
-**Does not own:**
-- 不拥有 Win32 subclass、DWM frame、系统按钮绘制或命中测试
-- 不拥有标题栏、设置项、菜单、浮层或正文内部边框
-
-**Called by:** `src/main.ts`
-
-**Depends on:** `src/app/services/platform.ts`, `src/lib/desktop/tauriStorage.ts`, `src/lib/services/logger.ts`, `@tauri-apps/api/core`, `@tauri-apps/api/window`
-
-**Change this when:**
-- 修改 Windows 原生按钮安全区、metrics 刷新事件或 DOM chrome 状态
-- 修改 pending/overlay/standard 三种前端布局回退规则
-
-**Related tests:** —
 
 **Confidence:** high
 
@@ -3054,8 +3052,8 @@
 **Kind:** service
 
 **Owns:**
-- 窗口相关 IPC 命令：常规窗口状态更新、设置窗口、菜单、授权关闭、原生 chrome metrics，以及 Markdown 小窗进入/返回/置顶
-- 隐藏文档窗口完成原生 chrome 与几何初始化后的显示时机
+- 窗口相关 IPC 命令：常规窗口状态更新、设置窗口、菜单、授权关闭，以及 Markdown 小窗进入/返回/置顶
+- 隐藏文档窗口完成无边框样式与几何初始化后的显示时机
 
 **Does not own:**
 - 不拥有窗口状态持久化逻辑（在 window/state.rs 中）
@@ -3082,7 +3080,6 @@
 - 普通窗口与 Markdown 小窗的位置、尺寸和最大化状态持久化
 - 进入小窗前的运行时窗口快照，以及返回普通模式时的几何恢复
 - 小窗最小尺寸、置顶、任务栏可见性与目标屏幕边界约束
-- Markdown 小窗 34px 与普通窗口 42px 的原生 caption 高度切换通知
 
 **Does not own:**
 - 不拥有前端小窗内容和标题栏 UI
@@ -3101,26 +3098,24 @@
 
 ---
 
-### `src-tauri/src/window/os/windows/titlebar.rs`
+### `src-tauri/src/window/os/windows.rs`
 
-**Kind:** Windows native window adapter
+**Kind:** Windows platform adapter
 
 **Owns:**
-- 幂等安装与清理 Win32 `SetWindowSubclass`
-- DWM custom frame 扩展、系统 caption button 命中与 DPI 感知顶部缩放命中
-- 最大化工作区边距、沉浸式明暗主题和标准装饰回退
-- `DWMWA_CAPTION_BUTTON_BOUNDS` 到逻辑像素左右安全区的测量
+- 校验 Windows 窗口是否已按平台配置创建为无装饰窗口，并在配置漂移时兜底关闭装饰、保留系统阴影。
+- 读取 Windows 应用主题，以及外部打开时将窗口带到前台。
 
 **Does not own:**
-- 不拥有 Nomo 标题栏内容、菜单或 CSS 布局
-- 不拥有窗口几何持久化与文档关闭确认
+- 不拥有前端自绘按钮、标题栏布局或关闭业务。
+- 不复制 Tao 已负责的缩放命中、最大化工作区和普通 Snap 行为。
 
-**Called by:** `src-tauri/src/window/os/windows.rs`
+**Called by:** `src-tauri/src/window/os/mod.rs`
 
-**Depends on:** Win32 DWM、HiDPI、Common Controls subclass 与 WindowsAndMessaging API
+**Depends on:** `src-tauri/tauri.windows.conf.json`、Tauri window API、Windows Registry 与 WindowsAndMessaging API
 
 **Change this when:**
-- 修改 Windows non-client frame、系统按钮、缩放命中、DPI 或原生 chrome 回退行为
+- 修改 Windows 无边框、阴影、系统主题或窗口前置行为。
 
 **Related tests:** `src/app/App.layout.test.ts`（源码接线断言）；真实行为需 Windows 实窗验证
 
@@ -3157,7 +3152,7 @@
 
 **Owns:**
 - 桌面窗口关闭、退出与设置窗口打开操作
-- 新窗口创建时的 chrome 选项（macOS overlay / Windows native overlay）及 Windows 隐藏初始化
+- 新窗口创建时的 chrome 选项（macOS overlay / Windows 无装饰）及 Windows 隐藏初始化
 - Markdown 小窗进入、返回和置顶 IPC 的前端适配
 
 **Does not own:**
