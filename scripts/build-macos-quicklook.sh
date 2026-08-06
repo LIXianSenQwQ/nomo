@@ -42,12 +42,21 @@ case "$ARCH" in
     ;;
 esac
 
+# Xcode 的 App Extension target 会自动把入口设为 _NSExtensionMain；
+# 直接调用 swiftc 时必须显式设置，否则生成的进程会启动后立即退出，导致 PlugInKit XPC Code=4097。
 xcrun swiftc \
-  "$EXTENSION_SRC_DIR/main.swift" \
   "$EXTENSION_SRC_DIR/PreviewViewController.swift" \
+  -emit-executable \
+  -parse-as-library \
   -module-name NomoQuickLookPreview \
   -application-extension \
   -target "${SWIFT_TARGET_ARCH}-apple-macosx12.0" \
+  -Xlinker -e \
+  -Xlinker _NSExtensionMain \
+  -Xlinker -rpath \
+  -Xlinker @executable_path/../Frameworks \
+  -Xlinker -rpath \
+  -Xlinker @executable_path/../../../../Frameworks \
   -o "$MACOS_DIR/NomoQuickLookPreview" \
   -framework Cocoa \
   -framework QuickLook \

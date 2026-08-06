@@ -9,7 +9,7 @@
     "build": "pnpm exec paraglide-js compile && vite build",
     "build:quicklook-renderer": "vite build --config vite.quicklook.config.ts",
     "build:quicklook-extension": "bash scripts/build-macos-quicklook.sh",
-    "build:macos": "pnpm run build:quicklook-extension && tauri build --bundles app,dmg && bash scripts/embed-quicklook-extension.sh",
+    "build:macos": "pnpm run build:quicklook-extension && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
@@ -61,6 +61,7 @@
     "svelte-check": "^4.0.0",
     "typescript": "^5.0.0",
     "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^2.0.0"
   }
 }
