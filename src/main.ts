@@ -1,10 +1,8 @@
 import './app/styles/theme.css';
 import './app/styles/global.css';
-import './app/styles/window-chrome.css';
 import { mount } from 'svelte';
 import { installAutoHideScrollbars } from './app/services/scrollbarVisibility';
 import { bootstrapThemeFromSnapshot } from './app/services/themeManager';
-import { installWindowChromeState } from './app/services/windowChrome';
 import { createPerfTimer, initializeLogger, logError, logInfo } from './lib/services/logger';
 
 bootstrapThemeFromSnapshot();
@@ -19,9 +17,7 @@ if (!target) {
 }
 
 const uninstallAutoHideScrollbars = installAutoHideScrollbars();
-const uninstallWindowChromeState = installWindowChromeState();
 window.addEventListener('beforeunload', uninstallAutoHideScrollbars, { once: true });
-window.addEventListener('beforeunload', uninstallWindowChromeState, { once: true });
 
 const searchParams = new URLSearchParams(window.location.search);
 const isSettingsView = searchParams.get('view') === 'settings';

@@ -168,10 +168,6 @@
   outline: none;
 }
 
-.markdown-mini-actions .return-button {
-  color: var(--md-editor-accent-strong);
-}
-
 .markdown-mini-large-preview {
   grid-area: 1 / 1;
   min-width: 0;

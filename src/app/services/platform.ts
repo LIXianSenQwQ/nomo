@@ -1,13 +1,12 @@
 export type AppPlatform = 'macos' | 'windows' | 'linux' | 'unknown';
-export type WindowChromeMode = 'native' | 'windows-native-overlay';
+export type WindowChromeMode = 'native' | 'windows-custom';
 
 export interface PlatformCapabilities {
   platform: AppPlatform;
   isMac: boolean;
   isWindows: boolean;
   windowChromeMode: WindowChromeMode;
-  usesNativeWindowControls: boolean;
-  usesWindowsNativeOverlay: boolean;
+  usesCustomWindowsTitlebar: boolean;
   showsInAppWindowMenu: boolean;
   windowDecorations: boolean;
 }
@@ -29,16 +28,15 @@ export function getPlatformCapabilities(
   platform: AppPlatform = detectAppPlatform(),
 ): PlatformCapabilities {
   const isWindows = platform === 'windows';
-  const windowChromeMode: WindowChromeMode = isWindows ? 'windows-native-overlay' : 'native';
+  const windowChromeMode: WindowChromeMode = isWindows ? 'windows-custom' : 'native';
 
   return {
     platform,
     isMac: platform === 'macos',
     isWindows,
     windowChromeMode,
-    usesNativeWindowControls: true,
-    usesWindowsNativeOverlay: isWindows,
+    usesCustomWindowsTitlebar: isWindows,
     showsInAppWindowMenu: isWindows,
-    windowDecorations: true,
+    windowDecorations: !isWindows,
   };
 }

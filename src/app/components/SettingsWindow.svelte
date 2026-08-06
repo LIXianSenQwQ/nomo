@@ -79,6 +79,7 @@
     startSoftwareUpdateInstall,
   } from '../services/softwareUpdate';
   import SoftwareUpdateDialog from './SoftwareUpdateDialog.svelte';
+  import WindowsCaptionControls from './WindowsCaptionControls.svelte';
   import nomoLogoDark from '../../../src-tauri/icons/nomo/source/nomo-app-dark-128.png?url';
   import nomoLogoLight from '../../../src-tauri/icons/nomo/source/nomo-app-light-128.png?url';
 
@@ -796,7 +797,7 @@
   }
 
   async function handleWindowDrag(event: MouseEvent) {
-    if (!desktopEnabled || event.buttons !== 1 || event.detail > 1) {
+    if (!desktopEnabled || event.buttons !== 1) {
       return;
     }
 
@@ -811,7 +812,12 @@
 
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      await getCurrentWindow().startDragging();
+      const appWindow = getCurrentWindow();
+      if (event.detail === 2 && platformCapabilities.usesCustomWindowsTitlebar) {
+        await appWindow.toggleMaximize();
+      } else if (event.detail === 1) {
+        await appWindow.startDragging();
+      }
     } catch {
       // ignore
     }
@@ -1389,7 +1395,9 @@
           <h1 id="settings-title">{categoryTitles[activeCategory]}</h1>
           <span class:visible={statusMessage} role="status" data-drag-region>{statusMessage}</span>
         </div>
-        {#if !desktopEnabled}
+        {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
+          <WindowsCaptionControls onClose={() => handleClose()} />
+        {:else if !desktopEnabled}
           <button
             type="button"
             class="close-button"
@@ -2531,6 +2539,7 @@
   }
 
   .settings-header-title {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 10px;

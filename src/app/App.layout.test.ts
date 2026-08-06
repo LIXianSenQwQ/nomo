@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -26,6 +26,10 @@ describe('App outline layout', () => {
     'utf-8',
   );
   const titleBarSource = readFileSync(resolve(__dirname, 'components/AppTitleBar.svelte'), 'utf-8');
+  const windowsCaptionControlsSource = readFileSync(
+    resolve(__dirname, 'components/WindowsCaptionControls.svelte'),
+    'utf-8',
+  );
   const documentTabsSource = readFileSync(
     resolve(__dirname, 'components/DocumentTabs.svelte'),
     'utf-8',
@@ -58,10 +62,6 @@ describe('App outline layout', () => {
   );
   const desktopWindowSource = readFileSync(
     resolve(__dirname, 'services/desktopWindow.ts'),
-    'utf-8',
-  );
-  const windowChromeSource = readFileSync(
-    resolve(__dirname, 'services/windowChrome.ts'),
     'utf-8',
   );
   const tauriMenuSource = readFileSync(
@@ -109,8 +109,12 @@ describe('App outline layout', () => {
     resolve(__dirname, '../../src-tauri/src/window/os/macos.rs'),
     'utf-8',
   );
-  const tauriWindowsTitlebarSource = readFileSync(
-    resolve(__dirname, '../../src-tauri/src/window/os/windows/titlebar.rs'),
+  const tauriWindowsSource = readFileSync(
+    resolve(__dirname, '../../src-tauri/src/window/os/windows.rs'),
+    'utf-8',
+  );
+  const desktopCapabilitySource = readFileSync(
+    resolve(__dirname, '../../src-tauri/capabilities/default.json'),
     'utf-8',
   );
   const tauriImageAssetsSource = readFileSync(
@@ -154,7 +158,6 @@ describe('App outline layout', () => {
     'styles/app-layout.css',
     'styles/app-chrome.css',
     'styles/app-responsive.css',
-    'styles/window-chrome.css',
     'styles/editor-document.css',
     'styles/editor-outline.css',
     'styles/editor-table-controls.css',
@@ -806,7 +809,7 @@ describe('App outline layout', () => {
     expect(toolbarSource).toContain('TableOfContents size={17}');
   });
 
-  it('keeps global explorer controls in the single titlebar chrome', () => {
+  it('keeps global explorer controls and Windows caption controls in one titlebar', () => {
     expect(appShellSource).toContain('{#if desktopEnabled}');
     expect(titleBarSource).toContain('sidebar-toggle-btn');
     expect(titleBarSource).toContain('PanelLeftClose');
@@ -823,35 +826,65 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('t.showExplorerSidebar()');
     expect(titleBarSource).toContain('t.hideExplorerSidebar()');
     expect(titleBarSource).toContain('export let focusMode: boolean');
-    expect(titleBarSource).not.toContain('class="window-controls"');
-    expect(titleBarSource).not.toContain('class="control-btn"');
-    expect(titleBarSource).not.toContain('handleMaximizeWindow');
+    expect(titleBarSource).toContain("import WindowsCaptionControls from './WindowsCaptionControls.svelte'");
+    expect(titleBarSource).toContain(
+      'desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar',
+    );
+    expect(titleBarSource).toContain(
+      '<WindowsCaptionControls variant="return" onClose={toggleMarkdownMini} />',
+    );
+    expect(titleBarSource).toContain('<WindowsCaptionControls onClose={closeCurrentWindow} />');
     expect(titleBarSource).toContain('syncWindowState');
+    expect(windowsCaptionControlsSource).toContain('await currentWindow.minimize()');
+    expect(windowsCaptionControlsSource).toContain('await currentWindow.toggleMaximize()');
+    expect(windowsCaptionControlsSource).toContain('await currentWindow.isMaximized()');
+    expect(windowsCaptionControlsSource).toContain('await currentWindow.onResized(syncMaximizedState)');
+    expect(windowsCaptionControlsSource).toContain('await onClose()');
+    expect(windowsCaptionControlsSource).not.toContain('currentWindow.close()');
+    expect(windowsCaptionControlsSource).not.toContain('currentWindow.destroy()');
+    expect(windowsCaptionControlsSource).toContain('width: 46px;');
+    expect(windowsCaptionControlsSource).toContain('height: 100%;');
     expect(desktopWindowSource).toContain("title: 'Nomo'");
     expect(desktopWindowSource).toContain('} - Nomo');
     expect(desktopWindowSource).toContain('getNewWindowChromeOptions');
     expect(desktopWindowSource).toContain("titleBarStyle: 'overlay'");
     expect(desktopWindowSource).toContain('trafficLightPosition: new LogicalPosition(16, 24)');
     expect(desktopWindowSource).toContain('hiddenTitle: true');
-    expect(desktopWindowSource).toContain('visible: !platformCapabilities.usesWindowsNativeOverlay');
-    expect(windowChromeSource).toContain("'get_window_chrome_metrics'");
-    expect(windowChromeSource).toContain("'nomo://window-chrome-changed'");
-    expect(tauriWindowsTitlebarSource).toContain('SetWindowSubclass');
-    expect(tauriWindowsTitlebarSource).toContain('DwmExtendFrameIntoClientArea');
-    expect(tauriWindowsTitlebarSource).toContain('DwmDefWindowProc');
+    expect(desktopWindowSource).toContain(
+      'visible: !platformCapabilities.usesCustomWindowsTitlebar',
+    );
+    expect(existsSync(resolve(__dirname, 'services/windowChrome.ts'))).toBe(false);
+    expect(existsSync(resolve(__dirname, 'styles/window-chrome.css'))).toBe(false);
+    expect(
+      existsSync(resolve(__dirname, '../../src-tauri/src/window/os/windows/titlebar.rs')),
+    ).toBe(false);
+    expect(tauriWindowsSource).toMatch(/fn window_decorations\(\) -> bool \{\s*false\s*\}/);
+    expect(tauriWindowsSource).toContain('.set_decorations(window_decorations())');
+    expect(tauriWindowsSource).toContain('.set_shadow(true)');
+    expect(tauriWindowsSource).not.toContain('SetWindowSubclass');
+    expect(tauriWindowCommandsSource).not.toContain('get_window_chrome_metrics');
+    expect(tauriLibSource).not.toContain('get_window_chrome_metrics');
+    expect(desktopCapabilitySource).toContain('"core:window:allow-minimize"');
     expect(tauriMacosSource).toContain('uses_overlay_titlebar(window.label())');
     expect(tauriMacosSource).toContain('label != "window-settings"');
     expect(tauriConfigSource).toContain('"y": 24');
     expect(styles).toMatch(/\.titlebar\s*\{[\s\S]*?height:\s*42px;/);
+    expect(styles).toMatch(/\.titlebar-row\.top-row\s*\{[\s\S]*?height:\s*42px;/);
+    expect(styles).toMatch(
+      /\.titlebar\.is-win \.titlebar-row\.top-row:not\(\.markdown-mini-titlebar-row\)\s*\{[\s\S]*?padding-right:\s*0;/,
+    );
     expect(styles).not.toContain('border-bottom: 1px solid var(--md-titlebar-border);');
     expect(styles).toMatch(
       /\.titlebar\.is-mac:not\(\.is-fullscreen\) \.titlebar-row\.top-row\s*\{[\s\S]*?padding-left:\s*88px;/,
     );
     const titlebarIconStyles = styles.match(/\.titlebar \.icon-btn\s*\{[^}]*\}/)?.[0] ?? '';
     expect(titlebarIconStyles).toContain('height: 32px;');
-    expect(styles).not.toContain('.window-controls {');
-    expect(styles).not.toContain('.control-btn {');
-    expect(settingsWindowSource).not.toContain('settings-window-controls');
+    expect(settingsWindowSource).toContain(
+      'desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar',
+    );
+    expect(settingsWindowSource).toContain(
+      '<WindowsCaptionControls onClose={() => handleClose()} />',
+    );
     expect(styles).toMatch(/\.sidebar-toggle-btn\s*\{[\s\S]*?flex-shrink:\s*0;/);
     expect(styles).toMatch(/\.titlebar-row\.bottom-row\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).not.toContain('.app-logo');

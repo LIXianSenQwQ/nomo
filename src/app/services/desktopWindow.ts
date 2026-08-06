@@ -15,6 +15,13 @@ function getNewWindowChromeOptions() {
     };
   }
 
+  if (platformCapabilities.usesCustomWindowsTitlebar) {
+    return {
+      decorations: false,
+      shadow: true,
+    };
+  }
+
   return {
     decorations: platformCapabilities.windowDecorations,
   };
@@ -71,7 +78,7 @@ export async function createAppWindow(
       minWidth: 920,
       minHeight: 640,
       center: true,
-      visible: !platformCapabilities.usesWindowsNativeOverlay,
+      visible: !platformCapabilities.usesCustomWindowsTitlebar,
       ...getNewWindowChromeOptions(),
       resizable: true,
       maximizable: true,

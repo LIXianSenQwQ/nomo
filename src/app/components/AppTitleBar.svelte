@@ -23,6 +23,7 @@
   import { clickOutside } from '../actions/clickOutside';
   import { getPlatformCapabilities } from '../services/platform';
   import { getDiagramTypeLabel, t } from '../i18n';
+  import WindowsCaptionControls from './WindowsCaptionControls.svelte';
 
   export let interfaceLocale: string;
   export let theme: 'light' | 'dark';
@@ -76,25 +77,34 @@
   export let softwareUpdateState: SoftwareUpdateSnapshot;
   export let openSoftwareUpdate: () => void;
 
+  const WINDOW_STATE_SYNC_DELAY_MS = 80;
+
   let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
   let unlistenResized: (() => void) | null = null;
+  let windowStateSyncTimer: number | null = null;
+  let windowStateRequestId = 0;
   let canSyncWindowState = false;
   let windowStateListenerReady = false;
 
   $: shouldShowWindowMenu = platformCapabilities.showsInAppWindowMenu;
 
   async function syncWindowState() {
-    if (!desktopEnabled || !canSyncWindowState) {
+    if (!desktopEnabled || !canSyncWindowState || !platformCapabilities.isMac) {
       return;
     }
 
+    const requestId = ++windowStateRequestId;
     try {
       const { getCurrentWindow } = await import('@tauri-apps/api/window');
       const appWindow = getCurrentWindow();
       const fullscreen = await appWindow.isFullscreen();
 
-      if (canSyncWindowState) {
+      if (
+        canSyncWindowState &&
+        platformCapabilities.isMac &&
+        requestId === windowStateRequestId
+      ) {
         isFullscreen = fullscreen;
       }
     } catch {
@@ -102,8 +112,24 @@
     }
   }
 
+  function scheduleWindowStateSync() {
+    if (!canSyncWindowState || !platformCapabilities.isMac) return;
+    if (windowStateSyncTimer !== null) {
+      window.clearTimeout(windowStateSyncTimer);
+    }
+    windowStateSyncTimer = window.setTimeout(() => {
+      windowStateSyncTimer = null;
+      void syncWindowState();
+    }, WINDOW_STATE_SYNC_DELAY_MS);
+  }
+
   async function setupWindowStateListener() {
-    if (!desktopEnabled || !canSyncWindowState || windowStateListenerReady) {
+    if (
+      !desktopEnabled ||
+      !canSyncWindowState ||
+      !platformCapabilities.isMac ||
+      windowStateListenerReady
+    ) {
       return;
     }
 
@@ -113,11 +139,11 @@
       if (!canSyncWindowState) return;
 
       const appWindow = getCurrentWindow();
-      await syncWindowState();
-      const unlisten = await appWindow.onResized(syncWindowState);
+      const unlisten = await appWindow.onResized(scheduleWindowStateSync);
 
       if (canSyncWindowState) {
         unlistenResized = unlisten;
+        await syncWindowState();
       } else {
         unlisten();
       }
@@ -135,6 +161,11 @@
 
     return () => {
       canSyncWindowState = false;
+      windowStateRequestId += 1;
+      if (windowStateSyncTimer !== null) {
+        window.clearTimeout(windowStateSyncTimer);
+        windowStateSyncTimer = null;
+      }
       if (unlistenResized) {
         unlistenResized();
         unlistenResized = null;
@@ -172,7 +203,7 @@
         if (markdownMiniActive) return;
         // 双击最大化/还原
         await appWindow.toggleMaximize();
-      } else {
+      } else if (e.detail === 1) {
         await appWindow.startDragging();
       }
     } catch {
@@ -244,16 +275,21 @@
           >
             {#if markdownMiniPinned}<Pin size={14} />{:else}<PinOff size={14} />{/if}
           </button>
-          <button
-            type="button"
-            class="return-button"
-            title={`${t.markdownMiniReturn()} (${markdownMiniShortcut})`}
-            aria-label={t.markdownMiniReturn()}
-            on:click={toggleMarkdownMini}
-          >
-            <ArrowDownLeft size={15} />
-          </button>
+          {#if !(desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar)}
+            <button
+              type="button"
+              class="return-button"
+              title={`${t.markdownMiniReturn()} (${markdownMiniShortcut})`}
+              aria-label={t.markdownMiniReturn()}
+              on:click={toggleMarkdownMini}
+            >
+              <ArrowDownLeft size={15} />
+            </button>
+          {/if}
         </div>
+        {#if desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar}
+          <WindowsCaptionControls variant="return" onClose={toggleMarkdownMini} />
+        {/if}
       </div>
     {/if}
     <div
@@ -726,6 +762,11 @@
           {/if}
         </button>
       </div>
+      {#if
+        desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar && !markdownMiniActive
+      }
+        <WindowsCaptionControls onClose={closeCurrentWindow} />
+      {/if}
     </div>
   </header>
 {/key}

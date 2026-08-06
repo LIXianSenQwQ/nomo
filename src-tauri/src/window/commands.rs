@@ -47,13 +47,15 @@ pub(crate) fn refresh_window_menu(
 ) -> Result<(), String> {
     crate::app_logger::info("Window", &format!("刷新窗口菜单：{}", window.label()));
     if let Err(error) = crate::window::os::setup_window(&window) {
-        crate::app_logger::warn(
-            "Window",
-            &format!(
-                "初始化窗口原生 chrome 失败，继续使用系统标题栏：label={} error={error}",
-                window.label()
-            ),
-        );
+        if crate::window::external_open::is_document_window_label(window.label())
+            && matches!(window.is_visible(), Ok(false))
+        {
+            let _ = window.destroy();
+        }
+        return Err(format!(
+            "初始化 Windows 无边框窗口失败：label={} error={error}",
+            window.label()
+        ));
     }
     let menu_result = install_window_menu(&app, &window);
     crate::window::state::restore_window_state(&app, window.label());
@@ -71,23 +73,7 @@ pub(crate) fn refresh_window_menu(
             .set_focus()
             .map_err(|error| format!("聚焦文档窗口失败：{error}"))?;
     }
-    if let Err(error) = window.emit("nomo://window-chrome-changed", ()) {
-        crate::app_logger::warn(
-            "Window",
-            &format!(
-                "通知窗口 chrome 初始化完成失败：label={} error={error}",
-                window.label()
-            ),
-        );
-    }
     menu_result
-}
-
-#[tauri::command]
-pub(crate) fn get_window_chrome_metrics(
-    window: tauri::WebviewWindow,
-) -> Result<crate::window::os::WindowChromeMetrics, String> {
-    crate::window::os::get_window_chrome_metrics(&window)
 }
 
 #[tauri::command]
@@ -105,18 +91,9 @@ pub(crate) fn report_window_title(
 
 #[tauri::command]
 pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), String> {
-    crate::app_logger::info("Window", "刷新界面语言相关窗口 chrome");
+    crate::app_logger::info("Window", "刷新界面语言相关窗口菜单");
     for (_label, window) in app.webview_windows() {
         if crate::window::external_open::is_document_window_label(window.label()) {
-            if let Err(error) = crate::window::os::setup_window(&window) {
-                crate::app_logger::warn(
-                    "Window",
-                    &format!(
-                        "刷新窗口原生 chrome 失败，继续使用系统标题栏：label={} error={error}",
-                        window.label()
-                    ),
-                );
-            }
             install_window_menu(&app, &window)?;
         } else if window.label() == SETTINGS_WINDOW_LABEL {
             window
@@ -133,7 +110,6 @@ pub(crate) fn set_desktop_icon_theme(
     app: AppHandle,
     theme: String,
     caption_background: Option<String>,
-    caption_foreground: Option<String>,
 ) -> Result<(), String> {
     crate::app_logger::info("Tray", &format!("设置桌面图标主题：{theme}"));
     let dark = match theme.as_str() {
@@ -143,21 +119,14 @@ pub(crate) fn set_desktop_icon_theme(
     };
 
     let fallback_background = if dark { (24, 29, 35) } else { (243, 244, 246) };
-    let fallback_foreground = if dark { (204, 204, 204) } else { (51, 51, 51) };
     let caption_background_rgb = caption_background
         .as_deref()
         .and_then(parse_css_hex_rgb)
         .unwrap_or(fallback_background);
-    let caption_foreground_rgb = caption_foreground
-        .as_deref()
-        .and_then(parse_css_hex_rgb)
-        .unwrap_or(fallback_foreground);
-    let caption_color = rgb_to_colorref(caption_background_rgb);
-    let caption_text_color = rgb_to_colorref(caption_foreground_rgb);
 
+    #[cfg(windows)]
     for (_label, window) in app.webview_windows() {
-        #[cfg(windows)]
-        if let Err(error) = window.set_background_color(dark.then_some(tauri::window::Color(
+        if let Err(error) = window.set_background_color(Some(tauri::window::Color(
             caption_background_rgb.0,
             caption_background_rgb.1,
             caption_background_rgb.2,
@@ -171,21 +140,9 @@ pub(crate) fn set_desktop_icon_theme(
                 ),
             );
         }
-        if let Err(error) = crate::window::os::set_window_chrome_theme(
-            &window,
-            dark,
-            Some(caption_color),
-            Some(caption_text_color),
-        ) {
-            crate::app_logger::warn(
-                "Window",
-                &format!(
-                    "同步窗口原生 chrome 主题失败：label={} error={error}",
-                    window.label()
-                ),
-            );
-        }
     }
+    #[cfg(not(windows))]
+    let _ = caption_background_rgb;
 
     crate::window::tray::set_desktop_icon_theme(&app, &theme)
 }
@@ -208,10 +165,6 @@ fn parse_css_hex_rgb(value: &str) -> Option<(u8, u8, u8)> {
         }
         _ => None,
     }
-}
-
-fn rgb_to_colorref((red, green, blue): (u8, u8, u8)) -> u32 {
-    u32::from(red) | (u32::from(green) << 8) | (u32::from(blue) << 16)
 }
 
 #[tauri::command]
@@ -293,7 +246,7 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
 
     #[cfg(windows)]
     let builder = {
-        let mut builder = builder;
+        let mut builder = builder.shadow(true);
         if let Some(owner) = settings_owner.as_ref() {
             builder = builder
                 .owner(owner)
@@ -315,18 +268,12 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
 
     // 先在隐藏状态下完成系统窗口适配和历史位置恢复，避免用户看到居中位置再跳到保存位置。
     if let Err(error) = crate::window::os::setup_window(&window) {
-        crate::app_logger::warn(
-            "Settings",
-            &format!("初始化偏好设置窗口原生 chrome 失败，继续使用系统标题栏：{error}"),
-        );
+        #[cfg(windows)]
+        remember_settings_owner_label(None);
+        let _ = window.destroy();
+        return Err(format!("初始化偏好设置窗口无边框样式失败：{error}"));
     }
     crate::window::state::restore_window_state(&app, window.label());
-    if let Err(error) = window.emit("nomo://window-chrome-changed", ()) {
-        crate::app_logger::warn(
-            "Settings",
-            &format!("通知偏好设置窗口 chrome 初始化完成失败：{error}"),
-        );
-    }
     bring_settings_window_to_front(&window)?;
     crate::app_logger::info("Settings", "设置窗口创建并显示完成");
     crate::app_logger::perf("Settings", "打开设置窗口", timer.elapsed());

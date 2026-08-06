@@ -426,6 +426,8 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   estimatedReadingMinutes: '推定読み取り値 {minutes} 分',
   selectStatsMetric: '統計指標を選択してください',
   switchTheme: 'テーマを切り替える',
+  minimizeWindow: 'ウィンドウを最小化',
+  maximizeWindow: 'ウィンドウを最大化',
   restoreWindow: '復元ウィンドウ',
   copyCode: 'コードをコピーする',
   copied: 'コピーされました',

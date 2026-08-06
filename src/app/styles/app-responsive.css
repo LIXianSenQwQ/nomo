@@ -96,9 +96,13 @@
 }
 
 .titlebar-row.top-row {
-  height: 41px;
+  height: 42px;
   gap: 6px;
   padding: 0 4px 0 8px;
+}
+
+.titlebar.is-win .titlebar-row.top-row:not(.markdown-mini-titlebar-row) {
+  padding-right: 0;
 }
 
 .titlebar.is-mac .titlebar-row.top-row {

@@ -206,12 +206,12 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 crate::app_logger::info("Window", "初始化主窗口系统适配和菜单");
-                if let Err(error) = crate::window::os::setup_window(&window) {
-                    crate::app_logger::warn(
-                        "Window",
-                        &format!("初始化主窗口原生 chrome 失败，继续使用系统标题栏：{error}"),
-                    );
-                }
+                crate::window::os::setup_window(&window).map_err(|error| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("初始化主窗口 Windows 无边框样式失败：{error}"),
+                    )
+                })?;
                 crate::window::menu::install_window_menu(app.handle(), &window)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
@@ -294,7 +294,6 @@ pub fn run() {
             crate::config::commands::list_app_settings,
             crate::window::commands::update_window_state,
             crate::window::commands::refresh_window_menu,
-            crate::window::commands::get_window_chrome_metrics,
             crate::window::commands::report_window_title,
             crate::window::commands::refresh_interface_language_chrome,
             crate::window::commands::set_desktop_icon_theme,
