@@ -69,6 +69,12 @@ function getLangLabel(value: string): string {
 const MAX_VISIBLE_LINES = 24;
 const EDIT_LINE_HEIGHT_PX = 18;
 
+type CodeEditTarget =
+  | { kind: 'default' }
+  | { kind: 'offset'; offset: number }
+  | { kind: 'range'; anchor: number; head: number }
+  | { kind: 'line'; line: number; edge: 'start' | 'end' };
+
 // 将 Shiki token 行转为 HTML 字符串（用于高亮层 innerHTML）
 function tokensToHtml(tokenLines: CodeTokenLine[]): string {
   return tokenLines
@@ -222,6 +228,7 @@ export class CodeBlockNodeView {
   private needsAutoEdit = false;
   private langSelector: HTMLElement | null = null;
   private copyFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private cancelDisplaySelectionCapture: (() => void) | null = null;
   private unsubscribeLocale: () => void = () => undefined;
 
   constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number) {
@@ -285,6 +292,9 @@ export class CodeBlockNodeView {
     this.codeDisplay.addEventListener('scroll', () => {
       this.lineNumbersWrapper.style.transform = `translateY(-${this.codeDisplay.scrollTop}px)`;
     });
+    this.codeDisplay.addEventListener('mousedown', (event) => {
+      this.handleDisplayMouseDown(event);
+    });
     this.codeBody.appendChild(this.codeDisplay);
     this.dom.appendChild(this.codeBody);
 
@@ -296,10 +306,10 @@ export class CodeBlockNodeView {
       event.stopPropagation();
       const clickOffset = this.getClickTextOffset(event);
       if (clickOffset !== null) {
-        this.enterEdit(undefined, 'start', clickOffset);
+        this.enterEdit({ kind: 'offset', offset: clickOffset });
         return;
       }
-      this.enterEdit(this.getClickLine(event));
+      this.enterEdit({ kind: 'line', line: this.getClickLine(event), edge: 'start' });
     });
 
     // 标记首次选中时自动进入编辑态（如 InputRule 从 ``` 创建 或快捷键插入）
@@ -347,7 +357,7 @@ export class CodeBlockNodeView {
     // 首次创建的代码块自动进入编辑态
     if (this.needsAutoEdit) {
       this.needsAutoEdit = false;
-      this.enterEdit(0, 'start');
+      this.enterEdit({ kind: 'line', line: 0, edge: 'start' });
     }
   }
 
@@ -359,9 +369,21 @@ export class CodeBlockNodeView {
   }
 
   stopEvent(event: Event): boolean {
+    const target = event.target as Node | null;
+    if (
+      target &&
+      this.codeDisplay.contains(target) &&
+      (event.type === 'mousedown' ||
+        event.type === 'mousemove' ||
+        event.type === 'mouseup' ||
+        event.type === 'click')
+    ) {
+      return true;
+    }
+
     // 编辑态内拦截所有事件，防止 ProseMirror 处理
     if (this.editing) {
-      if (this.dom.contains(event.target as Node)) return true;
+      if (target && this.dom.contains(target)) return true;
     }
     return false;
   }
@@ -374,6 +396,7 @@ export class CodeBlockNodeView {
     CodeBlockNodeView.instances.delete(this);
     this.unsubscribeLocale();
     this.cancelScheduledHighlight();
+    this.clearDisplaySelectionCapture();
     if (this.copyFeedbackTimer) clearTimeout(this.copyFeedbackTimer);
     this.cleanupEdit();
   }
@@ -445,8 +468,10 @@ export class CodeBlockNodeView {
 
   // ---- 编辑态管理 ----
 
-  enterEdit(clickLine?: number, caret: 'start' | 'end' = 'start', textOffset?: number): void {
+  enterEdit(target: CodeEditTarget = { kind: 'default' }): void {
     if (this.editing) return;
+
+    this.clearDisplaySelectionCapture();
 
     if (CodeBlockNodeView.activeEditingView && CodeBlockNodeView.activeEditingView !== this) {
       CodeBlockNodeView.activeEditingView.exitEdit(true);
@@ -518,17 +543,25 @@ export class CodeBlockNodeView {
     requestAnimationFrame(() => {
       if (!this.textarea) return;
       this.textarea.focus({ preventScroll: true });
-      if (textOffset !== undefined) {
-        const offset = Math.min(Math.max(textOffset, 0), this.textarea.value.length);
+      if (target.kind === 'offset') {
+        const offset = Math.min(Math.max(target.offset, 0), this.textarea.value.length);
         this.textarea.selectionStart = this.textarea.selectionEnd = offset;
-      } else if (clickLine !== undefined) {
+      } else if (target.kind === 'range') {
+        const anchor = Math.min(Math.max(target.anchor, 0), this.textarea.value.length);
+        const head = Math.min(Math.max(target.head, 0), this.textarea.value.length);
+        this.textarea.setSelectionRange(
+          Math.min(anchor, head),
+          Math.max(anchor, head),
+          anchor <= head ? 'forward' : 'backward',
+        );
+      } else if (target.kind === 'line') {
         const lines = this.textarea.value.split('\n');
         let offset = 0;
-        for (let i = 0; i < Math.min(clickLine, lines.length); i++) {
+        for (let i = 0; i < Math.min(target.line, lines.length); i++) {
           offset += lines[i].length + 1; // +1 for \n
         }
-        if (caret === 'end' && clickLine < lines.length) {
-          offset += lines[clickLine].length;
+        if (target.edge === 'end' && target.line < lines.length) {
+          offset += lines[target.line].length;
         }
         this.textarea.selectionStart = this.textarea.selectionEnd = Math.min(
           offset,
@@ -548,7 +581,7 @@ export class CodeBlockNodeView {
     for (const instance of CodeBlockNodeView.instances) {
       if (instance.view !== view) continue;
       if (instance.getPos() === pos) {
-        instance.enterEdit(clickLine, caret);
+        instance.enterEdit({ kind: 'line', line: clickLine, edge: caret });
         return true;
       }
     }
@@ -958,6 +991,94 @@ export class CodeBlockNodeView {
   }
 
   // ---- 辅助方法 ----
+
+  /**
+   * 展示态先交给浏览器完成原生拖选，松开后再把选区迁移到 textarea。
+   * 这样第一次拖动就能选择文本，同时保留代码块按需创建输入层的性能特征。
+   */
+  private handleDisplayMouseDown(event: MouseEvent): void {
+    if (this.editing || event.button !== 0) return;
+
+    const codeEl = this.codeDisplay.querySelector('code');
+    if (!codeEl) return;
+
+    const pointerAnchor = this.getClickTextOffset(event);
+    if (pointerAnchor === null) return;
+
+    this.clearDisplaySelectionCapture();
+
+    const handleMouseUp = () => {
+      const selection = document.getSelection();
+      const selectionTarget = this.getDisplaySelectionTarget(selection, codeEl, pointerAnchor);
+      this.clearDisplaySelectionCapture();
+      if (selectionTarget) {
+        this.enterEdit(selectionTarget);
+      }
+    };
+    const handleWindowBlur = () => this.clearDisplaySelectionCapture();
+
+    document.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('blur', handleWindowBlur);
+    this.cancelDisplaySelectionCapture = () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }
+
+  private getDisplaySelectionTarget(
+    selection: Selection | null,
+    codeEl: HTMLElement,
+    pointerAnchor: number,
+  ): CodeEditTarget | null {
+    if (!selection || selection.isCollapsed || !selection.focusNode) return null;
+
+    const nativeAnchor = selection.anchorNode
+      ? getTextOffsetFromDomPosition(codeEl, selection.anchorNode, selection.anchorOffset)
+      : null;
+    const anchor = nativeAnchor ?? pointerAnchor;
+    const head = this.getDisplaySelectionEndpoint(
+      codeEl,
+      selection.focusNode,
+      selection.focusOffset,
+    );
+
+    if (head === null || anchor === head) return null;
+    return { kind: 'range', anchor, head };
+  }
+
+  private getDisplaySelectionEndpoint(
+    codeEl: HTMLElement,
+    endpointNode: Node,
+    endpointOffset: number,
+  ): number | null {
+    const innerOffset = getTextOffsetFromDomPosition(codeEl, endpointNode, endpointOffset);
+    if (innerOffset !== null) return innerOffset;
+
+    if (endpointNode.nodeType === Node.ELEMENT_NODE && (endpointNode as Element).contains(codeEl)) {
+      let codeBranch: Node = codeEl;
+      while (codeBranch.parentNode && codeBranch.parentNode !== endpointNode) {
+        codeBranch = codeBranch.parentNode;
+      }
+      const branchIndex = Array.from(endpointNode.childNodes).findIndex(
+        (child) => child === codeBranch,
+      );
+      if (branchIndex >= 0) {
+        return endpointOffset <= branchIndex ? 0 : (codeEl.textContent?.length ?? 0);
+      }
+    }
+
+    const relation = codeEl.compareDocumentPosition(endpointNode);
+    if (relation & Node.DOCUMENT_POSITION_PRECEDING) return 0;
+    if (relation & Node.DOCUMENT_POSITION_FOLLOWING) return codeEl.textContent?.length ?? 0;
+    return null;
+  }
+
+  private clearDisplaySelectionCapture(): void {
+    if (!this.cancelDisplaySelectionCapture) return;
+    const cancel = this.cancelDisplaySelectionCapture;
+    this.cancelDisplaySelectionCapture = null;
+    cancel();
+  }
 
   /** 计算点击位置对应的行号（从 0 开始） */
   private getClickLine(event: MouseEvent): number {

@@ -2209,6 +2209,13 @@
   color: inherit;
 }
 
+.prosemirror-host .ProseMirror .code-card .code-content::selection,
+.prosemirror-host .ProseMirror .code-card .code-content code::selection,
+.prosemirror-host .ProseMirror .code-card .code-content code *::selection {
+  background: var(--md-editor-selection-bg);
+  color: inherit;
+}
+
 .prosemirror-host .ProseMirror .pm-inline-selection-bridge {
   background: var(--md-editor-text-selection-bg);
   color: inherit;
