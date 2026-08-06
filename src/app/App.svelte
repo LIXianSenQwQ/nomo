@@ -5268,6 +5268,7 @@
   on:closeTabsToRight={handleCloseTabsToRight}
   on:closeAllTabs={handleCloseAllTabs}
   on:deleteNode={handleDeleteNode}
+  on:revealError={(event) => showVisibleError(event.detail, t.openFolderFailed())}
   on:stateChange={handleSegmentedStateChange}
   on:status={handleSegmentedStatus}
 />

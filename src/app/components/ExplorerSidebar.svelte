@@ -143,6 +143,7 @@
     refreshFolder: void;
     collapseAll: void;
     deleteNode: { path: string; isDir: boolean };
+    revealError: unknown;
   }>();
 
   let creatingParentPath: string | null = null;
@@ -505,8 +506,8 @@
     try {
       const { revealInExplorer } = await import('../../lib/desktop/tauriStorage');
       await revealInExplorer(path);
-    } catch {
-      // 非桌面环境或调用失败，静默忽略
+    } catch (error) {
+      dispatch('revealError', error);
     }
   }
 

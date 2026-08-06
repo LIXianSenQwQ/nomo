@@ -334,6 +334,7 @@
       on:refreshFolder
       on:collapseAll
       on:deleteNode
+      on:revealError
     />
 
     <section
