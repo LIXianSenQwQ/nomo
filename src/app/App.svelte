@@ -2101,9 +2101,6 @@
   }
 
   function toggleFocusMode() {
-    if (!focusMode) {
-      closeToolbarTransientPanels();
-    }
     setSidebarHidden(!focusMode);
   }
 
@@ -2116,11 +2113,6 @@
   }
 
   function toggleToolbar() {
-    if (focusMode) {
-      setSidebarHidden(false);
-      setToolbarHidden(false);
-      return;
-    }
     setToolbarHidden(!toolbarHidden);
   }
 

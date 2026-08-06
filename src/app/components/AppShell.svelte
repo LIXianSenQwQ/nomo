@@ -186,7 +186,7 @@
 
   $: hasOpenDocument = appBootState === 'ready' && tabs.length > 0 && Boolean(activeTabId);
   $: activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
-  $: effectiveToolbarHidden = focusMode || toolbarHidden;
+  $: effectiveToolbarHidden = toolbarHidden;
   const toolbarTransitionDuration = transitionDuration('panel');
   const toolbarRevealDelay = Math.round(toolbarTransitionDuration * 0.8);
   let toolbarOverflowVisible = !effectiveToolbarHidden;
@@ -397,7 +397,7 @@
             </div>
           </div>
 
-          {#if !focusMode}
+          {#if toolbarHidden}
             <button
               class="toolbar-reveal-button"
               type="button"
