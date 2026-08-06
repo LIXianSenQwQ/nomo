@@ -43,3 +43,10 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
   "NSData",
   "std",
 ] }
+
+# macOS 26/27 的 dyld 要求 LINKEDIT 字符串池 8 字节对齐，
+# 而 Rust 1.77+ release 默认 strip = "debuginfo" 会把 proc-macro dylib 剥离成未对齐的坏文件，
+# 导致编译期 E0463 "can't find crate"（rust-lang/rust#157750）。
+# 在上游修复前，release 构建必须关闭 strip。
+[profile.release]
+strip = "none"
