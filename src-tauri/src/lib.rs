@@ -220,13 +220,17 @@ pub fn run() {
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             crate::window::state::restore_window_state(app.handle(), "main");
             if let Some(window) = app.get_webview_window("main") {
-                crate::app_logger::info("Window", "显示并聚焦主窗口");
+                crate::app_logger::info("Window", "显示主窗口");
                 window
                     .set_skip_taskbar(false)
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
                 window
                     .show()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+                // macOS 27 会在 Tauri setup 尚未返回、WebView 父视图仍在附着时拒绝设置
+                // first responder，并在稍后的视图释放阶段触发 NSView 生命周期断言。
+                // 启动时由 AppKit 自然激活首个可见窗口；后续显式唤起仍走平台聚焦逻辑。
+                #[cfg(not(target_os = "macos"))]
                 window
                     .set_focus()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
