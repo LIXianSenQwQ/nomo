@@ -53,49 +53,18 @@ fn open_with_system_default(href: &str) -> Result<(), String> {
 }
 
 /**
- * 在系统文件管理器中定位并选中指定文件。
+ * 在系统文件管理器中定位并选中指定文件或文件夹。
  *
- * Windows 使用 `explorer /select`，macOS 使用 `open -R`，
- * Linux 使用 `xdg-open` 打开文件所在目录。
+ * 统一复用 Tauri 官方 opener 的平台实现，避免自行拼接系统命令：
+ * Windows 使用 Shell API，macOS 使用 NSWorkspace，Linux 使用文件管理器 D-Bus/Portal。
  */
 #[tauri::command]
 pub(crate) fn reveal_in_explorer(path: String) -> Result<(), String> {
-    let file_path = Path::new(&path);
-    if !file_path.exists() {
-        return Err("文件不存在".to_string());
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("文件路径为空".to_string());
     }
-    reveal_with_system_manager(&path)
-}
 
-#[cfg(target_os = "windows")]
-fn reveal_with_system_manager(path: &str) -> Result<(), String> {
-    // explorer /select 需要将 /select, 和路径合并为一个参数
-    let select_arg = format!("/select,{}", path);
-    Command::new("explorer.exe")
-        .arg(&select_arg)
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("打开文件管理器失败：{error}"))
-}
-
-#[cfg(target_os = "macos")]
-fn reveal_with_system_manager(path: &str) -> Result<(), String> {
-    Command::new("open")
-        .args(["-R", path])
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("打开文件管理器失败：{error}"))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn reveal_with_system_manager(path: &str) -> Result<(), String> {
-    let dir = std::path::Path::new(path)
-        .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.to_string());
-    Command::new("xdg-open")
-        .arg(&dir)
-        .spawn()
-        .map(|_| ())
+    tauri_plugin_opener::reveal_item_in_dir(Path::new(path))
         .map_err(|error| format!("打开文件管理器失败：{error}"))
 }
