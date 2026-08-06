@@ -881,7 +881,7 @@
 **Kind:** registry
 
 **Owns:**
-- `nomo-default`、`nomo-amber-paper`、`nomo-classic-gray` 的亮暗变体、样式档案和预览
+- `nomo-default`、`nomo-amber-paper`、`nomo-classic-gray`、`nomo-github` 的亮暗变体、样式档案和预览
 - `nomo-classic`、`nomo-modern` 文档样式稳定 ID
 - 必填颜色/样式令牌到 CSS 变量的映射与主题完整性校验
 

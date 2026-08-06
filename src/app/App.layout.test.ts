@@ -1054,7 +1054,8 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain("on:click={() => setThemeMode('system')}");
     expect(settingsWindowSource).toContain('availableThemes');
     expect(settingsWindowSource).toContain('setColorTheme');
-    expect(settingsWindowSource).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
+    expect(settingsWindowSource).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(settingsWindowSource).toContain('@media (max-width: 520px)');
     expect(settingsWindowSource).toContain('styleTokens.radiusMd');
     expect(settingsWindowSource).toContain('styleTokens.shadowRaised');
     expect(settingsWindowSource).toContain('id="zoomPercent"');

@@ -12,6 +12,7 @@ describe('ThemeRegistry', () => {
       'nomo-default',
       'nomo-amber-paper',
       'nomo-classic-gray',
+      'nomo-github',
     ]);
     for (const theme of themeRegistry.listThemes()) {
       expect(() => validateThemeDefinition(theme)).not.toThrow();

@@ -2637,7 +2637,7 @@
 
   .theme-card-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--md-editor-space-md);
   }
 
@@ -3125,6 +3125,12 @@
 
     .settings-content {
       padding: var(--md-editor-space-lg);
+    }
+  }
+
+  @media (max-width: 520px) {
+    .theme-card-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
