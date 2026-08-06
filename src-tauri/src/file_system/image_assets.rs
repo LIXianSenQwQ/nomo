@@ -69,20 +69,22 @@ pub(crate) fn resolve_image_asset(input: ImageResolveInput) -> ImageResolvePaylo
         };
     }
 
-    let absolute_path = if Path::new(&src).is_absolute() {
-        PathBuf::from(&src)
+    let local_src = decode_percent_encoded_path(&src);
+    let absolute_path = if Path::new(&local_src).is_absolute() {
+        PathBuf::from(&local_src)
     } else if let Some(document_path) = input.document_path {
         let parent = Path::new(&document_path).parent().map(Path::to_path_buf);
         if let Some(parent) = parent {
             parent.join(
-                src.trim_start_matches("./")
+                local_src
+                    .trim_start_matches("./")
                     .replace('/', std::path::MAIN_SEPARATOR_STR),
             )
         } else {
-            PathBuf::from(&src)
+            PathBuf::from(&local_src)
         }
     } else {
-        PathBuf::from(&src)
+        PathBuf::from(&local_src)
     };
 
     let exists = absolute_path.is_file();
@@ -102,7 +104,8 @@ pub(crate) fn resolve_image_asset(input: ImageResolveInput) -> ImageResolvePaylo
 #[tauri::command]
 pub(crate) fn delete_image_asset(input: ImageDeleteInput) -> ImageDeletePayload {
     let src = input.src.trim().to_string();
-    if src.is_empty() || is_remote_image_src(&src) || Path::new(&src).is_absolute() {
+    let local_src = decode_percent_encoded_path(&src);
+    if src.is_empty() || is_remote_image_src(&src) || Path::new(&local_src).is_absolute() {
         return ImageDeletePayload {
             src,
             removed: false,
@@ -130,7 +133,8 @@ pub(crate) fn delete_image_asset(input: ImageDeleteInput) -> ImageDeletePayload 
     };
 
     let absolute_path = document_dir.join(
-        src.trim_start_matches("./")
+        local_src
+            .trim_start_matches("./")
             .replace('/', std::path::MAIN_SEPARATOR_STR),
     );
 
@@ -558,6 +562,39 @@ fn is_remote_image_src(src: &str) -> bool {
         || value.starts_with("https://")
         || value.starts_with("data:")
         || value.starts_with("blob:")
+}
+
+/// markdown-it 会把非 ASCII 图片路径编码为百分号形式；访问磁盘前需还原为原始 UTF-8 路径。
+fn decode_percent_encoded_path(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+            {
+                decoded.push((high << 4) | low);
+                index += 3;
+                continue;
+            }
+        }
+
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+
+    String::from_utf8(decoded).unwrap_or_else(|_| value.to_string())
+}
+
+fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn write_temp_image_file(file_name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
