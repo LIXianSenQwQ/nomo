@@ -164,6 +164,7 @@
   let updateDecisionUnlisten: (() => void) | null = null;
   let settingsCloseUnlisten: (() => void) | null = null;
   let settingsCloseListenerCancelled = false;
+  let systemThemeSyncActive = false;
   let closeInProgress = false;
 
   // 响应式派生：强制 Svelte 追踪 updateState 的变化
@@ -205,6 +206,7 @@
     desktopEnabled = isTauriRuntime();
     platformCapabilities = getPlatformCapabilities();
     settingsCloseListenerCancelled = false;
+    systemThemeSyncActive = true;
     if (desktopEnabled) {
       void initializeDesktopSettingsWindow();
     } else {
@@ -230,6 +232,7 @@
         updateDecisionUnlisten();
       }
       settingsCloseListenerCancelled = true;
+      systemThemeSyncActive = false;
       settingsCloseUnlisten?.();
       settingsCloseUnlisten = null;
       unsubscribeSoftwareUpdate();
@@ -320,9 +323,13 @@
     logToTerminal('info', 'SettingsWindow', '开始加载偏好设置');
     const timer = createPerfTimer('SettingsWindow', 'loadPreferences');
     draftSettings = await loadAppPreferences(desktopEnabled);
+    if (!systemThemeSyncActive) return;
     lastPersistedSettings = draftSettings;
-    effectiveSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
-    const resolved = await applySettingsToThisWindow(draftSettings);
+    const initialSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    if (!systemThemeSyncActive) return;
+    const resolved = await applySettingsToThisWindow(draftSettings, initialSystemScheme);
+    if (!systemThemeSyncActive) return;
+    effectiveSystemScheme = initialSystemScheme;
     writeThemeBootSnapshot(resolved);
     loaded = true;
     timer.end({ desktopEnabled });
@@ -479,10 +486,13 @@
     await invoke('close_window');
   }
 
-  async function applySettingsToThisWindow(settings: AppPreferences) {
+  async function applySettingsToThisWindow(
+    settings: AppPreferences,
+    systemScheme: ColorScheme = effectiveSystemScheme,
+  ) {
     interfaceLocale = applyInterfaceLanguagePreference(settings.interfaceLanguage);
-    const resolved = await applyThemeRuntime(settings, {
-      systemScheme: effectiveSystemScheme,
+    const resolved = applyThemeRuntime(settings, {
+      systemScheme,
       desktopEnabled,
     });
     applyTypographySettings(settings.fontSize, settings.lineHeight);
@@ -491,11 +501,27 @@
   }
 
   async function syncSystemTheme() {
-    if (!loaded || draftSettings.themeMode !== 'system') {
+    if (!systemThemeSyncActive || !loaded) {
       return;
     }
-    effectiveSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
-    await applySettingsToThisWindow(draftSettings);
+
+    const nextSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    if (
+      !systemThemeSyncActive ||
+      !loaded ||
+      nextSystemScheme === effectiveSystemScheme
+    ) {
+      return;
+    }
+    if (draftSettings.themeMode !== 'system') {
+      effectiveSystemScheme = nextSystemScheme;
+      return;
+    }
+    await applySettingsToThisWindow(draftSettings, nextSystemScheme);
+    if (!systemThemeSyncActive || !loaded || draftSettings.themeMode !== 'system') {
+      return;
+    }
+    effectiveSystemScheme = nextSystemScheme;
   }
 
   function isAppearancePreferenceKey(key: AppPreferenceKey) {

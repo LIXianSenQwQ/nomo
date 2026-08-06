@@ -2218,6 +2218,9 @@
   let fileCheckTimer: number | null = null;
   let explorerSyncInProgress = false;
   let stopSystemThemeSync: () => void = () => undefined;
+  let systemThemeListenerReady = false;
+  let appearanceRuntimeActive = false;
+  let appearanceApplyRequestId = 0;
 
   async function ensureExplorerPathExists(path: string, missingMessage: string) {
     if (!desktopEnabled) {
@@ -3050,10 +3053,19 @@
     systemScheme?: 'light' | 'dark';
     writeBootSnapshot?: boolean;
   }) {
+    const requestId = ++appearanceApplyRequestId;
+    const requestedPreferences = getCurrentAppearancePreferences();
     const systemScheme =
       options?.systemScheme ??
-      (themeMode === 'system' ? await readEffectiveSystemScheme(desktopEnabled) : undefined);
-    const resolved = await applyThemeRuntime(getCurrentAppearancePreferences(), {
+      (requestedPreferences.themeMode === 'system'
+        ? await readEffectiveSystemScheme(desktopEnabled)
+        : undefined);
+
+    if (!appearanceRuntimeActive || requestId !== appearanceApplyRequestId) {
+      return resolveTheme(requestedPreferences, systemScheme);
+    }
+
+    const resolved = applyThemeRuntime(requestedPreferences, {
       transition: options?.transition,
       systemScheme,
       desktopEnabled,
@@ -3071,11 +3083,16 @@
   }
 
   async function syncSystemThemeFromDesktop(options?: { transition?: boolean }) {
-    if (themeMode !== 'system') {
+    if (!appearanceRuntimeActive || themeMode !== 'system') {
+      return;
+    }
+
+    const systemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    if (!appearanceRuntimeActive || themeMode !== 'system' || systemScheme === theme) {
       return;
     }
     await applyCurrentAppearance({
-      systemScheme: await readEffectiveSystemScheme(desktopEnabled),
+      systemScheme,
       transition: options?.transition,
     });
   }
@@ -4201,11 +4218,11 @@
   }
 
   onMount(async () => {
+    appearanceRuntimeActive = true;
     appBootState = 'restoring-workspace';
     try {
       desktopEnabled = isTauriRuntime();
       window.addEventListener('wheel', handleGlobalWheel, { capture: true, passive: false });
-      setupSystemThemeListener();
       let persistedEditorMode: EditorMode | null = null;
       let settings: Awaited<ReturnType<typeof listAppSettings>> = [];
       let restoredWorkspaceTabs = false;
@@ -4310,6 +4327,8 @@
         persistedEditorMode = appPreferences.editorMode;
       }
 
+      setupSystemThemeListener();
+
       if (persistedEditorMode && !largeDocumentMode) {
         mode = persistedEditorMode;
         editor.updateOptions({ mode: persistedEditorMode });
@@ -4341,12 +4360,18 @@
       syncSourceTextareaHeight();
       await updateWindowTitle().catch(() => undefined);
     } finally {
+      if (appearanceRuntimeActive && !systemThemeListenerReady) {
+        setupSystemThemeListener();
+      }
       appBootState = 'ready';
       scheduleStartupSoftwareUpdateCheck();
     }
   });
 
   onDestroy(() => {
+    appearanceRuntimeActive = false;
+    appearanceApplyRequestId += 1;
+    systemThemeListenerReady = false;
     // 组件销毁前立即持久化工作区状态和阅读位置
     void flushAllSegmentedSessions().catch(() => undefined);
     void flushPersistWorkspaceState();
@@ -4982,13 +5007,17 @@
   }
 
   function setupSystemThemeListener() {
+    if (!appearanceRuntimeActive) {
+      return;
+    }
     stopSystemThemeSync();
     stopSystemThemeSync = listenForSystemThemeChanges(() => {
-      if (themeMode !== 'system') {
+      if (!appearanceRuntimeActive || themeMode !== 'system') {
         return;
       }
       return syncSystemThemeFromDesktop({ transition: true });
     });
+    systemThemeListenerReady = true;
   }
 
   async function loadFolder(folderPath: string) {

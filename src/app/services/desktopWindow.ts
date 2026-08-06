@@ -162,7 +162,6 @@ export async function setDesktopIconTheme(
   desktopEnabled: boolean,
   theme: 'light' | 'dark',
   captionBackground: string,
-  captionForeground: string,
 ) {
   if (!desktopEnabled) {
     return;
@@ -171,7 +170,7 @@ export async function setDesktopIconTheme(
   try {
     logInfo('DesktopWindow', '同步桌面图标主题', { theme });
     const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('set_desktop_icon_theme', { theme, captionBackground, captionForeground });
+    await invoke('set_desktop_icon_theme', { theme, captionBackground });
   } catch (error) {
     logError('DesktopWindow', 'Failed to sync desktop icon theme', { error: formatError(error) });
   }

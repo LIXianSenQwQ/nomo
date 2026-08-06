@@ -7,6 +7,7 @@ import type {
   ThemeStyleProfile,
   ThemeStyleTokens,
 } from '../../lib/theme/types';
+import { logError } from '../../lib/services/logger';
 import { getDesktopSystemTheme, setDesktopIconTheme } from './desktopWindow';
 import {
   DEFAULT_COLOR_THEME_ID,
@@ -159,7 +160,7 @@ export function applyResolvedTheme(
   return resolved;
 }
 
-export async function applyThemeRuntime(
+export function applyThemeRuntime(
   preferences: Partial<AppearancePreferences>,
   options?: {
     transition?: boolean;
@@ -172,12 +173,12 @@ export async function applyThemeRuntime(
   applyResolvedTheme(resolved, { transition: options?.transition });
   options?.editor?.updateTheme(resolved.editorTheme);
   if (options?.desktopEnabled !== undefined) {
-    await setDesktopIconTheme(
+    // 原生图标/背景同步不参与前端主题提交，避免 IPC 延迟让旧请求覆盖较新的主题状态。
+    void setDesktopIconTheme(
       options.desktopEnabled,
       resolved.effectiveScheme,
       resolved.tokens.titlebarBackground,
-      resolved.tokens.titlebarForeground,
-    ).catch(() => undefined);
+    );
   }
   return resolved;
 }
@@ -299,7 +300,34 @@ export function listenForSystemThemeChanges(sync: () => void | Promise<void>) {
     return () => undefined;
   }
   const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
-  const runSync = () => void sync();
+  let disposed = false;
+  let syncRunning = false;
+  let syncPending = false;
+  const runSync = () => {
+    if (disposed) return;
+    if (syncRunning) {
+      syncPending = true;
+      return;
+    }
+
+    syncRunning = true;
+    void (async () => {
+      try {
+        do {
+          syncPending = false;
+          try {
+            await sync();
+          } catch (error) {
+            logError('ThemeManager', '同步系统主题失败', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        } while (syncPending && !disposed);
+      } finally {
+        syncRunning = false;
+      }
+    })();
+  };
   const handleVisibility = () => {
     if (document.visibilityState === 'visible') {
       runSync();
@@ -311,6 +339,8 @@ export function listenForSystemThemeChanges(sync: () => void | Promise<void>) {
   document.addEventListener('visibilitychange', handleVisibility);
 
   return () => {
+    disposed = true;
+    syncPending = false;
     mediaQuery?.removeEventListener?.('change', runSync);
     window.removeEventListener('focus', runSync);
     document.removeEventListener('visibilitychange', handleVisibility);
