@@ -1,0 +1,1374 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Nomo 经典主题当前方案、冷灰雾蓝优化方案与 GitHub Light 方案的交互式对比原型"
+    />
+    <title>Nomo · 经典主题优化对比</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --stage: #e7eaed;
+        --stage-ink: #22282e;
+        --stage-muted: #67717a;
+        --stage-line: rgba(43, 52, 60, 0.12);
+        --stage-card: rgba(255, 255, 255, 0.66);
+        --font-ui: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        min-height: 100%;
+        background: var(--stage);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 14% 4%, rgba(255, 255, 255, 0.52), transparent 31rem),
+          var(--stage);
+        color: var(--stage-ink);
+        font-family: var(--font-ui);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        color: inherit;
+        font: inherit;
+      }
+
+      svg {
+        display: block;
+        width: 1em;
+        height: 1em;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
+
+      .page {
+        width: min(1510px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 18px 0 24px;
+      }
+
+      .review-bar {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.76fr) minmax(660px, 1.3fr);
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 14px;
+      }
+
+      .review-copy {
+        min-width: 0;
+      }
+
+      .eyebrow {
+        margin: 0 0 3px;
+        color: #48647a;
+        font-size: 11px;
+        font-weight: 720;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .review-copy h1 {
+        margin: 0;
+        font-size: clamp(20px, 2vw, 29px);
+        font-weight: 690;
+        letter-spacing: -0.04em;
+        line-height: 1.15;
+      }
+
+      .review-copy p {
+        overflow: hidden;
+        margin: 7px 0 0;
+        color: var(--stage-muted);
+        font-size: 12px;
+        line-height: 1.45;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .variant-switcher {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 5px;
+        padding: 5px;
+        border: 1px solid var(--stage-line);
+        border-radius: 11px;
+        background: var(--stage-card);
+        box-shadow: 0 8px 30px rgba(56, 66, 74, 0.06);
+        backdrop-filter: blur(16px);
+      }
+
+      .variant-button {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        height: 48px;
+        padding: 0 11px 0 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #59646d;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          background-color 150ms ease,
+          box-shadow 150ms ease,
+          color 150ms ease;
+      }
+
+      .variant-button:hover {
+        background: rgba(255, 255, 255, 0.48);
+        color: #303940;
+      }
+
+      .variant-button[aria-pressed='true'] {
+        background: #ffffff;
+        color: #252d33;
+        box-shadow:
+          0 1px 2px rgba(39, 48, 55, 0.08),
+          0 5px 16px rgba(39, 48, 55, 0.07);
+      }
+
+      .variant-button:focus-visible {
+        outline: 2px solid #58758e;
+        outline-offset: 2px;
+      }
+
+      .variant-index {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid rgba(51, 62, 70, 0.09);
+        border-radius: 8px;
+        background: rgba(66, 78, 87, 0.055);
+        color: #69747d;
+        font-size: 11px;
+        font-weight: 740;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .variant-button[aria-pressed='true'] .variant-index {
+        border-color: rgba(88, 117, 142, 0.18);
+        background: #e8edf1;
+        color: #3f607b;
+      }
+
+      .variant-name,
+      .variant-note {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .variant-name {
+        display: block;
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .variant-note {
+        display: block;
+        margin-top: 2px;
+        color: #7b858d;
+        font-size: 10px;
+        font-weight: 500;
+      }
+
+      .recommended {
+        color: #4b6b84;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .app-window {
+        --app-bg: #efefef;
+        --surface: #fafafa;
+        --rail: #e9e9e9;
+        --chrome: #f4f4f4;
+        --document-bg: #ffffff;
+        --sidebar-active: #e1e1e1;
+        --fg: #2e2e2e;
+        --muted: #626262;
+        --border: #d4d4d4;
+        --selection: rgba(80, 80, 80, 0.2);
+        --hover: #e6e6e6;
+        --heading: #202020;
+        --link: #116d8f;
+        --accent: #686868;
+        --accent-strong: #3f3f3f;
+        --accent-fill: #565656;
+        --on-accent: #ffffff;
+        --code-bg: #dcdcdc;
+        --code-fg: #444444;
+        --code-border: #e4e4e4;
+        --table-border: #d2d2d2;
+        --table-head: #eaeaea;
+        --titlebar: #e9e9e9;
+        --titlebar-border: #d8d8d8;
+        --quote-bg: #f0f0f0;
+        --quote-border: #8a8a8a;
+        display: grid;
+        grid-template-rows: 44px minmax(0, 1fr) 26px;
+        width: 100%;
+        height: min(780px, calc(100vh - 132px));
+        min-height: 590px;
+        overflow: hidden;
+        border: 1px solid rgba(29, 36, 41, 0.64);
+        border-radius: 13px;
+        background: var(--app-bg);
+        color: var(--fg);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.72) inset,
+          0 26px 70px rgba(41, 51, 59, 0.2);
+        transition:
+          background-color 180ms ease,
+          color 180ms ease;
+      }
+
+      .app-window[data-variant='proposed'] {
+        --app-bg: #f0f2f4;
+        --surface: #fafbfc;
+        --rail: #eceff2;
+        --chrome: #f5f6f7;
+        --document-bg: #ffffff;
+        --sidebar-active: #e1e8ee;
+        --fg: #2b3137;
+        --muted: #5e6872;
+        --border: #d8dee4;
+        --selection: rgba(88, 117, 142, 0.22);
+        --hover: #e5eaef;
+        --heading: #20262c;
+        --link: #376f98;
+        --accent: #58758e;
+        --accent-strong: #3f607b;
+        --accent-fill: #506d84;
+        --on-accent: #ffffff;
+        --code-bg: #f6f8fa;
+        --code-fg: #343b43;
+        --code-border: #dce2e8;
+        --table-border: #dce2e8;
+        --table-head: #f4f6f8;
+        --titlebar: #eef1f3;
+        --titlebar-border: #d8dee4;
+        --quote-bg: #f6f8fa;
+        --quote-border: #7890a4;
+      }
+
+      .app-window[data-variant='github'] {
+        --app-bg: #f6f8fa;
+        --surface: #ffffff;
+        --rail: #f6f8fa;
+        --chrome: #f6f8fa;
+        --document-bg: #ffffff;
+        --sidebar-active: #ddf4ff;
+        --fg: #1f2328;
+        --muted: #656d76;
+        --border: #d0d7de;
+        --selection: #b6e3ff;
+        --hover: #eaeef2;
+        --heading: #1f2328;
+        --link: #0969da;
+        --accent: #0969da;
+        --accent-strong: #0550ae;
+        --accent-fill: #0969da;
+        --on-accent: #ffffff;
+        --code-bg: #f6f8fa;
+        --code-fg: #24292f;
+        --code-border: #d0d7de;
+        --table-border: #d0d7de;
+        --table-head: #f6f8fa;
+        --titlebar: #f6f8fa;
+        --titlebar-border: #d0d7de;
+        --quote-bg: #ddf4ff;
+        --quote-border: #0969da;
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        padding-left: 12px;
+        border-bottom: 1px solid var(--titlebar-border);
+        background: var(--titlebar);
+        user-select: none;
+      }
+
+      .app-mark {
+        display: grid;
+        width: 23px;
+        height: 23px;
+        margin-right: 16px;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+        color: var(--accent-strong);
+        font-size: 12px;
+        font-weight: 780;
+      }
+
+      .menu {
+        display: flex;
+        align-items: center;
+        gap: 1px;
+        height: 100%;
+      }
+
+      .menu button,
+      .window-control {
+        border: 0;
+        background: transparent;
+      }
+
+      .menu button {
+        height: 30px;
+        padding: 0 9px;
+        border-radius: 5px;
+        color: var(--fg);
+        font-size: 13px;
+        cursor: default;
+      }
+
+      .menu button:hover,
+      .window-control:hover {
+        background: color-mix(in srgb, var(--fg) 7%, transparent);
+      }
+
+      .document-location {
+        overflow: hidden;
+        margin-left: 24px;
+        color: var(--muted);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .window-controls {
+        display: flex;
+        align-self: stretch;
+        margin-left: auto;
+      }
+
+      .window-control {
+        display: grid;
+        width: 46px;
+        place-items: center;
+        color: var(--fg);
+        cursor: default;
+      }
+
+      .window-control.close:hover {
+        background: #c42b1c;
+        color: #ffffff;
+      }
+
+      .window-control svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .app-main {
+        display: grid;
+        grid-template-columns: 244px minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .sidebar {
+        display: grid;
+        grid-template-rows: 46px minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        border-right: 1px solid var(--border);
+        background: var(--rail);
+        transition:
+          background-color 180ms ease,
+          border-color 180ms ease;
+      }
+
+      .sidebar-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px 0 14px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+      }
+
+      .sidebar-title {
+        color: var(--heading);
+        font-size: 12px;
+        font-weight: 720;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .sidebar-actions {
+        display: flex;
+        gap: 2px;
+        margin-left: auto;
+      }
+
+      .icon-button,
+      .tool-button,
+      .mode-button,
+      .copy-button {
+        display: grid;
+        place-items: center;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button {
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+      }
+
+      .icon-button:hover,
+      .tool-button:hover,
+      .mode-button:hover,
+      .copy-button:hover {
+        background: color-mix(in srgb, var(--fg) 7%, transparent);
+        color: var(--fg);
+      }
+
+      .icon-button:focus-visible,
+      .tool-button:focus-visible,
+      .mode-button:focus-visible,
+      .copy-button:focus-visible,
+      .tree-row:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      }
+
+      .icon-button svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .file-tree {
+        overflow: auto;
+        padding: 8px;
+      }
+
+      .tree-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: 15px 16px minmax(0, 1fr);
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+        height: 31px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 13px;
+        text-align: left;
+      }
+
+      .tree-row:hover {
+        background: color-mix(in srgb, var(--fg) 6%, transparent);
+        color: var(--fg);
+      }
+
+      .tree-row.root {
+        color: var(--heading);
+        font-weight: 660;
+      }
+
+      .tree-row.nested {
+        padding-left: 23px;
+      }
+
+      .tree-row.file {
+        grid-template-columns: 16px minmax(0, 1fr);
+        padding-left: 47px;
+      }
+
+      .tree-row.active {
+        background: var(--sidebar-active);
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .tree-row.active::before {
+        position: absolute;
+        top: 7px;
+        bottom: 7px;
+        left: 5px;
+        width: 2px;
+        border-radius: 99px;
+        background: var(--accent);
+        content: '';
+      }
+
+      .tree-row.active svg {
+        color: var(--accent);
+      }
+
+      .tree-row svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .tree-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .editor-shell {
+        display: grid;
+        grid-template-rows: 35px 43px minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background: var(--surface);
+        transition: background-color 180ms ease;
+      }
+
+      .tabs {
+        display: flex;
+        align-items: flex-end;
+        min-width: 0;
+        padding: 0 9px;
+        background: var(--rail);
+      }
+
+      .tab {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 142px;
+        height: 31px;
+        padding: 0 11px;
+        border: 0;
+        border-radius: 9px 9px 0 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 520;
+      }
+
+      .tab.active {
+        background: var(--surface);
+        color: var(--heading);
+        font-weight: 650;
+        box-shadow: 0 1px 0 var(--surface);
+      }
+
+      .tab.active::after {
+        position: absolute;
+        right: 11px;
+        bottom: 0;
+        left: 11px;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+        background: var(--accent);
+        content: '';
+      }
+
+      .tab svg {
+        width: 15px;
+        height: 15px;
+        color: var(--accent);
+      }
+
+      .tab span {
+        overflow: hidden;
+        flex: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tab-close {
+        display: grid;
+        width: 17px;
+        height: 17px;
+        place-items: center;
+        border-radius: 4px;
+        color: var(--muted);
+      }
+
+      .tab-close:hover {
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        min-width: 0;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        transition:
+          background-color 180ms ease,
+          border-color 180ms ease;
+      }
+
+      .tool-button {
+        width: 30px;
+        height: 30px;
+        border-radius: 5px;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .tool-button.italic {
+        font-family: Georgia, serif;
+        font-size: 17px;
+        font-style: italic;
+      }
+
+      .tool-button.selected {
+        background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+        color: var(--accent-strong);
+      }
+
+      .tool-button svg {
+        width: 17px;
+        height: 17px;
+      }
+
+      .tool-divider {
+        width: 1px;
+        height: 21px;
+        margin: 0 6px;
+        background: var(--border);
+      }
+
+      .toolbar-spacer {
+        min-width: 8px;
+        flex: 1;
+      }
+
+      .mode-switcher {
+        display: flex;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+      }
+
+      .mode-button {
+        height: 25px;
+        padding: 0 9px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+
+      .mode-button.active {
+        background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+        color: var(--accent-strong);
+        font-weight: 680;
+      }
+
+      .document-viewport {
+        position: relative;
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+        background: var(--document-bg);
+        transition: background-color 180ms ease;
+      }
+
+      .document {
+        width: min(780px, calc(100% - 310px));
+        margin: 44px 270px 96px auto;
+        color: var(--fg);
+        font-size: 15px;
+        line-height: 1.72;
+      }
+
+      .document h1,
+      .document h2 {
+        color: var(--heading);
+      }
+
+      .document h1 {
+        margin: 0 0 19px;
+        font-size: clamp(27px, 2.6vw, 38px);
+        font-weight: 740;
+        letter-spacing: -0.045em;
+        line-height: 1.2;
+      }
+
+      .document h1::before {
+        display: block;
+        width: 34px;
+        height: 3px;
+        margin-bottom: 13px;
+        border-radius: 99px;
+        background: var(--accent);
+        content: '';
+      }
+
+      .document h2 {
+        margin: 30px 0 11px;
+        padding-bottom: 7px;
+        border-bottom: 1px solid var(--border);
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+      }
+
+      .document p {
+        margin: 11px 0;
+      }
+
+      .document a {
+        color: var(--link);
+        font-weight: 550;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      .document :not(pre) > code {
+        padding: 2px 5px;
+        border: 1px solid var(--code-border);
+        border-radius: 4px;
+        background: var(--code-bg);
+        color: var(--code-fg);
+        font-family: var(--font-mono);
+        font-size: 0.89em;
+        line-height: 1;
+      }
+
+      .quote {
+        margin: 17px 0;
+        padding: 11px 15px;
+        border-left: 3px solid var(--quote-border);
+        border-radius: 5px;
+        background: var(--quote-bg);
+        color: color-mix(in srgb, var(--fg) 82%, var(--muted));
+      }
+
+      .quote strong {
+        color: var(--accent-strong);
+      }
+
+      .code-card {
+        margin: 18px 0;
+        overflow: hidden;
+        border: 1px solid var(--code-border);
+        border-radius: 6px;
+        background: var(--code-bg);
+        color: var(--code-fg);
+      }
+
+      .code-head {
+        display: flex;
+        min-height: 35px;
+        align-items: center;
+        padding: 0 8px 0 12px;
+        border-bottom: 1px solid var(--code-border);
+        color: color-mix(in srgb, var(--code-fg) 74%, transparent);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .language-dot {
+        width: 6px;
+        height: 6px;
+        margin-right: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      .copy-button {
+        width: 27px;
+        height: 25px;
+        margin-left: auto;
+        border: 1px solid var(--code-border);
+        border-radius: 4px;
+        color: color-mix(in srgb, var(--code-fg) 75%, transparent);
+      }
+
+      .copy-button svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      .code-card pre {
+        margin: 0;
+        overflow: auto;
+        padding: 12px 15px;
+        font: 12px/1.62 var(--font-mono);
+      }
+
+      .code-keyword {
+        color: #8250df;
+      }
+
+      .code-string {
+        color: #0a5b8e;
+      }
+
+      .document table {
+        width: 100%;
+        margin: 18px 0;
+        border-collapse: separate;
+        border-spacing: 0;
+        overflow: hidden;
+        border: 1px solid var(--table-border);
+        border-radius: 6px;
+        font-size: 13px;
+      }
+
+      .document th,
+      .document td {
+        padding: 8px 11px;
+        border-right: 1px solid var(--table-border);
+        border-bottom: 1px solid var(--table-border);
+        text-align: left;
+      }
+
+      .document th {
+        background: var(--table-head);
+        color: var(--heading);
+        font-weight: 700;
+      }
+
+      .document td {
+        background: var(--surface);
+      }
+
+      .document tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .document th:last-child,
+      .document td:last-child {
+        border-right: 0;
+      }
+
+      .outline {
+        position: absolute;
+        top: 38px;
+        right: 26px;
+        width: 206px;
+        padding-left: 14px;
+        border-left: 1px solid var(--border);
+        color: var(--muted);
+      }
+
+      .outline-title {
+        margin-bottom: 10px;
+        color: var(--heading);
+        font-size: 11px;
+        font-weight: 720;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .outline a {
+        display: block;
+        overflow: hidden;
+        padding: 5px 8px;
+        border-radius: 4px;
+        color: inherit;
+        font-size: 12px;
+        text-decoration: none;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .outline a.active {
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .outline a.sub {
+        padding-left: 16px;
+      }
+
+      .statusbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 12px;
+        border-top: 1px solid var(--border);
+        background: var(--chrome);
+        color: var(--muted);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .status-spacer {
+        flex: 1;
+      }
+
+      .accent-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .accent-chip::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        content: '';
+      }
+
+      .variant-caption {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        margin-top: 12px;
+        color: var(--stage-muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .caption-key {
+        flex: 0 0 auto;
+        padding: 4px 8px;
+        border: 1px solid var(--stage-line);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.42);
+        color: #4e5a63;
+        font-size: 10px;
+        font-weight: 710;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      #variant-summary {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 1120px) {
+        .review-bar {
+          grid-template-columns: 1fr;
+          gap: 13px;
+        }
+
+        .review-copy p {
+          white-space: normal;
+        }
+
+        .app-window {
+          height: 700px;
+        }
+
+        .document {
+          width: min(720px, calc(100% - 80px));
+          margin-right: auto;
+        }
+
+        .outline {
+          display: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          width: min(100% - 20px, 1510px);
+          padding-top: 10px;
+        }
+
+        .variant-switcher {
+          grid-template-columns: 1fr;
+        }
+
+        .app-window {
+          min-height: 620px;
+          border-radius: 10px;
+        }
+
+        .document-location,
+        .menu,
+        .sidebar {
+          display: none;
+        }
+
+        .app-main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .document {
+          width: calc(100% - 36px);
+          margin: 30px 18px 70px;
+        }
+
+        .toolbar {
+          overflow: hidden;
+        }
+
+        .toolbar-spacer,
+        .mode-switcher,
+        .tool-button:nth-of-type(n + 6) {
+          display: none;
+        }
+
+        .variant-caption {
+          align-items: flex-start;
+        }
+
+        #variant-summary {
+          white-space: normal;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+      <symbol id="icon-panel" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+        <path d="M8 4v16"></path>
+      </symbol>
+      <symbol id="icon-folder" viewBox="0 0 24 24">
+        <path d="M3 7.5h6l2-2h3.5a2 2 0 0 1 2 2H21v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+      </symbol>
+      <symbol id="icon-file" viewBox="0 0 24 24">
+        <path d="M6 3h8l4 4v14H6z"></path>
+        <path d="M14 3v5h5M9 13h6M9 17h5"></path>
+      </symbol>
+      <symbol id="icon-chevron" viewBox="0 0 24 24">
+        <path d="m8 10 4 4 4-4"></path>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14"></path>
+      </symbol>
+      <symbol id="icon-more" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1"></circle>
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="19" cy="12" r="1"></circle>
+      </symbol>
+      <symbol id="icon-x" viewBox="0 0 24 24">
+        <path d="m7 7 10 10M17 7 7 17"></path>
+      </symbol>
+      <symbol id="icon-minus" viewBox="0 0 24 24">
+        <path d="M6 12h12"></path>
+      </symbol>
+      <symbol id="icon-square" viewBox="0 0 24 24">
+        <rect x="6" y="6" width="12" height="12"></rect>
+      </symbol>
+      <symbol id="icon-list" viewBox="0 0 24 24">
+        <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"></path>
+      </symbol>
+      <symbol id="icon-code" viewBox="0 0 24 24">
+        <path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"></path>
+      </symbol>
+      <symbol id="icon-table" viewBox="0 0 24 24">
+        <rect x="3" y="5" width="18" height="14" rx="1"></rect>
+        <path d="M3 10h18M9 5v14M15 5v14"></path>
+      </symbol>
+      <symbol id="icon-copy" viewBox="0 0 24 24">
+        <rect x="8" y="8" width="11" height="11" rx="2"></rect>
+        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+      </symbol>
+    </svg>
+
+    <main class="page">
+      <header class="review-bar">
+        <div class="review-copy">
+          <p class="eyebrow">Nomo / Classic theme study</p>
+          <h1>经典灰，不必继续“加灰”。</h1>
+          <p>保留中性框架，用更轻的内容区块和一条低饱和冷蓝建立视线锚点。</p>
+        </div>
+
+        <div class="variant-switcher" role="group" aria-label="主题方案对比">
+          <button class="variant-button" type="button" data-variant="current" aria-pressed="false">
+            <span class="variant-index">01</span>
+            <span>
+              <span class="variant-name">当前经典灰</span>
+              <span class="variant-note">真实 token 基线</span>
+            </span>
+          </button>
+          <button class="variant-button" type="button" data-variant="proposed" aria-pressed="true">
+            <span class="variant-index">02</span>
+            <span>
+              <span class="variant-name">冷灰 · 雾蓝</span>
+              <span class="variant-note">参考 1 + 局部借鉴 GitHub</span>
+            </span>
+            <span class="recommended">推荐</span>
+          </button>
+          <button class="variant-button" type="button" data-variant="github" aria-pressed="false">
+            <span class="variant-index">03</span>
+            <span>
+              <span class="variant-name">GitHub Light</span>
+              <span class="variant-note">参考 2 完整方向</span>
+            </span>
+          </button>
+        </div>
+      </header>
+
+      <section class="app-window" data-variant="proposed" aria-label="Nomo 经典主题样例窗口">
+        <header class="titlebar">
+          <button class="icon-button" type="button" aria-label="切换侧边栏">
+            <svg><use href="#icon-panel"></use></svg>
+          </button>
+          <span class="app-mark">N</span>
+          <nav class="menu" aria-label="应用菜单">
+            <button type="button">文件</button>
+            <button type="button">编辑</button>
+            <button type="button">段落</button>
+            <button type="button">格式</button>
+            <button type="button">帮助</button>
+          </nav>
+          <span class="document-location">Nomo · docs · 主题系统重构说明.md</span>
+          <div class="window-controls" aria-label="窗口控制">
+            <button class="window-control" type="button" aria-label="最小化">
+              <svg><use href="#icon-minus"></use></svg>
+            </button>
+            <button class="window-control" type="button" aria-label="最大化">
+              <svg><use href="#icon-square"></use></svg>
+            </button>
+            <button class="window-control close" type="button" aria-label="关闭">
+              <svg><use href="#icon-x"></use></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="app-main">
+          <aside class="sidebar">
+            <header class="sidebar-head">
+              <span class="sidebar-title">资源管理器</span>
+              <div class="sidebar-actions">
+                <button class="icon-button" type="button" aria-label="新建文件">
+                  <svg><use href="#icon-plus"></use></svg>
+                </button>
+                <button class="icon-button" type="button" aria-label="更多操作">
+                  <svg><use href="#icon-more"></use></svg>
+                </button>
+              </div>
+            </header>
+            <div class="file-tree">
+              <button class="tree-row root" type="button">
+                <svg><use href="#icon-chevron"></use></svg>
+                <svg><use href="#icon-folder"></use></svg>
+                <span class="tree-label">Nomo</span>
+              </button>
+              <button class="tree-row nested" type="button">
+                <svg><use href="#icon-chevron"></use></svg>
+                <svg><use href="#icon-folder"></use></svg>
+                <span class="tree-label">docs</span>
+              </button>
+              <button class="tree-row file active" type="button">
+                <svg><use href="#icon-file"></use></svg>
+                <span class="tree-label">主题系统重构说明.md</span>
+              </button>
+              <button class="tree-row file" type="button">
+                <svg><use href="#icon-file"></use></svg>
+                <span class="tree-label">README.md</span>
+              </button>
+              <button class="tree-row file" type="button">
+                <svg><use href="#icon-file"></use></svg>
+                <span class="tree-label">CONTEXT.md</span>
+              </button>
+              <button class="tree-row nested" type="button">
+                <svg style="transform: rotate(-90deg)"><use href="#icon-chevron"></use></svg>
+                <svg><use href="#icon-folder"></use></svg>
+                <span class="tree-label">src</span>
+              </button>
+              <button class="tree-row nested" type="button">
+                <svg style="transform: rotate(-90deg)"><use href="#icon-chevron"></use></svg>
+                <svg><use href="#icon-folder"></use></svg>
+                <span class="tree-label">assets</span>
+              </button>
+            </div>
+          </aside>
+
+          <section class="editor-shell">
+            <div class="tabs">
+              <div class="tab active">
+                <svg><use href="#icon-file"></use></svg>
+                <span>主题系统重构说明.md</span>
+                <i class="tab-close" aria-hidden="true">×</i>
+              </div>
+              <div class="tab">
+                <svg><use href="#icon-file"></use></svg>
+                <span>README.md</span>
+              </div>
+            </div>
+
+            <div class="toolbar" aria-label="编辑工具栏">
+              <button class="tool-button selected" type="button" aria-label="一级标题">H1</button>
+              <button class="tool-button" type="button" aria-label="粗体">B</button>
+              <button class="tool-button italic" type="button" aria-label="斜体">I</button>
+              <span class="tool-divider"></span>
+              <button class="tool-button" type="button" aria-label="列表">
+                <svg><use href="#icon-list"></use></svg>
+              </button>
+              <button class="tool-button" type="button" aria-label="代码">
+                <svg><use href="#icon-code"></use></svg>
+              </button>
+              <button class="tool-button" type="button" aria-label="表格">
+                <svg><use href="#icon-table"></use></svg>
+              </button>
+              <span class="toolbar-spacer"></span>
+              <div class="mode-switcher" aria-label="编辑模式">
+                <button class="mode-button active" type="button">语义</button>
+                <button class="mode-button" type="button">源码</button>
+              </div>
+            </div>
+
+            <div class="document-viewport">
+              <article class="document">
+                <h1>主题系统重构说明</h1>
+                <p>
+                  经典主题的目标不是把所有区域染成灰色，而是通过清晰的灰阶层次，让
+                  <code>&lt;modules&gt;</code>、<code>flowable-service</code>
+                  与正文各自拥有稳定的阅读位置。
+                </p>
+                <p>
+                  低饱和强调色只负责当前文件、激活标签与
+                  <a href="#visual-hierarchy">可交互内容</a>，不参与大面积铺色。
+                </p>
+
+                <div class="quote">
+                  <strong>设计原则：</strong>框架保持安静，正文保持明亮，状态只在需要时被看见。
+                </div>
+
+                <h2 id="visual-hierarchy">灰阶与内容层级</h2>
+                <p>代码块用极浅背景和细边框建立边界，不再依赖一整块中灰色制造区分。</p>
+
+                <div class="code-card">
+                  <header class="code-head">
+                    <span class="language-dot"></span>
+                    <span>Plain Text</span>
+                    <button class="copy-button" type="button" aria-label="复制代码">
+                      <svg><use href="#icon-copy"></use></svg>
+                    </button>
+                  </header>
+                  <pre><code><span class="code-keyword">modules</span>/
+  editor-core/
+  theme-registry/
+  <span class="code-string">flowable-service/</span></code></pre>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>区域</th>
+                      <th>处理方式</th>
+                      <th>视觉目标</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>侧边栏</td>
+                      <td>浅冷灰 + 细分割线</td>
+                      <td>稳定但不抢正文</td>
+                    </tr>
+                    <tr>
+                      <td>内容区块</td>
+                      <td>极浅底色 + hairline</td>
+                      <td>轻、透气、可辨识</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </article>
+
+              <nav class="outline" aria-label="文档大纲">
+                <div class="outline-title">文档大纲</div>
+                <a class="active" href="#">主题系统重构说明</a>
+                <a class="sub" href="#visual-hierarchy">灰阶与内容层级</a>
+                <a class="sub" href="#">交互状态</a>
+                <a class="sub" href="#">验收清单</a>
+              </nav>
+            </div>
+          </section>
+        </div>
+
+        <footer class="statusbar">
+          <span class="accent-chip" id="status-theme">冷灰 · 雾蓝</span>
+          <span>Markdown</span>
+          <span class="status-spacer"></span>
+          <span>248 字</span>
+          <span>100%</span>
+          <span>UTF-8</span>
+        </footer>
+      </section>
+
+      <p class="variant-caption">
+        <span class="caption-key">判断</span>
+        <span id="variant-summary"
+          >推荐：保留经典主题的中性身份，以低饱和钢蓝建立状态锚点，并把代码块与表头提亮。</span
+        >
+      </p>
+    </main>
+
+    <script>
+      const variants = {
+        current: {
+          name: '当前经典灰',
+          summary:
+            '当前：正文已经是白色，但侧栏、标题栏和代码块灰度偏重，且强调色仍是灰色，状态锚点不够清楚。',
+        },
+        proposed: {
+          name: '冷灰 · 雾蓝',
+          summary: '推荐：保留经典主题的中性身份，以低饱和钢蓝建立状态锚点，并把代码块与表头提亮。',
+        },
+        github: {
+          name: 'GitHub Light',
+          summary:
+            '参考 2：对开发者最熟悉、对比最直接，但品牌色更强，会把“经典灰”推向独立的 GitHub 主题。',
+        },
+      };
+
+      const appWindow = document.querySelector('.app-window');
+      const summary = document.querySelector('#variant-summary');
+      const statusTheme = document.querySelector('#status-theme');
+      const buttons = [...document.querySelectorAll('.variant-button')];
+
+      function selectVariant(variant) {
+        appWindow.dataset.variant = variant;
+        summary.textContent = variants[variant].summary;
+        statusTheme.textContent = variants[variant].name;
+        buttons.forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.variant === variant));
+        });
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => selectVariant(button.dataset.variant));
+      });
+    </script>
+  </body>
+</html>
