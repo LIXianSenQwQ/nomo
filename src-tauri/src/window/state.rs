@@ -1,6 +1,8 @@
 use crate::models::WindowStateInput;
 use crate::window::commands::update_window_state;
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+use std::sync::{mpsc, Mutex, OnceLock};
+use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 
 const MIN_WINDOW_WIDTH: u32 = 920;
@@ -17,8 +19,11 @@ const MARKDOWN_MINI_MIN_WINDOW_HEIGHT: u32 = 240;
 const MARKDOWN_MINI_DEFAULT_WINDOW_WIDTH: u32 = 460;
 const MARKDOWN_MINI_DEFAULT_WINDOW_HEIGHT: u32 = 560;
 const MIN_VISIBLE_SIZE: i32 = 80;
+const WINDOW_STATE_PERSIST_DELAY: Duration = Duration::from_millis(250);
 
 static MARKDOWN_MINI_RUNTIME_STATE: OnceLock<Mutex<Option<MarkdownMiniRuntimeState>>> =
+    OnceLock::new();
+static WINDOW_STATE_PERSIST_SENDER: OnceLock<mpsc::Sender<WindowStatePersistCommand>> =
     OnceLock::new();
 
 #[derive(Clone)]
@@ -30,10 +35,40 @@ struct MarkdownMiniRuntimeState {
     was_fullscreen: bool,
 }
 
+#[derive(Clone)]
+struct WindowStateSnapshot {
+    app: AppHandle,
+    label: String,
+    position: tauri::PhysicalPosition<i32>,
+    size: tauri::PhysicalSize<u32>,
+    maximized: bool,
+}
+
+enum WindowStatePersistCommand {
+    Schedule(WindowStateSnapshot),
+    Flush(WindowStateSnapshot, mpsc::SyncSender<Result<(), String>>),
+}
+
 pub(crate) fn persist_window_state_after_geometry_change(window: &tauri::Window) {
-    // 小窗在返回或销毁时一次保存最终边界，拖动期间不触发配置磁盘写入。
-    if !is_markdown_mini_mode_window(window.label()) {
-        persist_current_window_state(window);
+    if is_markdown_mini_mode_window(window.label()) {
+        // 小窗在返回或销毁时一次保存最终边界，拖动期间不触发配置磁盘写入。
+        return;
+    }
+
+    let snapshot = match capture_current_window_state(window) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            log_window_state_persist_error(window.label(), &error);
+            return;
+        }
+    };
+
+    // 窗口尺寸和 WebView 布局仍由系统实时更新；这里只合并高频配置写盘。
+    if window_state_persist_sender()
+        .send(WindowStatePersistCommand::Schedule(snapshot.clone()))
+        .is_err()
+    {
+        persist_window_state_snapshot_and_log(snapshot);
     }
 }
 
@@ -41,34 +76,117 @@ pub(crate) fn persist_window_state_before_destroy(window: &tauri::Window) {
     if is_markdown_mini_mode_window(window.label()) {
         persist_markdown_mini_window_state(window);
     } else {
-        persist_current_window_state(window);
+        flush_current_window_state(window);
     }
 }
 
-pub(crate) fn persist_current_window_state(window: &tauri::Window) {
-    let result = (|| {
-        let position = window
-            .outer_position()
-            .map_err(|error| format!("读取窗口位置失败：{error}"))?;
-        let size = window
-            .inner_size()
-            .map_err(|error| format!("读取窗口尺寸失败：{error}"))?;
-        let maximized = window.is_maximized().unwrap_or(false);
-        persist_window_geometry(
-            window.app_handle().clone(),
-            window.label(),
-            position,
-            size,
-            maximized,
-        )
-    })();
+fn capture_current_window_state(window: &tauri::Window) -> Result<WindowStateSnapshot, String> {
+    let position = window
+        .outer_position()
+        .map_err(|error| format!("读取窗口位置失败：{error}"))?;
+    let size = window
+        .inner_size()
+        .map_err(|error| format!("读取窗口尺寸失败：{error}"))?;
 
-    if let Err(error) = result {
-        crate::app_logger::warn(
-            "Window",
-            &format!("持久化窗口状态失败：label={} error={error}", window.label()),
-        );
+    Ok(WindowStateSnapshot {
+        app: window.app_handle().clone(),
+        label: window.label().to_string(),
+        position,
+        size,
+        maximized: window.is_maximized().unwrap_or(false),
+    })
+}
+
+fn flush_current_window_state(window: &tauri::Window) {
+    let snapshot = match capture_current_window_state(window) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            log_window_state_persist_error(window.label(), &error);
+            return;
+        }
+    };
+    let fallback_snapshot = snapshot.clone();
+    let (result_sender, result_receiver) = mpsc::sync_channel(0);
+
+    if window_state_persist_sender()
+        .send(WindowStatePersistCommand::Flush(snapshot, result_sender))
+        .is_err()
+    {
+        persist_window_state_snapshot_and_log(fallback_snapshot);
+        return;
     }
+
+    match result_receiver.recv() {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            log_window_state_persist_error(&fallback_snapshot.label, &error);
+        }
+        Err(_) => persist_window_state_snapshot_and_log(fallback_snapshot),
+    }
+}
+
+fn window_state_persist_sender() -> &'static mpsc::Sender<WindowStatePersistCommand> {
+    WINDOW_STATE_PERSIST_SENDER.get_or_init(|| {
+        let (sender, receiver) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("nomo-window-state-persist".to_string())
+            .spawn(move || run_window_state_persist_worker(receiver))
+            .expect("failed to start window state persistence worker");
+        sender
+    })
+}
+
+fn run_window_state_persist_worker(receiver: mpsc::Receiver<WindowStatePersistCommand>) {
+    let mut pending = HashMap::<String, WindowStateSnapshot>::new();
+
+    loop {
+        match receiver.recv_timeout(WINDOW_STATE_PERSIST_DELAY) {
+            Ok(WindowStatePersistCommand::Schedule(snapshot)) => {
+                pending.insert(snapshot.label.clone(), snapshot);
+            }
+            Ok(WindowStatePersistCommand::Flush(snapshot, result_sender)) => {
+                pending.remove(&snapshot.label);
+                let result = persist_window_state_snapshot(snapshot);
+                let _ = result_sender.send(result);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                for (_, snapshot) in pending.drain() {
+                    persist_window_state_snapshot_and_log(snapshot);
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                for (_, snapshot) in pending.drain() {
+                    persist_window_state_snapshot_and_log(snapshot);
+                }
+                return;
+            }
+        }
+    }
+}
+
+fn persist_window_state_snapshot(snapshot: WindowStateSnapshot) -> Result<(), String> {
+    let WindowStateSnapshot {
+        app,
+        label,
+        position,
+        size,
+        maximized,
+    } = snapshot;
+    persist_window_geometry(app, &label, position, size, maximized)
+}
+
+fn persist_window_state_snapshot_and_log(snapshot: WindowStateSnapshot) {
+    let label = snapshot.label.clone();
+    if let Err(error) = persist_window_state_snapshot(snapshot) {
+        log_window_state_persist_error(&label, &error);
+    }
+}
+
+fn log_window_state_persist_error(label: &str, error: &str) {
+    crate::app_logger::warn(
+        "Window",
+        &format!("持久化窗口状态失败：label={label} error={error}"),
+    );
 }
 
 pub(crate) fn enter_markdown_mini_mode(window: &WebviewWindow, pinned: bool) -> Result<(), String> {
