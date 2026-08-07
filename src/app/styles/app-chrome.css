@@ -2,6 +2,7 @@
   --editor-search-panel-top: 44px;
   container-type: inline-size;
   position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
@@ -17,7 +18,8 @@
   --editor-card-surface: var(--md-editor-surface);
   --editor-card-edge-color: color-mix(in srgb, var(--md-editor-border) 76%, transparent);
   --editor-card-shadow-color: color-mix(in srgb, var(--md-editor-border) 34%, transparent);
-  --editor-tab-shadow-color: color-mix(in srgb, var(--md-editor-border) 42%, transparent);
+  --editor-card-top-shadow-color: color-mix(in srgb, #000000 12%, transparent);
+  --editor-tab-shadow-color: color-mix(in srgb, #000000 16%, transparent);
   grid-template-rows: auto minmax(0, 1fr);
   border-top-left-radius: 0;
   background: var(--md-editor-rail);
@@ -44,6 +46,21 @@
   z-index: 2;
   border-top-left-radius: 0;
   background: transparent;
+  overflow: visible;
+}
+
+.editor-shell.has-open-document > .topbar::after {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  height: var(--md-editor-radius-lg);
+  border-radius: var(--md-editor-radius-lg) 0 0 0;
+  box-shadow: 0 -1px 4px -1px var(--editor-card-top-shadow-color);
+  clip-path: inset(-4px -4px 0 -4px);
+  pointer-events: none;
+  content: '';
 }
 
 .editor-shell > .topbar,
@@ -279,6 +296,15 @@
   opacity: 0;
   pointer-events: none;
   will-change: transform, width;
+}
+
+.tab-top-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 -1px 2px -1px var(--editor-tab-shadow-color);
+  clip-path: inset(-3px -3px calc(100% - 10px) -3px);
+  pointer-events: none;
 }
 
 .tabs-container[data-indicator-ready='true'] .tab-active-indicator {

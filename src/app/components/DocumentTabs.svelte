@@ -322,7 +322,9 @@
         layoutKey: tabMeasureKey,
       }}
     >
-      <span class="tab-active-indicator" aria-hidden="true"></span>
+      <span class="tab-active-indicator" aria-hidden="true">
+        <span class="tab-top-shadow"></span>
+      </span>
       {#each tabs.slice(visibleRange.start, visibleRange.end) as tab (tab.id)}
         <button
           type="button"

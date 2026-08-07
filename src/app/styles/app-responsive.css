@@ -96,7 +96,11 @@
   box-sizing: border-box;
   font-size: var(--md-editor-ui-font-size-sm);
   color: var(--md-titlebar-fg);
-  z-index: 2000;
+  z-index: 0;
+}
+
+.titlebar:has(.dropdown-menu) {
+  z-index: 2002;
 }
 
 .titlebar-row {
