@@ -1,4 +1,15 @@
-@media (max-width: 1320px) {
+@container (max-width: 900px) {
+  .editor-grid:has(> .content-outline) .document-layout {
+    grid-template-columns: 1fr;
+    justify-content: center;
+  }
+
+  .editor-grid:has(> .content-outline) .document-layout > .prosemirror-host,
+  .editor-grid:has(> .content-outline) .document-layout > .source-editor,
+  .editor-grid:has(> .content-outline) .document-layout > .front-matter-card {
+    grid-column: 1;
+  }
+
   .content-outline {
     display: none;
   }

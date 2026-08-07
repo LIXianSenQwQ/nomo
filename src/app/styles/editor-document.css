@@ -43,6 +43,21 @@
   background: var(--md-editor-document-bg);
 }
 
+.editor-grid:has(> .content-outline) .document-layout {
+  --md-editor-outline-safe-space: calc(224px + clamp(32px, 3.5cqw, 160px));
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, min(100%, calc(var(--md-editor-content-width-percent) * 1cqw)))
+    minmax(var(--md-editor-outline-safe-space), 1fr);
+  justify-content: stretch;
+}
+
+.editor-grid:has(> .content-outline) .document-layout > .prosemirror-host,
+.editor-grid:has(> .content-outline) .document-layout > .source-editor,
+.editor-grid:has(> .content-outline) .document-layout > .front-matter-card {
+  grid-column: 2;
+}
+
 .prosemirror-host {
   position: relative;
   grid-column: 1;

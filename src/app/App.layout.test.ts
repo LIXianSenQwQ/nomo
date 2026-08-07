@@ -165,6 +165,14 @@ describe('App outline layout', () => {
     .map((path) => readFileSync(resolve(__dirname, path), 'utf-8'))
     .join('\n');
   const responsiveStyles = readFileSync(resolve(__dirname, 'styles/app-responsive.css'), 'utf-8');
+  const documentStylesSource = readFileSync(
+    resolve(__dirname, 'styles/editor-document.css'),
+    'utf-8',
+  );
+  const outlineStylesSource = readFileSync(
+    resolve(__dirname, 'styles/editor-outline.css'),
+    'utf-8',
+  );
 
   function extractCssBlock(source: string, selector: string, fromIndex = 0) {
     const selectorIndex = source.indexOf(selector, fromIndex);
@@ -185,15 +193,43 @@ describe('App outline layout', () => {
     throw new Error(`CSS block not closed: ${selector}`);
   }
 
-  it('keeps the document outline out of the document layout flow', () => {
+  it('keeps the document centered until it needs to avoid the floating outline', () => {
     const documentLayouts =
       editorSource.match(/<div class="document-layout">[\s\S]*?<\/div>/g) ?? [];
+    const adaptiveDocumentStyles = extractCssBlock(
+      documentStylesSource,
+      '.editor-grid:has(> .content-outline) .document-layout',
+    );
+    const compactOutlineStyles = extractCssBlock(
+      responsiveStyles,
+      '@container (max-width: 900px)',
+    );
+    const outlineStyles = extractCssBlock(outlineStylesSource, '.content-outline');
 
     expect(documentLayouts).toHaveLength(2);
     for (const layout of documentLayouts) {
       expect(layout).not.toContain('class="content-outline"');
     }
-    expect(styles).toMatch(/\.content-outline\s*\{[\s\S]*?position:\s*fixed;/);
+    expect(adaptiveDocumentStyles).toContain(
+      '--md-editor-outline-safe-space: calc(224px + clamp(32px, 3.5cqw, 160px));',
+    );
+    expect(adaptiveDocumentStyles).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*min\(100%,\s*calc\(var\(--md-editor-content-width-percent\) \* 1cqw\)\)\)\s*minmax\(var\(--md-editor-outline-safe-space\),\s*1fr\);/,
+    );
+    expect(adaptiveDocumentStyles).toMatch(/justify-content:\s*stretch;/);
+    expect(documentStylesSource).toMatch(
+      /\.editor-grid:has\(> \.content-outline\) \.document-layout > \.front-matter-card\s*\{[\s\S]*?grid-column:\s*2;/,
+    );
+    expect(outlineStyles).toMatch(/position:\s*fixed;/);
+    expect(outlineStyles).toMatch(/width:\s*220px;/);
+    expect(outlineStyles).toMatch(/right:\s*clamp\(32px,\s*3\.5cqw,\s*160px\);/);
+    expect(compactOutlineStyles).toMatch(
+      /\.editor-grid:has\(> \.content-outline\) \.document-layout\s*\{[\s\S]*?grid-template-columns:\s*1fr;[\s\S]*?justify-content:\s*center;/,
+    );
+    expect(compactOutlineStyles).toMatch(
+      /\.editor-grid:has\(> \.content-outline\) \.document-layout > \.front-matter-card\s*\{[\s\S]*?grid-column:\s*1;/,
+    );
+    expect(compactOutlineStyles).toMatch(/\.content-outline\s*\{[\s\S]*?display:\s*none;/);
     expect(styles).toMatch(/\.editor-shell\s*\{[\s\S]*?container-type:\s*inline-size;/);
     expect(styles).toMatch(/\.image-node\.is-badge img\s*\{[\s\S]*?height:\s*20px;/);
     expect(styles).toMatch(/\.image-node\.is-badge img\s*\{[\s\S]*?min-width:\s*0;/);
@@ -214,9 +250,6 @@ describe('App outline layout', () => {
     );
     expect(styles).toMatch(
       /\.prosemirror-host \.ProseMirror \.html-widget:has\(img\[src\*='img\.shields\.io'\]\)[\s\S]*?display:\s*block;/,
-    );
-    expect(styles).toMatch(
-      /\.content-outline\s*\{[\s\S]*?right:\s*clamp\(32px,\s*3\.5cqw,\s*160px\);/,
     );
     expect(styles).not.toContain('7vw');
   });
