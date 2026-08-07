@@ -4748,7 +4748,8 @@
         format === 'html'
           ? t.exportHtmlSuccess({ path: result.filePath! })
           : t.exportPdfSuccess({ path: result.filePath! });
-      showToast(message, 2500);
+      const warningText = result.warnings?.filter(Boolean).join('；');
+      showToast(warningText ? `${message}；${warningText}` : message, warningText ? 5000 : 2500);
     } else {
       showToast(result.error ?? t.exportFailed(), 3500);
     }

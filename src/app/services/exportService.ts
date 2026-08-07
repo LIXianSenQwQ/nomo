@@ -7,6 +7,13 @@ import { logDebug, logInfo, logWarn } from '../../lib/services/logger';
 import exportCssContent from '../styles/export-document.css?inline';
 
 const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 8_000;
+const PDF_OUTLINE_MARKER_HOST = 'nomo-pdf-outline.invalid';
+
+interface PdfOutlineEntry {
+  marker_uri: string;
+  title: string;
+  level: number;
+}
 
 export interface ExportDocumentInput {
   /** 当前文档 Markdown 内容（用于 fallback 或元数据）。 */
@@ -91,22 +98,96 @@ export async function exportPdf(input: ExportDocumentInput): Promise<ExportResul
       return { success: false, cancelled: true };
     }
 
+    const pdfDocument = addPdfOutlineMarkers(html);
     const result = await exportPdfFromHtml({
-      html_content: html,
+      html_content: pdfDocument.html,
       file_path: filePath,
       paper_size: 'A4',
       orientation: 'portrait',
       margins: { top: 20, right: 20, bottom: 20, left: 20 },
       print_background: true,
+      outline: pdfDocument.outline,
     });
 
-    logInfo('exportService', 'PDF 导出完成', { filePath, bytes: result.bytes_written });
-    return { success: true, filePath, warnings };
+    const mergedWarnings = [...warnings, ...(result.warnings ?? [])];
+    logInfo('exportService', 'PDF 导出完成', {
+      filePath,
+      bytes: result.bytes_written,
+      outlineCount: pdfDocument.outline.length,
+      warningCount: mergedWarnings.length,
+    });
+    return { success: true, filePath, warnings: mergedWarnings };
   }).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     logWarn('exportService', 'PDF 导出失败', { error: message });
     return { success: false, error: message };
   });
+}
+
+/**
+ * 为 PDF 打印副本加入标题定位标记。标记链接会在 Rust 后处理中转换为 PDF 书签并移除。
+ */
+export function addPdfOutlineMarkers(html: string): { html: string; outline: PdfOutlineEntry[] } {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const headings = Array.from(
+    doc.querySelectorAll(
+      '.nomo-export h1, .nomo-export h2, .nomo-export h3, .nomo-export h4, .nomo-export h5, .nomo-export h6',
+    ),
+  );
+  const outline: PdfOutlineEntry[] = [];
+  const jobId = createPdfOutlineJobId();
+
+  for (const heading of headings) {
+    const title = (heading.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!title) {
+      continue;
+    }
+
+    const level = Number.parseInt(heading.tagName.slice(1), 10);
+    const markerUri = `https://${PDF_OUTLINE_MARKER_HOST}/${jobId}/${outline.length}`;
+    const marker = doc.createElement('a');
+    marker.className = 'nomo-pdf-outline-marker';
+    marker.href = markerUri;
+    marker.setAttribute('aria-hidden', 'true');
+    marker.setAttribute('tabindex', '-1');
+    heading.classList.add('nomo-pdf-outline-heading');
+    heading.prepend(marker);
+    outline.push({ marker_uri: markerUri, title, level });
+  }
+
+  if (outline.length > 0) {
+    const style = doc.createElement('style');
+    style.textContent = `
+.nomo-pdf-outline-heading { position: relative; }
+.nomo-pdf-outline-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  text-decoration: none;
+}
+`;
+    doc.head.append(style);
+  }
+
+  return {
+    html: `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`,
+    outline,
+  };
+}
+
+function createPdfOutlineJobId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 /**

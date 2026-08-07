@@ -310,7 +310,7 @@ fn encode_markdown(markdown: &str, encoding: MarkdownEncoding) -> Result<Vec<u8>
     }
 }
 
-fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
         .filter(|value| !value.as_os_str().is_empty())
@@ -335,7 +335,7 @@ fn write_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
     if let Err(error) = replace_file(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
-        return Err(format!("保存 Markdown 文件失败：{error}"));
+        return Err(format!("保存文件失败：{error}"));
     }
 
     sync_parent_dir(parent);

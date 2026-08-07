@@ -1,9 +1,6 @@
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { createPerfTimer, logDebug, logInfo, perfAsync } from '../../lib/services/logger';
-import {
-  normalizeMarkdownEncoding,
-  type MarkdownEncoding,
-} from '../../lib/services/storage';
+import { normalizeMarkdownEncoding, type MarkdownEncoding } from '../../lib/services/storage';
 
 export interface NativeDocument {
   path: string;
@@ -158,11 +155,13 @@ interface ExportPdfInput {
   orientation?: string;
   margins?: { top: number; right: number; bottom: number; left: number };
   print_background?: boolean;
+  outline?: Array<{ marker_uri: string; title: string; level: number }>;
 }
 
 interface ExportResultPayload {
   file_path: string;
   bytes_written: number;
+  warnings?: string[];
 }
 
 interface Base64FileResultPayload {

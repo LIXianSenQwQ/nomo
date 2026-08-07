@@ -152,7 +152,7 @@ pub(crate) struct ExportHtmlInput {
     pub(crate) file_path: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct PdfMarginsInput {
     pub(crate) top: f64,
     pub(crate) right: f64,
@@ -160,7 +160,14 @@ pub(crate) struct PdfMarginsInput {
     pub(crate) left: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct PdfOutlineEntry {
+    pub(crate) marker_uri: String,
+    pub(crate) title: String,
+    pub(crate) level: u8,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct ExportPdfInput {
     pub(crate) html_content: String,
     pub(crate) file_path: String,
@@ -168,12 +175,16 @@ pub(crate) struct ExportPdfInput {
     pub(crate) orientation: Option<String>,
     pub(crate) margins: Option<PdfMarginsInput>,
     pub(crate) print_background: Option<bool>,
+    #[serde(default)]
+    pub(crate) outline: Vec<PdfOutlineEntry>,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct ExportResult {
     pub(crate) file_path: String,
     pub(crate) bytes_written: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(crate) warnings: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

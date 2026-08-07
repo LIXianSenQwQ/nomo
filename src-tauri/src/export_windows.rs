@@ -1,164 +1,254 @@
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::AppHandle;
+use tokio::sync::oneshot;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    ICoreWebView2Environment6, ICoreWebView2_7, COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE,
+    COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT,
+};
+use webview2_com::{
+    CoTaskMemPWSTR, DocumentTitleChangedEventHandler, ExecuteScriptCompletedHandler,
+    PrintToPdfCompletedHandler,
+};
+use windows_core::{Interface, HSTRING, PWSTR};
 
-use crate::export::{cleanup_temp_dir, write_temp_html};
-use crate::models::{ExportPdfInput, ExportResult};
+use crate::models::ExportPdfInput;
 
-const EDGE_PATHS: [&str; 3] = [
-    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Users\{USER}\AppData\Local\Microsoft\Edge\Application\msedge.exe",
-];
+const MILLIMETERS_PER_INCH: f64 = 25.4;
+const DEFAULT_MARGIN_MM: f64 = 20.0;
+static DOCUMENT_READY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
-pub(crate) async fn print_html_to_pdf(
-    app: AppHandle,
-    input: ExportPdfInput,
-) -> Result<ExportResult, String> {
-    let html_path = write_temp_html(&app, &input.html_content).map_err(|e| e.to_string())?;
-    let pdf_path = input.file_path.clone();
-
-    let result = print_with_edge(&html_path, &pdf_path, &input).await;
-
-    cleanup_temp_dir(&html_path);
-    result
-}
-
-async fn print_with_edge(
+pub(crate) async fn render_html_to_pdf(
+    app: &AppHandle,
     html_path: &Path,
-    pdf_path: &str,
+    output_path: &Path,
     input: &ExportPdfInput,
-) -> Result<ExportResult, String> {
-    let html_file_url = path_to_file_url(html_path)?;
-    let edge_path = find_edge_executable().ok_or(
-        "未找到 Microsoft Edge，无法使用系统浏览器生成 PDF。请安装 Edge 或等待后续 WebView2 原生打印实现。".to_string(),
-    )?;
+) -> Result<(), String> {
+    let export_window = crate::export::create_pdf_export_window(app, html_path).await?;
+    wait_for_document_ready(export_window.window()).await?;
+    print_webview_to_pdf(export_window.window(), output_path, input).await
+}
 
-    let mut cmd = Command::new(&edge_path);
-    cmd.arg("--headless")
-        .arg("--disable-gpu")
-        .arg("--run-all-compositor-stages-before-draw")
-        .arg("--disable-extensions")
-        .arg("--no-sandbox")
-        .arg("--disable-dev-shm-usage")
-        // 同时传入新旧参数名，确保不同 Edge/Chromium 版本都能正确关闭
-        // 浏览器自动页眉页脚（日期、文件名、file:// 路径、页码等）。
-        .arg("--no-pdf-header-footer")
-        .arg("--print-to-pdf-no-header")
-        .arg(format!("--print-to-pdf={}", pdf_path))
-        .arg(&html_file_url)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+async fn wait_for_document_ready(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let sequence = DOCUMENT_READY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let ready_title = format!("nomo-pdf-document-ready-{sequence}");
+    let error_title = format!("nomo-pdf-document-error-{sequence}");
+    let script = r#"
+(async () => {
+  if (document.fonts && document.fonts.ready) {
+    await document.fonts.ready;
+  }
+  await Promise.all(Array.from(document.images).map((image) => {
+    if (image.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      image.addEventListener('load', resolve, { once: true });
+      image.addEventListener('error', resolve, { once: true });
+    });
+  }));
+  document.title = '__READY_TITLE__';
+})().catch(() => {
+  document.title = '__ERROR_TITLE__';
+})
+"#
+    .replace("__READY_TITLE__", &ready_title)
+    .replace("__ERROR_TITLE__", &error_title);
+    let (result_tx, result_rx) = oneshot::channel();
+    let result_tx = Arc::new(Mutex::new(Some(result_tx)));
+    let callback_tx = Arc::clone(&result_tx);
+    let callback_ready_title = ready_title.clone();
+    let callback_error_title = error_title.clone();
 
+    window
+        .with_webview(move |platform_webview| {
+            let operation = (|| -> Result<(), String> {
+                let controller = platform_webview.controller();
+                let core = unsafe { controller.CoreWebView2() }
+                    .map_err(|error| format!("获取 WebView2 实例失败：{error}"))?;
+                let title_tx = Arc::clone(&callback_tx);
+                let title_handler =
+                    DocumentTitleChangedEventHandler::create(Box::new(move |webview, _args| {
+                        let Some(webview) = webview else {
+                            return Ok(());
+                        };
+                        let mut title = PWSTR::null();
+                        if unsafe { webview.DocumentTitle(&mut title) }.is_err() {
+                            return Ok(());
+                        }
+                        let title = CoTaskMemPWSTR::from(title).to_string();
+                        if title == callback_ready_title {
+                            send_once(&title_tx, Ok(()));
+                        } else if title == callback_error_title {
+                            send_once(
+                                &title_tx,
+                                Err("等待 PDF 页面字体和图片完成失败".to_string()),
+                            );
+                        }
+                        Ok(())
+                    }));
+                let mut title_token = 0;
+                unsafe { core.add_DocumentTitleChanged(&title_handler, &mut title_token) }
+                    .map_err(|error| format!("监听 PDF 页面资源状态失败：{error}"))?;
+
+                let script = HSTRING::from(script);
+                let execute_tx = Arc::clone(&callback_tx);
+                let execute_handler =
+                    ExecuteScriptCompletedHandler::create(Box::new(move |status, _result| {
+                        if let Err(error) = status {
+                            send_once(
+                                &execute_tx,
+                                Err(format!("执行 PDF 页面资源检查失败：{error}")),
+                            );
+                        }
+                        Ok(())
+                    }));
+                unsafe { core.ExecuteScript(&script, &execute_handler) }
+                    .map_err(|error| format!("执行 PDF 页面资源检查失败：{error}"))
+            })();
+
+            if let Err(error) = operation {
+                send_once(&result_tx, Err(error));
+            }
+        })
+        .map_err(|error| format!("访问 PDF 导出 WebView 失败：{error}"))?;
+
+    result_rx
+        .await
+        .map_err(|_| "等待 PDF 页面资源时 WebView 已关闭".to_string())?
+}
+
+async fn print_webview_to_pdf(
+    window: &tauri::WebviewWindow,
+    output_path: &Path,
+    input: &ExportPdfInput,
+) -> Result<(), String> {
+    let output_path = output_path.to_path_buf();
+    let input = input.clone();
+    let (result_tx, result_rx) = oneshot::channel();
+    let result_tx = Arc::new(Mutex::new(Some(result_tx)));
+    let callback_tx = Arc::clone(&result_tx);
+
+    window
+        .with_webview(move |platform_webview| {
+            let operation = (|| -> Result<(), String> {
+                let controller = platform_webview.controller();
+                let core = unsafe { controller.CoreWebView2() }
+                    .map_err(|error| format!("获取 WebView2 实例失败：{error}"))?;
+                let environment = platform_webview.environment();
+                let environment6: ICoreWebView2Environment6 = environment
+                    .cast()
+                    .map_err(|error| format!("当前 WebView2 Runtime 不支持 PDF 打印：{error}"))?;
+                let print_settings = unsafe { environment6.CreatePrintSettings() }
+                    .map_err(|error| format!("创建 WebView2 打印设置失败：{error}"))?;
+
+                configure_print_settings(&print_settings, &input)?;
+
+                let core7: ICoreWebView2_7 = core
+                    .cast()
+                    .map_err(|error| format!("当前 WebView2 Runtime 不支持 PDF 打印：{error}"))?;
+                let output_path = HSTRING::from(output_path.as_path());
+                let handler =
+                    PrintToPdfCompletedHandler::create(Box::new(move |status, succeeded| {
+                        let outcome = status
+                            .map_err(|error| format!("WebView2 PDF 打印失败：{error}"))
+                            .and_then(|_| {
+                                if succeeded {
+                                    Ok(())
+                                } else {
+                                    Err("WebView2 未能生成 PDF".to_string())
+                                }
+                            });
+                        send_once(&callback_tx, outcome);
+                        Ok(())
+                    }));
+
+                unsafe { core7.PrintToPdf(&output_path, &print_settings, &handler) }
+                    .map_err(|error| format!("启动 WebView2 PDF 打印失败：{error}"))
+            })();
+
+            if let Err(error) = operation {
+                send_once(&result_tx, Err(error));
+            }
+        })
+        .map_err(|error| format!("访问 PDF 导出 WebView 失败：{error}"))?;
+
+    result_rx
+        .await
+        .map_err(|_| "等待 WebView2 PDF 打印时 WebView 已关闭".to_string())?
+}
+
+fn configure_print_settings(
+    settings: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2PrintSettings,
+    input: &ExportPdfInput,
+) -> Result<(), String> {
+    let (page_width, page_height) = paper_size_inches(input.paper_size.as_deref());
+    let landscape = input.orientation.as_deref() == Some("landscape");
     let margins = input.margins.as_ref();
-    if let Some(m) = margins {
-        cmd.arg(format!("--print-to-pdf-margin-top={}", m.top));
-        cmd.arg(format!("--print-to-pdf-margin-right={}", m.right));
-        cmd.arg(format!("--print-to-pdf-margin-bottom={}", m.bottom));
-        cmd.arg(format!("--print-to-pdf-margin-left={}", m.left));
-    }
+    let margin_top = millimeters_to_inches(margins.map(|value| value.top));
+    let margin_right = millimeters_to_inches(margins.map(|value| value.right));
+    let margin_bottom = millimeters_to_inches(margins.map(|value| value.bottom));
+    let margin_left = millimeters_to_inches(margins.map(|value| value.left));
 
-    if input.orientation.as_deref() == Some("landscape") {
-        cmd.arg("--landscape");
-    }
-
-    match input.paper_size.as_deref() {
-        Some("Letter") | Some("letter") => {
-            cmd.arg("--page-size=letter");
-        }
-        Some("A4") | Some("a4") | None => {
-            cmd.arg("--page-size=A4");
-        }
-        Some(size) => {
-            crate::app_logger::warn("Export", &format!("暂不支持的纸张大小：{size}，使用 A4"));
-            cmd.arg("--page-size=A4");
-        }
-    }
-
-    // Edge/Chromium headless 默认会按 CSS 打印背景色；print_background=false 暂无可靠命令行开关。
-    let _ = input.print_background;
-
-    let output = cmd
-        .output()
-        .map_err(|e| format!("启动 Edge 打印失败：{e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Edge 打印 PDF 失败：{stderr}"));
-    }
-
-    if !Path::new(pdf_path).exists() {
-        return Err("PDF 文件未生成".to_string());
-    }
-
-    let bytes_written = std::fs::metadata(pdf_path)
-        .map(|m| m.len() as usize)
-        .unwrap_or(0);
-
-    crate::app_logger::info(
-        "Export",
-        &format!("已通过 Edge 生成 PDF：{pdf_path} ({bytes_written} bytes)"),
-    );
-
-    Ok(ExportResult {
-        file_path: pdf_path.to_string(),
-        bytes_written,
-    })
-}
-
-fn find_edge_executable() -> Option<PathBuf> {
-    // 先检查固定路径。
-    for path in &EDGE_PATHS {
-        let expanded = if path.contains("{USER}") {
-            if let Ok(user) = std::env::var("USERPROFILE") {
-                path.replace("{USER}", &user)
+    unsafe {
+        settings
+            .SetOrientation(if landscape {
+                COREWEBVIEW2_PRINT_ORIENTATION_LANDSCAPE
             } else {
-                continue;
-            }
-        } else {
-            path.to_string()
-        };
-        let p = PathBuf::from(expanded);
-        if p.exists() {
-            return Some(p);
+                COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT
+            })
+            .map_err(|error| format!("设置 PDF 页面方向失败：{error}"))?;
+        settings
+            .SetPageWidth(page_width)
+            .map_err(|error| format!("设置 PDF 页面宽度失败：{error}"))?;
+        settings
+            .SetPageHeight(page_height)
+            .map_err(|error| format!("设置 PDF 页面高度失败：{error}"))?;
+        settings
+            .SetMarginTop(margin_top)
+            .map_err(|error| format!("设置 PDF 上边距失败：{error}"))?;
+        settings
+            .SetMarginRight(margin_right)
+            .map_err(|error| format!("设置 PDF 右边距失败：{error}"))?;
+        settings
+            .SetMarginBottom(margin_bottom)
+            .map_err(|error| format!("设置 PDF 下边距失败：{error}"))?;
+        settings
+            .SetMarginLeft(margin_left)
+            .map_err(|error| format!("设置 PDF 左边距失败：{error}"))?;
+        settings
+            .SetShouldPrintBackgrounds(input.print_background.unwrap_or(true))
+            .map_err(|error| format!("设置 PDF 背景打印失败：{error}"))?;
+        settings
+            .SetShouldPrintHeaderAndFooter(false)
+            .map_err(|error| format!("关闭 PDF 页眉页脚失败：{error}"))?;
+    }
+    Ok(())
+}
+
+fn paper_size_inches(paper_size: Option<&str>) -> (f64, f64) {
+    match paper_size {
+        Some(value) if value.eq_ignore_ascii_case("letter") => (8.5, 11.0),
+        Some(value) if !value.eq_ignore_ascii_case("a4") => {
+            crate::app_logger::warn("Export", &format!("暂不支持的纸张大小：{value}，使用 A4"));
+            (210.0 / MILLIMETERS_PER_INCH, 297.0 / MILLIMETERS_PER_INCH)
+        }
+        _ => (210.0 / MILLIMETERS_PER_INCH, 297.0 / MILLIMETERS_PER_INCH),
+    }
+}
+
+fn millimeters_to_inches(value: Option<f64>) -> f64 {
+    let value = value.filter(|value| value.is_finite() && *value >= 0.0);
+    value.unwrap_or(DEFAULT_MARGIN_MM) / MILLIMETERS_PER_INCH
+}
+
+fn send_once(
+    sender: &Arc<Mutex<Option<oneshot::Sender<Result<(), String>>>>>,
+    result: Result<(), String>,
+) {
+    if let Ok(mut sender) = sender.lock() {
+        if let Some(sender) = sender.take() {
+            let _ = sender.send(result);
         }
     }
-
-    // 尝试通过 where 命令查找。
-    if let Ok(output) = Command::new("where").arg("msedge").output() {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            if let Some(line) = stdout.lines().next() {
-                let p = PathBuf::from(line.trim());
-                if p.exists() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-
-    None
 }
-
-fn path_to_file_url(path: &Path) -> Result<String, String> {
-    let canonical = path
-        .canonicalize()
-        .map_err(|e| format!("解析临时 HTML 路径失败：{e}"))?;
-    let path_str = canonical.to_string_lossy();
-    // Windows canonicalize 返回 \\?\C:\...，需要去掉前缀。
-    let clean_path = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
-    let with_slashes = clean_path.replace('\\', "/");
-    Ok(format!("file:///{}", with_slashes))
-}
-
-// 保留 WebView2 原生打印 TODO 占位。
-#[allow(dead_code)]
-pub(crate) async fn _print_with_webview2(
-    _app: AppHandle,
-    _input: ExportPdfInput,
-) -> Result<ExportResult, String> {
-    Err("WebView2 PrintToPdfAsync 原生实现预留入口".to_string())
-}
-
-pub(crate) fn _unused(_: PathBuf) {}

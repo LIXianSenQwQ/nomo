@@ -5,12 +5,16 @@ mod external_link;
 mod file_system;
 mod i18n;
 mod models;
+mod pdf_outline;
 mod software_update;
 mod text_document;
 mod window;
 
 #[cfg(target_os = "windows")]
 mod export_windows;
+
+#[cfg(target_os = "macos")]
+mod export_macos;
 
 use tauri::{Emitter, Manager, WindowEvent};
 
@@ -55,6 +59,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
+            _ if crate::export::is_pdf_export_window_label(window.label()) => {}
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
                 crate::window::state::persist_window_state_after_geometry_change(window);
             }
