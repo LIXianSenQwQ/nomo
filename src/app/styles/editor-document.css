@@ -1507,6 +1507,29 @@
   font-size: 26px;
 }
 
+.heading-level-indicator {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 14px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 32px;
+  height: 18px;
+  color: var(--md-editor-accent);
+  font-family: var(--md-editor-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
 .prosemirror-host .ProseMirror blockquote {
   margin: 18px 0;
   padding: 8px 0 8px 16px;

@@ -41,6 +41,7 @@ import { blockquoteInputPlugin } from './plugins/blockquoteInput';
 import { codeHighlightPlugin } from './plugins/codeHighlight';
 import { codeHighlightDecorationPlugin } from './plugins/codeHighlightDecorationPlugin';
 import { inlineCodeSelectionBridgePlugin } from './plugins/inlineCodeSelectionBridge';
+import { headingLevelIndicatorPlugin } from './plugins/headingLevelIndicator';
 import { codeBlockNavigationPlugin } from './plugins/codeBlockNavigation';
 import { displayMathInputPlugin } from './plugins/displayMathInput';
 import { mathInlineInputPlugin } from './plugins/mathInlineInput';
@@ -54,6 +55,7 @@ import {
 import { tableControlsPlugin } from './plugins/tableControls';
 import { tableHtmlBlockPlugin } from './plugins/tableHtml';
 import { taskListPlugin } from './plugins/taskList';
+import { tocSyncPlugin } from './plugins/tocSync';
 import { createCalloutPlugin } from './callout/calloutPlugin';
 import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
@@ -110,7 +112,6 @@ export class ProseMirrorEditorCore implements EditorCore {
   private frontMatterPrefix = '';
   private originalDoc: ProseMirrorNode;
   private pendingMarkdownDoc: ProseMirrorNode | null = null;
-  private pendingMarkdownSelection: { anchor: number; head: number } | null = null;
   private markdownSyncTimer: ReturnType<typeof setTimeout> | null = null;
   private version = 0;
   private dirty = false;
@@ -536,10 +537,12 @@ export class ProseMirrorEditorCore implements EditorCore {
         codeHighlightPlugin(),
         codeHighlightDecorationPlugin({ enabled: false }),
         inlineCodeSelectionBridgePlugin(),
+        headingLevelIndicatorPlugin(),
         searchHighlightPlugin(),
         // mathBlockPlugin(),  // 已被 math_block 语义节点 + displayMathInputPlugin 取代
         displayMathInputPlugin(),
         trailingParagraphPlugin(),
+        tocSyncPlugin(),
         pendingInlineMarkPlugin(),
         tableHtmlBlockPlugin(),
         tableControlsPlugin(),
@@ -751,18 +754,9 @@ export class ProseMirrorEditorCore implements EditorCore {
 
     if (transaction.docChanged) {
       this.pendingMarkdownDoc = nextState.doc;
-      this.pendingMarkdownSelection = {
-        anchor: nextState.selection.anchor,
-        head: nextState.selection.head,
-      };
       this.dirty = !nextState.doc.eq(this.originalDoc);
       this.scheduleMarkdownSync();
       this.notifyDeletedImages(previousDoc, nextState.doc);
-    } else if (this.pendingMarkdownDoc) {
-      this.pendingMarkdownSelection = {
-        anchor: nextState.selection.anchor,
-        head: nextState.selection.head,
-      };
     }
 
     // 每次事务都递增版本并通知（pending mark 状态切换、选区变化等需要及时反映到 UI）
@@ -788,7 +782,6 @@ export class ProseMirrorEditorCore implements EditorCore {
   private clearPendingMarkdownSync(): void {
     this.clearMarkdownSyncTimer();
     this.pendingMarkdownDoc = null;
-    this.pendingMarkdownSelection = null;
   }
 
   private flushPendingMarkdownSync(): boolean {
@@ -797,20 +790,17 @@ export class ProseMirrorEditorCore implements EditorCore {
       return false;
     }
 
-    const selection = this.pendingMarkdownSelection;
     this.clearPendingMarkdownSync();
 
     const serializedMarkdown = pendingDoc.eq(this.originalDoc)
       ? this.restoreOriginalBodyWithCurrentFrontMatter()
       : `${this.frontMatterPrefix}${serializeMarkdown(pendingDoc)}`;
+    // 保留 Markdown 字符串层的 TOC 规范化，但不再因此重建 EditorState。
+    // 语义视图中的 toc_block 已由 tocSyncPlugin 原位同步，历史栈保持不变。
     this.markdown = updateTocBlocks(serializedMarkdown);
     this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.dirty = this.markdown !== this.originalMarkdown;
-    if (this.markdown !== serializedMarkdown) {
-      this.replaceViewState(this.markdown, selection ?? undefined);
-    } else {
-      this.semanticViewDirty = false;
-    }
+    this.semanticViewDirty = false;
     this.emit('content-sync');
     return true;
   }

@@ -368,6 +368,66 @@ describe('createEditorCore', () => {
     expect(editor.getMarkdown()).not.toContain('旧标题');
   });
 
+  it('preserves undo and redo history while syncing toc after heading changes', () => {
+    const titleMarkdown = '<!-- toc -->\n- [原标题](#原标题)\n<!-- /toc -->\n\n# 原标题';
+    const titleTarget = document.createElement('div');
+    const titleEditor = createEditorCore({ markdown: titleMarkdown, target: titleTarget });
+    const titleView = (titleEditor as unknown as { view: EditorView }).view;
+    const titleDirtyEvents: boolean[] = [];
+    titleEditor.subscribe((event) => titleDirtyEvents.push(event.dirty));
+
+    const originalHeading = findNodeByText(titleView.state.doc, 'heading', '原标题');
+    titleView.dispatch(
+      titleView.state.tr.insertText(
+        '新标题',
+        originalHeading.pos + 1,
+        originalHeading.pos + 1 + originalHeading.node.content.size,
+      ),
+    );
+
+    expect(titleTarget.querySelector('.toc-text')?.textContent).toBe('新标题');
+    expect(titleEditor.execute({ type: 'undo' })).toBe(true);
+    expect(titleTarget.querySelector('.toc-text')?.textContent).toBe('原标题');
+    expect(titleEditor.getMarkdown()).toBe(titleMarkdown);
+    expect(titleDirtyEvents.at(-1)).toBe(false);
+    expect(titleEditor.execute({ type: 'redo' })).toBe(true);
+    expect(titleTarget.querySelector('.toc-text')?.textContent).toBe('新标题');
+
+    const levelMarkdown = '<!-- toc -->\n  - [标题](#标题)\n<!-- /toc -->\n\n## 标题';
+    const levelTarget = document.createElement('div');
+    const levelEditor = createEditorCore({ markdown: levelMarkdown, target: levelTarget });
+    const levelView = (levelEditor as unknown as { view: EditorView }).view;
+    const levelDirtyEvents: boolean[] = [];
+    levelEditor.subscribe((event) => levelDirtyEvents.push(event.dirty));
+
+    const levelHeading = findNodeByText(levelView.state.doc, 'heading', '标题');
+    levelView.dispatch(
+      levelView.state.tr.setSelection(TextSelection.create(levelView.state.doc, levelHeading.pos + 1)),
+    );
+    expect(levelEditor.execute({ type: 'setHeading', level: 3 })).toBe(true);
+    expect(levelTarget.querySelector<HTMLElement>('.toc-link')?.dataset.level).toBe('3');
+    expect(levelEditor.execute({ type: 'undo' })).toBe(true);
+    expect(levelTarget.querySelector<HTMLElement>('.toc-link')?.dataset.level).toBe('2');
+    expect(levelEditor.getMarkdown()).toBe(levelMarkdown);
+    expect(levelDirtyEvents.at(-1)).toBe(false);
+    expect(levelEditor.execute({ type: 'redo' })).toBe(true);
+    expect(levelTarget.querySelector<HTMLElement>('.toc-link')?.dataset.level).toBe('3');
+
+    const bodyMarkdown = '<!-- toc -->\n- [标题](#标题)\n<!-- /toc -->\n\n# 标题\n\n正文';
+    const bodyTarget = document.createElement('div');
+    const bodyEditor = createEditorCore({ markdown: bodyMarkdown, target: bodyTarget });
+    const bodyView = (bodyEditor as unknown as { view: EditorView }).view;
+    const bodyParagraph = findNodeByText(bodyView.state.doc, 'paragraph', '正文');
+    bodyView.dispatch(bodyView.state.tr.insertText('补充', bodyParagraph.pos + 1));
+    expect(bodyTarget.querySelector('.toc-text')?.textContent).toBe('标题');
+    expect(bodyEditor.execute({ type: 'undo' })).toBe(true);
+    expect(bodyEditor.getMarkdown()).toBe(bodyMarkdown);
+
+    titleEditor.destroy();
+    levelEditor.destroy();
+    bodyEditor.destroy();
+  });
+
   it('renders an empty toc placeholder when no headings exist', () => {
     const target = document.createElement('div');
     const editor = createEditorCore({ markdown: '正文', target });
