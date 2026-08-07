@@ -54,6 +54,10 @@
     min-height: 40px;
   }
 
+  .editor-shell.no-open-document::before {
+    min-height: 40px;
+  }
+
   .toolbar {
     flex-wrap: nowrap;
     align-content: center;

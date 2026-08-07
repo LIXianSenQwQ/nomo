@@ -63,8 +63,7 @@
   content: '';
 }
 
-.editor-shell > .topbar,
-.editor-shell > .empty-workspace {
+.editor-shell > .topbar {
   border-top-left-radius: inherit;
 }
 
@@ -73,7 +72,19 @@
 }
 
 .editor-shell.no-open-document {
+  --editor-card-edge-color: color-mix(in srgb, var(--md-editor-border) 76%, transparent);
+  --editor-card-shadow-color: color-mix(in srgb, var(--md-editor-border) 34%, transparent);
   grid-template-rows: auto minmax(0, 1fr);
+  border-top-left-radius: 0;
+  background: var(--md-editor-rail);
+  box-shadow: none;
+}
+
+.editor-shell.no-open-document::before {
+  grid-row: 1;
+  min-height: var(--md-editor-tab-height);
+  pointer-events: none;
+  content: '';
 }
 
 /* 搜索面板悬浮在编辑器工作区上方（不占独立布局行） */
@@ -103,7 +114,12 @@
   min-height: 0;
   place-items: center;
   padding: clamp(28px, 6cqw, 80px);
+  border-top-left-radius: var(--md-editor-radius-lg);
   background: var(--md-editor-surface);
+  box-shadow:
+    -1px 0 0 var(--editor-card-edge-color),
+    -6px -3px 16px var(--editor-card-shadow-color);
+  overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
 }

@@ -347,11 +347,7 @@
       style={`--toolbar-transition-duration: ${toolbarTransitionDuration}ms; --toolbar-reveal-delay: ${toolbarRevealDelay}ms`}
       aria-label={t.semanticEditorArea()}
     >
-      {#if appBootState !== 'ready'}
-        <div class="startup-loading" role="status" aria-live="polite">
-          <span>正在恢复工作区...</span>
-        </div>
-      {:else if hasOpenDocument}
+      {#if hasOpenDocument}
         <DocumentTabs
           {interfaceLocale}
           {tabs}
@@ -366,151 +362,157 @@
           on:closeTabsToRight
           on:closeAllTabs
         />
+      {/if}
 
+      {#if appBootState !== 'ready'}
+        <div class="startup-loading" role="status" aria-live="polite">
+          <span>正在恢复工作区...</span>
+        </div>
+      {:else if hasOpenDocument}
         <div class="editor-card">
-        {#if activeTab?.documentKind === 'markdown'}
-          <div
-            class="editor-toolbar-region"
-            class:collapsed={effectiveToolbarHidden}
-            class:overflow-visible={toolbarOverflowVisible}
-            on:transitionend={handleToolbarTransitionEnd}
-          >
+          {#if activeTab?.documentKind === 'markdown'}
             <div
-              aria-hidden={!toolbarOverflowVisible || markdownMiniActive}
-              inert={!toolbarOverflowVisible || markdownMiniActive}
-              use:toolbarVisibilityMotion={{ hidden: effectiveToolbarHidden }}
+              class="editor-toolbar-region"
+              class:collapsed={effectiveToolbarHidden}
+              class:overflow-visible={toolbarOverflowVisible}
+              on:transitionend={handleToolbarTransitionEnd}
             >
-              <EditorToolbar
+              <div
+                aria-hidden={!toolbarOverflowVisible || markdownMiniActive}
+                inert={!toolbarOverflowVisible || markdownMiniActive}
+                use:toolbarVisibilityMotion={{ hidden: effectiveToolbarHidden }}
+              >
+                <EditorToolbar
+                  {interfaceLocale}
+                  {mode}
+                  {contentWidthPercent}
+                  {outlineVisible}
+                  {toolbarShortcut}
+                  {runCommand}
+                  {pendingInlineMarks}
+                  {tablePickerOpen}
+                  {openTablePicker}
+                  {closeTablePicker}
+                  {openLinkPicker}
+                  {insertTableWithSize}
+                  {updateContentWidth}
+                  {setMode}
+                  {toggleOutlineVisible}
+                  {toggleToolbar}
+                  inactive={!toolbarOverflowVisible || markdownMiniActive}
+                  openSearchPanel={() => openSearchPanel(false)}
+                />
+              </div>
+            </div>
+
+            {#if toolbarHidden}
+              <button
+                class="toolbar-reveal-button"
+                type="button"
+                title={`${t.showToolbar()} (${toolbarShortcut})`}
+                aria-label={t.showToolbar()}
+                on:click={toggleToolbar}
+              >
+                <ChevronDown size={15} />
+              </button>
+            {/if}
+
+            <div data-search-panel>
+              <SearchReplacePanel
                 {interfaceLocale}
-                {mode}
-                {contentWidthPercent}
-                {outlineVisible}
-                {toolbarShortcut}
-                {runCommand}
-                {pendingInlineMarks}
-                {tablePickerOpen}
-                {openTablePicker}
-                {closeTablePicker}
-                {openLinkPicker}
-                {insertTableWithSize}
-                {updateContentWidth}
-                {setMode}
-                {toggleOutlineVisible}
-                {toggleToolbar}
-                inactive={!toolbarOverflowVisible || markdownMiniActive}
-                openSearchPanel={() => openSearchPanel(false)}
+                open={searchPanelOpen}
+                replaceVisible={searchReplaceVisible}
+                query={searchQuery}
+                replacement={searchReplacement}
+                caseSensitive={searchCaseSensitive}
+                wholeWord={searchWholeWord}
+                backwards={searchBackwards}
+                wrapAround={searchWrapAround}
+                activeIndex={searchActiveIndex}
+                matchCount={searchMatchCount}
+                readonly={readonlyDocumentMode}
+                updateQuery={updateSearchQuery}
+                updateReplacement={updateSearchReplacement}
+                toggleCaseSensitive={toggleSearchCaseSensitive}
+                toggleWholeWord={toggleSearchWholeWord}
+                toggleBackwards={toggleSearchBackwards}
+                toggleWrapAround={toggleSearchWrapAround}
+                toggleReplaceVisible={toggleSearchReplaceVisible}
+                findPrevious={findPreviousSearchMatch}
+                findNext={findNextSearchMatch}
+                countMatches={countSearchMatches}
+                replaceCurrent={replaceCurrentSearchMatch}
+                replaceAll={replaceAllSearchMatches}
+                close={closeSearchPanel}
               />
             </div>
-          </div>
 
-          {#if toolbarHidden}
-            <button
-              class="toolbar-reveal-button"
-              type="button"
-              title={`${t.showToolbar()} (${toolbarShortcut})`}
-              aria-label={t.showToolbar()}
-              on:click={toggleToolbar}
-            >
-              <ChevronDown size={15} />
-            </button>
-          {/if}
-
-          <div data-search-panel>
-            <SearchReplacePanel
+            <EditorWorkspace
               {interfaceLocale}
-              open={searchPanelOpen}
-              replaceVisible={searchReplaceVisible}
-              query={searchQuery}
-              replacement={searchReplacement}
-              caseSensitive={searchCaseSensitive}
-              wholeWord={searchWholeWord}
-              backwards={searchBackwards}
-              wrapAround={searchWrapAround}
-              activeIndex={searchActiveIndex}
-              matchCount={searchMatchCount}
-              readonly={readonlyDocumentMode}
-              updateQuery={updateSearchQuery}
-              updateReplacement={updateSearchReplacement}
-              toggleCaseSensitive={toggleSearchCaseSensitive}
-              toggleWholeWord={toggleSearchWholeWord}
-              toggleBackwards={toggleSearchBackwards}
-              toggleWrapAround={toggleSearchWrapAround}
-              toggleReplaceVisible={toggleSearchReplaceVisible}
-              findPrevious={findPreviousSearchMatch}
-              findNext={findNextSearchMatch}
-              countMatches={countSearchMatches}
-              replaceCurrent={replaceCurrentSearchMatch}
-              replaceAll={replaceAllSearchMatches}
-              close={closeSearchPanel}
+              bind:sourcePane
+              bind:semanticPane
+              bind:sourceTextarea
+              bind:editorHost
+              {mode}
+              {markdown}
+              {largeDocumentMode}
+              {frontMatter}
+              {frontMatterEditing}
+              {frontMatterFocusRequest}
+              {frontMatterFocusTarget}
+              {readonlyDocumentMode}
+              {outlineVisible}
+              {outline}
+              {activeOutlineId}
+              {collapsedOutlineIds}
+              {visibleOutlineIds}
+              {updateMarkdown}
+              {enterFrontMatterEdit}
+              {leaveFrontMatterEdit}
+              {updateFrontMatterContent}
+              {deleteFrontMatter}
+              {updateActiveOutlineFromSourceScroll}
+              {updateActiveOutlineFromSemanticScroll}
+              {onSourceScroll}
+              {onSemanticScroll}
+              {handleEditorPaste}
+              {handleEditorDrop}
+              {isOutlineItemExpandable}
+              {toggleOutlineItemExpanded}
+              {jumpToOutlineItem}
             />
-          </div>
 
-          <EditorWorkspace
-            {interfaceLocale}
-            bind:sourcePane
-            bind:semanticPane
-            bind:sourceTextarea
-            bind:editorHost
-            {mode}
-            {markdown}
-            {largeDocumentMode}
-            {frontMatter}
-            {frontMatterEditing}
-            {frontMatterFocusRequest}
-            {frontMatterFocusTarget}
-            {readonlyDocumentMode}
-            {outlineVisible}
-            {outline}
-            {activeOutlineId}
-            {collapsedOutlineIds}
-            {visibleOutlineIds}
-            {updateMarkdown}
-            {enterFrontMatterEdit}
-            {leaveFrontMatterEdit}
-            {updateFrontMatterContent}
-            {deleteFrontMatter}
-            {updateActiveOutlineFromSourceScroll}
-            {updateActiveOutlineFromSemanticScroll}
-            {onSourceScroll}
-            {onSemanticScroll}
-            {handleEditorPaste}
-            {handleEditorDrop}
-            {isOutlineItemExpandable}
-            {toggleOutlineItemExpanded}
-            {jumpToOutlineItem}
-          />
+            {#if markdownMiniActive && largeDocumentMode}
+              <MarkdownMiniLargePreview {markdown} {nativePath} {editorTheme} />
+            {/if}
 
-          {#if markdownMiniActive && largeDocumentMode}
-            <MarkdownMiniLargePreview {markdown} {nativePath} {editorTheme} />
-          {/if}
-
-          <LinkQuickEditor
-            {interfaceLocale}
-            open={linkPickerOpen}
-            text={linkText}
-            href={linkHref}
-            error={linkError}
-            canRemove={linkCanRemove}
-            positionStyle={linkPickerPositionStyle}
-            updateText={updateLinkText}
-            updateHref={updateLinkHref}
-            {applyLink}
-            {removeLink}
-            {closeLinkPicker}
-          />
-        {:else if activeTab?.documentKind === 'text' || activeTab?.documentKind === 'json'}
-          {#key activeTab.sessionId}
-            <SegmentedTextEditorWorkspace
-              bind:this={segmentedWorkspace}
+            <LinkQuickEditor
               {interfaceLocale}
-              tab={activeTab}
-              {autoSaveEnabled}
-              {autoSaveDelayMs}
-              on:stateChange
-              on:status
+              open={linkPickerOpen}
+              text={linkText}
+              href={linkHref}
+              error={linkError}
+              canRemove={linkCanRemove}
+              positionStyle={linkPickerPositionStyle}
+              updateText={updateLinkText}
+              updateHref={updateLinkHref}
+              {applyLink}
+              {removeLink}
+              {closeLinkPicker}
             />
-          {/key}
-        {/if}
+          {:else if activeTab?.documentKind === 'text' || activeTab?.documentKind === 'json'}
+            {#key activeTab.sessionId}
+              <SegmentedTextEditorWorkspace
+                bind:this={segmentedWorkspace}
+                {interfaceLocale}
+                tab={activeTab}
+                {autoSaveEnabled}
+                {autoSaveDelayMs}
+                on:stateChange
+                on:status
+              />
+            {/key}
+          {/if}
         </div>
       {:else}
         <EmptyWorkspace {interfaceLocale} {createNewFile} {openFileDialog} {openFolderDialog} />
