@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nomo 标题层级角标方案</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #e9edf0;
+        --surface: #ffffff;
+        --chrome: #f6f8f9;
+        --sidebar: #f1f4f5;
+        --text: #293137;
+        --heading: #151b1f;
+        --muted: #6c777e;
+        --faint: #a2abb1;
+        --border: #dce2e5;
+        --border-strong: #c9d1d6;
+        --accent: #2f7d6f;
+        --accent-strong: #225f54;
+        --accent-soft: #e5f1ee;
+        --selection: #d6e9e5;
+        --shadow: 0 22px 64px rgba(25, 34, 39, 0.16);
+        --font-ui: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        --font-document: 'Segoe UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+        --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #101418;
+        --surface: #1b2126;
+        --chrome: #20272d;
+        --sidebar: #171d22;
+        --text: #dfe5e8;
+        --heading: #f7f9fa;
+        --muted: #9aa5ac;
+        --faint: #68737a;
+        --border: #303940;
+        --border-strong: #455159;
+        --accent: #67b7a5;
+        --accent-strong: #a2d9cc;
+        --accent-soft: #223a35;
+        --selection: #29463f;
+        --shadow: 0 26px 72px rgba(0, 0, 0, 0.46);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        min-width: 720px;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-family: var(--font-ui);
+        font-size: 13px;
+      }
+
+      button {
+        border: 0;
+        color: inherit;
+        font: inherit;
+      }
+
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .page {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        padding: 20px;
+      }
+
+      .showcase-bar {
+        min-height: 58px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 2px 14px;
+      }
+
+      .showcase-title {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .showcase-title h1 {
+        margin: 0;
+        color: var(--heading);
+        font-size: 18px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .showcase-title p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .showcase-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .theme-button {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .theme-button:hover {
+        border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+        color: var(--accent-strong);
+      }
+
+      .app-frame {
+        min-height: 0;
+        display: grid;
+        grid-template-rows: 40px 34px minmax(0, 1fr) 24px;
+        overflow: hidden;
+        border: 1px solid var(--border-strong);
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .titlebar {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+        user-select: none;
+      }
+
+      .titlebar-left,
+      .window-controls,
+      .tabs,
+      .toolbar-left,
+      .toolbar-right,
+      .statusbar {
+        display: flex;
+        align-items: center;
+      }
+
+      .app-mark {
+        width: 22px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        margin-right: 10px;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #fff;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .menu {
+        padding: 6px 8px;
+        border-radius: 5px;
+        color: var(--text);
+      }
+
+      .document-name {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .window-controls {
+        gap: 4px;
+      }
+
+      .window-control {
+        width: 26px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        color: var(--faint);
+        font-size: 13px;
+      }
+
+      .tabbar {
+        display: grid;
+        grid-template-columns: 198px minmax(0, 1fr);
+        border-bottom: 1px solid var(--border);
+        background: var(--chrome);
+      }
+
+      .workspace-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 13px;
+        border-right: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .workspace-label::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        content: '';
+      }
+
+      .tabs {
+        min-width: 0;
+      }
+
+      .tab {
+        height: 33px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 14px;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .tab::before {
+        color: var(--accent);
+        content: '#';
+        font-family: var(--font-mono);
+        font-weight: 800;
+      }
+
+      .workspace {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 198px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        min-height: 0;
+        padding: 16px 10px;
+        border-right: 1px solid var(--border);
+        background: var(--sidebar);
+      }
+
+      .side-heading {
+        margin: 0 8px 10px;
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .outline-item {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 30px;
+        padding: 5px 8px;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        text-align: left;
+      }
+
+      .outline-item.active {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .outline-item.level-2 {
+        padding-left: 22px;
+      }
+
+      .outline-code {
+        width: 21px;
+        flex: 0 0 auto;
+        color: var(--faint);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .editor-area {
+        min-width: 0;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: 38px minmax(0, 1fr);
+        background: var(--surface);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+      }
+
+      .toolbar-left,
+      .toolbar-right {
+        gap: 5px;
+      }
+
+      .tool-button {
+        min-width: 27px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .tool-button:hover {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .variant-switcher {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--chrome);
+      }
+
+      .variant-button {
+        min-width: 72px;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 11px;
+        cursor: pointer;
+      }
+
+      .variant-button[aria-pressed='true'] {
+        background: var(--surface);
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--heading) 12%, transparent);
+        color: var(--accent-strong);
+        font-weight: 650;
+      }
+
+      .document-scroll {
+        min-height: 0;
+        overflow: auto;
+        background: linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(50% - 380px),
+          color-mix(in srgb, var(--border) 30%, transparent) calc(50% - 380px),
+          transparent calc(50% - 379px)
+        );
+      }
+
+      .document {
+        width: min(690px, calc(100% - 88px));
+        min-height: 100%;
+        margin: 0 auto;
+        padding: 62px 28px 120px 74px;
+        font-family: var(--font-document);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .document ::selection {
+        background: var(--selection);
+      }
+
+      .heading {
+        position: relative;
+        color: var(--heading);
+        line-height: 1.25;
+      }
+
+      .heading-level {
+        position: absolute;
+        right: calc(100% + 18px);
+        top: 0.28em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        min-width: 32px;
+        height: 18px;
+        color: var(--faint);
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+        user-select: none;
+      }
+
+      .document h1 {
+        margin: 0 0 24px;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+      }
+
+      .document h2 {
+        margin: 38px 0 14px;
+        font-size: 25px;
+        font-weight: 670;
+        letter-spacing: -0.018em;
+      }
+
+      .document h3 {
+        margin: 28px 0 10px;
+        font-size: 20px;
+        font-weight: 650;
+      }
+
+      .document p {
+        margin: 12px 0;
+        color: var(--text);
+      }
+
+      .document strong {
+        color: var(--heading);
+      }
+
+      .note {
+        margin: 22px 0;
+        padding: 10px 14px;
+        border-left: 3px solid var(--accent);
+        border-radius: 0 8px 8px 0;
+        background: var(--accent-soft);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      /* 方案 A：静默边栏。仅用字重和颜色建立层级，推荐作为默认方案。 */
+      .document[data-variant='quiet'] .heading-level {
+        color: var(--faint);
+      }
+
+      .document[data-variant='quiet'] h1 .heading-level {
+        color: var(--accent);
+      }
+
+      /* 方案 B：描边角标。辨识度更高，适合标题层级较深的文档。 */
+      .document[data-variant='outline'] .heading-level {
+        top: 0.12em;
+        min-width: 27px;
+        height: 20px;
+        justify-content: center;
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        background: var(--surface);
+        color: var(--muted);
+        letter-spacing: 0;
+      }
+
+      .document[data-variant='outline'] h1 .heading-level {
+        border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      /* 方案 C：层级刻度。以细线把角标和标题基线连起来。 */
+      .document[data-variant='ruler'] .heading-level {
+        top: 0.08em;
+        right: calc(100% + 15px);
+        min-width: 38px;
+        height: 22px;
+        padding-right: 13px;
+        color: var(--muted);
+      }
+
+      .document[data-variant='ruler'] .heading-level::after {
+        position: absolute;
+        top: 50%;
+        right: 0;
+        width: 8px;
+        height: 1px;
+        background: var(--border-strong);
+        content: '';
+      }
+
+      .document[data-variant='ruler'] h1 .heading-level::after {
+        width: 11px;
+        background: var(--accent);
+      }
+
+      /* 方案 D：反白签条。强调最强，但仍限制在正文左侧留白。 */
+      .document[data-variant='flag'] .heading-level {
+        top: 0.1em;
+        min-width: 30px;
+        height: 20px;
+        justify-content: center;
+        border-radius: 3px 0 0 3px;
+        background: var(--border-strong);
+        color: var(--surface);
+        letter-spacing: 0;
+      }
+
+      .document[data-variant='flag'] .heading-level::after {
+        position: absolute;
+        right: -5px;
+        width: 0;
+        height: 0;
+        border-top: 10px solid transparent;
+        border-bottom: 10px solid transparent;
+        border-left: 5px solid var(--border-strong);
+        content: '';
+      }
+
+      .document[data-variant='flag'] h1 .heading-level {
+        background: var(--accent);
+      }
+
+      .document[data-variant='flag'] h1 .heading-level::after {
+        border-left-color: var(--accent);
+      }
+
+      /* 方案 E：按需显示。只有当前点击的标题展示层级，其余保持完全安静。 */
+      .document[data-variant='focus'] .heading-level {
+        opacity: 0;
+        transform: translateX(5px);
+        transition:
+          opacity 120ms ease,
+          transform 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
+      }
+
+      .document[data-variant='focus'] .heading.is-active-heading .heading-level {
+        color: var(--accent);
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .statusbar {
+        justify-content: space-between;
+        padding: 0 10px;
+        border-top: 1px solid var(--border);
+        background: var(--chrome);
+        color: var(--faint);
+        font-size: 10px;
+      }
+
+      .status-hint {
+        color: var(--muted);
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          padding: 12px;
+        }
+
+        .showcase-title p,
+        .sidebar,
+        .workspace-label,
+        .toolbar-left,
+        .status-hint {
+          display: none;
+        }
+
+        .tabbar,
+        .workspace {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .editor-area {
+          grid-column: 1;
+        }
+
+        .toolbar {
+          justify-content: flex-end;
+        }
+
+        .document {
+          width: min(660px, calc(100% - 32px));
+        }
+      }
+
+      @media (max-width: 760px) {
+        .variant-button {
+          min-width: 52px;
+          padding: 0 7px;
+        }
+
+        .variant-button span {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          scroll-behavior: auto !important;
+        }
+
+        .document[data-variant='focus'] .heading-level {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="showcase-bar">
+        <div class="showcase-title">
+          <h1>标题层级角标</h1>
+          <p>四种方案共用同一正文基线，默认展示推荐的静默边栏。</p>
+        </div>
+        <div class="showcase-actions">
+          <button
+            class="theme-button"
+            id="theme-button"
+            type="button"
+            aria-label="切换深浅主题"
+            title="切换深浅主题"
+          >
+            ◐
+          </button>
+        </div>
+      </header>
+
+      <section class="app-frame" aria-label="Nomo 标题角标原型">
+        <header class="titlebar">
+          <div class="titlebar-left">
+            <span class="app-mark">N</span>
+            <span class="menu">文件</span>
+            <span class="menu">编辑</span>
+            <span class="menu">视图</span>
+          </div>
+          <div class="document-name">产品设计说明.md — Nomo</div>
+          <div class="window-controls" aria-hidden="true">
+            <span class="window-control">—</span>
+            <span class="window-control">□</span>
+            <span class="window-control">×</span>
+          </div>
+        </header>
+
+        <div class="tabbar">
+          <div class="workspace-label">Nomo Workspace</div>
+          <div class="tabs"><div class="tab">产品设计说明.md</div></div>
+        </div>
+
+        <div class="workspace">
+          <aside class="sidebar">
+            <h2 class="side-heading">文档大纲</h2>
+            <button class="outline-item active" type="button">
+              <span class="outline-code">H1</span><span>让标题层级一眼可见</span>
+            </button>
+            <button class="outline-item level-2" type="button">
+              <span class="outline-code">H2</span><span>为什么放在左侧</span>
+            </button>
+            <button class="outline-item level-2" type="button">
+              <span class="outline-code">H2</span><span>阅读时保持安静</span>
+            </button>
+          </aside>
+
+          <section class="editor-area">
+            <div class="toolbar">
+              <div class="toolbar-left" aria-label="编辑工具示意">
+                <button class="tool-button" type="button">H</button>
+                <button class="tool-button" type="button">B</button>
+                <button class="tool-button" type="button"><em>I</em></button>
+                <button class="tool-button" type="button">“</button>
+                <button class="tool-button" type="button">&lt;/&gt;</button>
+              </div>
+              <div class="toolbar-right">
+                <div class="variant-switcher" role="group" aria-label="选择角标方案">
+                  <button
+                    class="variant-button"
+                    data-variant="quiet"
+                    type="button"
+                    aria-pressed="true"
+                  >
+                    A <span>静默边栏</span>
+                  </button>
+                  <button
+                    class="variant-button"
+                    data-variant="outline"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    B <span>描边角标</span>
+                  </button>
+                  <button
+                    class="variant-button"
+                    data-variant="ruler"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    C <span>层级刻度</span>
+                  </button>
+                  <button
+                    class="variant-button"
+                    data-variant="flag"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    D <span>反白签条</span>
+                  </button>
+                  <button
+                    class="variant-button"
+                    data-variant="focus"
+                    type="button"
+                    aria-pressed="false"
+                  >
+                    E <span>点击显示</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="document-scroll">
+              <article class="document" id="document-preview" data-variant="quiet">
+                <h1 class="heading">
+                  <span class="heading-level" aria-hidden="true">H1</span>让标题层级一眼可见
+                </h1>
+                <p>
+                  在长文档中，字号差异能表达层级，却不一定能让人快速确认当前标题是一级还是二级。左侧角标补上了这个信息，但不会进入正文的阅读路径。
+                </p>
+
+                <h2 class="heading">
+                  <span class="heading-level" aria-hidden="true">H2</span>为什么放在标题左侧
+                </h2>
+                <p>
+                  标题文字继续与段落保持同一条左边线。角标被放进编辑区原本就存在的留白里，因此<strong
+                    >不会挤压标题，也不会改变 Markdown 的内容结构</strong
+                  >。
+                </p>
+                <div class="note">
+                  角标只承担“标明层级”这一件事。低饱和颜色、等宽字体和固定宽度，让它更像编辑器的辅助标尺。
+                </div>
+
+                <h3 class="heading">
+                  <span class="heading-level" aria-hidden="true">H3</span>阅读时保持安静
+                </h3>
+                <p>
+                  H1 可以获得一处克制的强调，H2、H3
+                  逐级回落到中性色。鼠标无需经过角标，选择文本和光标移动也不会受到影响。
+                </p>
+
+                <h2 class="heading">
+                  <span class="heading-level" aria-hidden="true">H2</span>窄窗口自动退让
+                </h2>
+                <p>
+                  当内容区不足以容纳侧边留白时，可以隐藏角标或缩小外侧间距，优先保证正文宽度与输入体验。
+                </p>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <footer class="statusbar">
+          <span class="status-hint" id="status-hint">提示：使用右上方 A–E 按钮切换方案</span>
+          <span id="variant-caption">A · 静默边栏（推荐）</span>
+        </footer>
+      </section>
+    </main>
+
+    <script>
+      const preview = document.querySelector('#document-preview');
+      const caption = document.querySelector('#variant-caption');
+      const statusHint = document.querySelector('#status-hint');
+      const buttons = [...document.querySelectorAll('.variant-button')];
+      const labels = {
+        quiet: 'A · 静默边栏（推荐）',
+        outline: 'B · 描边角标',
+        ruler: 'C · 层级刻度',
+        flag: 'D · 反白签条',
+        focus: 'E · 点击标题时显示',
+      };
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const variant = button.dataset.variant;
+          preview.dataset.variant = variant;
+          caption.textContent = labels[variant];
+          statusHint.textContent =
+            variant === 'focus'
+              ? '提示：点击任一标题显示角标，点击正文或空白处收起'
+              : '提示：使用右上方 A–E 按钮切换方案';
+          preview
+            .querySelectorAll('.is-active-heading')
+            .forEach((heading) => heading.classList.remove('is-active-heading'));
+          buttons.forEach((candidate) => {
+            candidate.setAttribute('aria-pressed', String(candidate === button));
+          });
+        });
+      });
+
+      document.addEventListener('click', (event) => {
+        if (preview.dataset.variant !== 'focus') return;
+
+        const heading = event.target.closest('.heading');
+        preview
+          .querySelectorAll('.is-active-heading')
+          .forEach((candidate) => candidate.classList.remove('is-active-heading'));
+
+        if (heading && preview.contains(heading)) {
+          heading.classList.add('is-active-heading');
+        }
+      });
+
+      document.querySelector('#theme-button').addEventListener('click', () => {
+        const root = document.documentElement;
+        root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      });
+    </script>
+  </body>
+</html>

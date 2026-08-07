@@ -70,12 +70,14 @@
 | 代码高亮装饰 | `src/lib/editor-core/plugins/codeHighlight.ts` | `src/lib/services/shikiCodeTokenizer.ts` | 语法高亮装饰逻辑 |
 | 公式输入规则 | `src/lib/editor-core/plugins/displayMathInput.ts`, `mathInlineInput.ts`, `mathBlock.ts` | — | 公式快捷输入 |
 | 行内 Markdown 输入 | `src/lib/editor-core/plugins/inlineMarkdownMarkInput.ts` | — | 粗体/斜体/删除线等快捷输入 |
+| 当前标题层级角标 | `src/lib/editor-core/plugins/headingLevelIndicator.ts` | `src/app/styles/editor-document.css` | H1-H6 当前标题角标的定位、显隐或 GSAP 动效 |
 | 表格控件 | `src/lib/editor-core/plugins/tableControls.ts` | `src/lib/editor-core/plugins/tableControlDom.ts`, `tableHtml.ts` | 表格行列控制 UI |
 | 任务列表 | `src/lib/editor-core/plugins/taskList.ts` | — | 任务列表交互 |
 | 链接交互 | `src/lib/editor-core/plugins/linkInteraction.ts` | `src/app/components/LinkQuickEditor.svelte` | 链接点击/悬浮/编辑 |
 | 待输入 mark | `src/lib/editor-core/plugins/pendingInlineMark.ts` | — | 按钮样式持续输入 |
 | 搜索高亮 | `src/lib/editor-core/plugins/searchHighlight.ts` | `src/app/services/searchReplace.ts` | 搜索/替换高亮 |
 | 尾部段落补全 | `src/lib/editor-core/plugins/trailingParagraph.ts` | — | 非段落块插入后自动追加空段落 |
+| 正文目录事务同步 | `src/lib/editor-core/plugins/tocSync.ts` | `src/lib/toc/tocService.ts` | 标题变化后的 TOC 派生更新与撤销历史保持 |
 | 编辑器上下文菜单插件 | `src/lib/editor-core/plugins/contextMenu.ts` | `src/app/components/ContextMenu.svelte` | 编辑区右键菜单事件分发 |
 | 行内代码语法高亮装饰 | `src/lib/editor-core/plugins/codeHighlightDecorationPlugin.ts` | — | 行内 code mark 的 token 着色 |
 
@@ -2597,6 +2599,33 @@
 
 ---
 
+### `src/lib/editor-core/plugins/tocSync.ts`
+
+**Kind:** plugin
+
+**Owns:**
+- 标题内容或等级变化后的 TOC 节点属性同步
+- 将 TOC 派生事务排除在独立撤销步骤之外
+- 基于事务变更范围跳过普通正文编辑
+
+**Does not own:**
+- 不拥有 TOC Markdown 生成规则（由 tocService.ts 提供）
+- 不拥有 TOC 展示和跳转（由 TocBlockNodeView.ts 提供）
+
+**Called by:** `src/lib/editor-core/ProseMirrorEditorCore.ts`（插件注册）
+
+**Depends on:** `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/schema.ts`, `src/lib/toc/tocService.ts`
+
+**Change this when:**
+- 修改标题变化后的目录同步时机
+- 修改 TOC 派生事务的撤销历史策略
+
+**Related tests:** `src/lib/editor-core/createEditorCore.test.ts`
+
+**Confidence:** high
+
+---
+
 ### `src/lib/editor-core/plugins/contextMenu.ts`
 
 **Kind:** plugin
@@ -2617,6 +2646,32 @@
 **Change this when:**
 - 修改右键菜单事件处理
 - 修改菜单工厂挂载机制
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
+### `src/lib/editor-core/plugins/headingLevelIndicator.ts`
+
+**Kind:** plugin
+
+**Owns:**
+- 当前 H1-H6 标题层级角标的选区识别、浮层定位与显隐
+- 标题角标的 GSAP 动画、响应式安全留白和生命周期清理
+
+**Does not own:**
+- 不拥有标题 Schema、Markdown 序列化、导出或大纲数据
+- 不拥有角标的主题化 CSS 外观（在 editor-document.css 中）
+
+**Called by:** `src/lib/editor-core/ProseMirrorEditorCore.ts`（插件注册）
+
+**Depends on:** `gsap`, `prosemirror-state`, `prosemirror-view`
+
+**Change this when:**
+- 修改角标触发条件、定位逻辑或 GSAP 显隐动画
+- 修改窄窗口安全留白规则
 
 **Related tests:** —
 
