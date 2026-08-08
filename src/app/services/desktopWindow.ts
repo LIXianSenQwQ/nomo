@@ -227,9 +227,14 @@ export async function updateAppWindowTitle(
     return;
   }
 
-  const win = getCurrentWindow();
   const title = `${fileName}${dirty ? ' *' : ''} - Nomo`;
-  await win.setTitle(title).catch(() => undefined);
+  // macOS 上标题被 hiddenTitle + Overlay 隐藏，无需写入 NSWindow；调用 setTitle 会使
+  // AppKit 重置标题栏布局，把 trafficLightPosition 摆回默认位置（红绿灯偏上），直到
+  // 下次窗口重绘才恢复。托盘菜单标题走 report_window_title，不受影响。
+  if (!getPlatformCapabilities().isMac) {
+    const win = getCurrentWindow();
+    await win.setTitle(title).catch(() => undefined);
+  }
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('report_window_title', { title }).catch(() => undefined);
 }
