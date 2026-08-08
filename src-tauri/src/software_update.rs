@@ -3,6 +3,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
+    time::Duration,
 };
 
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 const GITHUB_LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/LIXianSenQwQ/nomo/releases/latest";
+const GITHUB_PROXY_PREFIX: &str = "https://gh-proxy.com/";
+const UPDATE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const UPDATE_SMALL_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
+const UPDATE_DOWNLOAD_READ_TIMEOUT: Duration = Duration::from_secs(20);
 const CHECKSUMS_ASSET_NAME: &str = "checksums.md5";
 const DOWNLOAD_PROGRESS_EVENT: &str = "nomo://software-update-download-progress";
 const UPDATE_STATE_EVENT: &str = "nomo://software-update-state";
@@ -155,6 +160,52 @@ struct GitHubReleaseAsset {
     name: String,
     size: Option<u64>,
     browser_download_url: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SoftwareUpdateSource {
+    GitHub,
+    GhProxy,
+}
+
+impl SoftwareUpdateSource {
+    fn label(self) -> &'static str {
+        match self {
+            Self::GitHub => "GitHub 直连",
+            Self::GhProxy => "gh-proxy",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SoftwareUpdateRequestFailure {
+    message: String,
+    retryable: bool,
+}
+
+impl SoftwareUpdateRequestFailure {
+    fn from_reqwest(context: &str, error: reqwest::Error) -> Self {
+        let retryable = error
+            .status()
+            .map(is_retryable_update_status)
+            .unwrap_or_else(|| !error.is_builder());
+        Self {
+            message: format!("{context}：{error}"),
+            retryable,
+        }
+    }
+
+    fn terminal(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            retryable: false,
+        }
+    }
+}
+
+struct DownloadAttemptOutcome {
+    downloaded_bytes: u64,
+    actual_md5: String,
 }
 
 #[tauri::command]
@@ -324,40 +375,9 @@ async fn perform_software_update_check(
         });
     }
 
-    // 步骤2：创建 HTTP 客户端并请求 GitHub Release
+    // 步骤2：优先直连 GitHub，网络失败时通过 gh-proxy 请求 Release
     let client = release_http_client()?;
-    crate::app_logger::info(
-        "Update",
-        &format!("正在请求 GitHub Release API：{GITHUB_LATEST_RELEASE_API}"),
-    );
-    let request_timer = std::time::Instant::now();
-    let release = client
-        .get(GITHUB_LATEST_RELEASE_API)
-        .send()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("请求 GitHub Release 失败：{error}"));
-            format!("检查 GitHub Release 更新失败：{error}")
-        })?
-        .error_for_status()
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("GitHub Release 接口返回异常：{error}"));
-            format!("GitHub Release 更新接口返回异常：{error}")
-        })?
-        .json::<GitHubRelease>()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("解析 GitHub Release 响应失败：{error}"));
-            format!("解析 GitHub Release 更新信息失败：{error}")
-        })?;
-    crate::app_logger::info(
-        "Update",
-        &format!(
-            "GitHub Release 请求完成，耗时：{:?}，tag：{}",
-            request_timer.elapsed(),
-            release.tag_name
-        ),
-    );
+    let (release, release_source) = fetch_latest_github_release(&client).await?;
 
     // 步骤3：比较版本号
     let release_version = normalize_release_version(&release.tag_name)?;
@@ -417,31 +437,12 @@ async fn perform_software_update_check(
         })?;
 
     // 步骤5：下载校验清单并匹配 MD5
-    crate::app_logger::info("Update", "正在下载 MD5 校验清单");
-    let checksum_timer = std::time::Instant::now();
-    let checksums = client
-        .get(&checksums_asset.browser_download_url)
-        .send()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("下载校验清单失败：{error}"));
-            format!("下载 MD5 校验清单失败：{error}")
-        })?
-        .error_for_status()
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("校验清单接口返回异常：{error}"));
-            format!("MD5 校验清单下载接口返回异常：{error}")
-        })?
-        .text()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("读取校验清单内容失败：{error}"));
-            format!("读取 MD5 校验清单失败：{error}")
-        })?;
-    crate::app_logger::info(
-        "Update",
-        &format!("校验清单下载完成，耗时：{:?}", checksum_timer.elapsed()),
-    );
+    let checksums = fetch_github_checksums(
+        &client,
+        &checksums_asset.browser_download_url,
+        release_source,
+    )
+    .await?;
 
     let expected_md5 = find_md5_for_file(&checksums, &update_asset.name).ok_or_else(|| {
         crate::app_logger::error(
@@ -557,64 +558,58 @@ async fn download_software_update_inner<R: Runtime>(
     );
 
     let client = release_http_client()?;
-    crate::app_logger::info("Update", "正在发起下载请求");
-    let mut response = client
-        .get(&candidate.download_url)
-        .send()
-        .await
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("下载请求失败：{error}"));
-            format!("下载更新安装包失败：{error}")
-        })?
-        .error_for_status()
-        .map_err(|error| {
-            crate::app_logger::error("Update", &format!("下载接口返回异常：{error}"));
-            format!("更新安装包下载接口返回异常：{error}")
-        })?;
-    let total_bytes = response.content_length().or(candidate.asset_size);
-    crate::app_logger::info(
-        "Update",
-        &format!("下载连接建立成功，总大小：{:?} bytes", total_bytes),
-    );
+    let direct_result = download_software_update_from_source(
+        &app,
+        &client,
+        &candidate,
+        &request_id,
+        &temp_path,
+        SoftwareUpdateSource::GitHub,
+    )
+    .await;
+    let outcome = match direct_result {
+        Ok(outcome) => outcome,
+        Err(direct_error) if direct_error.retryable => {
+            crate::app_logger::warn(
+                "Update",
+                &format!(
+                    "GitHub 直连下载失败，将通过 gh-proxy 重试：{}",
+                    direct_error.message
+                ),
+            );
+            let _ = fs::remove_file(&temp_path);
+            emit_download_progress(&app, &request_id, 0, candidate.asset_size);
 
-    let mut file =
-        File::create(&temp_path).map_err(|error| format!("创建更新安装包缓存失败：{error}"))?;
-    let mut context = md5::Context::new();
-    let mut downloaded_bytes = 0_u64;
-
-    emit_download_progress(&app, &request_id, downloaded_bytes, total_bytes);
-    while let Some(chunk) = response.chunk().await.map_err(|error| {
-        crate::app_logger::error("Update", &format!("读取下载内容失败：{error}"));
-        format!("读取更新安装包下载内容失败：{error}")
-    })? {
-        file.write_all(&chunk)
-            .map_err(|error| format!("写入更新安装包缓存失败：{error}"))?;
-        context.consume(&chunk);
-        downloaded_bytes += chunk.len() as u64;
-        emit_download_progress(&app, &request_id, downloaded_bytes, total_bytes);
-    }
-    file.flush()
-        .map_err(|error| format!("刷新更新安装包缓存失败：{error}"))?;
-    crate::app_logger::info(
-        "Update",
-        &format!(
-            "下载完成：{downloaded_bytes} bytes，耗时：{:?}",
-            timer.elapsed()
-        ),
-    );
-
-    let actual_md5 = format!("{:x}", context.compute());
-    if !actual_md5.eq_ignore_ascii_case(&candidate.md5) {
-        crate::app_logger::error(
-            "Update",
-            &format!("MD5 校验失败：期望 {}，实际 {}", candidate.md5, actual_md5),
-        );
-        let _ = fs::remove_file(&temp_path);
-        return Err(format!(
-            "更新包校验失败：Release 记录的 MD5 为 {}，实际下载文件 MD5 为 {}。",
-            candidate.md5, actual_md5
-        ));
-    }
+            match download_software_update_from_source(
+                &app,
+                &client,
+                &candidate,
+                &request_id,
+                &temp_path,
+                SoftwareUpdateSource::GhProxy,
+            )
+            .await
+            {
+                Ok(outcome) => outcome,
+                Err(proxy_error) => {
+                    let _ = fs::remove_file(&temp_path);
+                    let error = format!(
+                        "下载更新安装包失败：GitHub 直连失败（{}）；gh-proxy 失败（{}）",
+                        direct_error.message, proxy_error.message
+                    );
+                    crate::app_logger::error("Update", &error);
+                    return Err(error);
+                }
+            }
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            crate::app_logger::error("Update", &error.message);
+            return Err(error.message);
+        }
+    };
+    let downloaded_bytes = outcome.downloaded_bytes;
+    let actual_md5 = outcome.actual_md5;
     crate::app_logger::info("Update", "MD5 校验通过");
 
     fs::rename(&temp_path, &target_path).map_err(|error| format!("保存更新安装包失败：{error}"))?;
@@ -875,9 +870,305 @@ fn parse_reg_value(output: &str, value: &str) -> Option<String> {
     })
 }
 
+async fn fetch_latest_github_release(
+    client: &reqwest::Client,
+) -> Result<(GitHubRelease, SoftwareUpdateSource), String> {
+    crate::app_logger::info("Update", "正在通过 GitHub 直连请求最新 Release");
+    let direct_timer = std::time::Instant::now();
+    match fetch_latest_github_release_from_source(client, SoftwareUpdateSource::GitHub).await {
+        Ok(release) => {
+            crate::app_logger::info(
+                "Update",
+                &format!(
+                    "GitHub 直连 Release 请求完成，耗时：{:?}，tag：{}",
+                    direct_timer.elapsed(),
+                    release.tag_name
+                ),
+            );
+            Ok((release, SoftwareUpdateSource::GitHub))
+        }
+        Err(error) if error.retryable => {
+            crate::app_logger::warn(
+                "Update",
+                &format!(
+                    "GitHub 直连 Release 请求失败，将通过 gh-proxy 重试：{}",
+                    error.message
+                ),
+            );
+            let proxy_timer = std::time::Instant::now();
+            match fetch_latest_github_release_from_source(client, SoftwareUpdateSource::GhProxy)
+                .await
+            {
+                Ok(release) => {
+                    crate::app_logger::info(
+                        "Update",
+                        &format!(
+                            "gh-proxy Release 请求完成，耗时：{:?}，tag：{}",
+                            proxy_timer.elapsed(),
+                            release.tag_name
+                        ),
+                    );
+                    Ok((release, SoftwareUpdateSource::GhProxy))
+                }
+                Err(proxy_error) => {
+                    let message = format!(
+                        "检查 GitHub Release 更新失败：GitHub 直连失败（{}）；gh-proxy 失败（{}）",
+                        error.message, proxy_error.message
+                    );
+                    crate::app_logger::error("Update", &message);
+                    Err(message)
+                }
+            }
+        }
+        Err(error) => {
+            let message = format!("检查 GitHub Release 更新失败：{}", error.message);
+            crate::app_logger::error("Update", &message);
+            Err(message)
+        }
+    }
+}
+
+async fn fetch_latest_github_release_from_source(
+    client: &reqwest::Client,
+    source: SoftwareUpdateSource,
+) -> Result<GitHubRelease, SoftwareUpdateRequestFailure> {
+    let response = send_small_update_request(
+        client,
+        GITHUB_LATEST_RELEASE_API,
+        source,
+        "请求 GitHub Release 失败",
+    )
+    .await?;
+    response.json::<GitHubRelease>().await.map_err(|error| {
+        SoftwareUpdateRequestFailure::from_reqwest("解析 GitHub Release 更新信息失败", error)
+    })
+}
+
+async fn fetch_github_checksums(
+    client: &reqwest::Client,
+    original_url: &str,
+    release_source: SoftwareUpdateSource,
+) -> Result<String, String> {
+    crate::app_logger::info(
+        "Update",
+        &format!("正在通过 {}下载 MD5 校验清单", release_source.label()),
+    );
+    let request_timer = std::time::Instant::now();
+    match fetch_github_checksums_from_source(client, original_url, release_source).await {
+        Ok(checksums) => {
+            crate::app_logger::info(
+                "Update",
+                &format!(
+                    "{}校验清单下载完成，耗时：{:?}",
+                    release_source.label(),
+                    request_timer.elapsed()
+                ),
+            );
+            Ok(checksums)
+        }
+        Err(error) if release_source == SoftwareUpdateSource::GitHub && error.retryable => {
+            crate::app_logger::warn(
+                "Update",
+                &format!(
+                    "GitHub 直连下载校验清单失败，将通过 gh-proxy 重试：{}",
+                    error.message
+                ),
+            );
+            let proxy_timer = std::time::Instant::now();
+            match fetch_github_checksums_from_source(
+                client,
+                original_url,
+                SoftwareUpdateSource::GhProxy,
+            )
+            .await
+            {
+                Ok(checksums) => {
+                    crate::app_logger::info(
+                        "Update",
+                        &format!(
+                            "gh-proxy 校验清单下载完成，耗时：{:?}",
+                            proxy_timer.elapsed()
+                        ),
+                    );
+                    Ok(checksums)
+                }
+                Err(proxy_error) => {
+                    let message = format!(
+                        "下载 MD5 校验清单失败：GitHub 直连失败（{}）；gh-proxy 失败（{}）",
+                        error.message, proxy_error.message
+                    );
+                    crate::app_logger::error("Update", &message);
+                    Err(message)
+                }
+            }
+        }
+        Err(error) => {
+            let message = format!(
+                "通过 {}下载 MD5 校验清单失败：{}",
+                release_source.label(),
+                error.message
+            );
+            crate::app_logger::error("Update", &message);
+            Err(message)
+        }
+    }
+}
+
+async fn fetch_github_checksums_from_source(
+    client: &reqwest::Client,
+    original_url: &str,
+    source: SoftwareUpdateSource,
+) -> Result<String, SoftwareUpdateRequestFailure> {
+    let response =
+        send_small_update_request(client, original_url, source, "下载 MD5 校验清单失败").await?;
+    response
+        .text()
+        .await
+        .map_err(|error| SoftwareUpdateRequestFailure::from_reqwest("读取 MD5 校验清单失败", error))
+}
+
+async fn send_small_update_request(
+    client: &reqwest::Client,
+    original_url: &str,
+    source: SoftwareUpdateSource,
+    context: &str,
+) -> Result<reqwest::Response, SoftwareUpdateRequestFailure> {
+    let request_url = update_request_url(original_url, source)?;
+    client
+        .get(request_url)
+        .timeout(UPDATE_SMALL_REQUEST_TIMEOUT)
+        .send()
+        .await
+        .map_err(|error| SoftwareUpdateRequestFailure::from_reqwest(context, error))?
+        .error_for_status()
+        .map_err(|error| SoftwareUpdateRequestFailure::from_reqwest(context, error))
+}
+
+async fn download_software_update_from_source<R: Runtime>(
+    app: &AppHandle<R>,
+    client: &reqwest::Client,
+    candidate: &SoftwareUpdateCandidate,
+    request_id: &str,
+    temp_path: &Path,
+    source: SoftwareUpdateSource,
+) -> Result<DownloadAttemptOutcome, SoftwareUpdateRequestFailure> {
+    let request_url = update_request_url(&candidate.download_url, source)?;
+    crate::app_logger::info(
+        "Update",
+        &format!("正在通过 {}下载更新安装包", source.label()),
+    );
+    let timer = std::time::Instant::now();
+    let mut response = client
+        .get(request_url)
+        .send()
+        .await
+        .map_err(|error| {
+            SoftwareUpdateRequestFailure::from_reqwest("发起更新安装包下载请求失败", error)
+        })?
+        .error_for_status()
+        .map_err(|error| {
+            SoftwareUpdateRequestFailure::from_reqwest("更新安装包下载接口返回异常", error)
+        })?;
+    let total_bytes = response.content_length().or(candidate.asset_size);
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "{}下载连接建立成功，总大小：{:?} bytes",
+            source.label(),
+            total_bytes
+        ),
+    );
+
+    let mut file = File::create(temp_path).map_err(|error| {
+        SoftwareUpdateRequestFailure::terminal(format!("创建更新安装包缓存失败：{error}"))
+    })?;
+    let mut context = md5::Context::new();
+    let mut downloaded_bytes = 0_u64;
+    emit_download_progress(app, request_id, downloaded_bytes, total_bytes);
+
+    while let Some(chunk) = response.chunk().await.map_err(|error| {
+        SoftwareUpdateRequestFailure::from_reqwest("读取更新安装包下载内容失败", error)
+    })? {
+        file.write_all(&chunk).map_err(|error| {
+            SoftwareUpdateRequestFailure::terminal(format!("写入更新安装包缓存失败：{error}"))
+        })?;
+        context.consume(&chunk);
+        downloaded_bytes += chunk.len() as u64;
+        emit_download_progress(app, request_id, downloaded_bytes, total_bytes);
+    }
+    file.flush().map_err(|error| {
+        SoftwareUpdateRequestFailure::terminal(format!("刷新更新安装包缓存失败：{error}"))
+    })?;
+
+    let actual_md5 = format!("{:x}", context.compute());
+    if !actual_md5.eq_ignore_ascii_case(&candidate.md5) {
+        return Err(SoftwareUpdateRequestFailure::terminal(format!(
+            "更新包校验失败：Release 记录的 MD5 为 {}，实际下载文件 MD5 为 {}。",
+            candidate.md5, actual_md5
+        )));
+    }
+    crate::app_logger::info(
+        "Update",
+        &format!(
+            "{}下载完成：{downloaded_bytes} bytes，耗时：{:?}",
+            source.label(),
+            timer.elapsed()
+        ),
+    );
+
+    Ok(DownloadAttemptOutcome {
+        downloaded_bytes,
+        actual_md5,
+    })
+}
+
+fn update_request_url(
+    original_url: &str,
+    source: SoftwareUpdateSource,
+) -> Result<String, SoftwareUpdateRequestFailure> {
+    match source {
+        SoftwareUpdateSource::GitHub => Ok(original_url.to_string()),
+        SoftwareUpdateSource::GhProxy => github_proxy_url(original_url).ok_or_else(|| {
+            SoftwareUpdateRequestFailure::terminal(
+                "该更新地址不属于允许通过 gh-proxy 访问的 Nomo GitHub 地址。",
+            )
+        }),
+    }
+}
+
+fn github_proxy_url(original_url: &str) -> Option<String> {
+    let url = reqwest::Url::parse(original_url).ok()?;
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+
+    let allowed = (url.host_str() == Some("api.github.com")
+        && url.path() == "/repos/LIXianSenQwQ/nomo/releases/latest")
+        || (url.host_str() == Some("github.com")
+            && url
+                .path()
+                .starts_with("/LIXianSenQwQ/nomo/releases/download/"));
+    allowed.then(|| format!("{GITHUB_PROXY_PREFIX}{original_url}"))
+}
+
+fn is_retryable_update_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::FORBIDDEN
+        || status == reqwest::StatusCode::REQUEST_TIMEOUT
+        || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+        || status.is_server_error()
+}
+
 fn release_http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("Nomo software updater")
+        .connect_timeout(UPDATE_CONNECT_TIMEOUT)
+        .read_timeout(UPDATE_DOWNLOAD_READ_TIMEOUT)
         .build()
         .map_err(|error| format!("创建更新请求客户端失败：{error}"))
 }
