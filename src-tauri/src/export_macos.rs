@@ -1,11 +1,14 @@
+use std::ffi::c_void;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use block2::RcBlock;
-use objc2::runtime::{AnyObject, ProtocolObject};
-use objc2::MainThreadMarker;
+use objc2::rc::Retained;
+use objc2::runtime::{AnyObject, Bool, NSObject, ProtocolObject};
+use objc2::{define_class, msg_send, sel, AllocAnyThread, MainThreadMarker};
 use objc2_app_kit::{
-    NSPaperOrientation, NSPrintInfo, NSPrintJobSavingURL, NSPrintSaveJob, NSPrintingPaginationMode,
+    NSPaperOrientation, NSPrintInfo, NSPrintJobSavingURL, NSPrintOperation, NSPrintSaveJob,
+    NSPrintingPaginationMode,
 };
 use objc2_foundation::{NSCopying, NSError, NSSize, NSString, NSURL};
 use objc2_web_kit::{WKContentWorld, WKWebView};
@@ -80,16 +83,21 @@ return true;
 "#,
     );
     let handler = RcBlock::new(move |_value: *mut AnyObject, error: *mut NSError| {
-        let result = if error.is_null() {
-            print_webview(webview_ptr, &output_path, &input)
-        } else {
+        if !error.is_null() {
             let description = unsafe { &*error }.localizedDescription();
-            Err(format!(
-                "等待 PDF 页面字体和图片完成失败：{}",
-                description.to_string()
-            ))
-        };
-        send_once(&result_tx, result);
+            send_once(
+                &result_tx,
+                Err(format!(
+                    "等待 PDF 页面字体和图片完成失败：{}",
+                    description.to_string()
+                )),
+            );
+            return;
+        }
+        // 打印以模态方式异步运行，结果由 NomoPdfPrintDelegate 回调通知，这里只上报启动失败。
+        if let Err(error) = print_webview(webview_ptr, &output_path, &input, &result_tx) {
+            send_once(&result_tx, Err(error));
+        }
     });
     // evaluateJavaScript 无法返回 Promise；必须由异步接口等待字体和图片加载完成。
     unsafe {
@@ -104,10 +112,54 @@ return true;
     Ok(())
 }
 
+// 打印任务上下文：在模态打印期间持有打印操作与回调委托，打印完成后由回调统一回收。
+struct PrintContext {
+    result_tx: Arc<Mutex<Option<oneshot::Sender<Result<(), String>>>>>,
+    _operation: Retained<NSPrintOperation>,
+    _delegate: Retained<NomoPdfPrintDelegate>,
+}
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "NomoPdfPrintDelegate"]
+    struct NomoPdfPrintDelegate;
+
+    impl NomoPdfPrintDelegate {
+        // NSPrintOperation 模态运行的完成回调，在打印线程触发；只做线程安全的结果通知与资源回收。
+        #[unsafe(method(printOperationDidRun:success:contextInfo:))]
+        fn print_operation_did_run(
+            &self,
+            _operation: &NSPrintOperation,
+            success: Bool,
+            context_info: *mut c_void,
+        ) {
+            if context_info.is_null() {
+                return;
+            }
+            let context = unsafe { Box::from_raw(context_info.cast::<PrintContext>()) };
+            let result = if success.as_bool() {
+                Ok(())
+            } else {
+                Err("macOS 未能生成 PDF".to_string())
+            };
+            send_once(&context.result_tx, result);
+        }
+    }
+);
+
+impl NomoPdfPrintDelegate {
+    fn new() -> Retained<Self> {
+        unsafe { msg_send![Self::alloc(), init] }
+    }
+}
+
+// runOperation 会在主线程同步阻塞到打印结束，导致整个 app 假死；
+// 改用 runOperationModalForWindow 模态运行：主线程 runloop 继续处理事件，完成后经回调拿到结果。
 fn print_webview(
-    webview_ptr: *mut std::ffi::c_void,
+    webview_ptr: *mut c_void,
     output_path: &Path,
     input: &ExportPdfInput,
+    result_tx: &Arc<Mutex<Option<oneshot::Sender<Result<(), String>>>>>,
 ) -> Result<(), String> {
     let webview = unsafe { &*(webview_ptr.cast::<WKWebView>()) };
     let print_info = NSPrintInfo::new();
@@ -116,13 +168,26 @@ fn print_webview(
     let operation = unsafe { webview.printOperationWithPrintInfo(&print_info) };
     operation.setShowsPrintPanel(false);
     operation.setShowsProgressPanel(false);
-    operation.setCanSpawnSeparateThread(false);
 
-    if operation.runOperation() {
-        Ok(())
-    } else {
-        Err("macOS 未能生成 PDF".to_string())
+    let window = webview
+        .window()
+        .ok_or_else(|| "获取 PDF 导出窗口失败".to_string())?;
+    let delegate = NomoPdfPrintDelegate::new();
+    let context = Box::new(PrintContext {
+        result_tx: Arc::clone(result_tx),
+        _operation: Retained::clone(&operation),
+        _delegate: Retained::clone(&delegate),
+    });
+    let context_ptr = Box::into_raw(context).cast::<c_void>();
+    unsafe {
+        operation.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+            &window,
+            Some(&delegate),
+            Some(sel!(printOperationDidRun:success:contextInfo:)),
+            context_ptr,
+        );
     }
+    Ok(())
 }
 
 fn configure_print_info(

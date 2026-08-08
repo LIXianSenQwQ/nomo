@@ -182,7 +182,15 @@ fn marker_from_annotation(
     if action.get(b"S").and_then(Object::as_name).ok() != Some(b"URI") {
         return Ok(None);
     }
-    let marker_uri = match action.get(b"URI").and_then(Object::as_str) {
+    // macOS WebKit 会把 URI 写成间接对象（如 /URI 17 0 R），必须先解引用再取字符串。
+    let uri_object = match action.get(b"URI") {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    let (_, uri_object) = document
+        .dereference(uri_object)
+        .map_err(|error| format!("读取 PDF 链接地址失败：{error}"))?;
+    let marker_uri = match uri_object.as_str() {
         Ok(value) => String::from_utf8_lossy(value).into_owned(),
         Err(_) => return Ok(None),
     };

@@ -43,6 +43,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSImage",
   "NSPrintInfo",
   "NSPrintOperation",
+  "NSResponder",
   "NSView",
   "NSWindow",
   "objc2-core-foundation",
