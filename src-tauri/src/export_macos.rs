@@ -3,11 +3,12 @@ use std::sync::{Arc, Mutex};
 
 use block2::RcBlock;
 use objc2::runtime::{AnyObject, ProtocolObject};
+use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSPaperOrientation, NSPrintInfo, NSPrintJobSavingURL, NSPrintSaveJob, NSPrintingPaginationMode,
 };
 use objc2_foundation::{NSCopying, NSError, NSSize, NSString, NSURL};
-use objc2_web_kit::WKWebView;
+use objc2_web_kit::{WKContentWorld, WKWebView};
 use tauri::AppHandle;
 use tokio::sync::oneshot;
 
@@ -60,33 +61,45 @@ fn prepare_and_print_webview(
     }
 
     let webview = unsafe { &*(webview_ptr.cast::<WKWebView>()) };
+    let main_thread =
+        MainThreadMarker::new().ok_or_else(|| "PDF 导出必须在 macOS 主线程执行".to_string())?;
+    let content_world = unsafe { WKContentWorld::pageWorld(main_thread) };
     let script = NSString::from_str(
         r#"
-(async () => {
-  if (document.fonts && document.fonts.ready) {
-    await document.fonts.ready;
-  }
-  await Promise.all(Array.from(document.images).map((image) => {
-    if (image.complete) return Promise.resolve();
-    return new Promise((resolve) => {
-      image.addEventListener('load', resolve, { once: true });
-      image.addEventListener('error', resolve, { once: true });
-    });
-  }));
-  return true;
-})()
+if (document.fonts && document.fonts.ready) {
+  await document.fonts.ready;
+}
+await Promise.all(Array.from(document.images).map((image) => {
+  if (image.complete) return Promise.resolve();
+  return new Promise((resolve) => {
+    image.addEventListener('load', resolve, { once: true });
+    image.addEventListener('error', resolve, { once: true });
+  });
+}));
+return true;
 "#,
     );
     let handler = RcBlock::new(move |_value: *mut AnyObject, error: *mut NSError| {
         let result = if error.is_null() {
             print_webview(webview_ptr, &output_path, &input)
         } else {
-            Err("等待 PDF 页面字体和图片完成失败".to_string())
+            let description = unsafe { &*error }.localizedDescription();
+            Err(format!(
+                "等待 PDF 页面字体和图片完成失败：{}",
+                description.to_string()
+            ))
         };
         send_once(&result_tx, result);
     });
+    // evaluateJavaScript 无法返回 Promise；必须由异步接口等待字体和图片加载完成。
     unsafe {
-        webview.evaluateJavaScript_completionHandler(&script, Some(&handler));
+        webview.callAsyncJavaScript_arguments_inFrame_inContentWorld_completionHandler(
+            &script,
+            None,
+            None,
+            &content_world,
+            Some(&handler),
+        );
     }
     Ok(())
 }
