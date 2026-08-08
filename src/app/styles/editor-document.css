@@ -61,7 +61,8 @@
 .prosemirror-host {
   position: relative;
   grid-column: 1;
-  min-height: 100%;
+  /* 不可加 min-height: 100%：WebKit 会把 grid item 的百分比 min-height 解析为旧的
+     grid area 高度，长文档切成短文档后 scrollHeight 不收缩，尾部出现大片空白。 */
   width: 100%;
   max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
   margin: 0 auto;
