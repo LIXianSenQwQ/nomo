@@ -1,3 +1,4 @@
+import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin, PluginKey, type Transaction } from 'prosemirror-state';
 import { schema } from '../schema';
 
@@ -22,6 +23,51 @@ const TRAILING_PARAGRAPH_NODE_TYPES = new Set([
   'toc_block',
 ]);
 
+export type TrailingParagraphNormalization = {
+  doc: ProseMirrorNode;
+  appended: boolean;
+};
+
+/**
+ * 为以特殊块结尾的语义文档补充一个可编辑的尾段落。
+ *
+ * Markdown 解析不产生尾部空段落，因此这里只调整 ProseMirror 内部文档，
+ * 让初始选区有安全的文本落点；其他文档结构保持不变。
+ */
+export function ensureTrailingParagraph(doc: ProseMirrorNode): TrailingParagraphNormalization {
+  const lastChild = doc.lastChild;
+  if (!lastChild || !needsTrailingParagraph(lastChild)) {
+    return { doc, appended: false };
+  }
+
+  const paragraph = schema.nodes.paragraph.create();
+  return {
+    doc: doc.copy(doc.content.append(Fragment.from(paragraph))),
+    appended: true,
+  };
+}
+
+/**
+ * 序列化前移除仍为空的编辑器尾段落，避免只编辑特殊块时改写 Markdown 空行。
+ * 用户一旦在尾段落输入内容，该段落就按普通正文保留。
+ */
+export function removeEmptyTrailingParagraph(doc: ProseMirrorNode): ProseMirrorNode {
+  if (doc.childCount < 2) return doc;
+
+  const lastChild = doc.lastChild;
+  const previousChild = doc.child(doc.childCount - 2);
+  if (
+    !lastChild ||
+    lastChild.type !== schema.nodes.paragraph ||
+    lastChild.content.size > 0 ||
+    !needsTrailingParagraph(previousChild)
+  ) {
+    return doc;
+  }
+
+  return doc.copy(doc.content.cut(0, doc.content.size - lastChild.nodeSize));
+}
+
 export function trailingParagraphPlugin(): Plugin {
   return new Plugin({
     key: trailingParagraphKey,
@@ -36,7 +82,7 @@ export function trailingParagraphPlugin(): Plugin {
       const insertPositions: number[] = [];
       newState.doc.forEach((node, offset, index) => {
         if (node.type === schema.nodes.paragraph) return;
-        if (!TRAILING_PARAGRAPH_NODE_TYPES.has(node.type.name)) return;
+        if (!needsTrailingParagraph(node)) return;
         if (!isFullyCoveredByInsertedRange(offset, offset + node.nodeSize, insertedRanges)) return;
 
         const nextNode = index + 1 < newState.doc.childCount ? newState.doc.child(index + 1) : null;
@@ -53,6 +99,10 @@ export function trailingParagraphPlugin(): Plugin {
       return tr;
     },
   });
+}
+
+function needsTrailingParagraph(node: ProseMirrorNode): boolean {
+  return TRAILING_PARAGRAPH_NODE_TYPES.has(node.type.name);
 }
 
 type InsertedRange = {

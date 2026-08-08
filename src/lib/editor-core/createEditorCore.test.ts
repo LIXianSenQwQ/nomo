@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { TextSelection } from 'prosemirror-state';
+import { AllSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { createEditorCore } from './createEditorCore';
 
@@ -60,6 +60,10 @@ function pressEditorKey(view: EditorView, key: string, init?: KeyboardEventInit)
   return handled;
 }
 
+function getTopLevelNodeNames(doc: ProseMirrorNode): string[] {
+  return Array.from({ length: doc.childCount }, (_, index) => doc.child(index).type.name);
+}
+
 describe('createEditorCore', () => {
   it('keeps Markdown as the observable editor state', () => {
     const editor = createEditorCore({ markdown: '# Nomo' });
@@ -79,6 +83,109 @@ describe('createEditorCore', () => {
 
     expect(target.querySelectorAll('.ProseMirror p br')).toHaveLength(2);
     expect(editor.getMarkdown()).toBe('1\n2\n3');
+
+    editor.destroy();
+  });
+
+  it('opens a code-only document with a safe trailing paragraph selection', () => {
+    const markdown = '```java\n1`111\n```';
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown, target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const dirtyEvents: boolean[] = [];
+    editor.subscribe((event) => dirtyEvents.push(event.dirty));
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['code_block', 'paragraph']);
+    expect(view.state.selection).toBeInstanceOf(TextSelection);
+    expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+    expect(editor.getMarkdown()).toBe(markdown);
+    expect(dirtyEvents.at(-1)).toBe(false);
+
+    view.dispatch(view.state.tr.insertText('下方正文'));
+
+    expect(view.state.doc.child(0).textContent).toBe('1`111');
+    expect(view.state.doc.child(1).textContent).toBe('下方正文');
+    expect(dirtyEvents.at(-1)).toBe(true);
+
+    expect(editor.execute({ type: 'undo' })).toBe(true);
+    expect(editor.getMarkdown()).toBe(markdown);
+    expect(dirtyEvents.at(-1)).toBe(false);
+
+    view.dispatch(view.state.tr.insertText('X', 1));
+    expect(editor.getMarkdown()).toBe('```java\nX1`111\n```');
+
+    editor.destroy();
+  });
+
+  it('keeps a Mermaid-only document when typing from its initial selection', () => {
+    const markdown = '```mermaid\nflowchart TD\n  A --> B\n```';
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown, target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['mermaid_block', 'paragraph']);
+    expect(view.state.selection).not.toBeInstanceOf(AllSelection);
+    expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+
+    view.dispatch(view.state.tr.insertText('图表说明'));
+
+    expect(view.state.doc.child(0).type.name).toBe('mermaid_block');
+    expect(view.state.doc.child(0).attrs.code).toBe('flowchart TD\n  A --> B');
+    expect(view.state.doc.child(1).textContent).toBe('图表说明');
+
+    editor.destroy();
+  });
+
+  it('opens a math-only document with a safe trailing paragraph selection', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '$$\nE = mc^2\n$$', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['math_block', 'paragraph']);
+    expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+
+    editor.destroy();
+  });
+
+  it('normalizes a trailing special block when source mode returns to semantic mode', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# Old', mode: 'source', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    editor.setMarkdown('```mermaid\nflowchart LR\n  A --> B\n```', { sourceInput: true });
+    expect(view.state.doc.textContent).toBe('Old');
+
+    editor.updateOptions({ mode: 'semantic' });
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['mermaid_block', 'paragraph']);
+    expect(view.state.selection.$from.parent.type.name).toBe('paragraph');
+
+    editor.destroy();
+  });
+
+  it('does not add paragraphs when a special block is not the final document node', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '```ts\nconst value = 1;\n```\n\n# 后续标题',
+      target,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['code_block', 'heading']);
+
+    editor.destroy();
+  });
+
+  it('does not duplicate an existing paragraph after a special block', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '```ts\nconst value = 1;\n```\n\n后续正文',
+      target,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['code_block', 'paragraph']);
+    expect(view.state.doc.child(1).textContent).toBe('后续正文');
 
     editor.destroy();
   });

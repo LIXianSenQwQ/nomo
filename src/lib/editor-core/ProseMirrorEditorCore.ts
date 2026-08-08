@@ -59,7 +59,12 @@ import { tocSyncPlugin } from './plugins/tocSync';
 import { createCalloutPlugin } from './callout/calloutPlugin';
 import { removeEmptyCalloutOnBackspace } from './callout/calloutCommands';
 import { deleteCodeBlockBeforeCursor } from './codeBlockCommands';
-import { trailingParagraphPlugin } from './plugins/trailingParagraph';
+import {
+  ensureTrailingParagraph,
+  removeEmptyTrailingParagraph,
+  trailingParagraphPlugin,
+  type TrailingParagraphNormalization,
+} from './plugins/trailingParagraph';
 import { contextMenuPlugin } from './plugins/contextMenu';
 import { searchHighlightPlugin } from './plugins/searchHighlight';
 import { windowsImePunctuationFallbackPlugin } from './plugins/windowsImePunctuationFallback';
@@ -133,7 +138,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.markdown = updateTocBlocks(options.markdown);
     this.originalMarkdown = this.markdown;
     this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
-    this.originalDoc = parseMarkdown(this.markdown);
+    this.originalDoc = this.parseSemanticDocument(this.markdown).doc;
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
@@ -207,7 +212,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.dirty = dirty;
     if (!dirty) {
       this.originalMarkdown = this.markdown;
-      this.originalDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
+      this.originalDoc = this.view?.state.doc ?? this.parseSemanticDocument(this.markdown).doc;
     }
   }
 
@@ -218,7 +223,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     const delaySemanticSync = options?.sourceInput === true && this.runtime.mode === 'source';
     const previousDoc = delaySemanticSync
       ? null
-      : (this.view?.state.doc ?? parseMarkdown(this.markdown));
+      : (this.view?.state.doc ?? this.parseSemanticDocument(this.markdown).doc);
     this.markdown = updateTocBlocks(markdown);
     this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.version += 1;
@@ -227,13 +232,13 @@ export class ProseMirrorEditorCore implements EditorCore {
       options?.savedMarkdown === undefined ? undefined : updateTocBlocks(options.savedMarkdown);
     if (savedMarkdown !== undefined) {
       this.originalMarkdown = savedMarkdown;
-      this.originalDoc = parseMarkdown(savedMarkdown);
+      this.originalDoc = this.parseSemanticDocument(savedMarkdown).doc;
     } else if (options?.reason === 'open-file' || options?.reason === 'save-file') {
       this.originalMarkdown = this.markdown;
-      this.originalDoc = parseMarkdown(this.markdown);
+      this.originalDoc = this.parseSemanticDocument(this.markdown).doc;
     } else if (options?.reason === 'switch-tab' && options?.dirty !== true) {
       this.originalMarkdown = this.markdown;
-      this.originalDoc = parseMarkdown(this.markdown);
+      this.originalDoc = this.parseSemanticDocument(this.markdown).doc;
     }
 
     this.dirty = options?.dirty ?? this.markdown !== this.originalMarkdown;
@@ -250,7 +255,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
     this.replaceViewState(this.markdown);
     if (previousDoc && shouldReportImageDeletion(options)) {
-      const nextDoc = this.view?.state.doc ?? parseMarkdown(this.markdown);
+      const nextDoc = this.view?.state.doc ?? this.parseSemanticDocument(this.markdown).doc;
       this.notifyDeletedImages(previousDoc, nextDoc);
     }
     this.emit(options?.reason ?? 'programmatic-update');
@@ -273,7 +278,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.clearPendingMarkdownSync();
     this.markdown = updateTocBlocks(snapshot.markdown);
     this.originalMarkdown = this.markdown;
-    this.originalDoc = parseMarkdown(this.markdown);
+    this.originalDoc = this.parseSemanticDocument(this.markdown).doc;
     this.version = snapshot.version;
     this.dirty = true;
     this.replaceViewState(this.markdown);
@@ -521,8 +526,10 @@ export class ProseMirrorEditorCore implements EditorCore {
   }
 
   private createState(markdown: string): EditorState {
+    const { doc, appended } = this.parseSemanticDocument(markdown);
     return EditorState.create({
-      doc: parseMarkdown(markdown),
+      doc,
+      selection: appended ? TextSelection.create(doc, doc.content.size - 1) : undefined,
       plugins: [
         windowsImePunctuationFallbackPlugin(),
         inputRules({
@@ -743,6 +750,10 @@ export class ProseMirrorEditorCore implements EditorCore {
     });
   }
 
+  private parseSemanticDocument(markdown: string): TrailingParagraphNormalization {
+    return ensureTrailingParagraph(parseMarkdown(markdown));
+  }
+
   private dispatchTransaction(transaction: Transaction): void {
     if (!this.view) {
       return;
@@ -794,7 +805,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
     const serializedMarkdown = pendingDoc.eq(this.originalDoc)
       ? this.restoreOriginalBodyWithCurrentFrontMatter()
-      : `${this.frontMatterPrefix}${serializeMarkdown(pendingDoc)}`;
+      : `${this.frontMatterPrefix}${serializeMarkdown(removeEmptyTrailingParagraph(pendingDoc))}`;
     // 保留 Markdown 字符串层的 TOC 规范化，但不再因此重建 EditorState。
     // 语义视图中的 toc_block 已由 tocSyncPlugin 原位同步，历史栈保持不变。
     this.markdown = updateTocBlocks(serializedMarkdown);
