@@ -9,7 +9,11 @@
 </script>
 
 {#key interfaceLocale}
-  <section class="empty-workspace" aria-label={t.noOpenDocument()}>
+  <section
+    class="empty-workspace"
+    aria-label={t.noOpenDocument()}
+    on:contextmenu|preventDefault
+  >
     <div class="empty-workspace-panel">
       <div class="empty-workspace-mark" aria-hidden="true">
         <FileText size={24} strokeWidth={1.8} />

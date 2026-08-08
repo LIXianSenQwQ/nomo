@@ -6,6 +6,7 @@
     EditorMode,
     EditorThemeOptions,
     InlinePendingMarks,
+    ContextMenuRequest,
   } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
@@ -29,6 +30,7 @@
     workspaceSidebarMotion,
   } from '../actions/motion';
   import { t } from '../i18n';
+  import { suppressUnhandledContextMenu } from '../services/contextMenuPolicy';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
   type AppBootState = 'booting' | 'restoring-workspace' | 'opening-file' | 'ready';
@@ -178,8 +180,14 @@
   export let updateActiveOutlineFromSemanticScroll: () => void;
   export let handleEditorPaste: (event: ClipboardEvent) => void;
   export let handleEditorDrop: (event: DragEvent) => void;
+  export let handleWorkspaceContextMenu: (event: MouseEvent) => void;
+  export let openContextMenu: (request: ContextMenuRequest) => void;
+  export let copyContextText: (text: string) => void | Promise<void>;
+  export let revealContextPath: (path: string) => void | Promise<void>;
   export let isOutlineItemExpandable: (index: number) => boolean;
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
+  export let expandAllOutline: () => void;
+  export let collapseAllOutline: () => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
@@ -231,6 +239,8 @@
 
   onDestroy(cancelToolbarOverflowFrame);
 </script>
+
+<svelte:window on:contextmenu={suppressUnhandledContextMenu} />
 
 <div
   class="app-layout"
@@ -300,6 +310,7 @@
       {exportPdf}
       {softwareUpdateState}
       {openSoftwareUpdate}
+      {openContextMenu}
     />
   {/if}
 
@@ -329,6 +340,8 @@
         ? (tabs.find((t) => t.id === previewTabId)?.nativePath ?? null)
         : null}
       {startResize}
+      {openContextMenu}
+      copyContextText={copyContextText}
       on:createNode
       on:renameNode
       on:refreshFolder
@@ -357,6 +370,11 @@
           {closeTab}
           {pinPreviewTab}
           {createNewFile}
+          {openFileDialog}
+          {openFolderDialog}
+          {openContextMenu}
+          copyContextText={copyContextText}
+          revealContextPath={revealContextPath}
           {currentFolderPath}
           on:closeOtherTabs
           on:closeTabsToRight
@@ -477,8 +495,14 @@
               {onSemanticScroll}
               {handleEditorPaste}
               {handleEditorDrop}
+              {handleWorkspaceContextMenu}
+              {openContextMenu}
+              copyContextText={copyContextText}
               {isOutlineItemExpandable}
               {toggleOutlineItemExpanded}
+              {expandAllOutline}
+              {collapseAllOutline}
+              {toggleOutlineVisible}
               {jumpToOutlineItem}
             />
 

@@ -1,12 +1,58 @@
-import { Plugin } from 'prosemirror-state';
-import type { EditorView } from 'prosemirror-view';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { Plugin, TextSelection } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
+
+export type ContextMenuIcon =
+  | 'undo'
+  | 'redo'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'search'
+  | 'select-all'
+  | 'insert'
+  | 'format'
+  | 'link'
+  | 'open'
+  | 'unlink'
+  | 'edit'
+  | 'delete'
+  | 'align-left'
+  | 'align-center'
+  | 'align-right'
+  | 'image'
+  | 'heading'
+  | 'list'
+  | 'quote'
+  | 'code'
+  | 'table'
+  | 'formula'
+  | 'diagram'
+  | 'separator'
+  | 'outline'
+  | 'toolbar'
+  | 'focus'
+  | 'width'
+  | 'zoom'
+  | 'new-file'
+  | 'new-folder'
+  | 'folder'
+  | 'refresh'
+  | 'collapse'
+  | 'expand'
+  | 'jump'
+  | 'minimize'
+  | 'maximize'
+  | 'restore'
+  | 'close';
 
 /** 上下文菜单项 */
 export interface ContextMenuItem {
   label: string;
-  icon?: string;
-  action: () => void;
+  icon?: ContextMenuIcon;
+  action?: () => unknown | Promise<unknown>;
+  disabled?: boolean;
+  children?: ContextMenuItem[];
   /** 当前是否激活（如对齐选中态），显示 ✓ */
   active?: boolean;
   /** 是否为分隔线后的项 */
@@ -15,6 +61,27 @@ export interface ContextMenuItem {
   danger?: boolean;
   /** 快捷键提示文本 */
   shortcut?: string;
+}
+
+export type ContextMenuTargetKind =
+  | 'text'
+  | 'empty-block'
+  | 'selection'
+  | 'link'
+  | 'image'
+  | 'heading'
+  | 'code-block'
+  | 'table'
+  | 'math-block'
+  | 'mermaid-block';
+
+export interface ContextMenuTarget {
+  kind: ContextMenuTargetKind;
+  pos: number;
+  nodeType: string;
+  text?: string;
+  href?: string;
+  headingLevel?: number;
 }
 
 /** 上下文菜单打开事件 */
@@ -30,6 +97,15 @@ export interface ContextMenuOpenEvent {
   /** 节点对应的 DOM 元素 */
   nodeDom: HTMLElement;
   /** 菜单项 */
+  items: ContextMenuItem[];
+  /** 右键命中的语义上下文 */
+  target: ContextMenuTarget;
+}
+
+/** 应用中任意区域请求打开统一上下文菜单时使用的负载。 */
+export interface ContextMenuRequest {
+  x: number;
+  y: number;
   items: ContextMenuItem[];
 }
 
@@ -58,8 +134,8 @@ export interface ContextMenuPluginOptions {
 /**
  * 通用上下文菜单 ProseMirror 插件。
  *
- * 监听编辑区的 contextmenu 事件，向上遍历 DOM 查找挂载了菜单工厂的元素，
- * 若找到则阻止默认菜单并触发 onOpen，传递菜单项和节点信息。
+ * 监听编辑区的 contextmenu 事件，优先查找对象挂载的菜单工厂，否则解析通用语义目标；
+ * 同时按坐标保留或移动选区，再由应用层生成对应菜单。
  */
 export function contextMenuPlugin(options: ContextMenuPluginOptions): Plugin {
   return new Plugin({
@@ -69,21 +145,27 @@ export function contextMenuPlugin(options: ContextMenuPluginOptions): Plugin {
           const target = event.target as HTMLElement | null;
           if (!target) return false;
 
+          if (target.closest('input, textarea, select')) {
+            return false;
+          }
+
           // 向上查找挂载了菜单工厂的 DOM 元素
           const factoryResult = findMenuFactory(target, view.dom);
-          if (!factoryResult) return false;
-
-          const { dom: nodeDom, factory } = factoryResult;
-
-          // 通过 DOM 定位 ProseMirror 文档位置
-          const pos = view.posAtDOM(nodeDom, 0);
+          const nodeDom = factoryResult?.dom ?? findSemanticNodeDom(target, view.dom);
+          const coordinateResult = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          let pos = coordinateResult?.pos ?? -1;
+          if (factoryResult) {
+            const factoryPos = view.posAtDOM(nodeDom, 0);
+            if (factoryPos >= 0) pos = factoryPos;
+          }
           if (pos < 0) return false;
 
-          const $pos = view.state.doc.resolve(pos);
-          const node = $pos.nodeAfter;
-          if (!node) return false;
+          preserveOrMoveSelection(view, pos);
 
-          const items = factory();
+          const $pos = view.state.doc.resolve(pos);
+          const node = $pos.nodeAfter ?? $pos.parent;
+          const items = factoryResult?.factory() ?? [];
+          const menuTarget = resolveContextTarget(view, target, nodeDom, pos, node);
 
           event.preventDefault();
           event.stopPropagation();
@@ -95,12 +177,109 @@ export function contextMenuPlugin(options: ContextMenuPluginOptions): Plugin {
             pos,
             nodeDom,
             items,
+            target: menuTarget,
           });
           return true;
         },
       },
     },
   });
+}
+
+function preserveOrMoveSelection(view: EditorView, pos: number): void {
+  const { selection, doc } = view.state;
+  if (!selection.empty && pos >= selection.from && pos <= selection.to) {
+    return;
+  }
+  try {
+    const nextSelection = TextSelection.near(doc.resolve(Math.max(0, Math.min(pos, doc.content.size))));
+    view.dispatch(view.state.tr.setSelection(nextSelection));
+  } catch {
+    // 坐标命中个别不可选 NodeView 时保留原选区，菜单仍可提供对象操作。
+  }
+}
+
+function findSemanticNodeDom(target: HTMLElement, editorDom: HTMLElement): HTMLElement {
+  return (
+    target.closest<HTMLElement>(
+      'a, h1, h2, h3, h4, h5, h6, .image-node, .code-card, table, .math-block, .mermaid-block',
+    ) ?? editorDom
+  );
+}
+
+function resolveContextTarget(
+  view: EditorView,
+  eventTarget: HTMLElement,
+  nodeDom: HTMLElement,
+  pos: number,
+  node: ProseMirrorNode,
+): ContextMenuTarget {
+  const objectDom = findSemanticNodeDom(eventTarget, view.dom);
+  const nodeType = node.type.name;
+
+  if (objectDom.closest('.image-node')) {
+    return { kind: 'image', pos, nodeType, text: String(node.attrs.alt ?? '') };
+  }
+
+  const link = eventTarget.closest<HTMLAnchorElement>('a[href]');
+  if (link) {
+    return {
+      kind: 'link',
+      pos,
+      nodeType,
+      text: link.textContent ?? '',
+      href: link.getAttribute('href') ?? '',
+    };
+  }
+
+  const heading = eventTarget.closest<HTMLElement>('h1, h2, h3, h4, h5, h6');
+  if (heading) {
+    return {
+      kind: 'heading',
+      pos,
+      nodeType,
+      text: heading.textContent ?? '',
+      headingLevel: Number(heading.tagName.slice(1)),
+    };
+  }
+
+  if (eventTarget.closest('.code-card')) {
+    const codeCard = eventTarget.closest<HTMLElement>('.code-card');
+    return {
+      kind: 'code-block',
+      pos,
+      nodeType,
+      text: codeCard?.querySelector<HTMLElement>('.code-content code')?.textContent ?? node.textContent,
+    };
+  }
+  if (eventTarget.closest('table')) {
+    return { kind: 'table', pos, nodeType };
+  }
+  if (eventTarget.closest('.math-block')) {
+    const mathBlock = eventTarget.closest<HTMLElement>('.math-block');
+    return { kind: 'math-block', pos, nodeType, text: mathBlock?.dataset.tex ?? String(node.attrs.tex ?? '') };
+  }
+  if (eventTarget.closest('.mermaid-block')) {
+    const mermaidBlock = eventTarget.closest<HTMLElement>('.mermaid-block');
+    return { kind: 'mermaid-block', pos, nodeType, text: mermaidBlock?.dataset.code ?? String(node.attrs.code ?? '') };
+  }
+
+  const { selection } = view.state;
+  if (!selection.empty && pos >= selection.from && pos <= selection.to) {
+    return {
+      kind: 'selection',
+      pos,
+      nodeType,
+      text: view.state.doc.textBetween(selection.from, selection.to, '\n'),
+    };
+  }
+
+  const block = eventTarget.closest<HTMLElement>('p');
+  if (block && !block.textContent?.trim()) {
+    return { kind: 'empty-block', pos, nodeType };
+  }
+
+  return { kind: 'text', pos, nodeType: nodeDom === view.dom ? nodeType : nodeDom.tagName.toLowerCase() };
 }
 
 /**

@@ -26,6 +26,7 @@
   --md-editor-ui-font-size-sm: 13px;
   --md-editor-ui-font-size-xs: 12px;
   --md-editor-line-height: 1.7;
+  --md-editor-z-context-menu: 80;
   --md-editor-zoom: 1;
   --md-scrollbar-size: 13px;
   --md-scrollbar-radius: var(--md-editor-radius-pill);

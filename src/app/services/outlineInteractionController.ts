@@ -47,6 +47,21 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
     );
   }
 
+  function expandAllOutline() {
+    options.setCollapsedOutlineIds(new Set());
+  }
+
+  function collapseAllOutline() {
+    const outline = options.getOutline();
+    options.setCollapsedOutlineIds(
+      new Set(
+        outline
+          .filter((_item, index) => getOutlineItemExpandable(outline, index))
+          .map((item) => item.id),
+      ),
+    );
+  }
+
   function pruneCollapsedOutlineIds() {
     options.setCollapsedOutlineIds(
       getPrunedCollapsedOutlineIds(options.getOutline(), options.getCollapsedOutlineIds()),
@@ -119,6 +134,8 @@ export function createOutlineInteractionController(options: OutlineInteractionOp
     toggleOutlineVisible,
     isOutlineItemExpandable,
     toggleOutlineItemExpanded,
+    expandAllOutline,
+    collapseAllOutline,
     pruneCollapsedOutlineIds,
     jumpToOutlineItem,
     updateActiveOutlineFromSourceScroll,

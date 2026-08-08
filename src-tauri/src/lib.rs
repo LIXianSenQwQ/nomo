@@ -57,6 +57,7 @@ pub fn run() {
                 crate::window::tray::show_main_window(app);
             }
         }))
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .on_window_event(|window, event| match event {
             _ if crate::export::is_pdf_export_window_label(window.label()) => {}

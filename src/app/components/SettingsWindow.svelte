@@ -42,6 +42,7 @@
     type ShortcutCommandId,
     type WritingStatsMetric,
   } from '../services/settings';
+  import { suppressUnhandledContextMenu } from '../services/contextMenuPolicy';
   import {
     applyThemeRuntime,
     listenForSystemThemeChanges,
@@ -1343,6 +1344,8 @@
     }
   }
 </script>
+
+<svelte:window on:contextmenu={suppressUnhandledContextMenu} />
 
 <svelte:head>
   {#key interfaceLocale}

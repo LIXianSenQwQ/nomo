@@ -10,6 +10,7 @@ export { DIAGRAM_TEMPLATES, getDiagramTemplate, isDiagramType } from './diagramT
 export type { DiagramTemplate, DiagramType } from './diagramTemplates';
 export type {
   EditorChangeEvent,
+  EditorClipboardPayload,
   EditorCommand,
   EditorCore,
   EditorCoreOptions,
@@ -30,3 +31,11 @@ export type {
   EditorThemeOptions,
   SetMarkdownOptions,
 } from './types';
+export type {
+  ContextMenuIcon,
+  ContextMenuItem,
+  ContextMenuOpenEvent,
+  ContextMenuRequest,
+  ContextMenuTarget,
+  ContextMenuTargetKind,
+} from './plugins/contextMenu';

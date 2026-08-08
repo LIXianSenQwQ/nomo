@@ -2,9 +2,11 @@
   import { ChevronDown, FileJson2, FileText, FileType2, Plus, X } from '@lucide/svelte';
   import { createEventDispatcher, onMount, tick } from 'svelte';
   import { motionIn, pulseOnChange, tabIndicator } from '../actions/motion';
-  import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
+  import type {
+    ContextMenuItem,
+    ContextMenuRequest,
+  } from '../../lib/editor-core/plugins/contextMenu';
   import type { Tab } from '../types';
-  import ContextMenu from './ContextMenu.svelte';
   import { t } from '../i18n';
 
   export let interfaceLocale: string;
@@ -15,6 +17,11 @@
   export let closeTab: (tabId: string, event?: Event) => void;
   export let pinPreviewTab: () => void;
   export let createNewFile: () => void;
+  export let openFileDialog: () => void = () => undefined;
+  export let openFolderDialog: () => void = () => undefined;
+  export let openContextMenu: (request: ContextMenuRequest) => void = () => undefined;
+  export let copyContextText: (text: string) => void | Promise<void> = () => undefined;
+  export let revealContextPath: (path: string) => void | Promise<void> = () => undefined;
   export let currentFolderPath: string = '';
 
   const dispatch = createEventDispatcher<{
@@ -52,12 +59,6 @@
   let activeTabIndex = -1;
   let activeTabOutsideVisibleRange = false;
 
-  // 标签栏右键菜单状态
-  let tabContextMenuOpen = false;
-  let tabContextMenuX = 0;
-  let tabContextMenuY = 0;
-  let tabContextMenuItems: ContextMenuItem[] = [];
-
   $: hiddenTabs = tabs.filter((_, i) => i < visibleRange.start || i >= visibleRange.end);
 
   // 构建标签右键菜单项
@@ -69,6 +70,7 @@
     // 步骤1：基础关闭操作
     items.push({
       label: t.close(),
+      icon: 'close',
       action: () => closeTab(tab.id),
       shortcut: isPreview ? undefined : 'Ctrl+W',
     });
@@ -78,6 +80,7 @@
     if (otherTabs.length > 0) {
       items.push({
         label: t.closeOtherTabs(),
+        icon: 'close',
         action: () => dispatch('closeOtherTabs', { tabId: tab.id }),
       });
     }
@@ -86,12 +89,14 @@
     if (rightTabs.length > 0) {
       items.push({
         label: t.closeTabsToRight(),
+        icon: 'close',
         action: () => dispatch('closeTabsToRight', { tabId: tab.id }),
       });
     }
 
     items.push({
       label: t.closeAllTabs(),
+      icon: 'close',
       action: () => dispatch('closeAllTabs'),
       danger: true,
     });
@@ -102,9 +107,13 @@
       items.push({ label: '', action: () => {}, separator: true });
       items.push({
         label: t.copyPath(),
-        action: () => {
-          navigator.clipboard.writeText(path).catch(() => {});
-        },
+        icon: 'copy',
+        action: () => copyContextText(path),
+      });
+      items.push({
+        label: t.revealInFolder(),
+        icon: 'folder',
+        action: () => revealContextPath(path),
       });
     }
 
@@ -113,15 +122,34 @@
 
   function handleTabContextMenu(tab: Tab, event: MouseEvent) {
     event.preventDefault();
-    tabContextMenuX = event.clientX;
-    tabContextMenuY = event.clientY;
-    tabContextMenuItems = buildTabContextMenuItems(tab);
-    tabContextMenuOpen = true;
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: buildTabContextMenuItems(tab),
+    });
   }
 
-  function closeTabContextMenu() {
-    tabContextMenuOpen = false;
-    tabContextMenuItems = [];
+  function handleTabStripContextMenu(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    event.preventDefault();
+    if (!target || target.closest('button')) return;
+    openContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { label: t.newFile(), icon: 'new-file', action: createNewFile },
+        { label: t.openFileEllipsis(), icon: 'open', action: openFileDialog },
+        { label: t.openFolderEllipsis(), icon: 'folder', action: openFolderDialog },
+        { label: '', separator: true },
+        {
+          label: t.closeAllTabs(),
+          icon: 'close',
+          danger: true,
+          action: () => dispatch('closeAllTabs'),
+        },
+      ],
+    });
   }
 
   function queueMeasureTabs() {
@@ -310,7 +338,13 @@
     {/each}
   </div>
 
-  <header class="topbar" aria-label={t.documentTabs()} data-interface-locale={interfaceLocale}>
+  <header
+    class="topbar"
+    role="navigation"
+    aria-label={t.documentTabs()}
+    data-interface-locale={interfaceLocale}
+    on:contextmenu={handleTabStripContextMenu}
+  >
     <div
       class="tabs-container"
       bind:this={tabsContainer}
@@ -337,7 +371,7 @@
           on:dblclick={() => {
             if (previewTabId === tab.id) pinPreviewTab();
           }}
-          on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
+          on:contextmenu={(event) => handleTabContextMenu(tab, event)}
         >
           {#if tab.documentKind === 'json'}
             <FileJson2 size={13} />
@@ -410,7 +444,7 @@
           title={getRelativeDisplayPath(tab.filePath, currentFolderPath)}
           use:motionIn={{ kind: 'row', y: -3 }}
           on:click={() => selectHiddenTab(tab.id)}
-          on:contextmenu|preventDefault={(event) => handleTabContextMenu(tab, event)}
+          on:contextmenu={(event) => handleTabContextMenu(tab, event)}
         >
           {#if tab.documentKind === 'json'}
             <FileJson2 size={13} />
@@ -428,12 +462,4 @@
     </div>
   {/if}
 
-  {#if tabContextMenuOpen}
-    <ContextMenu
-      x={tabContextMenuX}
-      y={tabContextMenuY}
-      items={tabContextMenuItems}
-      onClose={closeTabContextMenu}
-    />
-  {/if}
 {/key}

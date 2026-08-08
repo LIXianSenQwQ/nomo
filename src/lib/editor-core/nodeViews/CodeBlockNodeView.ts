@@ -588,6 +588,16 @@ export class CodeBlockNodeView {
     return false;
   }
 
+  static showLanguageSelectorAt(view: EditorView, pos: number): boolean {
+    for (const instance of CodeBlockNodeView.instances) {
+      if (instance.view === view && instance.getPos() === pos) {
+        instance.showLangSelector();
+        return true;
+      }
+    }
+    return false;
+  }
+
   private exitEdit(save: boolean): void {
     if (!this.editing) return;
 

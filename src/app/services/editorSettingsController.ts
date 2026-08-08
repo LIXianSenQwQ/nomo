@@ -63,6 +63,10 @@ export function createEditorSettingsController(options: EditorSettingsController
 
   function updateContentWidth(event: Event) {
     const value = Number((event.currentTarget as HTMLInputElement).value);
+    updateContentWidthValue(value);
+  }
+
+  function updateContentWidthValue(value: number) {
     options.setContentWidthPercent(value);
     localStorage.setItem('nomo-content-width-percent', String(value));
     persistSetting('contentWidthPercent', value);
@@ -81,5 +85,6 @@ export function createEditorSettingsController(options: EditorSettingsController
     updateLineHeight,
     updateLineHeightValue,
     updateContentWidth,
+    updateContentWidthValue,
   };
 }

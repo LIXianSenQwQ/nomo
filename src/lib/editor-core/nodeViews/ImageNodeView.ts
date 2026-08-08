@@ -244,6 +244,7 @@ export class ImageNodeView {
     // absolutePath 是 resolve 后的磁盘绝对路径，用于文件操作
     const absolutePath = this.resolved?.absolutePath ?? src;
     const displaySrc = this.resolved?.displaySrc ?? src;
+    const disabled = !this.view.editable;
 
     const setNodeAttr = (name: string, value: unknown) => {
       const pos = this.findOwnPos();
@@ -262,48 +263,69 @@ export class ImageNodeView {
       // 对齐组
       {
         label: t.alignLeft(),
+        icon: 'align-left',
+        disabled,
         action: () => setNodeAttr('align', 'left'),
         active: align === 'left',
       },
       {
         label: t.alignCenter(),
+        icon: 'align-center',
+        disabled,
         action: () => setNodeAttr('align', 'center'),
         active: align === 'center',
       },
       {
         label: t.alignRight(),
+        icon: 'align-right',
+        disabled,
         action: () => setNodeAttr('align', 'right'),
         active: align === 'right',
       },
+      { label: '', separator: true },
       {
         label: t.originalSize(),
+        icon: 'image',
+        disabled,
         action: () => setNodeAttr('width', null),
         active: !width,
-        separator: true,
       },
       {
         label: t.setSize(),
+        icon: 'edit',
+        disabled,
         action: () => this.openSizeEditor(),
       },
+      {
+        label: t.editImageAlt(),
+        icon: 'edit',
+        disabled,
+        action: () => this.openAltEditor(),
+      },
       // 文件操作组
+      { label: '', separator: true },
       {
         label: t.openImageLocation(),
+        icon: 'open',
         action: () => this.openImageLocation(absolutePath),
-        separator: true,
       },
       {
         label: t.copyImage(),
+        icon: 'copy',
         action: () => this.copyImageToClipboard(displaySrc),
       },
       {
         label: t.copyImagePath(),
+        icon: 'copy',
         action: () => this.copyImagePath(absolutePath),
       },
       // 危险操作
+      { label: '', separator: true },
       {
         label: t.deleteAction(),
+        icon: 'delete',
+        disabled,
         action: removeNode,
-        separator: true,
         danger: true,
       },
     ];
@@ -462,6 +484,72 @@ export class ImageNodeView {
     this.sizeEditorEl = null;
   }
 
+  private openAltEditor(): void {
+    this.closeSizeEditor();
+    const overlay = document.createElement('div');
+    overlay.className = 'image-size-editor-overlay';
+    const popover = document.createElement('div');
+    popover.className = 'image-size-editor';
+    const row = document.createElement('div');
+    row.className = 'image-size-editor-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'image-size-editor-input';
+    input.value = String(this.node.attrs.alt ?? '');
+    input.placeholder = t.imageAlt();
+    input.setAttribute('aria-label', t.imageAlt());
+    row.appendChild(input);
+
+    const actions = document.createElement('div');
+    actions.className = 'image-size-editor-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'image-size-editor-reset';
+    cancelBtn.textContent = t.cancel();
+    cancelBtn.addEventListener('click', () => this.closeSizeEditor());
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'image-size-editor-confirm';
+    confirmBtn.textContent = t.ok();
+    confirmBtn.addEventListener('click', () => {
+      const pos = this.findOwnPos();
+      if (pos >= 0) {
+        this.view.dispatch(
+          this.view.state.tr.setNodeMarkup(pos, undefined, {
+            ...this.node.attrs,
+            alt: input.value.trim(),
+          }),
+        );
+      }
+      this.closeSizeEditor();
+    });
+    actions.append(cancelBtn, confirmBtn);
+    popover.append(row, actions);
+    overlay.appendChild(popover);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) this.closeSizeEditor();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeSizeEditor();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmBtn.click();
+      }
+    });
+    document.body.appendChild(overlay);
+    this.sizeEditorEl = overlay;
+    popover.style.position = 'fixed';
+    popover.style.left = `${this.lastContextMenuX}px`;
+    popover.style.top = `${this.lastContextMenuY}px`;
+    popover.style.transform = 'translateX(-50%)';
+    requestAnimationFrame(() => {
+      input.focus();
+      input.select();
+    });
+  }
+
   private setImageWidth(width: string | null): void {
     const pos = this.findOwnPos();
     if (pos < 0) return;
@@ -488,9 +576,12 @@ export class ImageNodeView {
     try {
       const response = await fetch(resolvedSrc);
       const blob = await response.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ]);
+      try {
+        const { writeImage } = await import('@tauri-apps/plugin-clipboard-manager');
+        await writeImage(new Uint8Array(await blob.arrayBuffer()));
+      } catch {
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      }
     } catch {
       // 静默失败
     }
@@ -499,7 +590,12 @@ export class ImageNodeView {
   /** 复制图片 src 路径到剪贴板 */
   private async copyImagePath(src: string): Promise<void> {
     try {
-      await navigator.clipboard.writeText(src);
+      try {
+        const { writeText } = await import('@tauri-apps/plugin-clipboard-manager');
+        await writeText(src);
+      } catch {
+        await navigator.clipboard.writeText(src);
+      }
     } catch {
       // 静默失败
     }

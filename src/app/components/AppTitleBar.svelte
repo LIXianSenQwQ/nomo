@@ -19,6 +19,7 @@
     type DiagramType,
     type EditorCommand,
     type EditorMode,
+    type ContextMenuRequest,
   } from '../../lib/editor-core';
   import { clickOutside } from '../actions/clickOutside';
   import { getPlatformCapabilities } from '../services/platform';
@@ -76,6 +77,7 @@
   export let exportPdf: () => void;
   export let softwareUpdateState: SoftwareUpdateSnapshot;
   export let openSoftwareUpdate: () => void;
+  export let openContextMenu: (request: ContextMenuRequest) => void = () => undefined;
 
   const WINDOW_STATE_SYNC_DELAY_MS = 80;
 
@@ -211,6 +213,88 @@
     }
   }
 
+  async function handleTitlebarContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    const target = event.target as HTMLElement | null;
+    if (
+      !target ||
+      target.closest('button, .titlebar-menu, .dropdown-menu, input, textarea, select') ||
+      !desktopEnabled ||
+      !platformCapabilities.usesCustomWindowsTitlebar ||
+      !target.closest('[data-drag-region], [data-tauri-drag-region]')
+    ) {
+      return;
+    }
+
+    let maximized = false;
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      maximized = await getCurrentWindow().isMaximized();
+    } catch {
+      // 查询失败时仍提供可用的窗口菜单，最大化项使用默认文案。
+    }
+
+    const items = markdownMiniActive
+      ? [
+          {
+            label: t.minimizeWindow(),
+            icon: 'minimize' as const,
+            action: minimizeCurrentWindow,
+          },
+          {
+            label: markdownMiniPinned ? t.markdownMiniUnpin() : t.markdownMiniPin(),
+            icon: 'focus' as const,
+            active: markdownMiniPinned,
+            action: toggleMarkdownMiniPinned,
+          },
+          { label: '', separator: true },
+          {
+            label: t.markdownMiniReturn(),
+            icon: 'restore' as const,
+            action: toggleMarkdownMini,
+          },
+        ]
+      : [
+          {
+            label: t.minimizeWindow(),
+            icon: 'minimize' as const,
+            action: minimizeCurrentWindow,
+          },
+          {
+            label: maximized ? t.restoreWindow() : t.maximizeWindow(),
+            icon: maximized ? ('restore' as const) : ('maximize' as const),
+            action: toggleCurrentWindowMaximized,
+          },
+          { label: '', separator: true },
+          {
+            label: t.closeWindow(),
+            icon: 'close' as const,
+            danger: true,
+            action: closeCurrentWindow,
+          },
+        ];
+
+    openContextMenu({ x: event.clientX, y: event.clientY, items });
+  }
+
+  async function minimizeCurrentWindow() {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().minimize();
+    } catch {
+      // 窗口状态可能在菜单打开后变化，失败时保持当前窗口状态。
+    }
+  }
+
+  async function toggleCurrentWindowMaximized() {
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      await getCurrentWindow().toggleMaximize();
+    } catch {
+      // 窗口状态可能在菜单打开后变化，失败时保持当前窗口状态。
+    }
+  }
+
   function finish(action: () => void, menu: string) {
     action();
     closeMenu(menu);
@@ -233,12 +317,14 @@
 </script>
 
 {#key interfaceLocale}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <header
     class="titlebar"
     data-interface-locale={interfaceLocale}
     class:is-mac={platformCapabilities.isMac}
     class:is-win={platformCapabilities.isWindows}
     class:is-fullscreen={isFullscreen}
+    on:contextmenu={handleTitlebarContextMenu}
   >
     {#if markdownMiniActive}
       <div

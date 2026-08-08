@@ -1,6 +1,6 @@
 import type { DiagramType } from './diagramTemplates';
 import type { ImageContext } from '../services/render';
-import type { ContextMenuOpenEvent } from './plugins/contextMenu';
+import type { ContextMenuOpenEvent, ContextMenuTarget } from './plugins/contextMenu';
 import type { EditorThemeOptions } from '../theme/types';
 
 export type { EditorThemeOptions } from '../theme/types';
@@ -105,6 +105,11 @@ export interface EditorError {
   cause?: unknown;
 }
 
+export interface EditorClipboardPayload {
+  text: string;
+  html: string;
+}
+
 export type EditorCommand =
   | { type: 'toggleBold' }
   | { type: 'toggleItalic' }
@@ -198,6 +203,15 @@ export interface EditorCore {
   blur(): void;
   getActiveLink(): EditorLinkSnapshot | null;
   getSelectionAnchorRect(): EditorAnchorRect | null;
+  getClipboardPayload(): EditorClipboardPayload | null;
+  pasteClipboardText(text: string): boolean;
+  pasteClipboardHtml(html: string): boolean;
+  deleteSelection(): boolean;
+  selectAll(): boolean;
+  selectContextTarget(target: ContextMenuTarget): boolean;
+  editContextTarget(target: ContextMenuTarget): boolean;
+  chooseContextTargetLanguage(target: ContextMenuTarget): boolean;
+  deleteContextTarget(target: ContextMenuTarget): boolean;
   findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[];
   setSearchHighlights(matches: EditorSearchMatch[], activeIndex: number): void;
   clearSearchState?(activeMatch?: EditorSearchMatch): void;

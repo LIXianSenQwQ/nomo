@@ -88,6 +88,7 @@
     updateAppWindowTitle,
   } from './services/desktopWindow';
   import { createImageInsertionHandlers } from './services/imageInsertion';
+  import { readEditorClipboard, writeEditorClipboard } from './services/clipboard';
   import { createDesktopImageLoader } from './services/desktopImageLoader';
   import { isOutlineItemVisible as getOutlineItemVisible } from './services/outlineState';
   import { writeRecoveryDraft as writeRecoveryDraftToStorage } from './services/recoveryDraft';
@@ -133,6 +134,8 @@
   import type {
     ContextMenuOpenEvent,
     ContextMenuItem,
+    ContextMenuRequest,
+    ContextMenuTarget,
   } from '../lib/editor-core/plugins/contextMenu';
   import {
     DEFAULT_APP_PREFERENCES,
@@ -394,6 +397,7 @@
   let contextMenuY = 0;
   let contextMenuItems: ContextMenuItem[] = [];
   let contextMenuOpen = false;
+  let contextMenuVersion = 0;
 
   // 删除确认对话框状态
   let deleteConfirmOpen = false;
@@ -2253,10 +2257,288 @@
   }
 
   function handleContextMenuOpen(event: ContextMenuOpenEvent) {
-    contextMenuX = event.x;
-    contextMenuY = event.y;
-    contextMenuItems = event.items;
-    contextMenuOpen = true;
+    openApplicationContextMenu({
+      x: event.x,
+      y: event.y,
+      items: event.items.length ? event.items : buildEditorContextMenuItems(event.target),
+    });
+  }
+
+  function openApplicationContextMenu(request: ContextMenuRequest) {
+    activeMenu = null;
+    tablePickerOpen = false;
+    linkPickerOpen = false;
+    contextMenuX = request.x;
+    contextMenuY = request.y;
+    contextMenuItems = request.items;
+    contextMenuOpen = request.items.length > 0;
+    contextMenuVersion += 1;
+  }
+
+  function buildEditorContextMenuItems(target: ContextMenuTarget): ContextMenuItem[] {
+    if (target.kind === 'link') return buildLinkContextMenuItems(target);
+    if (target.kind === 'heading') return buildHeadingContextMenuItems(target);
+    if (target.kind === 'code-block') return buildCodeBlockContextMenuItems(target);
+    if (target.kind === 'table') return buildTableContextMenuItems();
+    if (target.kind === 'math-block' || target.kind === 'mermaid-block') {
+      return buildRenderedBlockContextMenuItems(target);
+    }
+    return target.kind === 'selection'
+      ? buildSelectionContextMenuItems()
+      : buildTextContextMenuItems();
+  }
+
+  function buildSelectionContextMenuItems(): ContextMenuItem[] {
+    const disabled = readonlyDocumentMode;
+    return [
+      { label: t.cut(), icon: 'cut', disabled, shortcut: 'Ctrl+X', action: cutSelection },
+      { label: t.copy(), icon: 'copy', shortcut: 'Ctrl+C', action: copySelection },
+      { label: t.paste(), icon: 'paste', disabled, shortcut: 'Ctrl+V', action: pasteFromContextMenu },
+      menuSeparator(),
+      {
+        label: t.format(),
+        icon: 'format',
+        disabled,
+        children: [
+          { ...commandMenuItem(t.bold(), { type: 'toggleBold' }, 'format', 'Ctrl+B'), active: pendingInlineMarks.strong },
+          { ...commandMenuItem(t.italic(), { type: 'toggleItalic' }, 'format', 'Ctrl+I'), active: pendingInlineMarks.em },
+          { ...commandMenuItem(t.underline(), { type: 'toggleUnderline' }, 'format', 'Ctrl+U'), active: pendingInlineMarks.underline },
+          { ...commandMenuItem(t.strikethrough(), { type: 'toggleStrikethrough' }, 'format'), active: pendingInlineMarks.strikethrough },
+          { ...commandMenuItem(t.inlineCode(), { type: 'toggleCode' }, 'code', 'Ctrl+`'), active: pendingInlineMarks.code },
+          { ...commandMenuItem(t.highlight(), { type: 'toggleHighlight' }, 'format'), active: pendingInlineMarks.highlight },
+          menuSeparator(),
+          commandMenuItem(t.clearStyle(), { type: 'clearInlineStyles' }, 'format'),
+        ],
+      },
+      {
+        label: editor.getActiveLink()?.active ? t.editLink() : t.createLink(),
+        icon: 'link',
+        disabled,
+        shortcut: 'Ctrl+K',
+        action: openLinkPicker,
+      },
+      commandMenuItem(t.insertInlineComment(), { type: 'insertCommentInline' }, 'edit'),
+      menuSeparator(),
+      { label: t.selectAll(), icon: 'select-all', shortcut: 'Ctrl+A', action: () => editor.selectAll() },
+      { label: t.find(), icon: 'search', shortcut: 'Ctrl+F', action: () => openSearchPanel(false) },
+    ];
+  }
+
+  function buildTextContextMenuItems(): ContextMenuItem[] {
+    const disabled = readonlyDocumentMode;
+    return [
+      commandMenuItem(t.undo(), { type: 'undo' }, 'undo', 'Ctrl+Z'),
+      commandMenuItem(t.redo(), { type: 'redo' }, 'redo', 'Ctrl+Y'),
+      { label: t.paste(), icon: 'paste', disabled, shortcut: 'Ctrl+V', action: pasteFromContextMenu },
+      menuSeparator(),
+      { label: t.insert(), icon: 'insert', disabled, children: buildInsertContextMenuItems() },
+      menuSeparator(),
+      { label: t.selectAll(), icon: 'select-all', shortcut: 'Ctrl+A', action: () => editor.selectAll() },
+      { label: t.find(), icon: 'search', shortcut: 'Ctrl+F', action: () => openSearchPanel(false) },
+    ];
+  }
+
+  function buildInsertContextMenuItems(): ContextMenuItem[] {
+    const headings: ContextMenuItem[] = ([1, 2, 3, 4, 5, 6] as const).map((level) =>
+      commandMenuItem(t.headingLevel({ level }), { type: 'setHeading', level }, 'heading', `Ctrl+${level}`),
+    );
+    return [
+      ...headings,
+      menuSeparator(),
+      commandMenuItem(t.unorderedList(), { type: 'toggleBulletList' }, 'list'),
+      commandMenuItem(t.orderedList(), { type: 'toggleOrderedList' }, 'list'),
+      commandMenuItem(t.taskList(), { type: 'toggleTaskList' }, 'list'),
+      commandMenuItem(t.quote(), { type: 'toggleBlockquote' }, 'quote'),
+      commandMenuItem(t.callout(), { type: 'insertCallout' }, 'quote'),
+      menuSeparator(),
+      commandMenuItem(t.codeBlock(), { type: 'insertCodeBlock' }, 'code'),
+      commandMenuItem(t.table(), { type: 'insertTable', rows: 3, columns: 3 }, 'table'),
+      {
+        label: t.image(),
+        icon: 'image',
+        disabled: readonlyDocumentMode,
+        action: chooseImageForContextMenu,
+      },
+      commandMenuItem(t.mathFormula(), { type: 'insertMathBlock', tex: 'E = mc^2' }, 'formula'),
+      commandMenuItem(t.mermaidDiagram(), { type: 'insertMermaidBlock' }, 'diagram'),
+      commandMenuItem(t.horizontalRule(), { type: 'insertHorizontalRule' }, 'separator'),
+    ];
+  }
+
+  function buildLinkContextMenuItems(target: ContextMenuTarget): ContextMenuItem[] {
+    return [
+      { label: t.openLink(), icon: 'open', action: () => target.href && openLinkFromEditor(target.href) },
+      { label: t.editLink(), icon: 'edit', disabled: readonlyDocumentMode, action: openLinkPicker },
+      { label: t.copyLinkAddress(), icon: 'copy', action: () => copyPlainText(target.href ?? '') },
+      menuSeparator(),
+      commandMenuItem(t.removeLink(), { type: 'removeLink' }, 'unlink'),
+    ];
+  }
+
+  function buildHeadingContextMenuItems(target: ContextMenuTarget): ContextMenuItem[] {
+    const levels = ([1, 2, 3, 4, 5, 6] as const).map((level) => ({
+      ...commandMenuItem(t.headingLevel({ level }), { type: 'setHeading', level }, 'heading'),
+      active: target.headingLevel === level,
+    }));
+    return [
+      { label: t.heading(), icon: 'heading', children: levels },
+      commandMenuItem(t.paragraph(), { type: 'setParagraph' }, 'format'),
+      menuSeparator(),
+      commandMenuItem(t.liftHeading(), { type: 'increaseHeadingLevel' }, 'heading'),
+      commandMenuItem(t.sinkHeading(), { type: 'decreaseHeadingLevel' }, 'heading'),
+    ];
+  }
+
+  function buildCodeBlockContextMenuItems(target: ContextMenuTarget): ContextMenuItem[] {
+    return [
+      { label: t.editCode(), icon: 'edit', disabled: readonlyDocumentMode, action: () => editor.editContextTarget(target) },
+      { label: t.copyCode(), icon: 'copy', action: () => copyPlainText(target.text ?? '') },
+      { label: t.selectLanguage(), icon: 'code', disabled: readonlyDocumentMode, action: () => editor.chooseContextTargetLanguage(target) },
+      { label: t.convertToParagraph(), icon: 'format', disabled: readonlyDocumentMode, action: () => {
+        if (editor.selectContextTarget(target)) runCommand({ type: 'insertCodeBlock' });
+      } },
+      menuSeparator(),
+      { label: t.deleteAction(), icon: 'delete', danger: true, disabled: readonlyDocumentMode, action: () => editor.deleteContextTarget(target) },
+    ];
+  }
+
+  function buildTableContextMenuItems(): ContextMenuItem[] {
+    return [
+      commandMenuItem(t.addRowBefore(), { type: 'addTableRowBefore' }, 'table'),
+      commandMenuItem(t.addRowAfter(), { type: 'addTableRowAfter' }, 'table'),
+      commandMenuItem(t.addColumnBefore(), { type: 'addTableColumnBefore' }, 'table'),
+      commandMenuItem(t.addColumnAfter(), { type: 'addTableColumnAfter' }, 'table'),
+      menuSeparator(),
+      commandMenuItem(t.alignLeft(), { type: 'setTableColumnAlignment', align: 'left' }, 'align-left'),
+      commandMenuItem(t.alignCenter(), { type: 'setTableColumnAlignment', align: 'center' }, 'align-center'),
+      commandMenuItem(t.alignRight(), { type: 'setTableColumnAlignment', align: 'right' }, 'align-right'),
+      commandMenuItem(t.toggleTableHeader(), { type: 'toggleTableHeader' }, 'table'),
+      menuSeparator(),
+      commandMenuItem(t.deleteRow(), { type: 'deleteTableRow' }, 'delete'),
+      commandMenuItem(t.deleteColumn(), { type: 'deleteTableColumn' }, 'delete'),
+      { ...commandMenuItem(t.deleteTable(), { type: 'deleteTable' }, 'delete'), danger: true },
+    ];
+  }
+
+  function buildRenderedBlockContextMenuItems(target: ContextMenuTarget): ContextMenuItem[] {
+    const isMermaid = target.kind === 'mermaid-block';
+    return [
+      { label: isMermaid ? t.editDiagramSource() : t.editFormulaSource(), icon: 'edit', disabled: readonlyDocumentMode, action: () => editor.editContextTarget(target) },
+      { label: isMermaid ? t.copyDiagramSource() : t.copyFormulaSource(), icon: 'copy', action: () => copyPlainText(target.text ?? '') },
+      menuSeparator(),
+      { label: t.deleteAction(), icon: 'delete', danger: true, disabled: readonlyDocumentMode, action: () => editor.deleteContextTarget(target) },
+    ];
+  }
+
+  function commandMenuItem(
+    label: string,
+    command: EditorCommand,
+    icon: ContextMenuItem['icon'],
+    shortcut?: string,
+  ): ContextMenuItem {
+    return {
+      label,
+      icon,
+      shortcut,
+      disabled: readonlyDocumentMode || !editor.canExecute(command),
+      action: () => runCommand(command),
+    };
+  }
+
+  function menuSeparator(): ContextMenuItem {
+    return { label: '', separator: true };
+  }
+
+  async function copySelection() {
+    const payload = editor.getClipboardPayload();
+    if (!payload) return;
+    try {
+      await writeEditorClipboard(payload, desktopEnabled);
+    } catch {
+      statusMessage = t.copyFailed();
+    }
+  }
+
+  async function cutSelection() {
+    const payload = editor.getClipboardPayload();
+    if (!payload || readonlyDocumentMode) return;
+    try {
+      await writeEditorClipboard(payload, desktopEnabled);
+      editor.deleteSelection();
+    } catch {
+      statusMessage = t.cutFailed();
+    }
+  }
+
+  async function copyPlainText(text: string) {
+    try {
+      await writeEditorClipboard({ text, html: '' }, desktopEnabled);
+    } catch {
+      statusMessage = t.copyFailed();
+    }
+  }
+
+  async function revealContextPath(path: string) {
+    try {
+      await revealInExplorer(path);
+    } catch (error) {
+      showVisibleError(error, t.openFolderFailed());
+    }
+  }
+
+  async function pasteFromContextMenu() {
+    if (readonlyDocumentMode) return;
+    try {
+      const content = await readEditorClipboard(desktopEnabled);
+      if (content.kind === 'image') {
+        await imageInsertion.insertImageFiles(content.files);
+      } else if (content.kind === 'html') {
+        const pasted = editor.pasteClipboardHtml(content.html);
+        if (!pasted && content.text) editor.pasteClipboardText(content.text);
+      } else {
+        editor.pasteClipboardText(content.text);
+      }
+      editor.focus();
+    } catch {
+      statusMessage = t.pasteFailed();
+    }
+  }
+
+  function chooseImageForContextMenu() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files ?? []);
+      if (files.length) void imageInsertion.insertImageFiles(files);
+    });
+    input.click();
+  }
+
+  function handleWorkspaceContextMenu(event: MouseEvent) {
+    if (mode !== 'semantic') return;
+    event.preventDefault();
+    openApplicationContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { label: outlineVisible ? t.hideOutline() : t.showOutline(), icon: 'outline', active: outlineVisible, action: toggleOutlineVisible },
+        { label: toolbarHidden ? t.showToolbar() : t.hideToolbar(), icon: 'toolbar', active: !toolbarHidden, action: toggleToolbar },
+        { label: focusMode ? t.exitFocusMode() : t.enterFocusMode(), icon: 'focus', active: focusMode, action: toggleFocusMode },
+        menuSeparator(),
+        {
+          label: t.contentWidth(),
+          icon: 'width',
+          children: [45, 60, 75, 90].map((value) => ({
+            label: `${value}%`,
+            active: contentWidthPercent === value,
+            action: () => editorSettings.updateContentWidthValue(value),
+          })),
+        },
+        { label: t.resetZoom(), icon: 'zoom', disabled: zoomPercent === 100, action: () => handleZoomChange(100) },
+      ],
+    });
   }
 
   /**
@@ -2268,10 +2550,7 @@
     const customEvent = event as CustomEvent;
     const detail = customEvent.detail;
     if (!detail?.items) return;
-    contextMenuX = detail.x;
-    contextMenuY = detail.y;
-    contextMenuItems = detail.items;
-    contextMenuOpen = true;
+    openApplicationContextMenu({ x: detail.x, y: detail.y, items: detail.items });
   }
 
   function closeContextMenu() {
@@ -3106,6 +3385,8 @@
   const updateContentWidth = editorSettings.updateContentWidth;
   const isOutlineItemExpandable = outlineInteraction.isOutlineItemExpandable;
   const toggleOutlineItemExpanded = outlineInteraction.toggleOutlineItemExpanded;
+  const expandAllOutline = outlineInteraction.expandAllOutline;
+  const collapseAllOutline = outlineInteraction.collapseAllOutline;
   const pruneCollapsedOutlineIds = outlineInteraction.pruneCollapsedOutlineIds;
   const syncSourceTextareaHeight = editorInteraction.syncSourceTextareaHeight;
   const openMarkdownFile = documentActions.openMarkdownFile;
@@ -5252,8 +5533,14 @@
   onSemanticScroll={handleSemanticScroll}
   {handleEditorPaste}
   {handleEditorDrop}
+  {handleWorkspaceContextMenu}
+  openContextMenu={openApplicationContextMenu}
+  copyContextText={copyPlainText}
+  {revealContextPath}
   {isOutlineItemExpandable}
   {toggleOutlineItemExpanded}
+  {expandAllOutline}
+  {collapseAllOutline}
   {jumpToOutlineItem}
   {openMarkdownFile}
   {openSettings}
@@ -5325,12 +5612,14 @@
 />
 
 {#if contextMenuOpen}
-  <ContextMenu
-    x={contextMenuX}
-    y={contextMenuY}
-    items={contextMenuItems}
-    onClose={closeContextMenu}
-  />
+  {#key contextMenuVersion}
+    <ContextMenu
+      x={contextMenuX}
+      y={contextMenuY}
+      items={contextMenuItems}
+      onClose={closeContextMenu}
+    />
+  {/key}
 {/if}
 
 <ConfirmDialog

@@ -10,7 +10,10 @@
   } from '@lucide/svelte';
   import { slide } from 'svelte/transition';
   import type { FileTreeNode } from '../types';
-  import type { ContextMenuItem } from '../../lib/editor-core/plugins/contextMenu';
+  import type {
+    ContextMenuItem,
+    ContextMenuRequest,
+  } from '../../lib/editor-core/plugins/contextMenu';
   import { createEventDispatcher } from 'svelte';
   import { clickOutside } from '../actions/clickOutside';
   import {
@@ -115,7 +118,6 @@
   }
   import { buildVisibleExplorerRows, type ExplorerTreeRow } from '../services/explorerRows';
   import { canExpandFolderNode } from '../services/folderTree';
-  import ContextMenu from './ContextMenu.svelte';
   import { t } from '../i18n';
 
   export let interfaceLocale: string;
@@ -136,6 +138,8 @@
   export let pinPreviewFile: () => void;
   export let previewNativePath: string | null;
   export let startResize: (event: MouseEvent) => void;
+  export let openContextMenu: (request: ContextMenuRequest) => void = () => undefined;
+  export let copyContextText: (text: string) => void | Promise<void> = () => undefined;
 
   const dispatch = createEventDispatcher<{
     createNode: { parentPath: string; type: 'folder' | 'file'; name: string };
@@ -150,12 +154,6 @@
   let creatingType: 'folder' | 'file' | null = null;
   let creatingValue = '';
   let creatingInputRef: HTMLInputElement | null = null;
-
-  // 资源管理器右键菜单状态
-  let explorerContextMenuOpen = false;
-  let explorerContextMenuX = 0;
-  let explorerContextMenuY = 0;
-  let explorerContextMenuItems: ContextMenuItem[] = [];
 
   let renamingPath: string | null = null;
   let renamingValue = '';
@@ -511,16 +509,62 @@
     }
   }
 
+  function menuSeparator(): ContextMenuItem {
+    return { label: '', separator: true };
+  }
+
+  function showExplorerContextMenu(event: MouseEvent, items: ContextMenuItem[]) {
+    event.preventDefault();
+    openContextMenu({ x: event.clientX, y: event.clientY, items });
+  }
+
+  function buildRootContextMenuItems(): ContextMenuItem[] {
+    if (!currentFolderPath) return [];
+    return [
+      { label: t.newFile(), icon: 'new-file', action: () => startCreating(currentFolderPath, 'file') },
+      { label: t.newFolder(), icon: 'new-folder', action: () => startCreating(currentFolderPath, 'folder') },
+      menuSeparator(),
+      { label: t.copyPath(), icon: 'copy', action: () => copyContextText(currentFolderPath) },
+      { label: t.revealInFolder(), icon: 'folder', action: () => revealPathInFolder(currentFolderPath) },
+      menuSeparator(),
+      { label: t.refresh(), icon: 'refresh', action: () => dispatch('refreshFolder') },
+      { label: t.collapseAll(), icon: 'collapse', action: () => dispatch('collapseAll') },
+    ];
+  }
+
+  function buildStandaloneContextMenuItems(): ContextMenuItem[] {
+    const path = nativePath || filePath;
+    if (!path) return [];
+    return [
+      { label: t.copyPath(), icon: 'copy', action: () => copyContextText(path) },
+      { label: t.revealInFolder(), icon: 'folder', action: () => revealPathInFolder(path) },
+      menuSeparator(),
+      { label: t.refresh(), icon: 'refresh', action: () => dispatch('refreshFolder') },
+    ];
+  }
+
+  function handleExplorerBlankContextMenu(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+    const target = event.target as HTMLElement | null;
+    if (!target || target.closest('input, textarea, select')) return;
+    const items = currentFolderPath
+      ? buildRootContextMenuItems()
+      : buildStandaloneContextMenuItems();
+    if (items.length) showExplorerContextMenu(event, items);
+  }
+
   // 步骤1：构建文件右键菜单项
   function buildFileContextMenuItems(node: FileTreeNode): ContextMenuItem[] {
     const items: ContextMenuItem[] = [];
 
     items.push({
       label: t.open(),
+      icon: 'open',
       action: () => openPreviewFile(node.path),
     });
     items.push({
       label: t.openInNewTab(),
+      icon: 'open',
       action: () => {
         openPreviewFile(node.path);
         pinPreviewFile();
@@ -530,24 +574,26 @@
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.rename(),
+      icon: 'edit',
       action: () => startRenamingFromContextMenu(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.copyPath(),
-      action: () => {
-        navigator.clipboard.writeText(node.path).catch(() => {});
-      },
+      icon: 'copy',
+      action: () => copyContextText(node.path),
     });
     items.push({
       label: t.revealInFolder(),
+      icon: 'folder',
       action: () => revealPathInFolder(node.path),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.deleteAction(),
+      icon: 'delete',
       danger: true,
       action: () => {
         dispatch('deleteNode', { path: node.path, isDir: false });
@@ -563,38 +609,43 @@
 
     items.push({
       label: t.newFile(),
+      icon: 'new-file',
       action: () => startCreating(node.path, 'file'),
     });
     items.push({
       label: t.newFolder(),
+      icon: 'new-folder',
       action: () => startCreating(node.path, 'folder'),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.rename(),
+      icon: 'edit',
       action: () => startRenamingFromContextMenu(node.path, node.name),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.copyPath(),
-      action: () => {
-        navigator.clipboard.writeText(node.path).catch(() => {});
-      },
+      icon: 'copy',
+      action: () => copyContextText(node.path),
     });
     items.push({
       label: t.revealInFolder(),
+      icon: 'folder',
       action: () => revealPathInFolder(node.path),
     });
 
     items.push({ label: '', action: () => {}, separator: true });
     items.push({
       label: t.refresh(),
+      icon: 'refresh',
       action: () => dispatch('refreshFolder'),
     });
     items.push({
       label: t.deleteAction(),
+      icon: 'delete',
       danger: true,
       action: () => {
         dispatch('deleteNode', { path: node.path, isDir: true });
@@ -606,26 +657,14 @@
 
   // 步骤3：处理文件右键事件
   function handleFileContextMenu(node: FileTreeNode, event: MouseEvent) {
-    event.preventDefault();
-    explorerContextMenuX = event.clientX;
-    explorerContextMenuY = event.clientY;
-    explorerContextMenuItems = buildFileContextMenuItems(node);
-    explorerContextMenuOpen = true;
+    showExplorerContextMenu(event, buildFileContextMenuItems(node));
   }
 
   // 步骤4：处理文件夹右键事件
   function handleFolderContextMenu(node: FileTreeNode, event: MouseEvent) {
-    event.preventDefault();
-    explorerContextMenuX = event.clientX;
-    explorerContextMenuY = event.clientY;
-    explorerContextMenuItems = buildFolderContextMenuItems(node);
-    explorerContextMenuOpen = true;
-  }
-
-  // 步骤5：关闭资源管理器右键菜单
-  function closeExplorerContextMenu() {
-    explorerContextMenuOpen = false;
-    explorerContextMenuItems = [];
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, select')) return;
+    showExplorerContextMenu(event, buildFolderContextMenuItems(node));
   }
 
   onDestroy(clearPendingRename);
@@ -639,6 +678,7 @@
     aria-label={t.folderStructure()}
     bind:clientHeight={fileTreeViewportHeight}
     on:scroll={handleFileTreeScroll}
+    on:contextmenu={handleExplorerBlankContextMenu}
   >
     <div class="tree-root">
       {#if currentFolderPath}
@@ -650,38 +690,7 @@
           class:collapsed={!rootFolderExpanded}
           title={currentFolderPath}
           on:click={toggleRootFolder}
-          on:contextmenu|preventDefault={(event) => {
-            // 根文件夹右键菜单：不包含重命名和删除
-            const items: ContextMenuItem[] = [];
-            items.push({
-              label: t.newFile(),
-              action: () => startCreating(currentFolderPath, 'file'),
-            });
-            items.push({
-              label: t.newFolder(),
-              action: () => startCreating(currentFolderPath, 'folder'),
-            });
-            items.push({ label: '', action: () => {}, separator: true });
-            items.push({
-              label: t.copyPath(),
-              action: () => {
-                navigator.clipboard.writeText(currentFolderPath).catch(() => {});
-              },
-            });
-            items.push({
-              label: t.revealInFolder(),
-              action: () => revealPathInFolder(currentFolderPath),
-            });
-            items.push({ label: '', action: () => {}, separator: true });
-            items.push({
-              label: t.refresh(),
-              action: () => dispatch('refreshFolder'),
-            });
-            explorerContextMenuX = event.clientX;
-            explorerContextMenuY = event.clientY;
-            explorerContextMenuItems = items;
-            explorerContextMenuOpen = true;
-          }}
+          on:contextmenu={(event) => showExplorerContextMenu(event, buildRootContextMenuItems())}
         >
           <span class="chevron-icon">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
@@ -796,7 +805,7 @@
                       title={node.path}
                       on:click={() => hasChildren && toggleFolderCollapse(node.path)}
                       on:dblclick={(event) => handleFolderDoubleClick(node, event)}
-                      on:contextmenu|preventDefault={(event) =>
+                      on:contextmenu={(event) =>
                         handleFolderContextMenu(node, event)}
                     >
                       {#if hasChildren}
@@ -913,7 +922,7 @@
                       title={node.path}
                       on:click={() => handleFileClick(node.path)}
                       on:dblclick={() => handleFileDblClick(node.path)}
-                      on:contextmenu|preventDefault={(event) => handleFileContextMenu(node, event)}
+                      on:contextmenu={(event) => handleFileContextMenu(node, event)}
                     >
                       <FileText size={13} />
                       <span>{node.name}</span>
@@ -933,6 +942,8 @@
           class:collapsed={!rootFolderExpanded}
           title={getDirectoryLabel(filePath)}
           on:click={toggleRootFolder}
+          on:contextmenu={(event) =>
+            showExplorerContextMenu(event, buildStandaloneContextMenuItems())}
         >
           <span class="chevron-icon">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
@@ -973,7 +984,14 @@
         </div>
 
         {#if rootFolderExpanded}
-          <button type="button" class="tree-file active" title={filePath} use:pulseOnChange={dirty}>
+          <button
+            type="button"
+            class="tree-file active"
+            title={filePath}
+            use:pulseOnChange={dirty}
+            on:contextmenu={(event) =>
+              showExplorerContextMenu(event, buildStandaloneContextMenuItems())}
+          >
             <FileText size={13} />
             <span>{fileName}</span>
           </button>
@@ -989,13 +1007,4 @@
     on:mousedown={startResize}
   ></button>
 </aside>
-
-{#if explorerContextMenuOpen}
-  <ContextMenu
-    x={explorerContextMenuX}
-    y={explorerContextMenuY}
-    items={explorerContextMenuItems}
-    onClose={closeExplorerContextMenu}
-  />
-{/if}
 {/key}

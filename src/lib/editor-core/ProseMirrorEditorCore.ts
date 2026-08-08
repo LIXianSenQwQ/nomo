@@ -5,6 +5,7 @@ import {
   joinBackward,
   liftEmptyBlock,
   newlineInCode,
+  selectAll as selectAllCommand,
   selectNodeBackward,
   toggleMark,
 } from 'prosemirror-commands';
@@ -65,7 +66,7 @@ import {
   trailingParagraphPlugin,
   type TrailingParagraphNormalization,
 } from './plugins/trailingParagraph';
-import { contextMenuPlugin } from './plugins/contextMenu';
+import { contextMenuPlugin, type ContextMenuTarget } from './plugins/contextMenu';
 import { searchHighlightPlugin } from './plugins/searchHighlight';
 import { windowsImePunctuationFallbackPlugin } from './plugins/windowsImePunctuationFallback';
 import {
@@ -79,6 +80,7 @@ import { addTableRowAfter, addTableRowBefore, findTableContext } from './tableCo
 import { updateTocBlocks } from '../toc/tocService';
 import type {
   EditorAnchorRect,
+  EditorClipboardPayload,
   EditorChangeEvent,
   EditorCommand,
   EditorCore,
@@ -342,6 +344,114 @@ export class ProseMirrorEditorCore implements EditorCore {
         toJSON: () => rect.toJSON(),
       };
     }
+  }
+
+  getClipboardPayload(): EditorClipboardPayload | null {
+    this.assertActive();
+    if (!this.view || this.view.state.selection.empty) return null;
+    const serialized = this.view.serializeForClipboard(this.view.state.selection.content());
+    return {
+      text: serialized.text,
+      html: serialized.dom.innerHTML,
+    };
+  }
+
+  pasteClipboardText(text: string): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable()) return false;
+    return this.view.pasteText(text);
+  }
+
+  pasteClipboardHtml(html: string): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable()) return false;
+    return this.view.pasteHTML(html);
+  }
+
+  deleteSelection(): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable()) return false;
+    return deleteSelection(this.view.state, this.view.dispatch);
+  }
+
+  selectAll(): boolean {
+    this.assertActive();
+    if (!this.view) return false;
+    return selectAllCommand(this.view.state, this.view.dispatch);
+  }
+
+  selectContextTarget(target: ContextMenuTarget): boolean {
+    this.assertActive();
+    if (!this.view) return false;
+    if (target.kind === 'table' || target.kind === 'heading' || target.kind === 'link') return true;
+    const pos = this.findContextNodePosition(target);
+    if (pos === null) return false;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return false;
+    try {
+      this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, pos)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  editContextTarget(target: ContextMenuTarget): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable()) return false;
+    const pos = this.findContextNodePosition(target);
+    if (pos === null) return false;
+    if (target.kind === 'code-block') return CodeBlockNodeView.enterEditAt(this.view, pos, 0, 'start');
+    if (target.kind === 'math-block') return MathBlockNodeView.enterEditAt(this.view, pos, 'start');
+    if (target.kind === 'mermaid-block') return MermaidBlockNodeView.enterEditAt(this.view, pos, 'start');
+    return false;
+  }
+
+  chooseContextTargetLanguage(target: ContextMenuTarget): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable() || target.kind !== 'code-block') return false;
+    const pos = this.findContextNodePosition(target);
+    return pos === null ? false : CodeBlockNodeView.showLanguageSelectorAt(this.view, pos);
+  }
+
+  deleteContextTarget(target: ContextMenuTarget): boolean {
+    this.assertActive();
+    if (!this.view || !this.isEditable()) return false;
+    const pos = this.findContextNodePosition(target);
+    if (pos === null) return false;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!node) return false;
+    this.view.dispatch(this.view.state.tr.delete(pos, pos + node.nodeSize).scrollIntoView());
+    return true;
+  }
+
+  private findContextNodePosition(target: ContextMenuTarget): number | null {
+    if (!this.view) return null;
+    const expectedType =
+      target.kind === 'code-block'
+        ? 'code_block'
+        : target.kind === 'math-block'
+          ? 'math_block'
+          : target.kind === 'mermaid-block'
+            ? 'mermaid_block'
+            : target.kind === 'image'
+              ? 'image'
+              : target.kind === 'heading'
+                ? 'heading'
+                : target.kind === 'table'
+                  ? 'table'
+                  : target.nodeType;
+    const doc = this.view.state.doc;
+    const safePos = Math.max(0, Math.min(target.pos, doc.content.size));
+    const direct = doc.nodeAt(safePos);
+    if (direct?.type.name === expectedType) return safePos;
+    const $pos = doc.resolve(safePos);
+    for (let depth = $pos.depth; depth > 0; depth -= 1) {
+      if ($pos.node(depth).type.name === expectedType) return $pos.before(depth);
+    }
+    if ($pos.nodeAfter?.type.name === expectedType) return $pos.pos;
+    if ($pos.nodeBefore?.type.name === expectedType) return $pos.pos - $pos.nodeBefore.nodeSize;
+    return null;
   }
 
   findSearchMatches(query: string, options: EditorSearchOptions): EditorSearchMatch[] {

@@ -36,7 +36,7 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 编辑器工厂与 API | `src/lib/editor-core/createEditorCore.ts` | `src/lib/editor-core/index.ts` | EditorCore 创建参数或对外接口变更 |
-| ProseMirror 核心实现 | `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/lib/editor-core/markdown.ts`, `schema.ts`, plugins, nodeViews | EditorView 生命周期、事务、模式切换、命令执行 |
+| ProseMirror 核心实现 | `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/lib/editor-core/markdown.ts`, `schema.ts`, plugins, nodeViews | EditorView 生命周期、事务、模式切换、命令执行、剪贴板负载与右键目标事务 |
 | Schema 定义 | `src/lib/editor-core/schema.ts` | `src/lib/editor-core/callout/calloutSchema.ts` | 新增/修改节点或 mark 类型 |
 | Markdown 解析与序列化 | `src/lib/editor-core/markdown.ts` | `src/lib/editor-core/callout/calloutParser.ts`, `calloutSerializer.ts`, `html/` | Markdown 与 ProseMirror doc 互转规则变更 |
 | HTML 安全策略 | `src/lib/editor-core/html/htmlPolicy.ts` | `src/lib/editor-core/html/htmlClassifier.ts` | 可编辑 HTML 标签/属性白名单变更 |
@@ -78,7 +78,7 @@
 | 搜索高亮 | `src/lib/editor-core/plugins/searchHighlight.ts` | `src/app/services/searchReplace.ts` | 搜索/替换高亮 |
 | 尾部段落补全 | `src/lib/editor-core/plugins/trailingParagraph.ts` | — | 非段落块插入后自动追加空段落 |
 | 正文目录事务同步 | `src/lib/editor-core/plugins/tocSync.ts` | `src/lib/toc/tocService.ts` | 标题变化后的 TOC 派生更新与撤销历史保持 |
-| 编辑器上下文菜单插件 | `src/lib/editor-core/plugins/contextMenu.ts` | `src/app/components/ContextMenu.svelte` | 编辑区右键菜单事件分发 |
+| 编辑器上下文菜单插件 | `src/lib/editor-core/plugins/contextMenu.ts` | `src/app/App.svelte`, `src/app/components/ContextMenu.svelte` | 语义编辑区目标命中、选区定位与右键菜单事件分发 |
 | 行内代码语法高亮装饰 | `src/lib/editor-core/plugins/codeHighlightDecorationPlugin.ts` | — | 行内 code mark 的 token 着色 |
 
 ### 文件系统与文档操作
@@ -92,6 +92,7 @@
 | 恢复草稿 | `src/app/services/recoveryDraft.ts` | `src/app/services/documentActionsController.ts` | 异常退出后草稿写入/恢复 |
 | Markdown 桥接 | `src/lib/markdown/MarkdownBridge.ts` | `src/lib/markdown/frontMatter.ts` | front matter 与正文分离/合并规则变更 |
 | 图片插入协调 | `src/app/services/imageInsertion.ts` | `src/app/services/imageMarkdown.ts`, `src/lib/editor-core/renderers.ts` | 粘贴/拖放图片导入、策略选择、源码插入 |
+| 剪贴板协调 | `src/app/services/clipboard.ts` | `src/app/App.svelte`, `@tauri-apps/plugin-clipboard-manager` | 文本/安全 HTML/图片的 Web Clipboard 与 Tauri 读写、降级和 RGBA 转 PNG |
 | 图片 Markdown 路径 | `src/app/services/imageMarkdown.ts` | `src/app/services/imageInsertion.ts` | 图片文件过滤、路径/Markdown 语法生成 |
 | 文件存储与文档仓库接口 | `src/lib/services/storage.ts` | `src/lib/desktop/tauriStorage.ts` | FileStorage、DocumentRepository、Markdown 源编码契约变更 |
 | 渲染服务类型接口 | `src/lib/services/render.ts` | `src/lib/services/shikiCodeTokenizer.ts`, `katexMathRenderer.ts`, `mermaidDiagramRenderer.ts` | ImageLoader、CodeTokenizer、MathRenderer、DiagramRenderer 接口变更 |
@@ -324,6 +325,7 @@
 - 订阅编辑器内容变化并同步 dirty/统计/大纲状态
 - 工作区恢复后发起一次启动更新检查，并按目标窗口协调通知卡片与安装确认
 - 协调当前文档在同一窗口内进入/返回 Markdown 小窗，并复用原编辑器、撤销栈和自动保存状态
+- 统一持有全应用上下文菜单状态，并为各 UI 区域提供单一打开入口、剪贴板和路径定位动作
 
 **Does not own:**
 - 不拥有具体 UI 子组件渲染逻辑（委派给 AppShell.svelte）
@@ -361,6 +363,7 @@
 - 通过 props 和回调将 App.svelte 的状态下发给子组件
 - Markdown 工具栏的收展区域、右侧展开柄及搜索面板位置联动
 - 在 Markdown 小窗模式下隐藏常规 chrome，并在可编辑编辑器与大文档只读预览之间选择内容视图
+- 挂载全窗口右键菜单兜底策略，并把统一菜单入口下发给标题栏、文件树、标签栏和大纲
 
 **Does not own:**
 - 不拥有业务状态管理（由 App.svelte 传入）
@@ -488,7 +491,7 @@
 
 **Owns:**
 - 资源管理器侧边栏 UI
-- 目录树、最近文件、行内重命名、创建文件/文件夹、右键菜单
+- 目录树、最近文件、行内重命名、创建文件/文件夹，以及节点、根目录、单文件和空白区域菜单项
 - 当前文件选中底板及其虚拟树坐标滑动动画
 - 侧边栏 resize 逻辑
 
@@ -498,7 +501,7 @@
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `src/app/services/explorerRows.ts`, `src/app/services/explorerRename.ts`, `src/app/actions/motion.ts`, `ContextMenu.svelte`, `src/app/types.ts`
+**Depends on:** `src/app/services/explorerRows.ts`, `src/app/services/explorerRename.ts`, `src/app/actions/motion.ts`, `src/lib/editor-core/plugins/contextMenu.ts`, `src/app/types.ts`
 
 **Change this when:**
 - 修改侧边栏布局或交互
@@ -525,6 +528,7 @@
 - Nomo 标题栏内容、Windows 应用内菜单及共享自绘窗口按钮的接入。
 - 将菜单点击转换为应用命令或调用传入的业务处理函数。
 - Markdown 小窗的文件名、冲突/只读状态、置顶和返回按钮，以及覆盖整行的单一路径拖动区域。
+- Windows 自绘标题栏拖动区的最小化、最大化/还原、关闭及小窗视图菜单项。
 
 **Does not own：**
 - 不拥有具体业务逻辑（由 App.svelte 通过 props 注入）。
@@ -581,6 +585,7 @@
 **Owns:**
 - 编辑工作区 UI：源码 textarea、ProseMirror 挂载点
 - Front Matter 卡片、大纲面板
+- 大纲标题与空白区域的导航、展开/折叠、复制标题和隐藏大纲菜单项
 - 外部变更提示
 - 模式切换（语义编辑/源码编辑/只读/大文档提示）
 
@@ -615,14 +620,14 @@
 - 标签页 UI：展示打开文档、切换标签、关闭标签
 - 活动标签完整底板的定位与 GSAP 滑动动画
 - 固定预览标签状态
-- 右键菜单
+- 标签项及标签栏空白区域的菜单项，并通过应用级菜单入口显示
 
 **Does not own:**
 - 不拥有标签页状态管理（由 tabs.ts 和 documentActionsController.ts 管理）
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `ContextMenu.svelte`, `src/app/actions/motion.ts`, `src/app/types.ts`
+**Depends on:** `src/lib/editor-core/plugins/contextMenu.ts`, `src/app/actions/motion.ts`, `src/app/types.ts`
 
 **Change this when：**
 - 修改标签页展示样式
@@ -1130,6 +1135,7 @@
 - 模式切换（语义/源码）
 - 命令执行
 - 插件和 NodeView 注册
+- 生成剪贴板文本/HTML、解析粘贴内容，并对右键命中的块级对象执行定位、编辑或删除事务
 
 **Does not own：**
 - 不拥有 Markdown 解析/序列化具体规则（在 markdown.ts 中）
@@ -1145,6 +1151,7 @@
 - 修改事务处理逻辑
 - 修改模式切换流程
 - 修改插件/NodeView 注册方式
+- 修改剪贴板或右键目标的最小公共 API
 
 **Do not change this when：**
 - 修改具体 Markdown 语法规则
@@ -2029,6 +2036,32 @@
 
 ---
 
+### `src/app/services/clipboard.ts`
+
+**Kind:** service
+
+**Owns:**
+- 语义编辑器剪贴板文本、安全 HTML 与图片读写协调
+- 优先使用激活上下文中的 Web Clipboard API，并在桌面端降级到 Tauri 官方剪贴板插件
+- 将 Tauri RGBA 图片编码为 PNG `File`，交回既有图片导入流程
+
+**Does not own:**
+- 不拥有 ProseMirror 选区序列化和粘贴解析（在 `ProseMirrorEditorCore.ts` 中）
+- 不拥有图片保存、资源目录或图床策略（在 `imageInsertion.ts` 中）
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `@tauri-apps/plugin-clipboard-manager`, Web Clipboard API
+
+**Change this when:**
+- 修改桌面/浏览器剪贴板优先级、权限降级或图片编码桥接
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
 ### `src/app/services/imageMarkdown.ts`
 
 **Kind:** utility
@@ -2130,23 +2163,48 @@
 
 ---
 
+### `src/app/services/contextMenuPolicy.ts`
+
+**Kind:** policy
+
+**Owns:**
+- 全窗口未处理右键事件的兜底规则：应用 chrome 禁用浏览器菜单，文本输入控件保留原生菜单
+- `data-context-menu="native|none"` 显式覆盖，以及 TXT/JSON 分段编辑器的既有行为隔离
+
+**Does not own:**
+- 不拥有任何自定义菜单项或菜单状态
+
+**Called by:** `src/app/components/AppShell.svelte`, `src/app/components/SettingsWindow.svelte`
+
+**Depends on:** —
+
+**Change this when:** 修改应用级“自定义、原生、禁用”右键边界
+
+**Related tests:** —
+
+**Confidence:** high
+
+---
+
 ### `src/app/components/ContextMenu.svelte`
 
 **Kind:** component
 
 **Owns:**
-- 通用上下文菜单 UI：定位、渲染菜单项、视口边界调整
+- 通用上下文菜单 UI：语义图标、禁用/选中状态、一级与二级菜单、视口边界调整
+- 完整键盘导航、可见焦点、滚动关闭与焦点恢复
 
 **Does not own:**
-- 不拥有菜单项定义（由 contextMenu.ts 插件的 onOpen 回调提供）
+- 不拥有菜单项定义和业务动作（由应用层或 NodeView 提供）
 
-**Called by:** `src/app/components/AppShell.svelte`（通过 contextMenu 插件回调）
+**Called by:** `src/app/App.svelte`
 
 **Depends on:** `src/lib/editor-core/plugins/contextMenu.ts`
 
 **Change this when:**
 - 修改菜单样式或定位逻辑
 - 修改菜单项渲染方式
+- 修改二级菜单或键盘交互
 
 **Do not change this when:**
 - 修改菜单项数据来源
@@ -2631,21 +2689,23 @@
 **Kind:** plugin
 
 **Owns:**
-- 编辑器上下文菜单 ProseMirror 插件
-- DOM 菜单工厂挂载/查找机制
-- `ContextMenuItem`、`ContextMenuOpenEvent`、`ContextMenuCapable` 类型定义
+- 编辑器上下文菜单 ProseMirror 插件与 DOM 菜单工厂挂载/查找机制
+- 将右键坐标映射到 ProseMirror 位置，并按“对象 → 选区 → 正文”识别语义目标
+- 在当前选区内保留选区，选区外将光标移动到命中位置
+- `ContextMenuItem`、`ContextMenuTarget`、`ContextMenuOpenEvent`、`ContextMenuRequest`、`ContextMenuCapable` 类型定义
 
 **Does not own:**
 - 不拥有菜单 UI 渲染（在 ContextMenu.svelte 中）
-- 不拥有具体菜单项生成（由各 NodeView 的 getContextMenuItems 提供）
+- 不拥有通用菜单项和应用级动作生成（在 `App.svelte` 中）
 
 **Called by:** `src/lib/editor-core/ProseMirrorEditorCore.ts`（插件注册）
 
-**Depends on:** —
+**Depends on:** `prosemirror-state`, `prosemirror-view`
 
 **Change this when:**
 - 修改右键菜单事件处理
 - 修改菜单工厂挂载机制
+- 修改目标命中优先级或选区定位语义
 
 **Related tests:** —
 
@@ -3287,7 +3347,7 @@
 **Kind:** controller
 
 **Owns:**
-- 大纲交互控制：点击大纲项触发滚动定位
+- 大纲交互控制：点击大纲项触发滚动定位，以及全部展开/折叠状态切换
 
 **Does not own:**
 - 不拥有大纲数据计算（在 outlineService.ts 中）

@@ -176,5 +176,6 @@ export function createImageInsertionHandlers(options: ImageInsertionOptions) {
   return {
     handleEditorDrop,
     handleEditorPaste,
+    insertImageFiles,
   };
 }
