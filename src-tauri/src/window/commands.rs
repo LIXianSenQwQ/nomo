@@ -64,9 +64,6 @@ pub(crate) fn refresh_window_menu(
         && crate::window::external_open::is_document_window_label(window.label())
     {
         window
-            .set_skip_taskbar(false)
-            .map_err(|error| format!("在任务栏显示文档窗口失败：{error}"))?;
-        window
             .show()
             .map_err(|error| format!("显示文档窗口失败：{error}"))?;
         window
@@ -389,9 +386,7 @@ pub(crate) fn acknowledge_settings_close_request(
 #[tauri::command]
 pub(crate) fn hide_window_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
     crate::app_logger::info("Window", &format!("隐藏窗口到托盘：{}", window.label()));
-    window
-        .set_skip_taskbar(true)
-        .map_err(|error| format!("从任务栏隐藏窗口失败：{error}"))?;
+    // 文档窗口始终保留任务栏资格；隐藏本身会移除任务栏和 Alt+Tab 项，避免恢复时 Shell 漏掉重新登记。
     window
         .hide()
         .map_err(|error| format!("隐藏窗口到托盘失败：{error}"))?;

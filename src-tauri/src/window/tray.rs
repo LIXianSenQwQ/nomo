@@ -238,7 +238,6 @@ fn show_window_by_label<R: Runtime>(app: &AppHandle<R>, label: &str) {
 }
 
 fn show_document_window<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
-    let _ = window.set_skip_taskbar(false);
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();

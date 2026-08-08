@@ -261,9 +261,17 @@ pub(crate) fn enter_markdown_mini_mode(window: &WebviewWindow, pinned: bool) -> 
         window
             .set_always_on_top(pinned)
             .map_err(|error| format!("设置 Markdown 小窗置顶失败：{error}"))?;
+        // Windows Shell 只会在可靠的可见性边界刷新 Alt+Tab，任务栏资格必须在隐藏状态下切换。
         window
-            .set_skip_taskbar(true)
-            .map_err(|error| format!("从任务栏隐藏 Markdown 小窗失败：{error}"))?;
+            .hide()
+            .map_err(|error| format!("切换 Markdown 小窗任务栏状态前隐藏窗口失败：{error}"))?;
+        window.set_skip_taskbar(true).map_err(|error| {
+            let _ = window.show();
+            format!("从任务栏隐藏 Markdown 小窗失败：{error}")
+        })?;
+        window
+            .show()
+            .map_err(|error| format!("显示 Markdown 小窗失败：{error}"))?;
         window
             .set_focus()
             .map_err(|error| format!("聚焦 Markdown 小窗失败：{error}"))?;
@@ -459,9 +467,6 @@ fn restore_normal_window_geometry(
     state: &MarkdownMiniRuntimeState,
 ) -> Result<(), String> {
     window
-        .set_skip_taskbar(false)
-        .map_err(|error| format!("恢复主窗口任务栏状态失败：{error}"))?;
-    window
         .set_always_on_top(false)
         .map_err(|error| format!("取消主窗口置顶失败：{error}"))?;
     window
@@ -499,6 +504,14 @@ fn restore_normal_window_geometry(
             .set_fullscreen(true)
             .map_err(|error| format!("恢复主窗口全屏状态失败：{error}"))?;
     }
+    // 先隐藏再恢复任务栏资格，随后 show 才会让 Windows Shell 重新登记 Alt+Tab 窗口。
+    window
+        .hide()
+        .map_err(|error| format!("恢复主窗口任务栏状态前隐藏窗口失败：{error}"))?;
+    window.set_skip_taskbar(false).map_err(|error| {
+        let _ = window.show();
+        format!("恢复主窗口任务栏状态失败：{error}")
+    })?;
     window
         .show()
         .map_err(|error| format!("显示主窗口失败：{error}"))?;

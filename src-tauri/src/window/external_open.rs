@@ -129,7 +129,6 @@ pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result
     let _ = persist_pending_external_open(app, &label, &paths);
 
     // 恢复窗口显示并强制到前台（处理托盘/最小化/后台等各种状态）
-    let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;
@@ -192,7 +191,6 @@ pub(crate) fn route_external_folder_open(
     let _ = persist_pending_external_folder_open(app, &label, &folder_path);
 
     // 恢复窗口显示并强制到前台（处理托盘/最小化/后台等各种状态）
-    let _ = window.set_skip_taskbar(false);
     window
         .show()
         .map_err(|error| format!("显示外部打开目标窗口失败：{error}"))?;

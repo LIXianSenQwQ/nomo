@@ -227,9 +227,6 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 crate::app_logger::info("Window", "显示主窗口");
                 window
-                    .set_skip_taskbar(false)
-                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
-                window
                     .show()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
                 // macOS 27 会在 Tauri setup 尚未返回、WebView 父视图仍在附着时拒绝设置
