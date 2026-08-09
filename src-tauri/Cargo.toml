@@ -1,6 +1,6 @@
 [package]
 name = "nomo"
-version = "0.4.4"
+version = "0.4.5"
 description = "A lightweight Markdown-first editor"
 authors = ["清羽"]
 edition = "2021"
@@ -43,6 +43,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "NSImage",
   "NSPrintInfo",
   "NSPrintOperation",
+  "NSResponder",
   "NSView",
   "NSWindow",
   "objc2-core-foundation",

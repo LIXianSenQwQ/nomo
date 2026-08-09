@@ -195,14 +195,11 @@
   import {
     getSemanticScrollAnchor,
     getSourceScrollAnchor,
-    restoreSemanticReadingPosition,
-    restoreSourceReadingPosition,
     setScrollTop,
     type OutlineScrollAnchor,
   } from './services/outlineNavigation';
   import {
     flushReadingPositions,
-    getReadingPosition,
     loadReadingPositions,
     saveReadingPositionToMemory,
     saveReadingPositionToMemoryOnly,
@@ -370,9 +367,6 @@
   let frontMatterFocusRequest = 0;
   let scrollDebounceTimer: number | null = null;
   let contentAnalysisTimer: number | null = null;
-  let readingPositionRestoreToken = 0;
-  let skipNextReadingPositionRestore = false;
-  let skipReadingPositionRestoreUntil = 0;
   let frontMatterFocusTarget: 'default' | 'title-value' = 'default';
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
   let searchPanelOpen = false;
@@ -1236,20 +1230,12 @@
         });
       }
 
-      // 步骤：仅当新标签页没有可恢复的阅读位置时，立即将滚动归零。
+      // 步骤：切换标签页后滚动条始终回到顶部。
       // editor.setMarkdown() 更新了 DOM 内容，但 scrollTop 仍保留旧标签页的值。
       // 若 scrollTop 远超新内容的 scrollHeight，macOS WebKit 会渲染空白页，
       // Windows Chromium 则显示在底部。
-      // 有阅读位置的标签页留给 scheduleRestoreReadingPosition 异步恢复，不在此处干预。
-      const storedPosition = hasPersistableReadingPositionPath(filePath)
-        ? getReadingPosition(filePath, mode)
-        : undefined;
-      const hasAnchor = storedPosition?.anchor != null;
-
-      if (!hasAnchor) {
-        if (semanticPane) setScrollTop(semanticPane, 0);
-        if (sourcePane) setScrollTop(sourcePane, 0);
-      }
+      if (semanticPane) setScrollTop(semanticPane, 0);
+      if (sourcePane) setScrollTop(sourcePane, 0);
 
       const analysis = analyzeMarkdown(markdown);
       outline = analysis.outline;
@@ -1257,8 +1243,6 @@
       applyOutlineDefaultExpansion();
       stats = analysis.stats;
       syncSourceTextareaHeight();
-
-      scheduleRestoreReadingPosition(tab.filePath, mode);
     } finally {
       isSwitchingTab = false;
     }
@@ -1326,66 +1310,6 @@
       scrollDebounceTimer = null;
       saveCurrentReadingPositionDebounced(modeToSave, anchor);
     }, 1500);
-  }
-
-  function skipReadingPositionRestoreOnce() {
-    skipNextReadingPositionRestore = true;
-    skipReadingPositionRestoreUntil = Date.now() + 1000;
-    readingPositionRestoreToken += 1;
-  }
-
-  function scheduleRestoreReadingPosition(path: string, targetMode: EditorMode, attempts = 120) {
-    if (skipNextReadingPositionRestore) {
-      skipNextReadingPositionRestore = false;
-      if (Date.now() <= skipReadingPositionRestoreUntil) {
-        return;
-      }
-    }
-    if (!hasPersistableReadingPositionPath(path)) return;
-
-    const position = getReadingPosition(path, targetMode);
-    const anchor = position?.anchor;
-    if (!anchor) return;
-
-    const restoreToken = ++readingPositionRestoreToken;
-    const tryRestore = async (remainingAttempts: number) => {
-      await tick();
-      await waitForAnimationFrame();
-      if (
-        restoreToken !== readingPositionRestoreToken ||
-        filePath !== path ||
-        mode !== targetMode
-      ) {
-        return;
-      }
-
-      const pane = targetMode === 'semantic' ? semanticPane : sourcePane;
-      const contentReady =
-        targetMode === 'semantic'
-          ? Boolean(semanticPane?.querySelector('.ProseMirror'))
-          : Boolean(sourceTextarea && sourceTextarea.value === markdown);
-
-      if (!pane || !contentReady) {
-        if (remainingAttempts > 0) {
-          requestAnimationFrame(() => void tryRestore(remainingAttempts - 1));
-        }
-        return;
-      }
-
-      if (targetMode === 'semantic') {
-        restoreSemanticReadingPosition(outline, semanticPane, anchor, {
-          anchorMode: position.anchorMode,
-          behavior: 'instant',
-        });
-      } else {
-        restoreSourceReadingPosition(outline, sourcePane, sourceTextarea, anchor, {
-          anchorMode: position.anchorMode,
-          behavior: 'instant',
-        });
-      }
-    };
-
-    requestAnimationFrame(() => void tryRestore(attempts));
   }
 
   // 顶级目录展开与收起状态
@@ -2787,8 +2711,6 @@
     const match = searchMatches[searchActiveIndex];
     if (!match) return;
 
-    skipReadingPositionRestoreOnce();
-
     const isSearchFocused = document.activeElement?.closest('.search-replace-panel') !== null;
     const activeSearchInput =
       document.activeElement instanceof HTMLInputElement &&
@@ -3265,7 +3187,6 @@
     getSemanticPane: () => semanticPane,
     getSourcePane: () => sourcePane,
     getSourceTextarea: () => sourceTextarea,
-    onExplicitJumpIntent: skipReadingPositionRestoreOnce,
   });
   const editorInteraction = createEditorInteractionController({
     getEditor: () => editor,
@@ -4605,7 +4526,6 @@
       if (persistedEditorMode && !largeDocumentMode) {
         mode = persistedEditorMode;
         editor.updateOptions({ mode: persistedEditorMode });
-        scheduleRestoreReadingPosition(filePath, persistedEditorMode);
       }
       await setupDesktopEvents();
       await refreshRecentFiles();

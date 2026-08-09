@@ -170,7 +170,7 @@
         port,
         windowBytes: SEGMENTED_FULL_WINDOW_BYTES,
         selection: tab.selection,
-        scrollAnchor: tab.scrollAnchor,
+        scrollAnchor: null,
         onMetadataChange: handleMetadataChange,
         onIndexProgress: handleIndexProgress,
         onTaskProgress: handleTaskProgress,
@@ -182,7 +182,7 @@
       ensureIndexPolling();
       await tick();
       initializeVirtualGeometry(session);
-      restoreScrollAnchor(session.byteLength);
+      restoreScrollAnchor();
       loading = false;
       core.focus();
     } catch (error) {
@@ -196,7 +196,8 @@
     if (!session) {
       throw new Error(`Segmented session metadata missing: ${tab.sessionId}`);
     }
-    const anchorByte = Math.min(tab.scrollAnchor?.byteOffset ?? 0, session.byteLength);
+    // 标签页始终从文件顶部打开，不恢复上次的滚动锚点。
+    const anchorByte = 0;
     const startByte = resolveCenteredSegmentWindowStart(
       anchorByte,
       session.byteLength,
@@ -374,10 +375,7 @@
       visibleBytes,
       measureCurrentWindowHeight(),
     );
-    const initialAnchor = Math.min(
-      tab.scrollAnchor?.byteOffset ?? session.firstWindow.startByte,
-      session.byteLength,
-    );
+    const initialAnchor = Math.min(session.firstWindow.startByte, session.byteLength);
     updateVirtualGeometry(session.byteLength, initialAnchor);
   }
 
@@ -420,9 +418,10 @@
     return metadata?.scrollAnchor?.byteOffset ?? tab.scrollAnchor?.byteOffset ?? 0;
   }
 
-  function restoreScrollAnchor(byteLength: number) {
+  function restoreScrollAnchor() {
     if (!scroller || !virtualMetrics) return;
-    const anchor = Math.min(tab.scrollAnchor?.byteOffset ?? 0, byteLength);
+    // 标签页始终从文件顶部开始，忽略保存的滚动锚点。
+    const anchor = 0;
     setProgrammaticScrollTop(resolveVirtualScrollTopForByteOffset(anchor, virtualMetrics));
     lastScrollByte = anchor;
     lastScrollAt = performance.now();
