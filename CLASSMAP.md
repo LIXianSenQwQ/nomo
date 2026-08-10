@@ -87,6 +87,7 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 文档操作控制器 | `src/app/services/documentActionsController.ts` | `src/app/services/documentFiles.ts`, `tabs.ts`, `recoveryDraft.ts` | 打开/保存/另存/自动保存/外部变更 |
+| 编辑器链接目标解析 | `src/app/services/documentLinkNavigation.ts` | `src/app/App.svelte`, `src-tauri/src/external_link.rs` | 相对路径、标题锚点、应用内文档与本地附件导航规则变更 |
 | 标签页状态管理 | `src/app/services/tabs.ts` | `src/app/types.ts` | 标签页创建/复用/状态写入 |
 | 工作区持久化 | `src/app/services/workspacePersistence.ts` | `src/app/App.svelte`, `src/lib/desktop/tauriStorage.ts` | 工作区 v2 元数据、草稿引用、旧 workspaceTabs 迁移 |
 | 阅读位置持久化 | `src/app/services/readingPosition.ts` | `src/app/App.svelte`, `src/app/services/outlineNavigation.ts` | Markdown 文件按路径保存/恢复统一阅读语义锚点 |
@@ -224,7 +225,7 @@
 | 外部打开路由 | `src-tauri/src/window/external_open.rs` | `src-tauri/src/lib.rs` | 单实例/启动参数/macOS open 事件 |
 | Windows 文件关联 | `src-tauri/src/window/file_association.rs` | — | 注册/注销默认打开方式和右键菜单 |
 | 平台适配 | `src-tauri/src/window/os/macos.rs`, `os/windows.rs` | `src-tauri/src/window/os/mod.rs` | macOS/Windows 窗口行为差异与 Windows 无边框/阴影设置 |
-| 外部链接安全 | `src-tauri/src/external_link.rs` | — | 打开外部链接/文件管理器定位 |
+| 外部链接与附件安全 | `src-tauri/src/external_link.rs` | `src/lib/desktop/tauriStorage.ts` | 打开外部链接、白名单本地附件或文件管理器定位 |
 | 配置命令 IPC | `src-tauri/src/config/commands.rs` | `src-tauri/src/config/mod.rs` | 设置读写/最近文件/快照/应用设置 IPC |
 | 窗口命令 IPC | `src-tauri/src/window/commands.rs` | `src-tauri/src/window/menu.rs`, `src-tauri/src/window/tray.rs` | 窗口状态保存/设置窗口/菜单安装/强制关闭 IPC |
 
@@ -733,6 +734,32 @@
 - 修改编辑器内部行为
 
 **Related tests:** `src/app/services/externalFileChangeFlow.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/app/services/documentLinkNavigation.ts`
+
+**Kind:** service
+
+**Owns:**
+- 编辑器链接分类：外部 URL、当前标题锚点、Nomo 文档与白名单附件
+- 以当前 Markdown 文件目录解析相对路径，并分离 URI fragment
+- 本地链接的协议、查询参数、UNC 路径和扩展名边界
+
+**Does not own:**
+- 不直接打开标签页或系统应用（由 `App.svelte` 与桌面 IPC 协调）
+- 不检查目标是否真实存在（由文档读取端口或附件后端命令校验）
+
+**Called by:** `src/app/App.svelte`
+
+**Depends on:** `@tauri-apps/api/path`, `src/app/services/tabs.ts`, `src/app/types.ts`
+
+**Change this when:**
+- 修改相对路径解析、支持的本地链接类型或 fragment 分类规则
+
+**Related tests:** —
 
 **Confidence:** high
 

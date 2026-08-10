@@ -347,6 +347,7 @@ pub fn run() {
             crate::file_system::start_folder_indexing,
             crate::file_system::check_paths_exist,
             crate::external_link::open_external_link,
+            crate::external_link::open_local_attachment,
             crate::external_link::reveal_in_explorer
         ])
         .build(context)

@@ -9,6 +9,7 @@
     listAppSettings,
     installSampleDocument,
     openExternalLink,
+    openLocalAttachment,
     updateAppSetting,
     updateAppSettings,
     readWorkspaceDraft,
@@ -239,6 +240,10 @@
   import { reconcileSegmentedSaveState } from './services/segmentedSaveReconciliation';
   import { getOpenDocumentRenameBlock } from './services/documentRenameGuard';
   import { createMarkdownLintController } from './services/markdownLintController';
+  import {
+    EditorLinkResolutionError,
+    resolveEditorLink,
+  } from './services/documentLinkNavigation';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
   const segmentedDocumentPort = createTauriSegmentedDocumentPort();
@@ -3437,8 +3442,8 @@
   async function openDocumentPath(
     path: string,
     options: { message: string; fallbackMessage: string },
-  ) {
-    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
+  ): Promise<boolean> {
+    if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return false;
     invalidatePendingPreviewOpen();
     const existingTab = tabs.find(
       (tab) => tab.nativePath != null && sameNativePath(tab.nativePath, path),
@@ -3447,7 +3452,7 @@
       await switchTab(existingTab.id);
       if (existingTab.id === previewTabId) previewTabId = null;
       statusMessage = t.switchedToOpenedTab();
-      return;
+      return activeTabId === existingTab.id;
     }
 
     // 新文档挂载会销毁当前分段 Core；刷新必须发生在路由读取及活动标签替换之前。
@@ -3465,12 +3470,13 @@
     if (routed.documentKind === 'markdown') {
       if (routed.value.error) {
         statusMessage = routed.value.error;
-        return;
+        return false;
       }
       if (routed.value.document) {
         await documentActions.applyNativeDocument(routed.value.document, options.message);
+        return true;
       }
-      return;
+      return false;
     }
 
     if (routed.value.documentKind !== routed.documentKind) {
@@ -3484,6 +3490,7 @@
     const openedFileName = path.replace(/\\/g, '/').split('/').pop() || path;
     await rememberRecentEntry(path, 'file', openedFileName, 0).catch(() => undefined);
     await refreshRecentFiles();
+    return true;
   }
 
   async function openDroppedMarkdown(paths: string[]) {
@@ -4866,8 +4873,8 @@
     });
 
     Promise.all([
-      openExternalLink(href).catch((error) => {
-        statusMessage = t.openLinkFailed({ error });
+      navigateEditorLink(href).catch((error) => {
+        statusMessage = getEditorLinkErrorMessage(error);
       }),
       minimumVisibleTime,
     ]).finally(() => {
@@ -4876,6 +4883,91 @@
         linkOpeningTimer = null;
       }
     });
+  }
+
+  async function navigateEditorLink(href: string) {
+    const trimmedHref = href.trim();
+    const isExternalOrAnchor =
+      /^(?:https?|mailto):/i.test(trimmedHref) || trimmedHref.startsWith('#');
+    if (!desktopEnabled && !isExternalOrAnchor) {
+      throw new Error(t.localLinkDesktopRequired());
+    }
+
+    const target = await resolveEditorLink(trimmedHref, nativePath);
+    if (target.kind === 'external') {
+      await openExternalLink(target.href);
+      return;
+    }
+    if (target.kind === 'anchor') {
+      jumpToLinkFragment(target.fragment);
+      return;
+    }
+    if (target.kind === 'attachment') {
+      await openLocalAttachment(target.path);
+      statusMessage = target.fragment
+        ? t.localAttachmentFragmentIgnored()
+        : t.localAttachmentOpened();
+      return;
+    }
+
+    const opened = await openDocumentPath(target.path, {
+      message: t.localLinkedDocumentOpened(),
+      fallbackMessage: t.localLinkedDocumentOpenFailed({ path: target.path }),
+    });
+    if (!opened || !target.fragment) return;
+
+    if (target.documentKind !== 'markdown') {
+      statusMessage = t.localDocumentFragmentIgnored();
+      return;
+    }
+
+    await tick();
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (
+      !isMarkdownTab(activeTab) ||
+      !activeTab.nativePath ||
+      !sameNativePath(activeTab.nativePath, target.path)
+    ) {
+      return;
+    }
+    jumpToLinkFragment(target.fragment);
+  }
+
+  function jumpToLinkFragment(fragment: string) {
+    const fragmentId = fragment.trim().toLowerCase();
+    const item = outline.find((candidate) => candidate.id.toLowerCase() === fragmentId);
+    if (!item) {
+      statusMessage = t.localLinkAnchorMissing({ anchor: fragment });
+      return;
+    }
+
+    outlineInteraction.jumpToOutlineItem(item);
+    statusMessage = t.localLinkAnchorOpened({ anchor: fragment });
+  }
+
+  function getEditorLinkErrorMessage(error: unknown) {
+    if (!(error instanceof EditorLinkResolutionError)) {
+      return t.openLinkFailed({ error });
+    }
+
+    switch (error.code) {
+      case 'invalid-encoding':
+        return t.localLinkInvalidEncoding();
+      case 'unsupported-protocol':
+        return t.localLinkUnsupportedProtocol();
+      case 'file-uri-unsupported':
+        return t.localLinkFileUriUnsupported();
+      case 'query-unsupported':
+        return t.localLinkQueryUnsupported();
+      case 'unc-unsupported':
+        return t.localLinkUncUnsupported();
+      case 'save-document-first':
+        return t.localLinkSaveFirst();
+      case 'unsupported-local-type':
+        return t.localLinkUnsupportedType();
+      case 'empty-fragment':
+        return t.localLinkEmptyAnchor();
+    }
   }
 
   function closeLinkPicker() {

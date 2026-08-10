@@ -456,6 +456,16 @@ export async function openExternalLink(href: string): Promise<void> {
   await invoke('open_external_link', { href });
 }
 
+export async function openLocalAttachment(path: string): Promise<void> {
+  logInfo('tauriStorage', '打开本地附件', { path });
+  if (!isTauriRuntime()) {
+    throw new Error('Local attachments can only be opened in the desktop app');
+  }
+
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('open_local_attachment', { path });
+}
+
 export async function createFolder(path: string): Promise<void> {
   logInfo('tauriStorage', '创建文件夹', { path });
   const { invoke } = await import('@tauri-apps/api/core');
