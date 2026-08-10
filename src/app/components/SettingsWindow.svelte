@@ -1668,7 +1668,10 @@
                 <span class="toggle-switch" aria-hidden="true"></span>
               </label>
 
-              <h2>{t.markdownLint()}</h2>
+              <h2 class="settings-heading-with-badge">
+                <span>{t.markdownLint()}</span>
+                <span class="beta-badge">Beta</span>
+              </h2>
               <label class="toggle-row" for="markdownLintEnabled">
                 <span>
                   <span class="toggle-title">{t.markdownLintEnabled()}</span>
@@ -2668,6 +2671,28 @@
 
   .settings-group h2:not(:first-child) {
     margin-top: 28px;
+  }
+
+  .settings-group h2.settings-heading-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .beta-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 1px 6px;
+    border: 1px solid color-mix(in srgb, var(--md-editor-accent) 42%, var(--md-editor-border));
+    border-radius: 999px;
+    color: var(--md-editor-accent);
+    background: color-mix(in srgb, var(--md-editor-accent) 8%, var(--md-editor-surface));
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
 
   .appearance-theme-row,
