@@ -64,6 +64,7 @@
   /* 不可加 min-height: 100%：WebKit 会把 grid item 的百分比 min-height 解析为旧的
      grid area 高度，长文档切成短文档后 scrollHeight 不收缩，尾部出现大片空白。 */
   width: 100%;
+  min-width: 0;
   max-width: calc(var(--md-editor-content-width-percent) * 1cqw);
   margin: 0 auto;
   padding: 0;
@@ -646,6 +647,9 @@
   --code-line-height: 18px;
   --code-font: var(--code-font-size) / var(--code-line-height) var(--md-editor-font-mono);
   position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   margin: 18px 0;
   border: 1px solid var(--md-editor-code-border);
   border-radius: var(--md-editor-radius-md);
@@ -798,6 +802,8 @@
 
 .code-body {
   display: flex;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   max-height: min(calc(24 * var(--code-line-height) + 2 * var(--code-content-padding-block)), 60vh);
 }
@@ -1482,6 +1488,9 @@
 }
 
 .prosemirror-host .ProseMirror {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: calc(100vh - 235px);
   outline: none;
   color: var(--md-editor-fg);

@@ -157,7 +157,11 @@ export function createEditorInteractionController(options: EditorInteractionOpti
 
   function measureEditorViewportLayout(restoreScrollTop: number | null) {
     if (options.getMode() === 'semantic') {
-      clampPaneScrollTop(options.getSemanticPane());
+      const semanticPane = options.getSemanticPane();
+      if (semanticPane) {
+        semanticPane.scrollLeft = 0;
+      }
+      clampPaneScrollTop(semanticPane);
       return;
     }
 
