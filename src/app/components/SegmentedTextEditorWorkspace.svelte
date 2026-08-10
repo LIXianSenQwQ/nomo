@@ -170,7 +170,7 @@
         port,
         windowBytes: SEGMENTED_FULL_WINDOW_BYTES,
         selection: tab.selection,
-        scrollAnchor: null,
+        scrollAnchor: tab.scrollAnchor,
         onMetadataChange: handleMetadataChange,
         onIndexProgress: handleIndexProgress,
         onTaskProgress: handleTaskProgress,
@@ -182,7 +182,7 @@
       ensureIndexPolling();
       await tick();
       initializeVirtualGeometry(session);
-      restoreScrollAnchor();
+      restoreScrollAnchor(session.byteLength);
       loading = false;
       core.focus();
     } catch (error) {
@@ -418,10 +418,9 @@
     return metadata?.scrollAnchor?.byteOffset ?? tab.scrollAnchor?.byteOffset ?? 0;
   }
 
-  function restoreScrollAnchor() {
+  function restoreScrollAnchor(byteLength: number) {
     if (!scroller || !virtualMetrics) return;
-    // 标签页始终从文件顶部开始，忽略保存的滚动锚点。
-    const anchor = 0;
+    const anchor = Math.min(Math.max(0, tab.scrollAnchor?.byteOffset ?? 0), byteLength);
     setProgrammaticScrollTop(resolveVirtualScrollTopForByteOffset(anchor, virtualMetrics));
     lastScrollByte = anchor;
     lastScrollAt = performance.now();

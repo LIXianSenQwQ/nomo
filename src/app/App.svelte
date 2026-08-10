@@ -196,14 +196,18 @@
   import {
     getSemanticScrollAnchor,
     getSourceScrollAnchor,
+    restoreSemanticReadingPosition,
+    restoreSourceReadingPosition,
     setScrollTop,
     type OutlineScrollAnchor,
   } from './services/outlineNavigation';
   import {
     flushReadingPositions,
+    getReadingPosition,
     loadReadingPositions,
     saveReadingPositionToMemory,
     saveReadingPositionToMemoryOnly,
+    type ReadingPosition,
     type ReadingPositionMode,
   } from './services/readingPosition';
   import {
@@ -382,6 +386,15 @@
   let frontMatterEditing = false;
   let frontMatterFocusRequest = 0;
   let scrollDebounceTimer: number | null = null;
+  let readingPositionRestoreGeneration = 0;
+  let pendingReadingPositionRestore: {
+    generation: number;
+    tabId: string;
+    filePath: string;
+    mode: ReadingPositionMode;
+  } | null = null;
+  const programmaticReadingScrollTokens = new Map<ReadingPositionMode, number>();
+  const sessionReadingPositions = new Map<string, ReadingPosition>();
   let contentAnalysisTimer: number | null = null;
   let frontMatterFocusTarget: 'default' | 'title-value' = 'default';
   let frontMatter: FrontMatterBlock | null = extractFrontMatterBlock(markdown);
@@ -575,6 +588,15 @@
     return Boolean(desktopEnabled && path && path !== t.untitledMarkdown());
   }
 
+  function pruneSessionReadingPositions() {
+    const currentTabIds = new Set(tabs.map((tab) => tab.id));
+    for (const tabId of sessionReadingPositions.keys()) {
+      if (!currentTabIds.has(tabId)) {
+        sessionReadingPositions.delete(tabId);
+      }
+    }
+  }
+
   // 防抖持久化工作区状态，避免每次按键都触发两次 IPC 调用 + 磁盘写入
   let _persistTimer: number | null = null;
   let _workspaceDraftTimer: number | null = null;
@@ -589,6 +611,7 @@
   let persistAfterWorkspaceRestore = false;
 
   function persistWorkspaceState() {
+    pruneSessionReadingPositions();
     if (!desktopEnabled || !windowLabel) return;
     // 延迟会话尚未加入 tabs 时不得写回残缺工作区；完成后会统一触发一次持久化。
     if (workspaceRestorePreparation || deferredWorkspaceRestore) {
@@ -1265,20 +1288,55 @@
     );
   }
 
+  function getReadingPositionForTab(
+    tab: MarkdownTabState,
+    preferredMode: ReadingPositionMode,
+  ): ReadingPosition | undefined {
+    if (hasPersistableReadingPositionPath(tab.filePath)) {
+      sessionReadingPositions.delete(tab.id);
+      return getReadingPosition(tab.filePath, preferredMode);
+    }
+    return sessionReadingPositions.get(tab.id);
+  }
+
+  function saveReadingPositionForTab(
+    tab: MarkdownTabState,
+    modeToSave: ReadingPositionMode,
+    anchor: OutlineScrollAnchor | null,
+    persist: boolean,
+  ) {
+    if (hasPersistableReadingPositionPath(tab.filePath)) {
+      if (persist) {
+        saveReadingPositionToMemory(tab.filePath, modeToSave, anchor);
+      } else {
+        saveReadingPositionToMemoryOnly(tab.filePath, modeToSave, anchor);
+      }
+      return;
+    }
+
+    sessionReadingPositions.set(tab.id, {
+      anchor,
+      anchorMode: modeToSave,
+      updatedAt: Date.now(),
+    });
+  }
+
   function saveCurrentReadingPositionToMemoryOnly(
     modeToSave: ReadingPositionMode = mode,
     anchor: OutlineScrollAnchor | null = getCurrentReadingAnchor(modeToSave),
   ) {
-    if (!hasPersistableReadingPositionPath(filePath)) return;
-    saveReadingPositionToMemoryOnly(filePath, modeToSave, anchor);
+    const activeTab = tabs.find((tab): tab is MarkdownTabState =>
+      tab.id === activeTabId && isMarkdownTab(tab),
+    );
+    if (!activeTab) return;
+    saveReadingPositionForTab(activeTab, modeToSave, anchor, false);
   }
 
-  function saveCurrentReadingPositionDebounced(
-    modeToSave: ReadingPositionMode = mode,
-    anchor: OutlineScrollAnchor | null = getCurrentReadingAnchor(modeToSave),
-  ) {
-    if (!hasPersistableReadingPositionPath(filePath)) return;
-    saveReadingPositionToMemory(filePath, modeToSave, anchor);
+  function clearReadingPositionSaveTimer() {
+    if (scrollDebounceTimer !== null) {
+      window.clearTimeout(scrollDebounceTimer);
+      scrollDebounceTimer = null;
+    }
   }
 
   async function flushCurrentReadingPosition() {
@@ -1290,6 +1348,8 @@
 
   // 加载指定 Tab 的状态并更新编辑器
   function loadTabState(tab: Tab) {
+    clearReadingPositionSaveTimer();
+    cancelPendingReadingPositionRestore();
     isSwitchingTab = true;
     try {
       dirty = tab.dirty;
@@ -1321,9 +1381,11 @@
       version = tab.version;
       largeDocumentMode = tab.largeDocumentMode;
       readonlyDocumentMode = tab.readonlyDocumentMode;
+      const nextMode = largeDocumentMode ? 'source' : mode;
+      const storedPosition = getReadingPositionForTab(tab, nextMode);
+      const restoreGeneration = readingPositionRestoreGeneration;
 
       if (editor) {
-        const nextMode = largeDocumentMode ? 'source' : mode;
         editor.updateOptions({
           readonly: readonlyDocumentMode,
           mode: nextMode,
@@ -1336,12 +1398,12 @@
         });
       }
 
-      // 步骤：切换标签页后滚动条始终回到顶部。
+      // 步骤：先归零，避免新标签继承旧标签超出范围的 scrollTop；布局稳定后再恢复自身锚点。
       // editor.setMarkdown() 更新了 DOM 内容，但 scrollTop 仍保留旧标签页的值。
       // 若 scrollTop 远超新内容的 scrollHeight，macOS WebKit 会渲染空白页，
       // Windows Chromium 则显示在底部。
-      if (semanticPane) setScrollTop(semanticPane, 0);
-      if (sourcePane) setScrollTop(sourcePane, 0);
+      setProgrammaticReadingScrollTop('semantic', semanticPane, 0);
+      setProgrammaticReadingScrollTop('source', sourcePane, 0);
 
       const analysis = analyzeMarkdown(markdown);
       outline = analysis.outline;
@@ -1349,6 +1411,12 @@
       applyOutlineDefaultExpansion();
       stats = analysis.stats;
       syncSourceTextareaHeight();
+      scheduleReadingPositionRestore(
+        tab,
+        nextMode,
+        storedPosition,
+        restoreGeneration,
+      );
     } finally {
       isSwitchingTab = false;
     }
@@ -1399,23 +1467,141 @@
   }
 
   function handleSemanticScroll() {
+    if (programmaticReadingScrollTokens.has('semantic')) return;
+    cancelPendingReadingPositionRestore();
     debounceReadingPositionSave('semantic');
   }
 
   function handleSourceScroll() {
+    if (programmaticReadingScrollTokens.has('source')) return;
+    cancelPendingReadingPositionRestore();
     debounceReadingPositionSave('source');
   }
 
   function debounceReadingPositionSave(modeToSave: ReadingPositionMode) {
+    const activeTab = tabs.find((tab): tab is MarkdownTabState =>
+      tab.id === activeTabId && isMarkdownTab(tab),
+    );
+    if (!activeTab) return;
     const anchor = getCurrentReadingAnchor(modeToSave);
-    saveCurrentReadingPositionToMemoryOnly(modeToSave, anchor);
-    if (scrollDebounceTimer !== null) {
-      window.clearTimeout(scrollDebounceTimer);
-    }
+    saveReadingPositionForTab(activeTab, modeToSave, anchor, false);
+    clearReadingPositionSaveTimer();
+    if (!hasPersistableReadingPositionPath(activeTab.filePath)) return;
+
+    const targetPath = activeTab.filePath;
     scrollDebounceTimer = window.setTimeout(() => {
       scrollDebounceTimer = null;
-      saveCurrentReadingPositionDebounced(modeToSave, anchor);
+      saveReadingPositionToMemory(targetPath, modeToSave, anchor);
     }, 1500);
+  }
+
+  function cancelPendingReadingPositionRestore() {
+    readingPositionRestoreGeneration += 1;
+    pendingReadingPositionRestore = null;
+  }
+
+  function setProgrammaticReadingScrollTop(
+    targetMode: ReadingPositionMode,
+    pane: HTMLElement | undefined,
+    scrollTop: number,
+  ) {
+    if (!pane) return;
+    suppressProgrammaticReadingScroll(targetMode);
+    setScrollTop(pane, scrollTop);
+  }
+
+  function suppressProgrammaticReadingScroll(targetMode: ReadingPositionMode) {
+    const token = (programmaticReadingScrollTokens.get(targetMode) ?? 0) + 1;
+    programmaticReadingScrollTokens.set(targetMode, token);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (programmaticReadingScrollTokens.get(targetMode) === token) {
+          programmaticReadingScrollTokens.delete(targetMode);
+        }
+      });
+    });
+  }
+
+  function scheduleReadingPositionRestore(
+    tab: MarkdownTabState,
+    targetMode: ReadingPositionMode,
+    position: ReadingPosition | undefined,
+    generation: number,
+    attemptsRemaining = 120,
+  ) {
+    const anchor = position?.anchor;
+    if (!anchor) return;
+
+    pendingReadingPositionRestore = {
+      generation,
+      tabId: tab.id,
+      filePath: tab.filePath,
+      mode: targetMode,
+    };
+
+    const tryRestore = async (remainingAttempts: number) => {
+      await tick();
+      await waitForAnimationFrame();
+
+      const pending = pendingReadingPositionRestore;
+      const targetStillActive =
+        pending?.generation === generation &&
+        readingPositionRestoreGeneration === generation &&
+        pending.tabId === tab.id &&
+        pending.filePath === tab.filePath &&
+        pending.mode === targetMode &&
+        activeTabId === tab.id &&
+        filePath === tab.filePath &&
+        mode === targetMode;
+      if (!targetStillActive) {
+        if (pending?.generation === generation) {
+          pendingReadingPositionRestore = null;
+        }
+        return;
+      }
+
+      const pane = targetMode === 'semantic' ? semanticPane : sourcePane;
+      const contentReady =
+        targetMode === 'semantic'
+          ? Boolean(semanticPane?.querySelector('.ProseMirror'))
+          : Boolean(sourceTextarea && sourceTextarea.value === markdown);
+      const expectsNonTop =
+        anchor.documentProgress > 0.001 ||
+        anchor.sourceLine > 1 ||
+        (typeof anchor.scrollTop === 'number' && anchor.scrollTop > 1) ||
+        (typeof anchor.offsetFromTop === 'number' && Math.abs(anchor.offsetFromTop) > 1);
+      const layoutReady =
+        pane != null &&
+        (!expectsNonTop || Math.max(0, pane.scrollHeight - pane.clientHeight) > 0);
+
+      if (!pane || !contentReady || !layoutReady) {
+        if (remainingAttempts > 0) {
+          requestAnimationFrame(() => void tryRestore(remainingAttempts - 1));
+        } else {
+          pendingReadingPositionRestore = null;
+        }
+        return;
+      }
+
+      pendingReadingPositionRestore = null;
+      const restore = () => {
+        if (targetMode === 'semantic') {
+          restoreSemanticReadingPosition(outline, semanticPane, anchor, {
+            anchorMode: position.anchorMode,
+            behavior: 'instant',
+          });
+          return;
+        }
+        restoreSourceReadingPosition(outline, sourcePane, sourceTextarea, anchor, {
+          anchorMode: position.anchorMode,
+          behavior: 'instant',
+        });
+      };
+      suppressProgrammaticReadingScroll(targetMode);
+      restore();
+    };
+
+    requestAnimationFrame(() => void tryRestore(attemptsRemaining));
   }
 
   // 顶级目录展开与收起状态
@@ -1543,6 +1729,8 @@
 
   function clearAllTabsWithoutCreatingBlank(options?: { skipPersist?: boolean }) {
     invalidatePendingPreviewOpen();
+    cancelPendingReadingPositionRestore();
+    sessionReadingPositions.clear();
     closeExternalChangeDialog();
     workspaceRestoreGeneration += 1;
     isSwitchingTab = true;
@@ -2109,6 +2297,7 @@
     if (isSegmentedTextTab(tabs.find((tab) => tab.id === activeTabId))) {
       return false;
     }
+    cancelPendingReadingPositionRestore();
     const previousMode = mode;
     const anchor = getCurrentReadingAnchor(previousMode);
     saveCurrentReadingPositionToMemoryOnly(previousMode, anchor);
@@ -2816,6 +3005,7 @@
   async function selectActiveSearchMatch() {
     const match = searchMatches[searchActiveIndex];
     if (!match) return;
+    cancelPendingReadingPositionRestore();
 
     const isSearchFocused = document.activeElement?.closest('.search-replace-panel') !== null;
     const activeSearchInput =
@@ -3293,6 +3483,7 @@
     getSemanticPane: () => semanticPane,
     getSourcePane: () => sourcePane,
     getSourceTextarea: () => sourceTextarea,
+    onExplicitJumpIntent: cancelPendingReadingPositionRestore,
   });
   const editorInteraction = createEditorInteractionController({
     getEditor: () => editor,
@@ -3748,7 +3939,6 @@
     targetTab.indexProgress = opened.firstWindow.indexProgress;
     targetTab.dirty = false;
     targetTab.selection = null;
-    targetTab.scrollAnchor = null;
     targetTab.diskReadonly = opened.filesystemReadonly ?? false;
     targetTab.externalFileChange = createEmptyExternalFileChange();
     tabs = [...tabs];
@@ -4675,6 +4865,8 @@
 
   onDestroy(() => {
     appearanceRuntimeActive = false;
+    cancelPendingReadingPositionRestore();
+    clearReadingPositionSaveTimer();
     appearanceApplyRequestId += 1;
     systemThemeListenerReady = false;
     // 组件销毁前立即持久化工作区状态和阅读位置
