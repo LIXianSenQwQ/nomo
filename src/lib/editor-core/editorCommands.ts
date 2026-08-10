@@ -182,14 +182,31 @@ export function splitBlockExitHeading(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  return splitBlockAs((node) => {
-    // 标题内回车：强制新块为普通段落
+  const { $from, empty } = state.selection;
+  const isHeadingStart =
+    empty && $from.parent.type === schema.nodes.heading && $from.parentOffset === 0;
+  const splitCommand = splitBlockAs((node) => {
+    // 标题行首回车：让默认拆分逻辑把空白左侧转为正文，并保留右侧原标题。
+    if (isHeadingStart && node.type === schema.nodes.heading) {
+      return null;
+    }
+
+    // 标题中间或末尾回车：强制新块为普通段落。
     if (node.type === schema.nodes.heading) {
       return { type: schema.nodes.paragraph };
     }
     // 其他场景沿用默认行为
     return null;
-  })(state, dispatch);
+  });
+
+  if (!isHeadingStart || !dispatch) {
+    return splitCommand(state, dispatch);
+  }
+
+  // 默认拆分会把光标留在右侧标题开头；派发同一事务前将其移入左侧空段落。
+  return splitCommand(state, (tr) => {
+    dispatch(tr.setSelection(TextSelection.create(tr.doc, $from.pos)));
+  });
 }
 
 /**

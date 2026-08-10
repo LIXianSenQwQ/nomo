@@ -1033,6 +1033,24 @@ describe('editorCommands', () => {
   });
 
   describe('splitBlockExitHeading', () => {
+    it('标题行首回车时，空段落插入标题前且原标题语义保持不变', () => {
+      const view = createMarkdownCommandView('### 标题', (doc) => TextSelection.create(doc, 1));
+
+      expect(splitBlockExitHeading(view.state, view.dispatch.bind(view))).toBe(true);
+
+      const doc = view.state.doc;
+      expect(doc.childCount).toBe(2);
+      expect(doc.child(0).type.name).toBe('paragraph');
+      expect(doc.child(0).textContent).toBe('');
+      expect(doc.child(1).type.name).toBe('heading');
+      expect(doc.child(1).attrs.level).toBe(3);
+      expect(doc.child(1).textContent).toBe('标题');
+      expect(view.state.selection.from).toBe(1);
+      expect(currentMarkdown(view)).toBe('### 标题');
+
+      destroyView(view);
+    });
+
     it('标题末尾回车时，新块退化为普通段落', () => {
       const view = createMarkdownCommandView('# 标题', (doc) =>
         TextSelection.create(doc, doc.child(0).nodeSize - 1),
