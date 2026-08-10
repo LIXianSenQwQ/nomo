@@ -71,6 +71,7 @@ import { searchHighlightPlugin } from './plugins/searchHighlight';
 import { windowsImePunctuationFallbackPlugin } from './plugins/windowsImePunctuationFallback';
 import {
   createMarkdownInputRules,
+  getMarkdownBlockLineMap,
   parseMarkdown,
   serializeMarkdown,
   splitFrontMatter,
@@ -200,6 +201,46 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.assertActive();
     this.flushPendingMarkdownSync();
     return this.markdown;
+  }
+
+  revealMarkdownLine(lineNumber: number): boolean {
+    if (!this.view) return false;
+    const mappings = getMarkdownBlockLineMap(this.markdown);
+    if (mappings.length === 0) return false;
+
+    const containing = mappings.find(
+      (mapping) => lineNumber >= mapping.fromLine && lineNumber <= mapping.toLine,
+    );
+    const target =
+      containing ??
+      mappings.reduce((nearest, mapping) => {
+        const nearestDistance = Math.min(
+          Math.abs(lineNumber - nearest.fromLine),
+          Math.abs(lineNumber - nearest.toLine),
+        );
+        const distance = Math.min(
+          Math.abs(lineNumber - mapping.fromLine),
+          Math.abs(lineNumber - mapping.toLine),
+        );
+        return distance < nearestDistance ? mapping : nearest;
+      });
+    if (target.nodeIndex >= this.view.state.doc.childCount) return false;
+
+    let blockPosition = 0;
+    for (let index = 0; index < target.nodeIndex; index += 1) {
+      blockPosition += this.view.state.doc.child(index).nodeSize;
+    }
+    const selectionPosition = Math.min(blockPosition + 1, this.view.state.doc.content.size);
+    this.view.dispatch(
+      this.view.state.tr
+        .setSelection(TextSelection.near(this.view.state.doc.resolve(selectionPosition)))
+        .scrollIntoView(),
+    );
+    const blockDom = this.view.nodeDOM(blockPosition);
+    if (blockDom instanceof HTMLElement) {
+      blockDom.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    return true;
   }
 
   flushMarkdown(): string {

@@ -216,6 +216,7 @@ export interface EditorCore {
   setSearchHighlights(matches: EditorSearchMatch[], activeIndex: number): void;
   clearSearchState?(activeMatch?: EditorSearchMatch): void;
   selectSearchMatch(match: EditorSearchMatch, focus?: boolean): boolean;
+  revealMarkdownLine(lineNumber: number): boolean;
   replaceSearchMatch(match: EditorSearchMatch, replacement: string): boolean;
   replaceAllSearchMatches(query: string, replacement: string, options: EditorSearchOptions): number;
   execute(command: EditorCommand): boolean;

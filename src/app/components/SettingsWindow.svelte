@@ -38,6 +38,7 @@
     type ExternalFileChangeBehavior,
     type FolderOpenDefaultBehavior,
     type InterfaceLanguagePreference,
+    type MarkdownLintRuleSet,
     type RenderModePreference,
     type ShortcutCommandId,
     type WritingStatsMetric,
@@ -890,6 +891,10 @@
     updateDraft({ renderMode });
   }
 
+  function setMarkdownLintRuleSet(markdownLintRuleSet: MarkdownLintRuleSet) {
+    updateDraft({ markdownLintRuleSet });
+  }
+
   function updateShortcut(commandId: ShortcutCommandId, event: Event) {
     updateDraft({
       shortcutPreferences: {
@@ -1662,6 +1667,46 @@
                 />
                 <span class="toggle-switch" aria-hidden="true"></span>
               </label>
+
+              <h2>{t.markdownLint()}</h2>
+              <label class="toggle-row" for="markdownLintEnabled">
+                <span>
+                  <span class="toggle-title">{t.markdownLintEnabled()}</span>
+                  <span class="toggle-desc">{t.markdownLintEnabledDescription()}</span>
+                </span>
+                <input
+                  id="markdownLintEnabled"
+                  type="checkbox"
+                  checked={draftSettings.markdownLintEnabled}
+                  on:change={(event) => toggleSetting('markdownLintEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="setting-row" class:setting-disabled={!draftSettings.markdownLintEnabled}>
+                <div>
+                  <span class="setting-label">{t.markdownLintRules()}</span>
+                  <p>{t.markdownLintRulesDescription()}</p>
+                </div>
+                <div class="segmented-control" role="group" aria-label={t.markdownLintRules()}>
+                  <button
+                    type="button"
+                    disabled={!draftSettings.markdownLintEnabled}
+                    class:active={draftSettings.markdownLintRuleSet === 'relaxed'}
+                    aria-pressed={draftSettings.markdownLintRuleSet === 'relaxed'}
+                    on:click={() => setMarkdownLintRuleSet('relaxed')}
+                    >{t.markdownLintRelaxed()}</button
+                  >
+                  <button
+                    type="button"
+                    disabled={!draftSettings.markdownLintEnabled}
+                    class:active={draftSettings.markdownLintRuleSet === 'default'}
+                    aria-pressed={draftSettings.markdownLintRuleSet === 'default'}
+                    on:click={() => setMarkdownLintRuleSet('default')}
+                    >{t.markdownLintDefault()}</button
+                  >
+                </div>
+              </div>
             </div>
           {:else if activeCategory === 'appearance'}
             <div class="settings-group">
@@ -2778,6 +2823,10 @@
     line-height: 1.45;
   }
 
+  .setting-row.setting-disabled {
+    opacity: 0.55;
+  }
+
   .segmented-control,
   .triple-control,
   .quad-control {
@@ -2825,6 +2874,15 @@
   .quad-control button:hover {
     background: color-mix(in srgb, var(--md-editor-accent) 8%, transparent);
     color: var(--md-editor-fg);
+  }
+
+  .segmented-control button:disabled {
+    cursor: not-allowed;
+  }
+
+  .segmented-control button:disabled:hover {
+    background: transparent;
+    color: var(--md-editor-muted-fg);
   }
 
   .segmented-control button.active,

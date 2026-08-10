@@ -39,6 +39,7 @@
 | ProseMirror 核心实现 | `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/lib/editor-core/markdown.ts`, `schema.ts`, plugins, nodeViews | EditorView 生命周期、事务、模式切换、命令执行、剪贴板负载与右键目标事务 |
 | Schema 定义 | `src/lib/editor-core/schema.ts` | `src/lib/editor-core/callout/calloutSchema.ts` | 新增/修改节点或 mark 类型 |
 | Markdown 解析与序列化 | `src/lib/editor-core/markdown.ts` | `src/lib/editor-core/callout/calloutParser.ts`, `calloutSerializer.ts`, `html/` | Markdown 与 ProseMirror doc 互转规则变更 |
+| Markdown 源码行到语义块导航 | `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/app/App.svelte` | 诊断、大纲等功能需要从源码行定位到最近的语义顶层块 |
 | HTML 安全策略 | `src/lib/editor-core/html/htmlPolicy.ts` | `src/lib/editor-core/html/htmlClassifier.ts` | 可编辑 HTML 标签/属性白名单变更 |
 | HTML 块分类 | `src/lib/editor-core/html/htmlClassifier.ts` | `src/lib/editor-core/html/htmlPolicy.ts` | HTML 块可编辑性判断/属性提取规则变更 |
 | 编辑器命令 | `src/lib/editor-core/editorCommands.ts` | `src/lib/editor-core/tableCommands.ts`, `codeBlockCommands.ts`, `callout/calloutCommands.ts` | 新增或修改编辑命令 |
@@ -143,6 +144,7 @@
 | 主题运行时 | `src/app/services/themeManager.ts` | `src/app/services/themeRegistry.ts`, `src/lib/editor-core/EditorCore.ts` | 主题解析、根颜色/样式令牌、启动快照、系统同步或运行时刷新变更 |
 | 编辑器设置应用 | `src/app/services/editorSettingsController.ts` | `src/app/services/settings.ts` | 字体、行高和内容宽度同步到编辑器 |
 | 设置窗口 UI | `src/app/components/SettingsWindow.svelte` | `src/app/services/settings.ts`, `src/app/services/themeManager.ts`, `src/lib/desktop/tauriUpdater.ts` | 设置界面/主题预览/更新/文件关联/图片配置 |
+| Markdown 格式检查 | `src/app/services/markdownLintController.ts`, `src/app/workers/markdownLint.worker.ts` | `src/lib/markdown-lint/`, `src/app/components/StatusBar.svelte`, `src/app/App.svelte`, `vite.config.ts` | 修改检查调度、Worker 依赖解析、规则集、诊断状态、结果本地化或状态栏详情 |
 | Rust 配置管理 | `src-tauri/src/config/mod.rs` | `src-tauri/src/models.rs` | 应用配置 JSON 持久化、设置读写、启动前读取 |
 
 ### 搜索与替换
@@ -231,7 +233,7 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 通用上下文菜单 | `src/app/components/ContextMenu.svelte` | `src/lib/editor-core/plugins/contextMenu.ts` | 右键菜单 UI 渲染/定位 |
-| 状态栏 | `src/app/components/StatusBar.svelte` | `src/lib/outline/outlineService.ts` | 字数统计/缩放百分比展示 |
+| 状态栏 | `src/app/components/StatusBar.svelte` | `src/lib/outline/outlineService.ts`, `src/lib/markdown-lint/`, `src/app/styles/editor-outline.css` | 字数统计、缩放百分比或 Markdown 格式检查状态与详情展示 |
 | Front Matter 卡片 | `src/app/components/FrontMatterCard.svelte` | `src/lib/markdown/frontMatter.ts` | YAML 元数据展示/编辑/删除 |
 | 空工作区 | `src/app/components/EmptyWorkspace.svelte` | — | 无文档时的新建/打开引导 |
 | 文件夹打开对话框 | `src/app/components/FolderOpenDialog.svelte` | `src/app/services/folderExplorerController.ts` | 打开文件夹窗口选择 UI |

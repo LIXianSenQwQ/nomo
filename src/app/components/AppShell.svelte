@@ -10,6 +10,11 @@
   } from '../../lib/editor-core';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { DocumentStats, OutlineItem } from '../../lib/outline/outlineService';
+  import type {
+    MarkdownLintIssue,
+    MarkdownLintRuleSet,
+    MarkdownLintState,
+  } from '../../lib/markdown-lint/types';
   import { ChevronDown } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import type { ExternalFileChangeState, FileTreeNode, Tab } from '../types';
@@ -29,13 +34,13 @@
     transitionDuration,
     workspaceSidebarMotion,
   } from '../actions/motion';
-  import { t } from '../i18n';
+  import { t, type EffectiveInterfaceLocale } from '../i18n';
   import { suppressUnhandledContextMenu } from '../services/contextMenuPolicy';
 
   type StatsMetric = 'lines' | 'words' | 'chars';
   type AppBootState = 'booting' | 'restoring-workspace' | 'opening-file' | 'ready';
 
-  export let interfaceLocale: string;
+  export let interfaceLocale: EffectiveInterfaceLocale;
   export let focusMode: boolean;
   export let toolbarHidden: boolean;
   export let toolbarShortcut: string;
@@ -85,6 +90,9 @@
   export let writingStatsVisible: boolean;
   export let writingStatsMetric: StatsMetric;
   export let readingTimeVisible: boolean;
+  export let markdownLintEnabled: boolean;
+  export let markdownLintRuleSet: MarkdownLintRuleSet;
+  export let markdownLintState: MarkdownLintState;
   export let zoomPercent: number;
   export let tablePickerOpen: boolean;
   export let linkPickerOpen: boolean;
@@ -192,6 +200,8 @@
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
   export let onZoomChange: (percent: number) => void;
+  export let retryMarkdownLint: () => void;
+  export let onMarkdownLintIssueSelect: (issue: MarkdownLintIssue) => boolean;
   export let appBootState: AppBootState;
   export let onSourceScroll: (() => void) | undefined = undefined;
   export let onSemanticScroll: (() => void) | undefined = undefined;
@@ -543,15 +553,21 @@
       {/if}
     </section>
 
-    {#if hasOpenDocument && activeTab?.documentKind === 'markdown' && writingStatsVisible}
+    {#if hasOpenDocument && activeTab?.documentKind === 'markdown' && (writingStatsVisible || markdownLintEnabled)}
       <StatusBar
         {interfaceLocale}
         {stats}
+        {writingStatsVisible}
         activeMetric={writingStatsMetric}
         {readingTimeVisible}
         {zoomPercent}
+        {markdownLintEnabled}
+        {markdownLintRuleSet}
+        {markdownLintState}
         onMetricChange={setWritingStatsMetric}
         {onZoomChange}
+        onRetryMarkdownLint={retryMarkdownLint}
+        {onMarkdownLintIssueSelect}
       />
     {/if}
   </main>

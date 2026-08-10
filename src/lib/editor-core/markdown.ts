@@ -735,6 +735,32 @@ export function parseMarkdown(markdown: string): ProseMirrorNode {
   }
 }
 
+export interface MarkdownBlockLineMap {
+  fromLine: number;
+  toLine: number;
+  nodeIndex: number;
+}
+
+/**
+ * 使用与语义编辑器相同的 markdown-it 配置建立源码行到顶层文档块的临时映射。
+ * 该映射只用于导航，不参与文档解析或持久化。
+ */
+export function getMarkdownBlockLineMap(markdown: string): MarkdownBlockLineMap[] {
+  const { frontMatter, body } = splitFrontMatter(markdown);
+  const bodyOffset = body ? markdown.indexOf(body, frontMatter.length) : markdown.length;
+  const bodyStartLineOffset =
+    (bodyOffset >= 0 ? markdown.slice(0, bodyOffset) : '').split('\n').length - 1;
+  const tokens = markdownIt.parse(preprocessImageHtml(body), {});
+
+  return tokens
+    .filter((token) => token.level === 0 && token.nesting >= 0 && token.map)
+    .map((token, nodeIndex) => ({
+      fromLine: token.map![0] + bodyStartLineOffset + 1,
+      toLine: token.map![1] + bodyStartLineOffset,
+      nodeIndex,
+    }));
+}
+
 export function serializeMarkdown(doc: ProseMirrorNode): string {
   return tableMarkdownSerializer.serialize(doc);
 }

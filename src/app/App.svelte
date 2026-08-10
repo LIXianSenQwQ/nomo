@@ -225,12 +225,20 @@
     SegmentedExternalChangeResult,
   } from '../lib/text-editor/protocol';
   import type { SegmentedEditorMetadata } from '../lib/text-editor/SegmentedTextEditorCore';
+  import type {
+    MarkdownLintInput,
+    MarkdownLintIssue,
+    MarkdownLintRuleSet,
+    MarkdownLintState,
+  } from '../lib/markdown-lint/types';
+  import { createMarkdownLintState } from '../lib/markdown-lint/types';
   import { segmentedSessionRegistry } from '../lib/text-editor/sessionRegistry';
   import { openDocumentByPath } from './services/documentRouter';
   import { flushSegmentedDocumentBeforeTransition } from './services/segmentedDocumentLifecycle';
   import { reconcileSegmentedExternalChangeCheck } from './services/segmentedExternalChangeReconciliation';
   import { reconcileSegmentedSaveState } from './services/segmentedSaveReconciliation';
   import { getOpenDocumentRenameBlock } from './services/documentRenameGuard';
+  import { createMarkdownLintController } from './services/markdownLintController';
 
   const RECOVERY_KEY = 'nomo-save-recovery';
   const segmentedDocumentPort = createTauriSegmentedDocumentPort();
@@ -284,6 +292,9 @@
   let writingStatsVisible = DEFAULT_APP_PREFERENCES.writingStatsVisible;
   let writingStatsMetric: WritingStatsMetric = DEFAULT_APP_PREFERENCES.writingStatsMetric;
   let readingTimeVisible = DEFAULT_APP_PREFERENCES.readingTimeVisible;
+  let markdownLintEnabled = DEFAULT_APP_PREFERENCES.markdownLintEnabled;
+  let markdownLintRuleSet: MarkdownLintRuleSet = DEFAULT_APP_PREFERENCES.markdownLintRuleSet;
+  let markdownLintState: MarkdownLintState = createMarkdownLintState('disabled');
   let fontSize = DEFAULT_APP_PREFERENCES.fontSize,
     lineHeight = DEFAULT_APP_PREFERENCES.lineHeight,
     contentWidthPercent = DEFAULT_APP_PREFERENCES.contentWidthPercent,
@@ -444,6 +455,96 @@
   let activeTabId = '';
   let previewTabId: string | null = null;
   let previewOpenGeneration = 0;
+  let lastMarkdownLintSignature = '';
+  let lastMarkdownLintImmediateKey = '';
+  const markdownLintController = createMarkdownLintController((state) => {
+    markdownLintState = state;
+  });
+
+  $: scheduleMarkdownLint(
+    markdownLintEnabled,
+    markdownLintRuleSet,
+    activeTabId,
+    version,
+    markdown,
+    largeDocumentLimit,
+    largeDocumentMode,
+  );
+
+  function getMarkdownLintInput(): MarkdownLintInput | null {
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (!markdownLintEnabled || !isMarkdownTab(activeTab)) return null;
+    return {
+      tabId: activeTabId,
+      version,
+      markdown,
+      ruleSet: markdownLintRuleSet,
+      largeDocumentLimit,
+      largeDocumentMode,
+    };
+  }
+
+  function scheduleMarkdownLint(
+    enabled: boolean,
+    ruleSet: MarkdownLintRuleSet,
+    tabId: string,
+    documentVersion: number,
+    content: string,
+    documentLimit: number,
+    isLargeDocument: boolean,
+  ) {
+    const activeTab = tabs.find((tab) => tab.id === tabId);
+    const signature =
+      enabled && isMarkdownTab(activeTab)
+        ? `${tabId}:${documentVersion}:${ruleSet}:${documentLimit}:${isLargeDocument}`
+        : `disabled:${enabled}:${tabId}`;
+    if (signature === lastMarkdownLintSignature) return;
+    lastMarkdownLintSignature = signature;
+
+    if (!enabled || !isMarkdownTab(activeTab)) {
+      lastMarkdownLintImmediateKey = '';
+      markdownLintController.disable();
+      return;
+    }
+
+    const immediateKey = `${tabId}:${ruleSet}:${enabled}`;
+    const delayMs = immediateKey === lastMarkdownLintImmediateKey ? 500 : 0;
+    lastMarkdownLintImmediateKey = immediateKey;
+    markdownLintController.schedule(
+      {
+        tabId,
+        version: documentVersion,
+        markdown: content,
+        ruleSet,
+        largeDocumentLimit: documentLimit,
+        largeDocumentMode: isLargeDocument,
+      },
+      delayMs,
+    );
+  }
+
+  function retryMarkdownLint() {
+    const input = getMarkdownLintInput();
+    if (input) markdownLintController.checkNow(input);
+  }
+
+  function revealMarkdownLintIssue(issue: MarkdownLintIssue): boolean {
+    if (mode === 'semantic') return editor.revealMarkdownLine(issue.lineNumber);
+    if (!sourceTextarea) return false;
+
+    const lineStarts = [0];
+    for (let index = 0; index < markdown.length; index += 1) {
+      if (markdown.charCodeAt(index) === 10) lineStarts.push(index + 1);
+    }
+    const lineStart = lineStarts[issue.lineNumber - 1];
+    if (lineStart === undefined) return false;
+    const columnOffset = Math.max(0, (issue.columnNumber ?? 1) - 1);
+    const from = Math.min(markdown.length, lineStart + columnOffset);
+    const to = Math.min(markdown.length, from + Math.max(1, issue.rangeLength ?? 1));
+    sourceTextarea.focus();
+    sourceTextarea.setSelectionRange(from, to);
+    return true;
+  }
 
   /** 任何离开当前导航上下文的动作都必须让迟到的预览请求自行丢弃。 */
   function invalidatePendingPreviewOpen() {
@@ -4169,6 +4270,8 @@
     writingStatsVisible = preferences.writingStatsVisible;
     writingStatsMetric = preferences.writingStatsMetric;
     readingTimeVisible = preferences.readingTimeVisible;
+    markdownLintEnabled = preferences.markdownLintEnabled;
+    markdownLintRuleSet = preferences.markdownLintRuleSet;
     largeDocumentLimit = preferences.largeDocumentLimit;
     autoSaveDelayMs = preferences.autoSaveDelayMs;
     createSnapshotBeforeSave = preferences.createSnapshotBeforeSave;
@@ -4252,6 +4355,8 @@
       writingStatsVisible,
       writingStatsMetric,
       readingTimeVisible,
+      markdownLintEnabled,
+      markdownLintRuleSet,
       defaultCodeBlockLanguage,
       defaultDiagramType,
       zoomPercent,
@@ -4587,6 +4692,7 @@
     sidebarResize.destroy();
     unsubscribe();
     editor.destroy();
+    markdownLintController.destroy();
   });
 
   function syncFromEditor(event: EditorChangeEvent) {
@@ -5361,6 +5467,9 @@
   {writingStatsVisible}
   {writingStatsMetric}
   {readingTimeVisible}
+  {markdownLintEnabled}
+  {markdownLintRuleSet}
+  {markdownLintState}
   {zoomPercent}
   {tablePickerOpen}
   {linkPickerOpen}
@@ -5465,6 +5574,8 @@
   {openMarkdownFile}
   {openSettings}
   {setWritingStatsMetric}
+  {retryMarkdownLint}
+  onMarkdownLintIssueSelect={revealMarkdownLintIssue}
   onZoomChange={handleZoomChange}
   exportHtml={() => handleExport('html')}
   exportPdf={() => handleExport('pdf')}

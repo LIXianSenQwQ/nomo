@@ -5,6 +5,7 @@ import {
   type SettingRecord,
 } from '../../lib/desktop/tauriStorage';
 import type { DiagramType } from '../../lib/editor-core/diagramTemplates';
+import type { MarkdownLintRuleSet } from '../../lib/markdown-lint/types';
 import type { AppearancePreferences, ColorScheme, ThemeMode } from '../../lib/theme/types';
 import {
   DEFAULT_IMAGE_HANDLING_SETTINGS,
@@ -36,6 +37,7 @@ export type WritingStatsMetric = 'lines' | 'words' | 'chars';
 export type ImageDefaultAlignPreference = ImageDefaultAlign;
 export type CodeBlockIndentPreference = 'spaces-2' | 'spaces-4' | 'tab';
 export type RenderModePreference = 'hardware' | 'software';
+export type { MarkdownLintRuleSet };
 export type { InterfaceLanguagePreference };
 
 export type ShortcutCommandId =
@@ -94,6 +96,8 @@ export interface AppPreferences {
   codeBlockLineNumbersVisible: boolean;
   codeBlockIndent: CodeBlockIndentPreference;
   inlineCodeRenderingEnabled: boolean;
+  markdownLintEnabled: boolean;
+  markdownLintRuleSet: MarkdownLintRuleSet;
   renderMode: RenderModePreference;
   shortcutPreferences: ShortcutPreferences;
   imageHandlingSettings: ImageHandlingSettings;
@@ -158,6 +162,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   codeBlockLineNumbersVisible: true,
   codeBlockIndent: 'spaces-2',
   inlineCodeRenderingEnabled: true,
+  markdownLintEnabled: false,
+  markdownLintRuleSet: 'relaxed',
   renderMode: 'hardware',
   shortcutPreferences: { ...DEFAULT_SHORTCUT_PREFERENCES },
   imageHandlingSettings: { ...DEFAULT_IMAGE_HANDLING_SETTINGS },
@@ -267,6 +273,8 @@ export async function loadAppPreferences(
     codeBlockLineNumbersVisible: parseSetting<unknown>(settings, 'codeBlockLineNumbersVisible'),
     codeBlockIndent: parseSetting<unknown>(settings, 'codeBlockIndent'),
     inlineCodeRenderingEnabled: parseSetting<unknown>(settings, 'inlineCodeRenderingEnabled'),
+    markdownLintEnabled: parseSetting<unknown>(settings, 'markdownLintEnabled'),
+    markdownLintRuleSet: parseSetting<unknown>(settings, 'markdownLintRuleSet'),
     renderMode: parseSetting<unknown>(settings, 'renderMode'),
     shortcutPreferences: parseSetting<unknown>(settings, 'shortcutPreferences'),
     imageHandlingSettings: parseSetting<Partial<ImageHandlingSettings>>(
@@ -429,6 +437,13 @@ export function normalizeAppPreferences(
       typeof value.inlineCodeRenderingEnabled === 'boolean'
         ? value.inlineCodeRenderingEnabled
         : DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled,
+    markdownLintEnabled:
+      typeof value.markdownLintEnabled === 'boolean'
+        ? value.markdownLintEnabled
+        : DEFAULT_APP_PREFERENCES.markdownLintEnabled,
+    markdownLintRuleSet: isMarkdownLintRuleSet(value.markdownLintRuleSet)
+      ? value.markdownLintRuleSet
+      : DEFAULT_APP_PREFERENCES.markdownLintRuleSet,
     renderMode: isRenderModePreference(value.renderMode)
       ? value.renderMode
       : DEFAULT_APP_PREFERENCES.renderMode,
@@ -553,6 +568,8 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     codeBlockLineNumbersVisible: preferences.codeBlockLineNumbersVisible,
     codeBlockIndent: preferences.codeBlockIndent,
     inlineCodeRenderingEnabled: preferences.inlineCodeRenderingEnabled,
+    markdownLintEnabled: preferences.markdownLintEnabled,
+    markdownLintRuleSet: preferences.markdownLintRuleSet,
     renderMode: preferences.renderMode,
     shortcutPreferences: preferences.shortcutPreferences,
     imageHandlingSettings: preferences.imageHandlingSettings,
@@ -732,6 +749,10 @@ function isCodeBlockIndentPreference(value: unknown): value is CodeBlockIndentPr
 
 function isRenderModePreference(value: unknown): value is RenderModePreference {
   return value === 'hardware' || value === 'software';
+}
+
+function isMarkdownLintRuleSet(value: unknown): value is MarkdownLintRuleSet {
+  return value === 'relaxed' || value === 'default';
 }
 
 function normalizeShortcutPreferences(value: unknown): ShortcutPreferences {
