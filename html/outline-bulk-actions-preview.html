@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Nomo 文档大纲一键展开与一键收起控件的四种交互方案" />
+    <title>Nomo 大纲批量展开 / 收起方案</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #e9edf2;
+        --chrome: #f3f5f8;
+        --surface: #ffffff;
+        --surface-soft: #f7f8fa;
+        --line: #d9dee7;
+        --line-strong: #c8cfdb;
+        --text: #20252d;
+        --muted: #697282;
+        --quiet: #929aa8;
+        --accent: #3569d4;
+        --accent-strong: #2656b5;
+        --accent-soft: #e8effd;
+        --shadow: 0 18px 50px rgba(32, 40, 55, 0.12);
+        --panel-shadow: 0 10px 24px rgba(38, 46, 58, 0.1);
+        --radius: 12px;
+        font-family:
+          Inter, 'SF Pro Text', 'Segoe UI Variable Text', 'Microsoft YaHei UI', sans-serif;
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --page: #15181d;
+        --chrome: #1c2026;
+        --surface: #232831;
+        --surface-soft: #1d2229;
+        --line: #343b46;
+        --line-strong: #46505e;
+        --text: #eef1f5;
+        --muted: #a9b1bd;
+        --quiet: #7f8998;
+        --accent: #7da4f4;
+        --accent-strong: #a9c2fa;
+        --accent-soft: #293a5c;
+        --shadow: 0 22px 58px rgba(0, 0, 0, 0.34);
+        --panel-shadow: 0 12px 26px rgba(0, 0, 0, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        background: var(--page);
+        color: var(--text);
+      }
+
+      button {
+        font: inherit;
+      }
+
+      button:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+        outline-offset: 2px;
+      }
+
+      .app-bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        min-height: 50px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 0 22px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--chrome) 94%, transparent);
+        backdrop-filter: blur(16px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 7px;
+        background: var(--surface);
+        color: var(--accent);
+        font-family: Georgia, serif;
+        font-size: 15px;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(40, 48, 60, 0.08);
+      }
+
+      .app-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .quiet-button {
+        display: inline-flex;
+        min-height: 30px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .quiet-button:hover {
+        border-color: var(--line-strong);
+        color: var(--text);
+      }
+
+      main {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 54px 0 70px;
+      }
+
+      .intro {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 28px;
+        margin-bottom: 30px;
+      }
+
+      .eyebrow {
+        margin: 0 0 9px;
+        color: var(--accent-strong);
+        font-size: 11px;
+        font-weight: 760;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 760px;
+        font-family: 'Segoe UI Variable Display', 'Microsoft YaHei UI', sans-serif;
+        font-size: clamp(28px, 4vw, 46px);
+        font-weight: 630;
+        letter-spacing: -0.035em;
+        line-height: 1.12;
+      }
+
+      .intro-copy {
+        max-width: 520px;
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .scope-note {
+        display: grid;
+        gap: 3px;
+        min-width: 164px;
+        padding: 11px 13px;
+        border-left: 2px solid var(--accent);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .scope-note strong {
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      .option-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .option {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 248px;
+        min-height: 388px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface-soft);
+        box-shadow: 0 3px 14px rgba(38, 46, 58, 0.05);
+        transition:
+          border-color 160ms ease,
+          box-shadow 160ms ease,
+          transform 160ms ease;
+      }
+
+      .option:hover {
+        border-color: var(--line-strong);
+        transform: translateY(-1px);
+      }
+
+      .option.selected {
+        border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+
+      .option-info {
+        display: flex;
+        flex-direction: column;
+        padding: 22px 18px 18px 20px;
+      }
+
+      .option-index {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--quiet);
+        font-family: ui-monospace, 'Cascadia Code', monospace;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+      }
+
+      .recommended {
+        padding: 3px 7px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-family: inherit;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .option h2 {
+        margin: 25px 0 8px;
+        font-size: 19px;
+        font-weight: 680;
+        letter-spacing: -0.02em;
+      }
+
+      .option-description {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .tradeoff {
+        margin: 14px 0 18px;
+        color: var(--quiet);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .choose {
+        width: 100%;
+        min-height: 34px;
+        margin-top: auto;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 620;
+        cursor: pointer;
+      }
+
+      .choose:hover,
+      .option.selected .choose {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .demo-stage {
+        display: grid;
+        place-items: center;
+        border-left: 1px solid var(--line);
+        background:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px), var(--chrome);
+        background-size: 24px 24px;
+      }
+
+      .outline-panel {
+        display: flex;
+        width: 220px;
+        max-height: 330px;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        box-shadow: var(--panel-shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .outline-head {
+        flex: 0 0 auto;
+        padding: 13px 13px 9px;
+      }
+
+      .outline-title {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      .outline-list {
+        min-height: 230px;
+        padding: 0 13px 12px;
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      .outline-row {
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr);
+        align-items: center;
+        gap: 6px;
+        min-height: 27px;
+        border-radius: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .outline-row[data-level='2'] {
+        padding-left: 15px;
+      }
+
+      .outline-row[data-level='3'] {
+        padding-left: 30px;
+      }
+
+      .outline-row.active {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        color: var(--accent-strong);
+        font-weight: 620;
+      }
+
+      .outline-row[hidden] {
+        display: none;
+      }
+
+      .row-toggle,
+      .row-spacer {
+        width: 16px;
+        height: 24px;
+      }
+
+      .row-toggle {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .row-toggle svg {
+        transition: transform 140ms ease;
+      }
+
+      .outline-row.collapsed .row-toggle svg {
+        transform: rotate(-90deg);
+      }
+
+      .row-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .row-number {
+        opacity: 0.46;
+        font-weight: 400;
+      }
+
+      .bulk-button {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 0 7px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 10.5px;
+        cursor: pointer;
+      }
+
+      .bulk-button:hover {
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .bulk-button svg,
+      .icon-button svg,
+      .adaptive-button svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* A：标题下方双文字动作，认知成本最低。 */
+      .variant-a .bulk-bar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      /* B：标题右侧紧凑图标组，最节省纵向空间。 */
+      .variant-b .outline-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-bottom: 11px;
+      }
+
+      .icon-group {
+        display: inline-flex;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface-soft);
+      }
+
+      .icon-button {
+        display: grid;
+        width: 28px;
+        height: 27px;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .icon-button + .icon-button {
+        border-left: 1px solid var(--line);
+      }
+
+      .icon-button:hover {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      /* C：单个状态按钮，根据当前大纲状态切换动作。 */
+      .variant-c .outline-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-bottom: 11px;
+      }
+
+      .adaptive-button {
+        display: inline-flex;
+        min-height: 27px;
+        align-items: center;
+        gap: 5px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 7px;
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        font-size: 10.5px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .adaptive-button:hover {
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+      }
+
+      /* D：底部命令栏，让标题区保持完全安静。 */
+      .variant-d .outline-head {
+        padding-bottom: 11px;
+      }
+
+      .footer-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        flex: 0 0 auto;
+        border-top: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface-soft) 86%, transparent);
+      }
+
+      .footer-action {
+        min-height: 34px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 10.5px;
+        cursor: pointer;
+      }
+
+      .footer-action + .footer-action {
+        border-left: 1px solid var(--line);
+      }
+
+      .footer-action:hover {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+      }
+
+      .selection-summary {
+        display: flex;
+        min-height: 52px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 18px;
+        padding: 11px 14px 11px 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .selection-summary strong {
+        color: var(--text);
+      }
+
+      .selection-summary code {
+        color: var(--accent-strong);
+        font-family: ui-monospace, 'Cascadia Code', monospace;
+      }
+
+      svg {
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+      }
+
+      @media (max-width: 1020px) {
+        .option-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .option {
+          grid-template-columns: minmax(210px, 1fr) 280px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100% - 24px, 520px);
+          padding-top: 34px;
+        }
+
+        .app-bar {
+          padding: 0 12px;
+        }
+
+        .intro {
+          grid-template-columns: 1fr;
+        }
+
+        .scope-note {
+          display: none;
+        }
+
+        .option {
+          grid-template-columns: 1fr;
+        }
+
+        .option-info {
+          min-height: 210px;
+        }
+
+        .demo-stage {
+          min-height: 374px;
+          border-top: 1px solid var(--line);
+          border-left: 0;
+        }
+
+        .selection-summary {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol id="chevron" viewBox="0 0 16 16">
+        <path d="m4 6 4 4 4-4" />
+      </symbol>
+      <symbol id="expand-all" viewBox="0 0 16 16">
+        <path d="m4 6 4-4 4 4M4 10l4 4 4-4" />
+      </symbol>
+      <symbol id="collapse-all" viewBox="0 0 16 16">
+        <path d="m4 4 4 4 4-4M4 12l4-4 4 4" />
+      </symbol>
+      <symbol id="moon" viewBox="0 0 16 16">
+        <path d="M13.4 10.1A5.6 5.6 0 0 1 5.9 2.6 5.7 5.7 0 1 0 13.4 10Z" />
+      </symbol>
+    </svg>
+
+    <header class="app-bar">
+      <div class="brand"><span class="brand-mark">N</span><span>Nomo · 大纲控件原型</span></div>
+      <div class="app-actions">
+        <button class="quiet-button" id="theme-toggle" type="button">
+          <svg width="14" height="14" aria-hidden="true"><use href="#moon"></use></svg>
+          深色
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Document outline / bulk actions</p>
+          <h1 id="page-title">一键展开、收起，放在哪里最顺手？</h1>
+          <p class="intro-copy">
+            四种方案都沿用当前 220px
+            浮动大纲、层级箭头与主题变量。点击原型内按钮可体验真实展开与收起，再点“选择此方案”记录偏好。
+          </p>
+        </div>
+        <div class="scope-note">
+          <strong>本次只比较入口</strong>
+          <span>不改变单个章节展开</span>
+          <span>不改变拖拽排序</span>
+        </div>
+      </section>
+
+      <section class="option-grid" aria-label="四种大纲批量控制方案">
+        <article class="option" data-option="A">
+          <div class="option-info">
+            <div class="option-index"><span>OPTION A</span></div>
+            <h2>清晰双按钮</h2>
+            <p class="option-description">
+              标题下方固定显示“全部展开 / 全部收起”，第一次使用也无需猜图标。
+            </p>
+            <p class="tradeoff">优点：最直观、可发现性最好。代价：多占一行纵向空间。</p>
+            <button class="choose" type="button">选择此方案</button>
+          </div>
+          <div class="demo-stage">
+            <aside class="outline-panel variant-a" aria-label="方案 A 大纲演示">
+              <div class="outline-head">
+                <div class="outline-title">文档大纲</div>
+                <div class="bulk-bar">
+                  <button class="bulk-button" type="button" data-action="expand">
+                    <svg aria-hidden="true"><use href="#expand-all"></use></svg>全部展开
+                  </button>
+                  <button class="bulk-button" type="button" data-action="collapse">
+                    <svg aria-hidden="true"><use href="#collapse-all"></use></svg>全部收起
+                  </button>
+                </div>
+              </div>
+              <div class="outline-list"></div>
+            </aside>
+          </div>
+        </article>
+
+        <article class="option selected" data-option="B">
+          <div class="option-info">
+            <div class="option-index">
+              <span>OPTION B</span><span class="recommended">已选方向</span>
+            </div>
+            <h2>标题栏单按钮</h2>
+            <p class="option-description">
+              标题右侧只保留一个图标：有折叠项时执行全部展开，全展开后执行全部收起。
+            </p>
+            <p class="tradeoff">
+              优点：最紧凑、不增加面板高度。图标、悬停文案与无障碍标签会同步切换。
+            </p>
+            <button class="choose" type="button">已选择</button>
+          </div>
+          <div class="demo-stage">
+            <aside class="outline-panel variant-b" aria-label="方案 B 大纲演示">
+              <div class="outline-head">
+                <div class="outline-title">文档大纲</div>
+                <div class="icon-group" aria-label="大纲批量操作">
+                  <button
+                    class="icon-button"
+                    type="button"
+                    data-action="adaptive"
+                    data-icon-only="true"
+                  ></button>
+                </div>
+              </div>
+              <div class="outline-list"></div>
+            </aside>
+          </div>
+        </article>
+
+        <article class="option" data-option="C">
+          <div class="option-info">
+            <div class="option-index"><span>OPTION C</span></div>
+            <h2>智能单按钮</h2>
+            <p class="option-description">
+              只展示当前最需要的动作：有折叠项时显示“全部展开”，全展开后切换为“全部收起”。
+            </p>
+            <p class="tradeoff">优点：动作聚焦、占用小。代价：不能在任意状态同时看到两个选择。</p>
+            <button class="choose" type="button">选择此方案</button>
+          </div>
+          <div class="demo-stage">
+            <aside class="outline-panel variant-c" aria-label="方案 C 大纲演示">
+              <div class="outline-head">
+                <div class="outline-title">文档大纲</div>
+                <button class="adaptive-button" type="button" data-action="adaptive"></button>
+              </div>
+              <div class="outline-list"></div>
+            </aside>
+          </div>
+        </article>
+
+        <article class="option" data-option="D">
+          <div class="option-info">
+            <div class="option-index"><span>OPTION D</span></div>
+            <h2>底部命令栏</h2>
+            <p class="option-description">标题与章节列表保持干净，两个批量动作固定在面板底部。</p>
+            <p class="tradeoff">优点：区域分工明确、长列表也能固定触达。代价：视线移动距离最长。</p>
+            <button class="choose" type="button">选择此方案</button>
+          </div>
+          <div class="demo-stage">
+            <aside class="outline-panel variant-d" aria-label="方案 D 大纲演示">
+              <div class="outline-head"><div class="outline-title">文档大纲</div></div>
+              <div class="outline-list"></div>
+              <div class="footer-actions">
+                <button class="footer-action" type="button" data-action="expand">全部展开</button>
+                <button class="footer-action" type="button" data-action="collapse">全部收起</button>
+              </div>
+            </aside>
+          </div>
+        </article>
+      </section>
+
+      <div class="selection-summary" aria-live="polite">
+        <span id="selection-text"><strong>已选择方案 B</strong> · 标题栏单按钮</span>
+        <span>当前方向：<code id="selection-code">B · 单按钮</code></span>
+      </div>
+    </main>
+
+    <script>
+      const outlineItems = [
+        { id: 'overview', title: '1. 项目概览', level: 1, parent: null },
+        { id: 'goals', title: '1.1 设计目标', level: 2, parent: 'overview' },
+        { id: 'audience', title: '1.2 目标用户', level: 2, parent: 'overview' },
+        { id: 'architecture', title: '2. 技术架构', level: 1, parent: null },
+        { id: 'desktop', title: '2.1 桌面端', level: 2, parent: 'architecture' },
+        { id: 'storage', title: '2.1.1 本地存储', level: 3, parent: 'desktop' },
+        { id: 'editor', title: '2.2 编辑器内核', level: 2, parent: 'architecture' },
+        { id: 'release', title: '3. 发布流程', level: 1, parent: null },
+        { id: 'windows', title: '3.1 Windows', level: 2, parent: 'release' },
+      ];
+
+      const initialCollapsed = new Set(['architecture']);
+
+      function hasChildren(id) {
+        return outlineItems.some((item) => item.parent === id);
+      }
+
+      function isHidden(item, collapsed) {
+        let parentId = item.parent;
+        while (parentId) {
+          if (collapsed.has(parentId)) return true;
+          parentId = outlineItems.find((candidate) => candidate.id === parentId)?.parent ?? null;
+        }
+        return false;
+      }
+
+      function renderPanel(panel, collapsed) {
+        const list = panel.querySelector('.outline-list');
+        list.innerHTML = '';
+
+        outlineItems.forEach((item) => {
+          const row = document.createElement('div');
+          row.className = `outline-row${item.id === 'overview' ? ' active' : ''}${collapsed.has(item.id) ? ' collapsed' : ''}`;
+          row.dataset.level = item.level;
+          row.hidden = isHidden(item, collapsed);
+
+          if (hasChildren(item.id)) {
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'row-toggle';
+            toggle.title = collapsed.has(item.id) ? `展开“${item.title}”` : `收起“${item.title}”`;
+            toggle.setAttribute('aria-label', toggle.title);
+            toggle.setAttribute('aria-expanded', String(!collapsed.has(item.id)));
+            toggle.innerHTML =
+              '<svg width="13" height="13" aria-hidden="true"><use href="#chevron"></use></svg>';
+            toggle.addEventListener('click', () => {
+              collapsed.has(item.id) ? collapsed.delete(item.id) : collapsed.add(item.id);
+              renderPanel(panel, collapsed);
+            });
+            row.append(toggle);
+          } else {
+            const spacer = document.createElement('span');
+            spacer.className = 'row-spacer';
+            row.append(spacer);
+          }
+
+          const label = document.createElement('span');
+          label.className = 'row-label';
+          const match = item.title.match(/^(\d+(?:\.\d+)*\.?\s*)/);
+          if (match) {
+            label.innerHTML = `<span class="row-number">${match[1]}</span>${item.title.slice(match[1].length)}`;
+          } else {
+            label.textContent = item.title;
+          }
+          row.append(label);
+          list.append(row);
+        });
+
+        const adaptive = panel.querySelector('[data-action="adaptive"]');
+        if (adaptive) {
+          const allExpanded = collapsed.size === 0;
+          const label = allExpanded ? '全部收起' : '全部展开';
+          const icon = allExpanded ? 'collapse-all' : 'expand-all';
+          adaptive.dataset.nextAction = allExpanded ? 'collapse' : 'expand';
+          adaptive.innerHTML =
+            adaptive.dataset.iconOnly === 'true'
+              ? `<svg aria-hidden="true"><use href="#${icon}"></use></svg>`
+              : `<svg aria-hidden="true"><use href="#${icon}"></use></svg>${label}`;
+          adaptive.title = label;
+          adaptive.setAttribute('aria-label', label);
+        }
+      }
+
+      document.querySelectorAll('.outline-panel').forEach((panel) => {
+        const collapsed = new Set(initialCollapsed);
+        panel.querySelectorAll('[data-action]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const action =
+              button.dataset.action === 'adaptive'
+                ? button.dataset.nextAction
+                : button.dataset.action;
+            collapsed.clear();
+            if (action === 'collapse') {
+              outlineItems
+                .filter((item) => hasChildren(item.id))
+                .forEach((item) => collapsed.add(item.id));
+            }
+            renderPanel(panel, collapsed);
+          });
+        });
+        renderPanel(panel, collapsed);
+      });
+
+      document.querySelectorAll('.choose').forEach((button) => {
+        button.addEventListener('click', () => {
+          const option = button.closest('.option');
+          const code = option.dataset.option;
+          const title = option.querySelector('h2').textContent;
+          document
+            .querySelectorAll('.option')
+            .forEach((candidate) => candidate.classList.toggle('selected', candidate === option));
+          document.querySelectorAll('.choose').forEach((candidate) => {
+            candidate.textContent = candidate === button ? '已选择' : '选择此方案';
+          });
+          document.getElementById('selection-text').innerHTML =
+            `<strong>已选择方案 ${code}</strong> · ${title}`;
+          document.getElementById('selection-code').textContent = code;
+        });
+      });
+
+      document.getElementById('theme-toggle').addEventListener('click', (event) => {
+        const root = document.documentElement;
+        const dark = root.dataset.theme !== 'dark';
+        root.dataset.theme = dark ? 'dark' : 'light';
+        event.currentTarget.lastChild.textContent = dark ? ' 浅色' : ' 深色';
+      });
+    </script>
+  </body>
+</html>
