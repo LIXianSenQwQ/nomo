@@ -3483,6 +3483,11 @@
     getSemanticPane: () => semanticPane,
     getSourcePane: () => sourcePane,
     getSourceTextarea: () => sourceTextarea,
+    getEditor: () => editor,
+    getReadonly: () => readonlyDocumentMode,
+    setStatusMessage: (value) => {
+      statusMessage = value;
+    },
     onExplicitJumpIntent: cancelPendingReadingPositionRestore,
   });
   const editorInteraction = createEditorInteractionController({
@@ -4238,6 +4243,7 @@
     return dirtyTabs;
   }
   const jumpToOutlineItem = outlineInteraction.jumpToOutlineItem;
+  const moveOutlineSection = outlineInteraction.moveOutlineSection;
   const updateActiveOutlineFromSourceScroll =
     outlineInteraction.updateActiveOutlineFromSourceScroll;
   const updateActiveOutlineFromSemanticScroll =
@@ -5855,6 +5861,7 @@
   {expandAllOutline}
   {collapseAllOutline}
   {jumpToOutlineItem}
+  {moveOutlineSection}
   {openMarkdownFile}
   {openSettings}
   {setWritingStatsMetric}

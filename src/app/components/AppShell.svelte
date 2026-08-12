@@ -197,6 +197,11 @@
   export let expandAllOutline: () => void;
   export let collapseAllOutline: () => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
+  export let moveOutlineSection: (request: {
+    sourceIndex: number;
+    targetIndex: number;
+    placement: 'before' | 'inside' | 'after';
+  }) => boolean;
   export let openMarkdownFile: (event: Event) => void;
   export let setWritingStatsMetric: (metric: StatsMetric) => void;
   export let onZoomChange: (percent: number) => void;
@@ -514,6 +519,7 @@
               {collapseAllOutline}
               {toggleOutlineVisible}
               {jumpToOutlineItem}
+              {moveOutlineSection}
             />
 
             {#if markdownMiniActive && largeDocumentMode}

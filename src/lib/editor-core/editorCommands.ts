@@ -2,7 +2,14 @@ import { lift, setBlockType, splitBlockAs, toggleMark, wrapIn } from 'prosemirro
 import { pendingInlineMarkKey, toggleMarkPending } from './plugins/pendingInlineMark';
 import { redo, undo } from 'prosemirror-history';
 import { liftListItem, wrapInList } from 'prosemirror-schema-list';
-import type { Mark, MarkType, Node as PmNode, NodeType, ResolvedPos } from 'prosemirror-model';
+import {
+  Fragment,
+  type Mark,
+  type MarkType,
+  type Node as PmNode,
+  type NodeType,
+  type ResolvedPos,
+} from 'prosemirror-model';
 import {
   EditorState,
   NodeSelection,
@@ -77,6 +84,7 @@ import { insertCallout, toggleCalloutType, unwrapCallout } from './callout/callo
 import type { EditorCommand, SetMarkdownOptions } from './types';
 import { createTocList } from '../toc/tocService';
 import { ensureFrontMatter } from '../markdown/frontMatter';
+import { planOutlineSectionMove } from '../outline/outlineReorder';
 
 type MarkdownSetter = (markdown: string, options?: SetMarkdownOptions) => void;
 
@@ -934,11 +942,64 @@ export function executeEditorCommand(
       return run(undo);
     case 'redo':
       return run(redo);
+    case 'moveOutlineSection':
+      return moveOutlineSection(view, command);
     case 'scrollToHeading':
       return scrollToHeading(view, command.headingIndex);
     default:
       return false;
   }
+}
+
+function moveOutlineSection(
+  view: EditorView,
+  command: Extract<EditorCommand, { type: 'moveOutlineSection' }>,
+): boolean {
+  const { state } = view;
+  const topLevelNodes: Array<{ node: PmNode; pos: number }> = [];
+  const headings: Array<{ childIndex: number; level: number }> = [];
+  let pos = 0;
+  for (let childIndex = 0; childIndex < state.doc.childCount; childIndex += 1) {
+    const node = state.doc.child(childIndex);
+    topLevelNodes.push({ node, pos });
+    if (node.type === state.schema.nodes.heading) {
+      headings.push({ childIndex, level: Number(node.attrs.level) });
+    }
+    pos += node.nodeSize;
+  }
+
+  const planResult = planOutlineSectionMove(headings, command);
+  if (!planResult.ok) return false;
+  const { plan } = planResult;
+  const sourceStartChild = headings[plan.sourceStartIndex].childIndex;
+  const sourceEndChild = headings[plan.sourceEndIndex]?.childIndex ?? state.doc.childCount;
+  const insertionHeadingIndex =
+    command.placement === 'before' ? command.targetIndex : plan.targetEndIndex;
+  const insertionChild = headings[insertionHeadingIndex]?.childIndex ?? state.doc.childCount;
+  const from = topLevelNodes[sourceStartChild].pos;
+  const to = topLevelNodes[sourceEndChild]?.pos ?? state.doc.content.size;
+  const insertionPos = topLevelNodes[insertionChild]?.pos ?? state.doc.content.size;
+  const movedHeadingLevels = new Map(
+    headings
+      .slice(plan.sourceStartIndex, plan.sourceEndIndex)
+      .map((heading) => [heading.childIndex, heading.level + plan.levelDelta]),
+  );
+  const movedNodes = topLevelNodes
+    .slice(sourceStartChild, sourceEndChild)
+    .map(({ node }, offset) => {
+      const nextLevel = movedHeadingLevels.get(sourceStartChild + offset);
+      if (!nextLevel) return node;
+      return node.type.create(
+        { ...node.attrs, level: nextLevel },
+        node.content,
+        node.marks,
+      );
+    });
+  const mappedInsertionPos = insertionPos > from ? insertionPos - (to - from) : insertionPos;
+  const tr = state.tr.delete(from, to).insert(mappedInsertionPos, Fragment.fromArray(movedNodes));
+  tr.setSelection(TextSelection.near(tr.doc.resolve(mappedInsertionPos + 1)));
+  view.dispatch(tr.scrollIntoView());
+  return true;
 }
 
 function insertFrontMatterBlock(markdown: string, setMarkdown: MarkdownSetter): boolean {

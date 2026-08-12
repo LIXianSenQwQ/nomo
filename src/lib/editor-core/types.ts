@@ -168,6 +168,12 @@ export type EditorCommand =
   | { type: 'redo' }
   | { type: 'formatDocument' }
   | { type: 'insertHorizontalRule' }
+  | {
+      type: 'moveOutlineSection';
+      sourceIndex: number;
+      targetIndex: number;
+      placement: 'before' | 'inside' | 'after';
+    }
   | { type: 'scrollToHeading'; headingIndex: number; text: string; level: number };
 
 export type EditorListener = (event: EditorChangeEvent) => void;

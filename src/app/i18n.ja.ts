@@ -192,6 +192,14 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   showDocumentOutline: '文書のアウトラインを表示',
   showDocumentOutlineDescription:
     'エディターの右側に現在のドキュメントの見出しナビゲーションを表示します。',
+  outlineMoveReadonly: 'このドキュメントは読み取り専用のため、セクションを並べ替えられません。',
+  outlineMoveUndoUnavailable:
+    'この環境では元に戻せるソース並べ替えを利用できません。ドキュメントは変更されていません。',
+  outlineMoveSelfOrDescendant: 'セクションを自身または子セクションへ移動することはできません。',
+  outlineMoveLevelOverflow: '移動すると H6 より深い見出しが作成されます。',
+  outlineMoveNoChange: 'セクションはすでにその位置にあります。',
+  outlineMoveFailed: 'セクションを移動できませんでした。ドキュメントは変更されていません。',
+  outlineSectionMoved: 'セクション「{title}」を移動しました。',
   showDocumentStats: 'ドキュメントの統計を表示する',
   showDocumentStatsDescription: 'ドキュメント本文の右下に軽量の統計を表示します。',
   defaultStatsMetric: 'デフォルトの統計メトリック',

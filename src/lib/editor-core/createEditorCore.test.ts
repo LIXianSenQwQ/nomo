@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { AllSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import { reorderOutlineSection } from '../outline/outlineReorder';
+import { extractOutline } from '../outline/outlineService';
 import { createEditorCore } from './createEditorCore';
 
 afterEach(() => {
@@ -829,6 +831,73 @@ describe('createEditorCore', () => {
       level: 3,
     });
     expect(result3).toBe(true);
+  });
+
+  it('moves an outline subtree in one undoable transaction and follows its root heading', () => {
+    const markdown = '# Alpha\n\nalpha body\n\n## Alpha child\n\nchild body\n\n# Beta\n\nbeta body';
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown, target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(
+      editor.execute({
+        type: 'moveOutlineSection',
+        sourceIndex: 0,
+        targetIndex: 2,
+        placement: 'inside',
+      }),
+    ).toBe(true);
+    expect(editor.getMarkdown()).toBe(
+      '# Beta\n\nbeta body\n\n## Alpha\n\nalpha body\n\n### Alpha child\n\nchild body',
+    );
+    const sourceResult = reorderOutlineSection(markdown, extractOutline(markdown), {
+      sourceIndex: 0,
+      targetIndex: 2,
+      placement: 'inside',
+    });
+    expect(sourceResult.ok).toBe(true);
+    if (sourceResult.ok) {
+      expect(
+        extractOutline(editor.getMarkdown()).map(({ title, level }) => ({ title, level })),
+      ).toEqual(
+        extractOutline(sourceResult.markdown).map(({ title, level }) => ({ title, level })),
+      );
+    }
+    expect(view.state.selection.$from.parent.textContent).toBe('Alpha');
+
+    expect(editor.execute({ type: 'undo' })).toBe(true);
+    expect(editor.getMarkdown()).toBe(markdown);
+    expect(editor.execute({ type: 'redo' })).toBe(true);
+    expect(editor.getMarkdown()).toContain('## Alpha\n\nalpha body\n\n### Alpha child');
+
+    editor.destroy();
+  });
+
+  it('keeps derived TOC synchronization inside the section move undo step', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '<!-- toc -->\n<!-- /toc -->\n\n# One\n\none\n\n# Two\n\ntwo',
+      target,
+    });
+    const initialMarkdown = editor.getMarkdown();
+
+    expect(
+      editor.execute({
+        type: 'moveOutlineSection',
+        sourceIndex: 0,
+        targetIndex: 1,
+        placement: 'after',
+      }),
+    ).toBe(true);
+    expect(extractOutline(editor.getMarkdown()).map((item) => item.title)).toEqual(['Two', 'One']);
+
+    expect(editor.execute({ type: 'undo' })).toBe(true);
+    expect(editor.getMarkdown()).toBe(initialMarkdown);
+    expect(editor.execute({ type: 'undo' })).toBe(false);
+    expect(editor.execute({ type: 'redo' })).toBe(true);
+    expect(extractOutline(editor.getMarkdown()).map((item) => item.title)).toEqual(['Two', 'One']);
+
+    editor.destroy();
   });
 
   it('returns false for out-of-range headingIndex', () => {

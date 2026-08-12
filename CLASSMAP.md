@@ -120,7 +120,8 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 大纲服务 | `src/lib/outline/outlineService.ts` | — | 标题大纲/字数统计/阅读统计 |
-| 大纲交互控制器 | `src/app/services/outlineInteractionController.ts` | `src/app/services/outlineNavigation.ts` | 点击大纲滚动定位 |
+| 章节结构重排 | `src/lib/outline/outlineReorder.ts` | `src/lib/editor-core/editorCommands.ts` | 计算章节子树、落点、层级变化、Markdown 重排与标题索引映射 |
+| 大纲交互控制器 | `src/app/services/outlineInteractionController.ts` | `src/app/services/outlineNavigation.ts`, `src/lib/outline/outlineReorder.ts` | 点击定位、章节拖拽编排、源码模式可撤销替换 |
 | 大纲滚动定位 | `src/app/services/outlineNavigation.ts` | `src/app/services/editorInteractionController.ts` | 模式切换/源码与语义视图滚动同步 |
 | 大纲状态 | `src/app/services/outlineState.ts` | — | 大纲展开/折叠/可见性/激活项计算 |
 | TOC 服务 | `src/lib/toc/tocService.ts` | `src/lib/editor-core/nodeViews/TocBlockNodeView.ts` | 生成 TOC Markdown/目录项数据 |
@@ -589,6 +590,7 @@
 - 编辑工作区 UI：源码 textarea、ProseMirror 挂载点
 - Front Matter 卡片、大纲面板
 - 大纲标题与空白区域的导航、展开/折叠、复制标题和隐藏大纲菜单项
+- 大纲整行 Pointer 拖拽状态机、三区落点提示、延时展开与边缘滚动
 - 外部变更提示
 - 模式切换（语义编辑/源码编辑/只读/大文档提示）
 
@@ -598,12 +600,13 @@
 
 **Called by:** `src/app/components/AppShell.svelte`
 
-**Depends on:** `FrontMatterCard.svelte`, `src/lib/editor-core/types.ts`
+**Depends on:** `FrontMatterCard.svelte`, `src/lib/editor-core/types.ts`, `src/lib/outline/outlineReorder.ts`
 
 **Change this when：**
 - 修改编辑区布局
 - 修改模式切换 UI 行为
 - 修改大纲面板展示
+- 修改大纲拖拽手势和落点反馈
 
 **Do not change this when：**
 - 修改 ProseMirror 内部逻辑
@@ -759,7 +762,7 @@
 **Change this when:**
 - 修改相对路径解析、支持的本地链接类型或 fragment 分类规则
 
-**Related tests:** —
+**Related tests:** `src/app/components/EditorWorkspace.test.ts`
 
 **Confidence:** high
 
@@ -1262,6 +1265,7 @@
 **Owns：**
 - 编辑器命令实现：标题、粗体、斜体、链接、列表、引用、代码块、表格、公式、图表、TOC 等
 - 将应用层 `EditorCommand` 转换为 ProseMirror transaction
+- 以单个事务移动章节顶层节点切片并调整后代标题层级
 
 **Does not own：**
 - 不拥有表格命令细节（在 tableCommands.ts 中）
@@ -1270,7 +1274,7 @@
 
 **Called by:** `src/lib/editor-core/ProseMirrorEditorCore.ts`, `src/app/services/appCommands.ts`
 
-**Depends on:** `src/lib/editor-core/schema.ts`, `src/lib/editor-core/tableCommands.ts`, `src/lib/editor-core/codeBlockCommands.ts`, `src/lib/editor-core/callout/calloutCommands.ts`
+**Depends on:** `src/lib/editor-core/schema.ts`, `src/lib/editor-core/tableCommands.ts`, `src/lib/editor-core/codeBlockCommands.ts`, `src/lib/editor-core/callout/calloutCommands.ts`, `src/lib/outline/outlineReorder.ts`
 
 **Change this when：**
 - 新增编辑命令
@@ -1424,6 +1428,32 @@
 - 修改大纲面板 UI
 
 **Related tests:** `src/lib/outline/outlineService.test.ts`
+
+**Confidence:** high
+
+---
+
+### `src/lib/outline/outlineReorder.ts`
+
+**Kind:** utility
+
+**Owns：**
+- 按标题索引计算章节子树范围、前/内/后落点和统一层级增量
+- 保真重排 Markdown 行记录并返回原标题索引到新索引的映射
+- 拒绝自身/后代、H6 越界、无效索引和无变化落点
+
+**Does not own：**
+- 不拥有 Pointer 手势与视觉反馈（在 EditorWorkspace.svelte 中）
+- 不拥有 ProseMirror 事务执行（在 editorCommands.ts 中）
+
+**Called by:** `src/app/services/outlineInteractionController.ts`, `src/app/components/EditorWorkspace.svelte`, `src/lib/editor-core/editorCommands.ts`
+
+**Depends on:** `src/lib/outline/outlineService.ts`
+
+**Change this when：**
+- 修改章节边界、树形落点、标题层级或源码重排规则
+
+**Related tests:** `src/lib/outline/outlineReorder.test.ts`
 
 **Confidence:** high
 
@@ -3376,7 +3406,8 @@
 **Kind:** controller
 
 **Owns:**
-- 大纲交互控制：点击大纲项触发滚动定位，以及全部展开/折叠状态切换
+- 大纲交互控制：点击定位、全部展开/折叠、章节移动和状态恢复
+- 源码模式原生可撤销文本替换，并在不支持时保持文档不变
 
 **Does not own:**
 - 不拥有大纲数据计算（在 outlineService.ts 中）
@@ -3384,12 +3415,12 @@
 
 **Called by:** `src/app/App.svelte`
 
-**Depends on:** `src/app/services/outlineNavigation.ts`, `src/app/services/outlineState.ts`
+**Depends on:** `src/app/services/outlineNavigation.ts`, `src/app/services/outlineState.ts`, `src/lib/outline/outlineReorder.ts`
 
 **Change this when:**
-- 修改大纲点击交互行为
+- 修改大纲点击、章节移动或源码撤销接入行为
 
-**Related tests:** —
+**Related tests:** `src/app/services/outlineInteractionController.test.ts`
 
 **Confidence:** high
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ChevronDown } from '@lucide/svelte';
+  import { onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
   import type {
     ContextMenuItem,
@@ -9,6 +10,10 @@
   import { createSourceTextareaImePunctuationFallback } from '../../lib/input/windowsImePunctuationFallback';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
+  import {
+    planOutlineSectionMove,
+    type OutlineDropPlacement,
+  } from '../../lib/outline/outlineReorder';
   import {
     modePaneMotion,
     motionIn,
@@ -55,8 +60,35 @@
   export let collapseAllOutline: () => void = () => undefined;
   export let toggleOutlineVisible: () => void = () => undefined;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
+  export let moveOutlineSection: (request: {
+    sourceIndex: number;
+    targetIndex: number;
+    placement: 'before' | 'inside' | 'after';
+  }) => boolean;
   export let onSourceScroll: (() => void) | undefined = undefined;
   export let onSemanticScroll: (() => void) | undefined = undefined;
+
+  interface PendingOutlineDrag {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    sourceIndex: number;
+    row: HTMLElement;
+  }
+
+  let outlinePanel: HTMLElement;
+  let pendingOutlineDrag: PendingOutlineDrag | null = null;
+  let outlineDragging = false;
+  let outlineDragPreview: HTMLElement | null = null;
+  let outlineDropTargetIndex = -1;
+  let outlineDropPlacement: OutlineDropPlacement | null = null;
+  let outlineDropValid = false;
+  let suppressOutlineClick = false;
+  let outlineExpandTimer: ReturnType<typeof setTimeout> | null = null;
+  let outlineExpandTargetIndex = -1;
+  let outlineAutoScrollFrame = 0;
+  let outlinePointerX = 0;
+  let outlinePointerY = 0;
 
   const sourceImeFallback = createSourceTextareaImePunctuationFallback();
 
@@ -65,6 +97,200 @@
     event.stopPropagation();
     toggleOutlineItemExpanded(item);
   }
+
+  function handleOutlineLinkClick(event: MouseEvent, item: OutlineItem) {
+    if (suppressOutlineClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    jumpToOutlineItem(item);
+  }
+
+  function handleOutlinePointerDown(event: PointerEvent, sourceIndex: number) {
+    if (
+      readonlyDocumentMode ||
+      event.button !== 0 ||
+      !event.isPrimary ||
+      event.pointerType === 'touch' ||
+      (event.target as HTMLElement | null)?.closest('.outline-toggle')
+    ) {
+      return;
+    }
+    const row = event.currentTarget as HTMLElement;
+    pendingOutlineDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      sourceIndex,
+      row,
+    };
+    outlinePointerX = event.clientX;
+    outlinePointerY = event.clientY;
+    row.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleOutlinePointerMove(event: PointerEvent) {
+    const pending = pendingOutlineDrag;
+    if (!pending || event.pointerId !== pending.pointerId) return;
+    outlinePointerX = event.clientX;
+    outlinePointerY = event.clientY;
+    if (!outlineDragging) {
+      const distance = Math.hypot(event.clientX - pending.startX, event.clientY - pending.startY);
+      if (distance < 5) return;
+      beginOutlineDrag(pending, event.clientX, event.clientY);
+    }
+    event.preventDefault();
+    positionOutlineDragPreview(event.clientX, event.clientY);
+    updateOutlineDropTarget(event.clientX, event.clientY);
+    scheduleOutlineAutoScroll();
+  }
+
+  function beginOutlineDrag(pending: PendingOutlineDrag, clientX: number, clientY: number) {
+    outlineDragging = true;
+    suppressOutlineClick = true;
+    const preview = pending.row.cloneNode(true) as HTMLElement;
+    const rect = pending.row.getBoundingClientRect();
+    preview.classList.add('outline-drag-preview');
+    preview.style.width = `${rect.width}px`;
+    preview.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(preview);
+    outlineDragPreview = preview;
+    positionOutlineDragPreview(clientX, clientY);
+  }
+
+  function positionOutlineDragPreview(clientX: number, clientY: number) {
+    if (!outlineDragPreview) return;
+    outlineDragPreview.style.transform = `translate3d(${clientX + 12}px, ${clientY + 12}px, 0)`;
+  }
+
+  function updateOutlineDropTarget(clientX: number, clientY: number) {
+    const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const row = element?.closest<HTMLElement>('[data-outline-index]');
+    if (!row || !outlinePanel?.contains(row) || !pendingOutlineDrag) {
+      clearOutlineDropTarget();
+      return;
+    }
+    const targetIndex = Number(row.dataset.outlineIndex);
+    const rect = row.getBoundingClientRect();
+    const relativeY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0.5;
+    const placement: OutlineDropPlacement =
+      relativeY < 0.3 ? 'before' : relativeY > 0.7 ? 'after' : 'inside';
+    const plan = planOutlineSectionMove(outline, {
+      sourceIndex: pendingOutlineDrag.sourceIndex,
+      targetIndex,
+      placement,
+    });
+    outlineDropTargetIndex = targetIndex;
+    outlineDropPlacement = placement;
+    outlineDropValid = plan.ok;
+    scheduleCollapsedOutlineExpansion(targetIndex);
+  }
+
+  function clearOutlineDropTarget() {
+    outlineDropTargetIndex = -1;
+    outlineDropPlacement = null;
+    outlineDropValid = false;
+    clearOutlineExpandTimer();
+  }
+
+  function scheduleCollapsedOutlineExpansion(targetIndex: number) {
+    if (
+      targetIndex === outlineExpandTargetIndex ||
+      !isOutlineItemExpandable(targetIndex) ||
+      !collapsedOutlineIds.has(outline[targetIndex]?.id)
+    ) {
+      if (!collapsedOutlineIds.has(outline[targetIndex]?.id)) clearOutlineExpandTimer();
+      return;
+    }
+    clearOutlineExpandTimer();
+    outlineExpandTargetIndex = targetIndex;
+    outlineExpandTimer = setTimeout(() => {
+      const item = outline[targetIndex];
+      if (outlineDragging && item && collapsedOutlineIds.has(item.id)) {
+        toggleOutlineItemExpanded(item);
+      }
+      clearOutlineExpandTimer();
+    }, 500);
+  }
+
+  function clearOutlineExpandTimer() {
+    if (outlineExpandTimer) clearTimeout(outlineExpandTimer);
+    outlineExpandTimer = null;
+    outlineExpandTargetIndex = -1;
+  }
+
+  function scheduleOutlineAutoScroll() {
+    if (outlineAutoScrollFrame) return;
+    outlineAutoScrollFrame = requestAnimationFrame(runOutlineAutoScroll);
+  }
+
+  function runOutlineAutoScroll() {
+    outlineAutoScrollFrame = 0;
+    if (!outlineDragging || !outlinePanel) return;
+    const rect = outlinePanel.getBoundingClientRect();
+    const edge = 36;
+    let delta = 0;
+    if (outlinePointerY < rect.top + edge) {
+      delta = -Math.ceil(((rect.top + edge - outlinePointerY) / edge) * 12);
+    } else if (outlinePointerY > rect.bottom - edge) {
+      delta = Math.ceil(((outlinePointerY - (rect.bottom - edge)) / edge) * 12);
+    }
+    if (delta !== 0) {
+      outlinePanel.scrollTop += delta;
+      updateOutlineDropTarget(outlinePointerX, outlinePointerY);
+      scheduleOutlineAutoScroll();
+    }
+  }
+
+  function handleOutlinePointerUp(event: PointerEvent) {
+    const pending = pendingOutlineDrag;
+    if (!pending || event.pointerId !== pending.pointerId) return;
+    if (outlineDragging && outlineDropTargetIndex >= 0 && outlineDropPlacement) {
+      moveOutlineSection({
+        sourceIndex: pending.sourceIndex,
+        targetIndex: outlineDropTargetIndex,
+        placement: outlineDropPlacement,
+      });
+    }
+    finishOutlineDrag();
+  }
+
+  function cancelOutlineDrag() {
+    if (!pendingOutlineDrag) return;
+    if (outlineDragging) suppressOutlineClick = true;
+    finishOutlineDrag();
+  }
+
+  function finishOutlineDrag() {
+    const pending = pendingOutlineDrag;
+    if (pending?.row.hasPointerCapture?.(pending.pointerId)) {
+      pending.row.releasePointerCapture(pending.pointerId);
+    }
+    pendingOutlineDrag = null;
+    outlineDragging = false;
+    outlineDragPreview?.remove();
+    outlineDragPreview = null;
+    clearOutlineDropTarget();
+    if (outlineAutoScrollFrame) cancelAnimationFrame(outlineAutoScrollFrame);
+    outlineAutoScrollFrame = 0;
+    setTimeout(() => {
+      suppressOutlineClick = false;
+    }, 0);
+  }
+
+  function handleOutlineWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && pendingOutlineDrag) {
+      event.preventDefault();
+      cancelOutlineDrag();
+    }
+  }
+
+  onDestroy(() => {
+    outlineDragPreview?.remove();
+    clearOutlineExpandTimer();
+    if (outlineAutoScrollFrame) cancelAnimationFrame(outlineAutoScrollFrame);
+  });
 
   function handleSemanticContextMenu(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
@@ -144,6 +370,14 @@
   }
 </script>
 
+<svelte:window
+  on:pointermove={handleOutlinePointerMove}
+  on:pointerup={handleOutlinePointerUp}
+  on:pointercancel={cancelOutlineDrag}
+  on:blur={cancelOutlineDrag}
+  on:keydown={handleOutlineWindowKeydown}
+/>
+
 {#key interfaceLocale}
   <div
     class="editor-grid"
@@ -217,7 +451,10 @@
 
     {#if outlineVisible}
       <aside
+        bind:this={outlinePanel}
         class="content-outline"
+        class:outline-dragging={outlineDragging}
+        class:outline-readonly={readonlyDocumentMode}
         aria-label={t.documentOutline()}
         transition:outlinePanelTransition
         on:contextmenu={handleOutlineContextMenu}
@@ -229,10 +466,25 @@
               {#if visibleOutlineIds.has(item.id)}
                 <div
                   class:active={activeOutlineId === item.id}
+                  class:outline-drag-source={outlineDragging && pendingOutlineDrag?.sourceIndex === index}
+                  class:outline-drop-before={
+                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'before'
+                  }
+                  class:outline-drop-inside={
+                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'inside'
+                  }
+                  class:outline-drop-after={
+                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'after'
+                  }
+                  class:outline-drop-invalid={
+                    outlineDragging && !outlineDropValid && outlineDropTargetIndex === index
+                  }
                   class="content-outline-row"
+                  data-outline-index={index}
                   role="group"
                   style={`padding-left: ${(item.level - 1) * 16}px`}
                   transition:outlineRowTransition
+                  on:pointerdown={(event) => handleOutlinePointerDown(event, index)}
                   on:contextmenu={(event) => handleOutlineItemContextMenu(event, item, index)}
                 >
                   {#if isOutlineItemExpandable(index)}
@@ -258,7 +510,7 @@
                     type="button"
                     class="outline-link"
                     title={item.title}
-                    on:click={() => jumpToOutlineItem(item)}
+                    on:click={(event) => handleOutlineLinkClick(event, item)}
                   >
                     <span>
                       {#if splitTitleNumber(item.title)[0]}
