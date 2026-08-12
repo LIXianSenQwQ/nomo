@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown } from '@lucide/svelte';
+  import { ChevronDown, ChevronsDownUp, ChevronsUpDown } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
   import type {
@@ -58,6 +58,7 @@
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
   export let expandAllOutline: () => void = () => undefined;
   export let collapseAllOutline: () => void = () => undefined;
+  export let collapseOutlineToDefaultLevel: () => void = () => undefined;
   export let toggleOutlineVisible: () => void = () => undefined;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let moveOutlineSection: (request: {
@@ -89,8 +90,23 @@
   let outlineAutoScrollFrame = 0;
   let outlinePointerX = 0;
   let outlinePointerY = 0;
+  let hasExpandableOutline = false;
+  let hasCollapsedExpandableOutline = false;
+
+  $: hasExpandableOutline = outline.some((_item, index) => isOutlineItemExpandable(index));
+  $: hasCollapsedExpandableOutline = outline.some(
+    (item, index) => isOutlineItemExpandable(index) && collapsedOutlineIds.has(item.id),
+  );
 
   const sourceImeFallback = createSourceTextareaImePunctuationFallback();
+
+  function toggleAllOutlineItems() {
+    if (hasCollapsedExpandableOutline) {
+      expandAllOutline();
+      return;
+    }
+    collapseOutlineToDefaultLevel();
+  }
 
   function handleOutlineToggle(event: MouseEvent, item: OutlineItem) {
     event.preventDefault();
@@ -459,7 +475,28 @@
         transition:outlinePanelTransition
         on:contextmenu={handleOutlineContextMenu}
       >
-        <strong>{t.documentOutline()}</strong>
+        <div class="content-outline-header">
+          <strong>{t.documentOutline()}</strong>
+          {#if hasExpandableOutline}
+            <button
+              type="button"
+              class="outline-bulk-toggle"
+              title={hasCollapsedExpandableOutline
+                ? t.expandAllOutline()
+                : t.collapseOutlineToDefaultLevel()}
+              aria-label={hasCollapsedExpandableOutline
+                ? t.expandAllOutline()
+                : t.collapseOutlineToDefaultLevel()}
+              on:click={toggleAllOutlineItems}
+            >
+              {#if hasCollapsedExpandableOutline}
+                <ChevronsUpDown size={15} />
+              {:else}
+                <ChevronsDownUp size={15} />
+              {/if}
+            </button>
+          {/if}
+        </div>
         {#if outline.length > 0}
           <div class="content-outline-list">
             {#each outline as item, index (item.id)}

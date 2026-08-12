@@ -196,6 +196,7 @@
   export let toggleOutlineItemExpanded: (item: OutlineItem) => void;
   export let expandAllOutline: () => void;
   export let collapseAllOutline: () => void;
+  export let collapseOutlineToDefaultLevel: () => void;
   export let jumpToOutlineItem: (item: OutlineItem) => void;
   export let moveOutlineSection: (request: {
     sourceIndex: number;
@@ -517,6 +518,7 @@
               {toggleOutlineItemExpanded}
               {expandAllOutline}
               {collapseAllOutline}
+              {collapseOutlineToDefaultLevel}
               {toggleOutlineVisible}
               {jumpToOutlineItem}
               {moveOutlineSection}

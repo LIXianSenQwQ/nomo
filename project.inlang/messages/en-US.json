@@ -108,6 +108,8 @@
   "markdownSource": "Markdown source",
   "semanticEditorArea": "Semantic editor",
   "documentOutline": "Document outline",
+  "expandAllOutline": "Expand all",
+  "collapseOutlineToDefaultLevel": "Collapse to default level",
   "expandHeading": "Expand heading",
   "collapseHeading": "Collapse heading",
   "expandNamedHeading": "Expand {title}",

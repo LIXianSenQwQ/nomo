@@ -108,6 +108,8 @@
   "markdownSource": "Markdown 源文本",
   "semanticEditorArea": "语义编辑区",
   "documentOutline": "文档大纲",
+  "expandAllOutline": "全部展开",
+  "collapseOutlineToDefaultLevel": "按默认层级收起",
   "expandHeading": "展开标题",
   "collapseHeading": "折叠标题",
   "expandNamedHeading": "展开 {title}",

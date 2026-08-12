@@ -5860,6 +5860,7 @@
   {toggleOutlineItemExpanded}
   {expandAllOutline}
   {collapseAllOutline}
+  collapseOutlineToDefaultLevel={applyOutlineDefaultExpansion}
   {jumpToOutlineItem}
   {moveOutlineSection}
   {openMarkdownFile}

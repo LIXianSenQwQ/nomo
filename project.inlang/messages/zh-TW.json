@@ -108,6 +108,8 @@
   "markdownSource": "Markdown 原始文字",
   "semanticEditorArea": "語義編輯區",
   "documentOutline": "文件大綱",
+  "expandAllOutline": "全部展開",
+  "collapseOutlineToDefaultLevel": "依預設層級摺疊",
   "expandHeading": "展開標題",
   "collapseHeading": "摺疊標題",
   "expandNamedHeading": "展開 {title}",

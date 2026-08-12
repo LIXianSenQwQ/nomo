@@ -109,6 +109,8 @@
   "markdownSource": "Markdown ソース",
   "semanticEditorArea": "セマンティックエディター",
   "documentOutline": "文書アウトライン",
+  "expandAllOutline": "すべて展開",
+  "collapseOutlineToDefaultLevel": "既定の階層まで折りたたむ",
   "expandHeading": "見出しを展開",
   "collapseHeading": "見出しを折りたたむ",
   "expandNamedHeading": "{title} を展開",
