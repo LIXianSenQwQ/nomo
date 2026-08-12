@@ -3,10 +3,12 @@ import {
   createParagraphNear,
   deleteSelection,
   joinBackward,
+  joinForward,
   liftEmptyBlock,
   newlineInCode,
   selectAll as selectAllCommand,
   selectNodeBackward,
+  selectNodeForward,
   toggleMark,
 } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
@@ -810,6 +812,7 @@ export class ProseMirrorEditorCore implements EditorCore {
             joinBackward,
             selectNodeBackward,
           ),
+          Delete: chainCommands(deleteSelection, joinForward, selectNodeForward),
           Space: convertMarkdownListShortcut,
           Tab: chainCommands(
             convertMarkdownListShortcut,
