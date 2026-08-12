@@ -23,9 +23,12 @@ describe('EditorWorkspace outline drag', () => {
     const rows = [...container.querySelectorAll<HTMLElement>('.content-outline-row')];
     const panel = container.querySelector<HTMLElement>('.content-outline')!;
     const firstLink = rows[0].querySelector<HTMLButtonElement>('.outline-link')!;
+    const pointerCapture = mockPointerCapture(rows[0]);
     expect(panel.classList.contains('outline-dragging')).toBe(false);
 
-    await dispatchPointer(rows[0], 'pointerdown', { clientX: 0, clientY: 5 });
+    await dispatchPointer(firstLink, 'pointerdown', { clientX: 0, clientY: 5 });
+    await dispatchPointer(window, 'pointermove', { clientX: 4, clientY: 5 });
+    expect(pointerCapture.set).not.toHaveBeenCalled();
     await dispatchPointer(window, 'pointerup', { clientX: 2, clientY: 5 });
     await fireEvent.click(firstLink);
     expect(jumpToOutlineItem).toHaveBeenCalledTimes(1);
@@ -45,8 +48,12 @@ describe('EditorWorkspace outline drag', () => {
     expect(document.body.querySelector('.outline-drag-preview')).not.toBeNull();
     expect(panel.classList.contains('outline-dragging')).toBe(true);
     expect(rows[1].classList.contains('outline-drop-inside')).toBe(true);
+    expect(pointerCapture.set).toHaveBeenCalledTimes(1);
+    expect(pointerCapture.set).toHaveBeenCalledWith(1);
     await dispatchPointer(window, 'pointerup', { clientX: 6, clientY: 45 });
     expect(panel.classList.contains('outline-dragging')).toBe(false);
+    expect(pointerCapture.release).toHaveBeenCalledTimes(1);
+    expect(pointerCapture.release).toHaveBeenCalledWith(1);
 
     expect(moveOutlineSection).toHaveBeenCalledWith({
       sourceIndex: 0,
@@ -66,6 +73,9 @@ describe('EditorWorkspace outline drag', () => {
       targetIndex: 1,
       placement: 'after',
     });
+    expect(pointerCapture.set).toHaveBeenCalledTimes(3);
+    expect(pointerCapture.release).toHaveBeenCalledTimes(3);
+    expect(jumpToOutlineItem).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[data-outline-drag-handle]')).toBeNull();
   });
 
@@ -87,6 +97,7 @@ describe('EditorWorkspace outline drag', () => {
     panel.getBoundingClientRect = () =>
       ({ top: 0, bottom: 300, left: 0, right: 220, width: 220, height: 300 } as DOMRect);
     const rows = [...container.querySelectorAll<HTMLElement>('.content-outline-row')];
+    const pointerCapture = mockPointerCapture(rows[0]);
     rows[1].getBoundingClientRect = () =>
       ({ top: 30, bottom: 60, left: 0, right: 200, width: 200, height: 30 } as DOMRect);
     Object.defineProperty(document, 'elementFromPoint', {
@@ -96,6 +107,7 @@ describe('EditorWorkspace outline drag', () => {
 
     await dispatchPointer(rows[0], 'pointerdown', { clientX: 0, clientY: 5 });
     await dispatchPointer(window, 'pointermove', { clientX: 6, clientY: 45 });
+    expect(pointerCapture.set).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(499);
     expect(toggleOutlineItemExpanded).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
@@ -103,9 +115,37 @@ describe('EditorWorkspace outline drag', () => {
 
     await fireEvent.keyDown(window, { key: 'Escape' });
     expect(document.body.querySelector('.outline-drag-preview')).toBeNull();
+    expect(pointerCapture.release).toHaveBeenCalledTimes(1);
     await dispatchPointer(window, 'pointerup', { clientX: 6, clientY: 45 });
     expect(moveOutlineSection).not.toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it('keeps the expand toggle outside the whole-row drag state machine', async () => {
+    const markdown = '# Parent\n## Child\n';
+    const outline = extractOutline(markdown);
+    const toggleOutlineItemExpanded = vi.fn();
+    const moveOutlineSection = vi.fn(() => true);
+    const { container } = render(EditorWorkspace, {
+      props: createProps(markdown, {
+        isOutlineItemExpandable: (index) => index === 0,
+        toggleOutlineItemExpanded,
+        moveOutlineSection,
+      }),
+    });
+    const firstRow = container.querySelector<HTMLElement>('.content-outline-row')!;
+    const toggle = firstRow.querySelector<HTMLButtonElement>('.outline-toggle')!;
+    const pointerCapture = mockPointerCapture(firstRow);
+
+    await dispatchPointer(toggle, 'pointerdown', { clientX: 0, clientY: 5 });
+    await dispatchPointer(window, 'pointermove', { clientX: 8, clientY: 5 });
+    await dispatchPointer(window, 'pointerup', { clientX: 8, clientY: 5 });
+    await fireEvent.click(toggle);
+
+    expect(toggleOutlineItemExpanded).toHaveBeenCalledWith(outline[0]);
+    expect(pointerCapture.set).not.toHaveBeenCalled();
+    expect(moveOutlineSection).not.toHaveBeenCalled();
+    expect(document.body.querySelector('.outline-drag-preview')).toBeNull();
   });
 });
 
@@ -180,4 +220,21 @@ async function dragTo(source: HTMLElement, target: HTMLElement, clientY: number)
   await dispatchPointer(source, 'pointerdown', { clientX: 0, clientY: 5 });
   await dispatchPointer(window, 'pointermove', { clientX: 6, clientY });
   await dispatchPointer(window, 'pointerup', { clientX: 6, clientY });
+}
+
+function mockPointerCapture(row: HTMLElement) {
+  let captured = false;
+  const set = vi.fn(() => {
+    captured = true;
+  });
+  const release = vi.fn(() => {
+    captured = false;
+  });
+  const has = vi.fn(() => captured);
+  Object.defineProperties(row, {
+    setPointerCapture: { configurable: true, value: set },
+    releasePointerCapture: { configurable: true, value: release },
+    hasPointerCapture: { configurable: true, value: has },
+  });
+  return { set, release, has };
 }

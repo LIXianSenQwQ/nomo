@@ -143,7 +143,6 @@
     };
     outlinePointerX = event.clientX;
     outlinePointerY = event.clientY;
-    row.setPointerCapture?.(event.pointerId);
   }
 
   function handleOutlinePointerMove(event: PointerEvent) {
@@ -165,6 +164,7 @@
   function beginOutlineDrag(pending: PendingOutlineDrag, clientX: number, clientY: number) {
     outlineDragging = true;
     suppressOutlineClick = true;
+    pending.row.setPointerCapture?.(pending.pointerId);
     const preview = pending.row.cloneNode(true) as HTMLElement;
     const rect = pending.row.getBoundingClientRect();
     preview.classList.add('outline-drag-preview');
