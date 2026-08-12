@@ -44,7 +44,8 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../sample.md": "samples/sample.md"
+      "../sample.md": "samples/sample.md",
+      "../assets/128x128.png": "samples/assets/128x128.png"
     },
     "fileAssociations": [
       {

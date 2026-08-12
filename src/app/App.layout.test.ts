@@ -1277,6 +1277,7 @@ describe('App outline layout', () => {
 
     expect(tauriConfig.bundle.resources).toEqual({
       '../sample.md': 'samples/sample.md',
+      '../assets/128x128.png': 'samples/assets/128x128.png',
     });
     expect(tauriLibSource).toContain('crate::file_system::install_sample_document');
     expect(tauriStorageSource).toContain(
