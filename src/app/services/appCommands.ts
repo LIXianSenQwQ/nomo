@@ -198,6 +198,12 @@ export function handleGlobalShortcut(
     return;
   }
 
+  if (event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'w') {
+    event.preventDefault();
+    handlers.closeCurrentFile();
+    return;
+  }
+
   const customCommand = findShortcutCommand(event, shortcuts);
   if (customCommand) {
     event.preventDefault();
