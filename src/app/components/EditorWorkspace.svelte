@@ -2,11 +2,7 @@
   import { ChevronDown, ChevronsDownUp, ChevronsUpDown } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
-  import type {
-    ContextMenuItem,
-    ContextMenuRequest,
-    EditorMode,
-  } from '../../lib/editor-core';
+  import type { ContextMenuItem, ContextMenuRequest, EditorMode } from '../../lib/editor-core';
   import { createSourceTextareaImePunctuationFallback } from '../../lib/input/windowsImePunctuationFallback';
   import type { FrontMatterBlock } from '../../lib/markdown/frontMatter';
   import type { OutlineItem } from '../../lib/outline/outlineService';
@@ -99,6 +95,145 @@
   );
 
   const sourceImeFallback = createSourceTextareaImePunctuationFallback();
+
+  // 末行最多上移四分之一视口；仅当真实内容进入视口底部四分之一区域时启用。
+  const SCROLL_PAST_END_VIEWPORT_RATIO = 0.25;
+  const LAYOUT_ROUNDING_TOLERANCE_PX = 1;
+
+  function measureScrollPastEndSpace(node: HTMLElement, _contentVersion: string) {
+    let animationFrame = 0;
+    let observedLayout: HTMLElement | null = null;
+    let observedContentEnd: Element | null = null;
+
+    const resizeObserver =
+      typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleUpdate) : null;
+
+    const getEditorSurface = () => {
+      if (node.classList.contains('source-pane')) {
+        return node.querySelector<HTMLTextAreaElement>('.source-editor');
+      }
+      return node.querySelector<HTMLElement>('.ProseMirror');
+    };
+
+    const getContentEnd = (editorSurface: HTMLElement | null) => {
+      if (editorSurface instanceof HTMLTextAreaElement) {
+        return editorSurface;
+      }
+      return editorSurface?.lastElementChild ?? editorSurface;
+    };
+
+    const syncObservedTargets = (layout: HTMLElement | null, contentEnd: Element | null) => {
+      if (observedLayout !== layout) {
+        if (observedLayout) resizeObserver?.unobserve(observedLayout);
+        if (layout) resizeObserver?.observe(layout);
+        observedLayout = layout;
+      }
+      if (observedContentEnd !== contentEnd) {
+        if (observedContentEnd) resizeObserver?.unobserve(observedContentEnd);
+        if (contentEnd) resizeObserver?.observe(contentEnd);
+        observedContentEnd = contentEnd;
+      }
+    };
+
+    const getElementBottomInPane = (element: Element) => {
+      const paneRect = node.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      return elementRect.bottom - paneRect.top + node.scrollTop;
+    };
+
+    const getEditorZoom = () => {
+      const value = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue('--md-editor-zoom'),
+      );
+      return Number.isFinite(value) && value > 0 ? value : 1;
+    };
+
+    const syncContentMinHeight = (editorSurface: HTMLElement, bottomPadding: number) => {
+      const paneRect = node.getBoundingClientRect();
+      const surfaceRect = editorSurface.getBoundingClientRect();
+      const surfaceTop = surfaceRect.top - paneRect.top + node.scrollTop;
+      const availableVisualHeight = Math.max(
+        0,
+        node.clientHeight - surfaceTop - bottomPadding - LAYOUT_ROUNDING_TOLERANCE_PX,
+      );
+      const minHeight = availableVisualHeight / getEditorZoom();
+      node.style.setProperty('--md-editor-content-min-height', `${minHeight}px`);
+    };
+
+    const getSourceContentBottom = (textarea: HTMLTextAreaElement) => {
+      const paneRect = node.getBoundingClientRect();
+      const textareaRect = textarea.getBoundingClientRect();
+      const originalHeight = textarea.style.height;
+      const originalMinHeight = textarea.style.minHeight;
+
+      textarea.style.height = '0px';
+      textarea.style.minHeight = '0px';
+      const contentHeight = textarea.scrollHeight;
+      textarea.style.height = originalHeight;
+      textarea.style.minHeight = originalMinHeight;
+
+      return textareaRect.top - paneRect.top + node.scrollTop + contentHeight * getEditorZoom();
+    };
+
+    const update = () => {
+      animationFrame = 0;
+      const layout = node.querySelector<HTMLElement>(':scope > .document-layout');
+      const editorSurface = getEditorSurface();
+      const contentEnd = getContentEnd(editorSurface);
+      syncObservedTargets(layout, contentEnd);
+      if (!layout || !editorSurface || !contentEnd || node.clientHeight <= 0) {
+        node.style.setProperty('--md-editor-content-min-height', '0px');
+        node.style.setProperty('--md-editor-scroll-past-end-space', '0px');
+        return;
+      }
+
+      const bottomPadding = layout
+        ? Number.parseFloat(getComputedStyle(layout).paddingBottom) || 0
+        : 0;
+      syncContentMinHeight(editorSurface, bottomPadding);
+      const contentBottom =
+        contentEnd instanceof HTMLTextAreaElement
+          ? getSourceContentBottom(contentEnd)
+          : getElementBottomInPane(contentEnd);
+      const activationLine = node.clientHeight * (1 - SCROLL_PAST_END_VIEWPORT_RATIO);
+      const totalTrailingSpace =
+        contentBottom > activationLine
+          ? Math.max(bottomPadding, node.clientHeight * SCROLL_PAST_END_VIEWPORT_RATIO)
+          : bottomPadding;
+      const spacerHeight = Math.max(0, Math.round(totalTrailingSpace - bottomPadding));
+      node.style.setProperty('--md-editor-scroll-past-end-space', `${spacerHeight}px`);
+    };
+
+    function scheduleUpdate() {
+      if (animationFrame) return;
+      if (typeof requestAnimationFrame !== 'function') {
+        update();
+        return;
+      }
+      animationFrame = requestAnimationFrame(update);
+    }
+
+    const mutationObserver =
+      typeof MutationObserver === 'function' ? new MutationObserver(scheduleUpdate) : null;
+    resizeObserver?.observe(node);
+    mutationObserver?.observe(node, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', scheduleUpdate);
+    scheduleUpdate();
+
+    return {
+      update() {
+        scheduleUpdate();
+      },
+      destroy() {
+        resizeObserver?.disconnect();
+        mutationObserver?.disconnect();
+        window.removeEventListener('resize', scheduleUpdate);
+        if (animationFrame) cancelAnimationFrame(animationFrame);
+        node.style.removeProperty('--md-editor-content-min-height');
+        node.style.removeProperty('--md-editor-scroll-past-end-space');
+      },
+    };
+  }
 
   function toggleAllOutlineItems() {
     if (hasCollapsedExpandableOutline) {
@@ -328,7 +463,8 @@
   function buildOutlineViewItems(): ContextMenuItem[] {
     const expandableItems = outline.filter((_item, index) => isOutlineItemExpandable(index));
     const allExpandableItemsCollapsed =
-      expandableItems.length > 0 && expandableItems.every((item) => collapsedOutlineIds.has(item.id));
+      expandableItems.length > 0 &&
+      expandableItems.every((item) => collapsedOutlineIds.has(item.id));
     return [
       {
         label: t.expandAll(),
@@ -404,6 +540,7 @@
       bind:this={sourcePane}
       class="editor-pane source-pane"
       aria-label={t.markdownSource()}
+      use:measureScrollPastEndSpace={markdown}
       on:scroll={() => {
         updateActiveOutlineFromSourceScroll();
         onSourceScroll?.();
@@ -430,6 +567,7 @@
           on:drop={handleEditorDrop}
           spellcheck="false"
         ></textarea>
+        <div class="editor-scroll-past-end" data-scroll-past-end aria-hidden="true"></div>
       </div>
     </section>
 
@@ -437,6 +575,7 @@
       bind:this={semanticPane}
       class="semantic-pane"
       aria-label={t.semanticEditorArea()}
+      use:measureScrollPastEndSpace={markdown}
       on:scroll={() => {
         updateActiveOutlineFromSemanticScroll();
         onSemanticScroll?.();
@@ -462,6 +601,7 @@
           />
         {/if}
         <div bind:this={editorHost} class="prosemirror-host"></div>
+        <div class="editor-scroll-past-end" data-scroll-past-end aria-hidden="true"></div>
       </div>
     </section>
 
@@ -503,19 +643,20 @@
               {#if visibleOutlineIds.has(item.id)}
                 <div
                   class:active={activeOutlineId === item.id}
-                  class:outline-drag-source={outlineDragging && pendingOutlineDrag?.sourceIndex === index}
-                  class:outline-drop-before={
-                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'before'
-                  }
-                  class:outline-drop-inside={
-                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'inside'
-                  }
-                  class:outline-drop-after={
-                    outlineDropValid && outlineDropTargetIndex === index && outlineDropPlacement === 'after'
-                  }
-                  class:outline-drop-invalid={
-                    outlineDragging && !outlineDropValid && outlineDropTargetIndex === index
-                  }
+                  class:outline-drag-source={outlineDragging &&
+                    pendingOutlineDrag?.sourceIndex === index}
+                  class:outline-drop-before={outlineDropValid &&
+                    outlineDropTargetIndex === index &&
+                    outlineDropPlacement === 'before'}
+                  class:outline-drop-inside={outlineDropValid &&
+                    outlineDropTargetIndex === index &&
+                    outlineDropPlacement === 'inside'}
+                  class:outline-drop-after={outlineDropValid &&
+                    outlineDropTargetIndex === index &&
+                    outlineDropPlacement === 'after'}
+                  class:outline-drop-invalid={outlineDragging &&
+                    !outlineDropValid &&
+                    outlineDropTargetIndex === index}
                   class="content-outline-row"
                   data-outline-index={index}
                   role="group"

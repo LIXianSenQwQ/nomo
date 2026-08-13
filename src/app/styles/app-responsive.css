@@ -6,6 +6,7 @@
 
   .editor-grid:has(> .content-outline) .document-layout > .prosemirror-host,
   .editor-grid:has(> .content-outline) .document-layout > .source-editor,
+  .editor-grid:has(> .content-outline) .document-layout > .editor-scroll-past-end,
   .editor-grid:has(> .content-outline) .document-layout > .front-matter-card {
     grid-column: 1;
   }

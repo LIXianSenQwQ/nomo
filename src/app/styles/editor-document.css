@@ -54,8 +54,17 @@
 
 .editor-grid:has(> .content-outline) .document-layout > .prosemirror-host,
 .editor-grid:has(> .content-outline) .document-layout > .source-editor,
+.editor-grid:has(> .content-outline) .document-layout > .editor-scroll-past-end,
 .editor-grid:has(> .content-outline) .document-layout > .front-matter-card {
   grid-column: 2;
+}
+
+.editor-scroll-past-end {
+  grid-column: 1;
+  width: 1px;
+  height: var(--md-editor-scroll-past-end-space, 0px);
+  pointer-events: none;
+  user-select: none;
 }
 
 .prosemirror-host {
@@ -1491,7 +1500,7 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  min-height: calc(100vh - 235px);
+  min-height: var(--md-editor-content-min-height, 0px);
   outline: none;
   color: var(--md-editor-fg);
   font-family: var(--md-editor-font-document);
