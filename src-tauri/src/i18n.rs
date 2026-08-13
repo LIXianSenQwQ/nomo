@@ -174,9 +174,14 @@ fn zh_cn(key: &str) -> &'static str {
             "已注册 Nomo，并打开 Windows 默认应用设置；请选择 Nomo 后这里会显示已绑定。"
         }
         "md_assoc_unregistered_message" => "已取消 Nomo 的 .md 默认打开方式绑定。",
+        "md_assoc_managed_by_package" => {
+            "文件关联由 Microsoft Store 包管理，请在 Windows 默认应用中选择 Nomo。"
+        }
         "context_menu_registered" => "已注册 .md 文件和文件夹右键菜单。",
         "context_menu_not_registered" => "尚未注册 .md 文件和文件夹右键菜单。",
         "context_menu_unregistered_message" => "已取消 .md 文件和文件夹右键菜单注册。",
+        "context_menu_package_enabled" => "Microsoft Store 右键菜单已启用。",
+        "context_menu_package_disabled" => "Microsoft Store 右键菜单已隐藏。",
         "windows_default_only" => "当前默认打开方式绑定仅支持 Windows。",
         "windows_context_only" => "当前右键菜单注册仅支持 Windows。",
         _ => "",
@@ -273,9 +278,14 @@ fn zh_tw(key: &str) -> &'static str {
             "已註冊 Nomo，並開啟 Windows 預設應用程式設定；請選擇 Nomo 後這裡會顯示已綁定。"
         }
         "md_assoc_unregistered_message" => "已取消 Nomo 的 .md 預設開啟方式綁定。",
+        "md_assoc_managed_by_package" => {
+            "檔案關聯由 Microsoft Store 套件管理，請在 Windows 預設應用程式中選擇 Nomo。"
+        }
         "context_menu_registered" => "已註冊 .md 檔案和資料夾右鍵選單。",
         "context_menu_not_registered" => "尚未註冊 .md 檔案和資料夾右鍵選單。",
         "context_menu_unregistered_message" => "已取消 .md 檔案和資料夾右鍵選單註冊。",
+        "context_menu_package_enabled" => "Microsoft Store 右鍵選單已啟用。",
+        "context_menu_package_disabled" => "Microsoft Store 右鍵選單已隱藏。",
         "windows_default_only" => "目前預設開啟方式綁定僅支援 Windows。",
         "windows_context_only" => "目前右鍵選單註冊僅支援 Windows。",
         _ => zh_cn(key),
@@ -368,9 +378,12 @@ fn en_us(key: &str) -> &'static str {
         "md_assoc_not_registered" => "Nomo is not registered as a .md open-with app yet.",
         "md_assoc_registered_message" => "Nomo has been registered and Windows default app settings were opened. Choose Nomo there, then this status will show it is bound.",
         "md_assoc_unregistered_message" => "Nomo .md default app binding has been removed.",
+        "md_assoc_managed_by_package" => "File associations are managed by the Microsoft Store package. Choose Nomo in Windows default apps.",
         "context_menu_registered" => "Registered .md file and folder context menus.",
         "context_menu_not_registered" => ".md file and folder context menus are not registered yet.",
         "context_menu_unregistered_message" => ".md file and folder context menu registration has been removed.",
+        "context_menu_package_enabled" => "The Microsoft Store context menu is enabled.",
+        "context_menu_package_disabled" => "The Microsoft Store context menu is hidden.",
         "windows_default_only" => "Default app binding is currently supported only on Windows.",
         "windows_context_only" => "Context menu registration is currently supported only on Windows.",
         _ => "",
@@ -463,9 +476,12 @@ fn ja_jp(key: &str) -> &'static str {
         "md_assoc_not_registered" => "Nomo の .md 開くアプリはまだ登録されていません。",
         "md_assoc_registered_message" => "Nomo を登録し、Windows の既定のアプリ設定を開きました。そこで Nomo を選択すると、ここに関連付け済みと表示されます。",
         "md_assoc_unregistered_message" => "Nomo の .md 既定アプリの関連付けを解除しました。",
+        "md_assoc_managed_by_package" => "ファイルの関連付けは Microsoft Store パッケージによって管理されます。Windows の既定のアプリで Nomo を選択してください。",
         "context_menu_registered" => ".md ファイルとフォルダーのコンテキストメニューを登録しました。",
         "context_menu_not_registered" => ".md ファイルとフォルダーのコンテキストメニューはまだ登録されていません。",
         "context_menu_unregistered_message" => ".md ファイルとフォルダーのコンテキストメニュー登録を解除しました。",
+        "context_menu_package_enabled" => "Microsoft Store のコンテキストメニューを有効にしました。",
+        "context_menu_package_disabled" => "Microsoft Store のコンテキストメニューを非表示にしました。",
         "windows_default_only" => "既定アプリの関連付けは現在 Windows のみ対応しています。",
         "windows_context_only" => "コンテキストメニュー登録は現在 Windows のみ対応しています。",
         _ => "",

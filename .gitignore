@@ -8,6 +8,10 @@ build/
 .vite/
 .tauri/
 src-tauri/target/
+src-tauri/windows-shell-extension/bin/
+src-tauri/windows-shell-extension/obj/
+src-tauri/windows-shell-extension/obj-tests/
+.artifacts/
 
 # Local environment
 .env

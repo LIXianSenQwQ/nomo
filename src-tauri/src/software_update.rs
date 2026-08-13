@@ -19,12 +19,18 @@ const CHECKSUMS_ASSET_NAME: &str = "checksums.md5";
 const DOWNLOAD_PROGRESS_EVENT: &str = "nomo://software-update-download-progress";
 const UPDATE_STATE_EVENT: &str = "nomo://software-update-state";
 const CACHED_UPDATE_INFO_FILE: &str = "update-info.json";
+const CURRENT_RELEASE_NOTES: &str = include_str!(concat!(
+    "../../.github/release-notes/v",
+    env!("CARGO_PKG_VERSION"),
+    ".md"
+));
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum SoftwareUpdateInstallationKind {
     Installer,
     Portable,
+    Store,
     Unsupported,
 }
 
@@ -45,6 +51,7 @@ pub(crate) enum SoftwareUpdateStatus {
     Downloading,
     Downloaded,
     Installing,
+    Managed,
     Unsupported,
     Error,
 }
@@ -73,6 +80,7 @@ pub(crate) struct SoftwareUpdateCheckPayload {
     pub(crate) date: Option<String>,
     pub(crate) body: Option<String>,
     pub(crate) candidate: Option<SoftwareUpdateCandidate>,
+    pub(crate) store_product_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -108,6 +116,7 @@ pub(crate) struct SoftwareUpdateSnapshot {
     progress: Option<SoftwareUpdateDownloadProgress>,
     error: Option<String>,
     notice_window_label: Option<String>,
+    store_product_id: Option<String>,
 }
 
 impl Default for SoftwareUpdateSnapshot {
@@ -124,6 +133,7 @@ impl Default for SoftwareUpdateSnapshot {
             progress: None,
             error: None,
             notice_window_label: None,
+            store_product_id: None,
         }
     }
 }
@@ -212,6 +222,9 @@ struct DownloadAttemptOutcome {
 pub(crate) fn get_cached_software_update<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<Option<DownloadedSoftwareUpdate>, String> {
+    if current_installation_kind()? == SoftwareUpdateInstallationKind::Store {
+        return Ok(None);
+    }
     let update_dir = software_update_cache_dir(&app)?;
     let info = read_cached_update_info(&update_dir)?;
 
@@ -251,7 +264,21 @@ pub(crate) fn get_software_update_state<R: Runtime>(
 
     update_shared_state(&app, |state| {
         state.installation_kind = installation_kind;
-        if let Some(cached) = cached_update {
+        state.store_product_id = if installation_kind == SoftwareUpdateInstallationKind::Store {
+            crate::windows_package::store_product_id()
+        } else {
+            None
+        };
+        if installation_kind == SoftwareUpdateInstallationKind::Store {
+            state.status = SoftwareUpdateStatus::Managed;
+            state.current_version = current_version.to_string();
+            state.version = Some(current_version.to_string());
+            state.body = Some(CURRENT_RELEASE_NOTES.to_string());
+            state.candidate = None;
+            state.downloaded_update = None;
+            state.progress = None;
+            state.error = None;
+        } else if let Some(cached) = cached_update {
             state.version = Some(cached.version.clone());
             state.downloaded_update = Some(cached);
             state.status = SoftwareUpdateStatus::Downloaded;
@@ -317,8 +344,12 @@ pub(crate) async fn check_software_update<R: Runtime>(
                 state.date = payload.date.clone();
                 state.body = payload.body.clone();
                 state.candidate = payload.candidate.clone();
+                state.store_product_id = payload.store_product_id.clone();
                 state.downloaded_update = cached.clone();
-                state.status = if !payload.supported {
+                state.status = if payload.installation_kind == SoftwareUpdateInstallationKind::Store
+                {
+                    SoftwareUpdateStatus::Managed
+                } else if !payload.supported {
                     SoftwareUpdateStatus::Unsupported
                 } else if cached.is_some() {
                     SoftwareUpdateStatus::Downloaded
@@ -360,6 +391,22 @@ async fn perform_software_update_check(
 
     let timer = std::time::Instant::now();
 
+    // Microsoft Store 包由 Store 管理更新，不访问 GitHub，也不生成下载候选。
+    if installation_kind == SoftwareUpdateInstallationKind::Store {
+        crate::app_logger::info("Update", "当前为 Microsoft Store 包，跳过 GitHub 更新检查");
+        return Ok(SoftwareUpdateCheckPayload {
+            supported: true,
+            available: false,
+            current_version: current_version.clone(),
+            installation_kind,
+            version: Some(current_version),
+            date: None,
+            body: Some(CURRENT_RELEASE_NOTES.to_string()),
+            candidate: None,
+            store_product_id: crate::windows_package::store_product_id(),
+        });
+    }
+
     // 步骤1：开发环境和非 Windows 平台不发起远程更新检查
     if installation_kind == SoftwareUpdateInstallationKind::Unsupported {
         crate::app_logger::info("Update", "当前环境不支持软件更新，跳过远程检查");
@@ -372,6 +419,7 @@ async fn perform_software_update_check(
             date: None,
             body: None,
             candidate: None,
+            store_product_id: None,
         });
     }
 
@@ -397,6 +445,7 @@ async fn perform_software_update_check(
             date,
             body: release.body,
             candidate: None,
+            store_product_id: None,
         });
     }
 
@@ -414,6 +463,7 @@ async fn perform_software_update_check(
             SoftwareUpdateAssetKind::WindowsPortable,
             select_windows_portable_asset(&release.assets, &release_version),
         ),
+        SoftwareUpdateInstallationKind::Store => unreachable!(),
         SoftwareUpdateInstallationKind::Unsupported => unreachable!(),
     };
     let update_asset = update_asset.ok_or_else(|| {
@@ -481,6 +531,7 @@ async fn perform_software_update_check(
         date,
         body: release.body,
         candidate: Some(candidate),
+        store_product_id: None,
     })
 }
 
@@ -716,12 +767,18 @@ fn is_current_windows_installer_installation() -> Result<bool, String> {
 
 #[cfg(all(target_os = "windows", debug_assertions))]
 fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String> {
-    Ok(SoftwareUpdateInstallationKind::Unsupported)
+    if crate::windows_package::is_packaged() {
+        Ok(SoftwareUpdateInstallationKind::Store)
+    } else {
+        Ok(SoftwareUpdateInstallationKind::Unsupported)
+    }
 }
 
 #[cfg(all(target_os = "windows", not(debug_assertions)))]
 fn current_installation_kind() -> Result<SoftwareUpdateInstallationKind, String> {
-    if is_current_windows_installer_installation()? {
+    if crate::windows_package::is_packaged() {
+        Ok(SoftwareUpdateInstallationKind::Store)
+    } else if is_current_windows_installer_installation()? {
         Ok(SoftwareUpdateInstallationKind::Installer)
     } else {
         Ok(SoftwareUpdateInstallationKind::Portable)
@@ -785,6 +842,24 @@ fn query_install_location(root: &str) -> Result<Option<String>, String> {
         "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nomo",
         "InstallLocation",
     )
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn legacy_windows_installer_exists() -> Result<bool, String> {
+    for root in ["HKCU", "HKLM"] {
+        if let Some(location) = query_install_location(root)? {
+            let install_dir = PathBuf::from(location.trim().trim_matches('"'));
+            if install_dir.join("uninstall.exe").is_file() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn legacy_windows_installer_exists() -> Result<bool, String> {
+    Ok(false)
 }
 
 #[cfg(target_os = "windows")]
@@ -1413,7 +1488,8 @@ fn launch_windows_installer_and_exit<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::{
-        find_md5_for_file, is_release_newer, select_windows_installer_asset, GitHubReleaseAsset,
+        find_md5_for_file, is_release_newer, perform_software_update_check,
+        select_windows_installer_asset, GitHubReleaseAsset, SoftwareUpdateInstallationKind,
     };
 
     fn asset(name: &str) -> GitHubReleaseAsset {
@@ -1480,6 +1556,23 @@ eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  Nomo_0.1.4_x64.zip";
         assert!(is_release_newer("0.1.3", "0.1.4").unwrap());
         assert!(!is_release_newer("0.1.4", "0.1.4").unwrap());
         assert!(!is_release_newer("0.1.5", "0.1.4").unwrap());
+    }
+
+    #[test]
+    fn store_update_check_never_creates_a_github_candidate() {
+        let payload = tauri::async_runtime::block_on(perform_software_update_check(
+            SoftwareUpdateInstallationKind::Store,
+        ))
+        .unwrap();
+
+        assert!(payload.supported);
+        assert!(!payload.available);
+        assert_eq!(
+            payload.installation_kind,
+            SoftwareUpdateInstallationKind::Store
+        );
+        assert!(payload.candidate.is_none());
+        assert!(payload.body.is_some());
     }
 
     #[cfg(target_os = "windows")]

@@ -307,6 +307,8 @@ pub(crate) struct MarkdownAssociationStatus {
     pub(crate) registered: bool,
     pub(crate) is_default: bool,
     pub(crate) default_prog_id: Option<String>,
+    #[serde(rename = "managedByPackage")]
+    pub(crate) managed_by_package: bool,
     pub(crate) message: String,
 }
 
@@ -320,5 +322,14 @@ pub(crate) struct WindowLabelPayload {
 pub(crate) struct WindowsContextMenuStatus {
     pub(crate) supported: bool,
     pub(crate) registered: bool,
+    pub(crate) enabled: bool,
+    #[serde(rename = "managedByPackage")]
+    pub(crate) managed_by_package: bool,
     pub(crate) message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LegacyInstallerNotice {
+    pub(crate) should_prompt: bool,
 }

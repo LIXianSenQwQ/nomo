@@ -455,6 +455,14 @@
   }
 
   let startupDraftConflict: StartupDraftConflict | null = null;
+  let legacyInstallerPromptOpen = false;
+
+  async function openWindowsInstalledAppsForLegacyNomo() {
+    legacyInstallerPromptOpen = false;
+    if (!desktopEnabled) return;
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_windows_installed_apps').catch(() => undefined);
+  }
 
   // 订阅自定义确认对话框（Svelte 5 Runes 模式 $store 语法不工作，需手动订阅）
   let confirmDialogState: ConfirmDialogState = {
@@ -4736,6 +4744,11 @@
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('refresh_window_menu').catch(() => undefined);
         await setupCriticalDesktopEvents();
+        void invoke<{ shouldPrompt: boolean }>('get_legacy_installer_notice')
+          .then((notice) => {
+            legacyInstallerPromptOpen = notice.shouldPrompt;
+          })
+          .catch(() => undefined);
 
         settings = await listAppSettings().catch(() => []);
         const dismissedUpdateSetting = settings.find(
@@ -5944,6 +5957,16 @@
     />
   {/key}
 {/if}
+
+<ConfirmDialog
+  open={legacyInstallerPromptOpen}
+  title={t.legacyInstallerTitle()}
+  message={t.legacyInstallerMessage()}
+  confirmLabel={t.legacyInstallerOpenApps()}
+  danger={false}
+  onConfirm={() => void openWindowsInstalledAppsForLegacyNomo()}
+  onCancel={() => (legacyInstallerPromptOpen = false)}
+/>
 
 <ConfirmDialog
   open={deleteConfirmOpen}

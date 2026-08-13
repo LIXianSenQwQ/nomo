@@ -12,7 +12,9 @@ import {
   type SoftwareUpdateProgressEvent,
 } from './tauriUpdater';
 
-function createMockCandidate(options: Partial<SoftwareUpdateCandidate> = {}): SoftwareUpdateCandidate {
+function createMockCandidate(
+  options: Partial<SoftwareUpdateCandidate> = {},
+): SoftwareUpdateCandidate {
   return {
     version: '0.1.4',
     date: '2026-06-09T00:00:00Z',
@@ -125,6 +127,29 @@ describe('tauriUpdater', () => {
     expect(result.currentVersion).toBe('0.1.3');
   });
 
+  it('preserves Microsoft Store managed update metadata without an installer candidate', async () => {
+    const result = await checkSoftwareUpdate({
+      isDesktopRuntime: () => true,
+      isWindowsRuntime: () => true,
+      getCurrentVersion: async () => '0.4.8',
+      check: async () => ({
+        supported: true,
+        available: false,
+        currentVersion: '0.4.8',
+        installationKind: 'store',
+        version: '0.4.8',
+        body: 'Store release notes',
+        storeProductId: '9NOMO1234567',
+      }),
+    });
+
+    expect(result).toMatchObject({
+      installationKind: 'store',
+      storeProductId: '9NOMO1234567',
+      available: false,
+    });
+  });
+
   it('returns available update metadata when a new version exists', async () => {
     const candidate = createMockCandidate();
     const result = await checkSoftwareUpdate({
@@ -167,7 +192,12 @@ describe('tauriUpdater', () => {
         download: vi.fn(async (_candidate, requestId) => {
           progressHandler?.({ requestId, downloadedBytes: 0, totalBytes: 100, percent: 0 });
           progressHandler?.({ requestId, downloadedBytes: 25, totalBytes: 100, percent: 25 });
-          progressHandler?.({ requestId: 'other', downloadedBytes: 50, totalBytes: 100, percent: 50 });
+          progressHandler?.({
+            requestId: 'other',
+            downloadedBytes: 50,
+            totalBytes: 100,
+            percent: 50,
+          });
           progressHandler?.({ requestId, downloadedBytes: 100, totalBytes: 100, percent: 100 });
           return downloadedUpdate;
         }),

@@ -100,12 +100,15 @@
     registered: boolean;
     is_default: boolean;
     default_prog_id: string | null;
+    managedByPackage: boolean;
     message: string;
   };
 
   type WindowsContextMenuStatus = {
     supported: boolean;
     registered: boolean;
+    enabled: boolean;
+    managedByPackage: boolean;
     message: string;
   };
 
@@ -509,11 +512,7 @@
     }
 
     const nextSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
-    if (
-      !systemThemeSyncActive ||
-      !loaded ||
-      nextSystemScheme === effectiveSystemScheme
-    ) {
+    if (!systemThemeSyncActive || !loaded || nextSystemScheme === effectiveSystemScheme) {
       return;
     }
     if (draftSettings.themeMode !== 'system') {
@@ -682,6 +681,8 @@
         return t.softwareUpdateDownloaded();
       case 'installing':
         return t.softwareUpdateInstalling();
+      case 'managed':
+        return t.softwareUpdateStoreManaged();
       case 'unsupported':
         return t.softwareUpdateUnsupported();
       case 'error':
@@ -701,11 +702,13 @@
         ? t.softwareUpdateDownloadingShort()
         : updateStatus === 'available'
           ? t.softwareUpdateViewDetails()
-          : updateStatus === 'downloaded'
-            ? t.softwareUpdateRestartAndInstall()
-            : updateStatus === 'installing'
-              ? t.softwareUpdateInstallingShort()
-              : t.softwareUpdateCheckNow();
+          : updateStatus === 'managed'
+            ? t.softwareUpdateViewDetails()
+            : updateStatus === 'downloaded'
+              ? t.softwareUpdateRestartAndInstall()
+              : updateStatus === 'installing'
+                ? t.softwareUpdateInstallingShort()
+                : t.softwareUpdateCheckNow();
 
   $: softwareUpdateDescription = updateState.error
     ? updateState.error
@@ -716,20 +719,22 @@
       ? t.checking()
       : updateStatus === 'upToDate'
         ? t.softwareUpdateLatest()
-        : updateStatus === 'downloaded'
-          ? t.softwareUpdateReady()
-          : updateStatus === 'error'
-            ? t.checkFailed()
-            : updateStatus === 'unsupported'
-              ? t.unsupported()
-              : updateState.version
-                ? `v${updateState.version}`
-                : t.softwareUpdateManual();
+        : updateStatus === 'managed'
+          ? t.softwareUpdateStorePill()
+          : updateStatus === 'downloaded'
+            ? t.softwareUpdateReady()
+            : updateStatus === 'error'
+              ? t.checkFailed()
+              : updateStatus === 'unsupported'
+                ? t.unsupported()
+                : updateState.version
+                  ? `v${updateState.version}`
+                  : t.softwareUpdateManual();
 
   $: softwareUpdatePillClass =
     updateStatus === 'checking'
       ? 'pending'
-      : updateStatus === 'upToDate' || updateStatus === 'downloaded'
+      : updateStatus === 'upToDate' || updateStatus === 'downloaded' || updateStatus === 'managed'
         ? 'bound'
         : updateStatus === 'error'
           ? 'error'
@@ -752,7 +757,23 @@
       softwareUpdateDialogOpen = true;
       return;
     }
+    if (updateState.status === 'managed') {
+      softwareUpdateDialogOpen = true;
+      return;
+    }
     void checkForSoftwareUpdate();
+  }
+
+  async function openMicrosoftStoreProduct() {
+    if (!softwareUpdateSnapshot.storeProductId) {
+      return;
+    }
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_microsoft_store_product');
+    } catch (error) {
+      showStatus(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function updateDraft(patch: Partial<AppPreferences>) {
@@ -1156,11 +1177,13 @@
         ? t.checking()
         : mdAssociationError
           ? t.checkFailed()
-          : mdAssociationStatus?.is_default
-            ? t.bound()
-            : mdAssociationStatus?.registered
-              ? t.pendingSelection()
-              : t.unbound();
+          : mdAssociationStatus?.managedByPackage
+            ? t.managedByWindows()
+            : mdAssociationStatus?.is_default
+              ? t.bound()
+              : mdAssociationStatus?.registered
+                ? t.pendingSelection()
+                : t.unbound();
 
   $: mdAssociationDesc = !desktopEnabled
     ? t.mdAssociationDesktopOnly()
@@ -1176,17 +1199,20 @@
     ? t.opening()
     : unbindingMdAssociation
       ? t.unbinding()
-      : mdAssociationStatus?.is_default || mdAssociationStatus?.registered
-        ? t.unbindMd()
-        : t.bindMd();
+      : mdAssociationStatus?.managedByPackage
+        ? t.openWindowsDefaultApps()
+        : mdAssociationStatus?.is_default || mdAssociationStatus?.registered
+          ? t.unbindMd()
+          : t.bindMd();
 
-  $: mdAssociationPillClass = mdAssociationStatus?.is_default
-    ? 'bound'
-    : mdAssociationError
-      ? 'error'
-      : mdAssociationStatus?.registered
-        ? 'pending'
-        : 'idle';
+  $: mdAssociationPillClass =
+    mdAssociationStatus?.managedByPackage || mdAssociationStatus?.is_default
+      ? 'bound'
+      : mdAssociationError
+        ? 'error'
+        : mdAssociationStatus?.registered
+          ? 'pending'
+          : 'idle';
 
   $: contextMenuLabel =
     !desktopEnabled || !platformCapabilities.isWindows
@@ -1195,9 +1221,13 @@
         ? t.checking()
         : contextMenuError
           ? t.checkFailed()
-          : contextMenuStatus?.registered
-            ? t.registered()
-            : t.unregistered();
+          : contextMenuStatus?.managedByPackage
+            ? contextMenuStatus.enabled
+              ? t.enabled()
+              : t.disabled()
+            : contextMenuStatus?.registered
+              ? t.registered()
+              : t.unregistered();
 
   $: contextMenuDesc = !desktopEnabled
     ? t.contextMenuDesktopOnly()
@@ -1213,15 +1243,23 @@
     ? t.registering()
     : unregisteringContextMenu
       ? t.unregistering()
-      : contextMenuStatus?.registered
-        ? t.unregisterContextMenu()
-        : t.registerContextMenu();
+      : contextMenuStatus?.managedByPackage
+        ? contextMenuStatus.enabled
+          ? t.disableContextMenu()
+          : t.enableContextMenu()
+        : contextMenuStatus?.registered
+          ? t.unregisterContextMenu()
+          : t.registerContextMenu();
 
-  $: contextMenuPillClass = contextMenuStatus?.registered
-    ? 'bound'
-    : contextMenuError
-      ? 'error'
-      : 'idle';
+  $: contextMenuPillClass = contextMenuStatus?.managedByPackage
+    ? contextMenuStatus.enabled
+      ? 'bound'
+      : 'idle'
+    : contextMenuStatus?.registered
+      ? 'bound'
+      : contextMenuError
+        ? 'error'
+        : 'idle';
 
   async function registerWindowsContextMenu() {
     if (!desktopEnabled || !platformCapabilities.isWindows || registeringContextMenu) {
@@ -1235,7 +1273,7 @@
       await refreshWindowsContextMenuStatus({ silent: true });
 
       // 步骤2：如果已注册，直接提示并返回
-      if (contextMenuStatus?.registered) {
+      if (contextMenuStatus?.registered && !contextMenuStatus.managedByPackage) {
         logToTerminal('info', 'SettingsWindow', '右键菜单已注册，跳过');
         showStatus(t.registered());
         return;
@@ -1945,7 +1983,10 @@
                       unbindingMdAssociation ||
                       checkingMdAssociation}
                     on:click={() => {
-                      if (mdAssociationStatus?.is_default || mdAssociationStatus?.registered) {
+                      if (
+                        !mdAssociationStatus?.managedByPackage &&
+                        (mdAssociationStatus?.is_default || mdAssociationStatus?.registered)
+                      ) {
                         void unbindMarkdownAssociation();
                       } else {
                         void bindMarkdownAssociation();
@@ -1975,7 +2016,11 @@
                       unregisteringContextMenu ||
                       checkingContextMenu}
                     on:click={() => {
-                      if (contextMenuStatus?.registered) {
+                      if (
+                        contextMenuStatus?.managedByPackage
+                          ? contextMenuStatus.enabled
+                          : contextMenuStatus?.registered
+                      ) {
                         void unregisterWindowsContextMenu();
                       } else {
                         void registerWindowsContextMenu();
@@ -2416,6 +2461,7 @@
                   id="softwareUpdateAutoCheckEnabled"
                   type="checkbox"
                   checked={draftSettings.softwareUpdateAutoCheckEnabled}
+                  disabled={softwareUpdateSnapshot.installationKind === 'store'}
                   on:change={(event) => toggleSetting('softwareUpdateAutoCheckEnabled', event)}
                 />
                 <span class="toggle-switch" aria-hidden="true"></span>
@@ -2459,6 +2505,7 @@
     onDownload={() => void downloadAvailableUpdate()}
     onInstall={() => void installDownloadedSoftwareUpdate()}
     onRetry={() => void checkForSoftwareUpdate()}
+    onOpenStore={() => void openMicrosoftStoreProduct()}
   />
 {/if}
 

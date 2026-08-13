@@ -8,10 +8,11 @@ export type SoftwareUpdateStatus =
   | 'downloading'
   | 'downloaded'
   | 'installing'
+  | 'managed'
   | 'unsupported'
   | 'error';
 
-export type SoftwareUpdateInstallationKind = 'installer' | 'portable' | 'unsupported';
+export type SoftwareUpdateInstallationKind = 'installer' | 'portable' | 'store' | 'unsupported';
 export type SoftwareUpdateAssetKind = 'windowsInstaller' | 'windowsPortable';
 
 export interface SoftwareUpdateCandidate {
@@ -42,6 +43,7 @@ export interface SoftwareUpdateCheckResult {
   date?: string;
   body?: string;
   candidate?: SoftwareUpdateCandidate;
+  storeProductId?: string;
 }
 
 export interface SoftwareUpdateProgress {
@@ -70,6 +72,7 @@ export interface SoftwareUpdateSnapshot {
   date?: string;
   body?: string;
   candidate?: SoftwareUpdateCandidate;
+  storeProductId?: string;
   downloadedUpdate?: DownloadedSoftwareUpdate;
   progress?: SoftwareUpdateProgressEvent;
   error?: string;

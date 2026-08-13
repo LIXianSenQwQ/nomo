@@ -39,13 +39,20 @@ pub(crate) fn get_markdown_file_association_status<R: Runtime>(
     )?;
     let fallback_prog_id = query_reg_value("HKCU\\Software\\Classes\\.md", "")?;
     let default_prog_id = user_choice_prog_id.or(fallback_prog_id);
-    let registered = is_nomo_registered(&exe_path.to_string_lossy())?;
+    let managed_by_package = crate::windows_package::is_packaged();
+    let registered = if managed_by_package {
+        true
+    } else {
+        is_nomo_registered(&exe_path.to_string_lossy())?
+    };
     let is_default = default_prog_id
         .as_deref()
         .map(|prog_id| prog_id_matches_nomo(prog_id, &exe_file_name))
         .unwrap_or(false);
 
-    let message = if is_default {
+    let message = if managed_by_package {
+        crate::i18n::text(locale, "md_assoc_managed_by_package").to_string()
+    } else if is_default {
         crate::i18n::text(locale, "md_assoc_registered_default").to_string()
     } else if registered {
         crate::i18n::text(locale, "md_assoc_registered_optional").to_string()
@@ -63,6 +70,7 @@ pub(crate) fn get_markdown_file_association_status<R: Runtime>(
         registered,
         is_default,
         default_prog_id,
+        managed_by_package,
         message,
     })
 }
@@ -72,6 +80,14 @@ pub(crate) fn register_markdown_file_association<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<DesktopActionPayload, String> {
     let locale = crate::i18n::effective_locale(app);
+    if crate::windows_package::is_packaged() {
+        crate::windows_package::open_default_apps_settings()?;
+        return Ok(DesktopActionPayload {
+            ok: true,
+            message: crate::i18n::text(locale, "md_assoc_managed_by_package").to_string(),
+        });
+    }
+
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
@@ -105,6 +121,25 @@ pub(crate) fn get_windows_context_menu_status<R: Runtime>(
 ) -> Result<WindowsContextMenuStatus, String> {
     let start = std::time::Instant::now();
     let locale = crate::i18n::effective_locale(app);
+    if crate::windows_package::is_packaged() {
+        let enabled = crate::windows_package::context_menu_enabled()?;
+        return Ok(WindowsContextMenuStatus {
+            supported: true,
+            registered: true,
+            enabled,
+            managed_by_package: true,
+            message: crate::i18n::text(
+                locale,
+                if enabled {
+                    "context_menu_package_enabled"
+                } else {
+                    "context_menu_package_disabled"
+                },
+            )
+            .to_string(),
+        });
+    }
+
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
@@ -123,6 +158,8 @@ pub(crate) fn get_windows_context_menu_status<R: Runtime>(
     Ok(WindowsContextMenuStatus {
         supported: true,
         registered,
+        enabled: registered,
+        managed_by_package: false,
         message,
     })
 }
@@ -132,6 +169,14 @@ pub(crate) fn register_windows_context_menu<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<DesktopActionPayload, String> {
     let locale = crate::i18n::effective_locale(app);
+    if crate::windows_package::is_packaged() {
+        crate::windows_package::set_context_menu_enabled(true)?;
+        return Ok(DesktopActionPayload {
+            ok: true,
+            message: crate::i18n::text(locale, "context_menu_package_enabled").to_string(),
+        });
+    }
+
     let exe_path = std::env::current_exe()
         .map_err(|error| format!("读取 Nomo 可执行文件路径失败：{error}"))?;
     let exe = exe_path.to_string_lossy().to_string();
@@ -158,6 +203,7 @@ pub(crate) fn get_markdown_file_association_status<R: Runtime>(
         registered: false,
         is_default: false,
         default_prog_id: None,
+        managed_by_package: false,
         message: crate::i18n::app_text(app, "windows_default_only").to_string(),
     })
 }
@@ -176,6 +222,8 @@ pub(crate) fn get_windows_context_menu_status<R: Runtime>(
     Ok(WindowsContextMenuStatus {
         supported: false,
         registered: false,
+        enabled: false,
+        managed_by_package: false,
         message: crate::i18n::app_text(app, "windows_context_only").to_string(),
     })
 }
@@ -192,6 +240,13 @@ pub(crate) fn unregister_markdown_file_association<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<DesktopActionPayload, String> {
     let locale = crate::i18n::effective_locale(app);
+    if crate::windows_package::is_packaged() {
+        crate::windows_package::open_default_apps_settings()?;
+        return Ok(DesktopActionPayload {
+            ok: true,
+            message: crate::i18n::text(locale, "md_assoc_managed_by_package").to_string(),
+        });
+    }
 
     // 步骤1：删除 Nomo.Markdown ProgId
     let _ = run_reg_delete("HKCU\\Software\\Classes\\Nomo.Markdown", &["/f"]);
@@ -254,6 +309,13 @@ pub(crate) fn unregister_windows_context_menu<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<DesktopActionPayload, String> {
     let locale = crate::i18n::effective_locale(app);
+    if crate::windows_package::is_packaged() {
+        crate::windows_package::set_context_menu_enabled(false)?;
+        return Ok(DesktopActionPayload {
+            ok: true,
+            message: crate::i18n::text(locale, "context_menu_package_disabled").to_string(),
+        });
+    }
 
     let _ = run_reg_delete(
         "HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\Nomo.Open",
@@ -525,11 +587,7 @@ fn write_single_folder_context_menu(
 
 #[cfg(target_os = "windows")]
 fn open_windows_default_apps_settings() -> Result<(), String> {
-    std::process::Command::new("explorer.exe")
-        .arg("ms-settings:defaultapps")
-        .spawn()
-        .map_err(|error| format!("打开 Windows 默认应用设置失败：{error}"))?;
-    Ok(())
+    crate::windows_package::open_default_apps_settings()
 }
 
 #[cfg(target_os = "windows")]

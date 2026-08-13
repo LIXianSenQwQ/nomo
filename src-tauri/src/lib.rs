@@ -9,6 +9,7 @@ mod pdf_outline;
 mod software_update;
 mod text_document;
 mod window;
+mod windows_package;
 
 #[cfg(target_os = "windows")]
 mod export_windows;
@@ -333,6 +334,9 @@ pub fn run() {
             crate::window::commands::get_windows_context_menu_status,
             crate::window::commands::register_windows_context_menu,
             crate::window::commands::unregister_windows_context_menu,
+            crate::windows_package::get_legacy_installer_notice,
+            crate::windows_package::open_windows_installed_apps,
+            crate::windows_package::open_microsoft_store_product,
             crate::app_logger::log_message,
             crate::app_logger::set_logger_enabled,
             crate::app_logger::get_logger_enabled,

@@ -122,6 +122,16 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
     '未保存の変更があるファイルがあります: {names}。このウィンドウを閉じてもよろしいですか？',
   rememberCloseWindowChoice: '今後は既定として使用',
   bindMdDefaultApp: '.md のデフォルト アプリをバインドする',
+  managedByWindows: 'Windows による管理',
+  openWindowsDefaultApps: '既定のアプリを開く',
+  enabled: '有効',
+  disabled: '無効',
+  enableContextMenu: 'コンテキスト メニューを有効にする',
+  disableContextMenu: 'コンテキスト メニューを無効にする',
+  legacyInstallerTitle: '以前の Nomo が見つかりました',
+  legacyInstallerMessage:
+    'Microsoft Store 版と従来の NSIS 版の併用はサポートされません。Windows の「インストールされているアプリ」から旧版を手動でアンインストールしてください。設定やドキュメントは自動削除されません。',
+  legacyInstallerOpenApps: 'インストールされているアプリを開く',
   registerMdContextMenu: '.mdとフォルダーのコンテキストメニューを登録する',
   unsupported: 'サポートされていません',
   checking: 'チェック中',
@@ -297,6 +307,12 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   softwareUpdateAutoCheck: '起動時に更新を自動確認',
   softwareUpdateAutoCheckDescription:
     'コールドスタートごとにバックグラウンドで一度確認します。失敗時は通知しません。',
+  softwareUpdateStoreManaged:
+    '更新は Microsoft Store によって管理され、Nomo は GitHub のインストーラーをダウンロードしません。',
+  softwareUpdateStorePill: 'Microsoft Store',
+  softwareUpdateStoreManagedHint:
+    'Microsoft Store が利用可能な更新のダウンロードとインストールを管理します。',
+  softwareUpdateOpenStore: 'Microsoft Store で開く',
   unsavedChangesBeforeUpdate:
     'これらのドキュメントには保存されていない変更があります: {names}。インストールを再起動すると、保存されていないコンテンツが失われる可能性があります。続く？',
   windowControls: 'ウィンドウコントロール',

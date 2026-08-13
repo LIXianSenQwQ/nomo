@@ -373,6 +373,28 @@ mod tests {
     }
 
     #[test]
+    fn accepts_shell_extension_activation_marker_before_paths() {
+        let dir =
+            env::temp_dir().join(format!("nomo-shell-activation-{}", crate::config::now_ts()));
+        fs::create_dir_all(&dir).unwrap();
+        let md = dir.join("shell file.md");
+        fs::write(&md, "# shell").unwrap();
+
+        let targets = collect_external_open_targets_from_args(
+            vec![
+                "Nomo.exe".to_string(),
+                "--nomo-shell-open".to_string(),
+                md.to_string_lossy().to_string(),
+            ],
+            None,
+        );
+
+        assert_eq!(targets.markdown_paths, vec![normalize_path(&md)]);
+        assert!(targets.folder_paths.is_empty());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn collects_json_paths_from_args() {
         let dir = env::temp_dir().join(format!(
             "nomo-external-open-json-{}",

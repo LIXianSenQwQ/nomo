@@ -16,6 +16,10 @@ describe('App outline layout', () => {
     resolve(__dirname, 'components/SettingsWindow.svelte'),
     'utf-8',
   );
+  const softwareUpdateDialogSource = readFileSync(
+    resolve(__dirname, 'components/SoftwareUpdateDialog.svelte'),
+    'utf-8',
+  );
   const linkQuickEditorSource = readFileSync(
     resolve(__dirname, 'components/LinkQuickEditor.svelte'),
     'utf-8',
@@ -200,10 +204,7 @@ describe('App outline layout', () => {
       documentStylesSource,
       '.editor-grid:has(> .content-outline) .document-layout',
     );
-    const compactOutlineStyles = extractCssBlock(
-      responsiveStyles,
-      '@container (max-width: 900px)',
-    );
+    const compactOutlineStyles = extractCssBlock(responsiveStyles, '@container (max-width: 900px)');
     const outlineStyles = extractCssBlock(outlineStylesSource, '.content-outline');
 
     expect(documentLayouts).toHaveLength(2);
@@ -859,7 +860,9 @@ describe('App outline layout', () => {
     expect(titleBarSource).toContain('t.showExplorerSidebar()');
     expect(titleBarSource).toContain('t.hideExplorerSidebar()');
     expect(titleBarSource).toContain('export let focusMode: boolean');
-    expect(titleBarSource).toContain("import WindowsCaptionControls from './WindowsCaptionControls.svelte'");
+    expect(titleBarSource).toContain(
+      "import WindowsCaptionControls from './WindowsCaptionControls.svelte'",
+    );
     expect(titleBarSource).toContain(
       'desktopEnabled && platformCapabilities.usesCustomWindowsTitlebar',
     );
@@ -871,7 +874,9 @@ describe('App outline layout', () => {
     expect(windowsCaptionControlsSource).toContain('await currentWindow.minimize()');
     expect(windowsCaptionControlsSource).toContain('await currentWindow.toggleMaximize()');
     expect(windowsCaptionControlsSource).toContain('await currentWindow.isMaximized()');
-    expect(windowsCaptionControlsSource).toContain('await currentWindow.onResized(syncMaximizedState)');
+    expect(windowsCaptionControlsSource).toContain(
+      'await currentWindow.onResized(syncMaximizedState)',
+    );
     expect(windowsCaptionControlsSource).toContain('await onClose()');
     expect(windowsCaptionControlsSource).not.toContain('currentWindow.close()');
     expect(windowsCaptionControlsSource).not.toContain('currentWindow.destroy()');
@@ -1079,6 +1084,19 @@ describe('App outline layout', () => {
     expect(appSource).toContain('applyAppPreferences');
     expect(appSource).toContain('autoSaveEnabled && desktopEnabled && dirty && nativePath');
     expect(appSource).toContain('previewTabId = filePreviewEnabled ? targetTab.id : null');
+  });
+
+  it('keeps package-managed Windows settings and Store updates visible without installer actions', () => {
+    expect(settingsWindowSource).toContain('mdAssociationStatus?.managedByPackage');
+    expect(settingsWindowSource).toContain('t.openWindowsDefaultApps()');
+    expect(settingsWindowSource).toContain('contextMenuStatus?.managedByPackage');
+    expect(settingsWindowSource).toContain("softwareUpdateSnapshot.installationKind === 'store'");
+    expect(softwareUpdateDialogSource).toContain("state.installationKind === 'store'");
+    expect(softwareUpdateDialogSource).toContain('{#if !isStore || state.storeProductId}');
+    expect(softwareUpdateDialogSource).toContain('on:click={handlePrimaryAction}');
+    expect(softwareUpdateDialogSource).toContain('if (isStore)');
+    expect(softwareUpdateDialogSource).toContain('onOpenStore();');
+    expect(appSource).toContain("invoke<{ shouldPrompt: boolean }>('get_legacy_installer_notice')");
   });
 
   it('wires the first and second batch settings to runtime behavior instead of placeholders', () => {

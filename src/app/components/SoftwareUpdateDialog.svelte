@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, X } from '@lucide/svelte';
+  import { Download, ExternalLink, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import type { SoftwareUpdateSnapshot } from '../../lib/desktop/tauriUpdater';
   import { openExternalLink } from '../../lib/desktop/tauriStorage';
@@ -13,6 +13,7 @@
   export let onDownload: () => void;
   export let onInstall: () => void;
   export let onRetry: () => void;
+  export let onOpenStore: () => void = () => undefined;
 
   let closeButton: HTMLButtonElement;
   let dialogElement: HTMLDivElement;
@@ -23,6 +24,7 @@
     t.softwareUpdateReleaseFallback(),
   );
   $: isPortable = state.installationKind === 'portable';
+  $: isStore = state.installationKind === 'store';
   $: isDownloading = state.status === 'downloading';
   $: isDownloaded = state.status === 'downloaded';
   $: isInstalling = state.status === 'installing';
@@ -90,6 +92,10 @@
   }
 
   function handlePrimaryAction() {
+    if (isStore) {
+      onOpenStore();
+      return;
+    }
     if (isPortable) {
       const href = state.candidate?.downloadUrl;
       if (href) void openExternalLink(href);
@@ -156,7 +162,10 @@
 
     <footer class="dialog-footer">
       <div class="footer-note">
-        {#if isPortable}
+        {#if isStore}
+          <strong>{t.softwareUpdateStorePill()}</strong>
+          {t.softwareUpdateStoreManagedHint()}
+        {:else if isPortable}
           <strong>{t.softwareUpdatePortableTitle()}</strong>
           {t.softwareUpdatePortableHint()}
         {:else if isDownloaded}
@@ -181,26 +190,31 @@
       {:else}
         <div class="footer-actions">
           <button class="button" type="button" disabled={isInstalling} on:click={onLater}>
-            {t.softwareUpdateLater()}
+            {isStore ? t.close() : t.softwareUpdateLater()}
           </button>
-          <button
-            class="button primary"
-            type="button"
-            disabled={(!state.candidate && !isDownloaded) || isInstalling}
-            on:click={handlePrimaryAction}
-          >
-            {#if isPortable}
-              <Download size={14} />
-              {t.softwareUpdateDownloadPortable()}
-            {:else if isDownloaded}
-              {t.softwareUpdateRestartAndInstall()}
-            {:else if state.status === 'error'}
-              {t.softwareUpdateCheckAgain()}
-            {:else}
-              <Download size={14} />
-              {t.softwareUpdateDownloadNow()}
-            {/if}
-          </button>
+          {#if !isStore || state.storeProductId}
+            <button
+              class="button primary"
+              type="button"
+              disabled={(!isStore && !state.candidate && !isDownloaded) || isInstalling}
+              on:click={handlePrimaryAction}
+            >
+              {#if isStore}
+                <ExternalLink size={14} />
+                {t.softwareUpdateOpenStore()}
+              {:else if isPortable}
+                <Download size={14} />
+                {t.softwareUpdateDownloadPortable()}
+              {:else if isDownloaded}
+                {t.softwareUpdateRestartAndInstall()}
+              {:else if state.status === 'error'}
+                {t.softwareUpdateCheckAgain()}
+              {:else}
+                <Download size={14} />
+                {t.softwareUpdateDownloadNow()}
+              {/if}
+            </button>
+          {/if}
         </div>
       {/if}
     </footer>

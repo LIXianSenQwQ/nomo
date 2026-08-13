@@ -16,6 +16,9 @@
     "format:check": "prettier --check .",
     "tauri": "node scripts/run-tauri.mjs",
     "build:win64:nsis": "tauri build --target x86_64-pc-windows-msvc --bundles nsis",
+    "build:win64:msix:dev": "pwsh -NoProfile -File scripts/msix/Build-Msix.ps1 -Mode Dev",
+    "build:win64:msix:store": "pwsh -NoProfile -File scripts/msix/Build-Msix.ps1 -Mode Store",
+    "test:win64:shell-extension": "pwsh -NoProfile -File scripts/msix/Build-ShellExtension.ps1 -RunTests",
     "test": "vitest run",
     "test:watch": "vitest"
   },
