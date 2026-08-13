@@ -37,3 +37,6 @@ Thumbs.db
 
 # Paraglide 由 build 前 pnpm exec paraglide-js compile 生成
 src/paraglide/
+
+# Local video production assets
+/video/
