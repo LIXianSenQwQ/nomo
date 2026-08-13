@@ -421,7 +421,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     options.updateWindowTitle();
   }
 
-  async function closeTab(tabId: string, event?: Event) {
+  async function closeTab(tabId: string, event?: Event, discardChanges = false) {
     event?.stopPropagation();
     const tabToClose = options.getTabs().find((tab) => tab.id === tabId);
     if (!tabToClose) {
@@ -447,7 +447,7 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
       savedMarkdownLength: tabToClose.savedMarkdown?.length ?? null,
     });
 
-    if (tabToClose.dirty) {
+    if (tabToClose.dirty && !discardChanges) {
       const message = t.confirmCloseModifiedFile();
       logCloseDiagnostics('documentActions.closeTab: 准备弹出未保存确认框', {
         tabId,
@@ -533,11 +533,12 @@ export function createDocumentActionsController(options: DocumentActionsOptions)
     if (!options.getDesktopEnabled() || !path) {
       return;
     }
-    if (activeTab.diskReadonly) {
+    const externalChangeType = options.getExternalFileChange().type;
+    if (activeTab.diskReadonly && externalChangeType !== 'deleted') {
       options.setStatusMessage(t.readonlySourceSaveAsRequired());
       return;
     }
-    if (options.getExternalFileChange().type !== 'modified') {
+    if (externalChangeType !== 'modified' && externalChangeType !== 'deleted') {
       options.setStatusMessage(t.noExternalChangeToOverwrite());
       return;
     }

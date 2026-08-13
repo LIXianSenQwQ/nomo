@@ -2058,6 +2058,14 @@
     overwriteExternalFile().catch(() => undefined);
   }
 
+  // 文件已被删除时，该按钮本身就是最终确认，不再叠加未保存确认框。
+  async function handleExternalChangeCloseDiscard() {
+    const target = getValidExternalChangeDialogTarget();
+    if (!target || target.change.type !== 'deleted') return;
+    closeExternalChangeDialog();
+    await closeTab(target.tabId, undefined, true);
+  }
+
   // 外部版本冲突时另存为当前冻结 revision；取消文件对话框后恢复冲突选择。
   async function handleExternalChangeSaveAs() {
     const target = getValidExternalChangeDialogTarget();
@@ -2075,11 +2083,60 @@
   function handleExternalChangeDismiss() {
     const target = getValidExternalChangeDialogTarget();
     if (!target) return;
+    if (target.change.type === 'deleted') {
+      keepDeletedExternalFileTemporarily(target);
+      return;
+    }
     if (target.sessionId && target.changeToken) {
       ignoreSegmentedExternalChange(target.sessionId, target.changeToken);
       return;
     }
     dismissExternalChange(target.change);
+  }
+
+  function keepDeletedExternalFileTemporarily(target: {
+    tabId: string;
+    sessionId: string | null;
+    changeToken: string | null;
+  }) {
+    const targetTab = tabs.find((tab) => tab.id === target.tabId);
+    if (!targetTab) {
+      closeExternalChangeDialog();
+      return;
+    }
+
+    if (isSegmentedTextTab(targetTab) && target.sessionId && target.changeToken) {
+      ignoreSegmentedExternalChange(target.sessionId, target.changeToken, {
+        statusMessage: t.externalDeletedKeptTemporary(),
+      });
+      return;
+    }
+
+    if (!isMarkdownTab(targetTab)) return;
+    saveActiveTabState();
+    const latestTab = tabs.find((tab) => tab.id === target.tabId);
+    if (!isMarkdownTab(latestTab)) return;
+
+    latestTab.nativePath = null;
+    latestTab.filePath = '';
+    latestTab.savedMarkdown = '';
+    latestTab.dirty = true;
+    latestTab.lastKnownModifiedAt = 0;
+    latestTab.diskReadonly = false;
+    latestTab.externalFileChange = createEmptyExternalFileChange();
+    nativePath = null;
+    filePath = '';
+    savedMarkdown = '';
+    dirty = true;
+    lastKnownModifiedAt = 0;
+    diskReadonly = false;
+    externalFileChange = createEmptyExternalFileChange();
+    editor.setDirty(true);
+    tabs = [...tabs];
+    closeExternalChangeDialog();
+    persistWorkspaceState();
+    updateWindowTitle();
+    statusMessage = t.externalDeletedKeptTemporary();
   }
 
   function ignoreSegmentedExternalChange(
@@ -4008,7 +4065,10 @@
     }
   }
 
-  async function closeSegmentedTab(tabToClose: Extract<Tab, { documentKind: 'text' | 'json' }>) {
+  async function closeSegmentedTab(
+    tabToClose: Extract<Tab, { documentKind: 'text' | 'json' }>,
+    discardWithoutConfirmation = false,
+  ) {
     const wasActive = tabToClose.id === activeTabId;
     try {
       if (wasActive) {
@@ -4021,8 +4081,8 @@
       return;
     }
 
-    let discardChanges = false;
-    if (tabToClose.dirty) {
+    let discardChanges = discardWithoutConfirmation;
+    if (tabToClose.dirty && !discardWithoutConfirmation) {
       const choice = await confirmAction(t.confirmCloseModifiedFile(), {
         title: tabToClose.fileName,
         okLabel: t.discardChanges(),
@@ -4066,6 +4126,7 @@
       return;
     }
     segmentedSessionRegistry.delete(tabToClose.sessionId);
+    ignoredSegmentedExternalChanges.delete(tabToClose.sessionId);
     const index = tabs.findIndex((tab) => tab.id === tabToClose.id);
     tabs = tabs.filter((tab) => tab.id !== tabToClose.id);
     if (previewTabId === tabToClose.id) previewTabId = null;
@@ -4089,7 +4150,7 @@
   }
 
   // 包装 closeTab：预览标签页直接关闭无需确认
-  async function closeTab(tabId: string, event?: Event) {
+  async function closeTab(tabId: string, event?: Event, discardWithoutConfirmation = false) {
     event?.stopPropagation();
     if (markdownMiniActive && activeTabId === tabId) {
       if (!(await requestMarkdownMiniReturn({ showExternalChange: false }))) return;
@@ -4116,7 +4177,7 @@
     }
 
     if (isSegmentedTextTab(tabToClose)) {
-      await closeSegmentedTab(tabToClose);
+      await closeSegmentedTab(tabToClose, discardWithoutConfirmation);
       return;
     }
 
@@ -4205,7 +4266,7 @@
       tabId,
       targetDirty: tabToClose.dirty,
     });
-    await _documentCloseTab(tabId, event);
+    await _documentCloseTab(tabId, event, discardWithoutConfirmation);
 
     // 关闭最后一个普通标签后清空编辑器状态
     if (tabs.length === 0) {
@@ -6028,4 +6089,5 @@
   onOverwrite={handleExternalChangeOverwrite}
   onSaveAs={handleExternalChangeSaveAs}
   onDismiss={handleExternalChangeDismiss}
+  onCloseDiscard={handleExternalChangeCloseDiscard}
 />

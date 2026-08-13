@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { AlertTriangle, Download, Save, Upload, X } from '@lucide/svelte';
+  import { AlertTriangle, Clock3, Download, Save, Trash2, Upload, X } from '@lucide/svelte';
   import { motionIn } from '../actions/motion';
   import { t } from '../i18n';
   import type { ExternalFileChangeState } from '../types';
@@ -12,6 +12,7 @@
   export let onOverwrite: () => void;
   export let onSaveAs: () => void;
   export let onDismiss: () => void;
+  export let onCloseDiscard: () => void;
 
   function handleKeydown(event: KeyboardEvent) {
     if (!open) return;
@@ -47,22 +48,41 @@
       </div>
 
       <div class="actions">
-        <button type="button" class="btn reload" on:click={onReload}>
-          <Download size={15} />
-          {t.reloadExternalShort()}
-        </button>
-        <button type="button" class="btn save-as" on:click={onSaveAs}>
-          <Save size={15} />
-          {t.saveAs()}
-        </button>
-        <button type="button" class="btn overwrite" on:click={onOverwrite}>
-          <Upload size={15} />
-          {t.overwriteExternalShort()}
-        </button>
-        <button type="button" class="btn cancel" on:click={onDismiss}>
-          <X size={15} />
-          {t.ignoreExternalChange()}
-        </button>
+        {#if change.type === 'deleted'}
+          <button type="button" class="btn save-as" on:click={onSaveAs}>
+            <Save size={15} />
+            {t.saveAs()}
+          </button>
+          <button type="button" class="btn overwrite" on:click={onOverwrite}>
+            <Upload size={15} />
+            {t.recreateOriginalFile()}
+          </button>
+          <button type="button" class="btn discard" on:click={onCloseDiscard}>
+            <Trash2 size={15} />
+            {t.closeAndDiscard()}
+          </button>
+          <button type="button" class="btn cancel" on:click={onDismiss}>
+            <Clock3 size={15} />
+            {t.keepTemporarily()}
+          </button>
+        {:else}
+          <button type="button" class="btn reload" on:click={onReload}>
+            <Download size={15} />
+            {t.reloadExternalShort()}
+          </button>
+          <button type="button" class="btn save-as" on:click={onSaveAs}>
+            <Save size={15} />
+            {t.saveAs()}
+          </button>
+          <button type="button" class="btn overwrite" on:click={onOverwrite}>
+            <Upload size={15} />
+            {t.overwriteExternalShort()}
+          </button>
+          <button type="button" class="btn cancel" on:click={onDismiss}>
+            <X size={15} />
+            {t.ignoreExternalChange()}
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -187,6 +207,17 @@
     background: var(--md-editor-danger);
     border-color: var(--md-editor-danger);
     color: #fff;
+  }
+
+  .btn.discard {
+    border-color: color-mix(in srgb, var(--md-editor-danger) 48%, var(--md-editor-border));
+    color: var(--md-editor-danger);
+    background: color-mix(in srgb, var(--md-editor-danger) 10%, var(--md-editor-surface));
+  }
+
+  .btn.discard:hover {
+    border-color: var(--md-editor-danger);
+    background: color-mix(in srgb, var(--md-editor-danger) 16%, var(--md-editor-surface));
   }
 
   .btn.overwrite:hover {
