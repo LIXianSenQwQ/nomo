@@ -15,7 +15,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
-import type { Node as ProseMirrorNode, ResolvedPos } from 'prosemirror-model';
+import { Fragment, Slice, type Node as ProseMirrorNode, type ResolvedPos } from 'prosemirror-model';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
@@ -105,6 +105,72 @@ import { isWholeWordRange } from '../search/textSearch';
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
 const MARKDOWN_SYNC_DEBOUNCE_MS = 120;
 
+function serializeClipboardText(slice: Slice): string {
+  let text = '';
+  let hasBlock = false;
+  let previousBlockWasEmptyParagraph = false;
+
+  slice.content.nodesBetween(0, slice.content.size, (node) => {
+    const nodeText = node.isText
+      ? (node.text ?? '')
+      : node.type.name === 'hard_break'
+        ? '\n'
+        : node.isLeaf
+          ? (node.type.spec.leafText?.(node) ?? '')
+          : '';
+
+    if (node.isBlock && ((node.isLeaf && nodeText) || node.isTextblock)) {
+      if (hasBlock) {
+        text += previousBlockWasEmptyParagraph ? '\n' : '\n\n';
+      }
+      hasBlock = true;
+      previousBlockWasEmptyParagraph =
+        node.type === schema.nodes.paragraph && node.content.size === 0;
+    }
+
+    text += nodeText;
+  });
+
+  return text;
+}
+
+function parseClipboardText(text: string, $context: ResolvedPos): Slice {
+  const normalized = text.replace(/\r\n?/g, '\n');
+  const paragraphs: ProseMirrorNode[] = [];
+  let inlineContent: ProseMirrorNode[] = [];
+  let textStart = 0;
+
+  const appendText = (value: string) => {
+    if (value) {
+      inlineContent.push(schema.text(value, $context.marks()));
+    }
+  };
+  const closeParagraph = () => {
+    paragraphs.push(schema.nodes.paragraph.create(null, inlineContent));
+    inlineContent = [];
+  };
+
+  for (const match of normalized.matchAll(/\n+/g)) {
+    const lineBreaks = match[0].length;
+    appendText(normalized.slice(textStart, match.index));
+    textStart = match.index + lineBreaks;
+
+    if (lineBreaks === 1) {
+      inlineContent.push(schema.nodes.hard_break.create({ soft: true }));
+      continue;
+    }
+
+    closeParagraph();
+    for (let index = 2; index < lineBreaks; index += 1) {
+      paragraphs.push(schema.nodes.paragraph.create());
+    }
+  }
+
+  appendText(normalized.slice(textStart));
+  closeParagraph();
+  return Slice.maxOpen(Fragment.fromArray(paragraphs));
+}
+
 function getFrontMatterPrefix(markdown: string): string {
   const { frontMatter, body } = splitFrontMatter(markdown);
   const suffix = markdown.slice(frontMatter.length);
@@ -162,6 +228,8 @@ export class ProseMirrorEditorCore implements EditorCore {
       state: this.createState(this.markdown),
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
       editable: () => this.isEditable(),
+      clipboardTextSerializer: (slice) => serializeClipboardText(slice),
+      clipboardTextParser: (text, $context) => parseClipboardText(text, $context),
       nodeViews: {
         code_block: (node, view, getPos) =>
           new CodeBlockNodeView(node, view, getPos as () => number),
