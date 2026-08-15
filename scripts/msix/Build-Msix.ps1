@@ -49,6 +49,45 @@ function Assert-NonEmpty([string]$Name, $Value) {
     }
 }
 
+function Assert-ProductionFrontendEmbedded([string]$ExecutablePath, [string]$FrontendDirectory) {
+    if (-not (Test-Path -LiteralPath $ExecutablePath -PathType Leaf)) {
+        throw "找不到待验证的 Tauri 应用程序：$ExecutablePath"
+    }
+
+    $indexPath = Join-Path $FrontendDirectory 'index.html'
+    if (-not (Test-Path -LiteralPath $indexPath -PathType Leaf)) {
+        throw "找不到生产前端入口：$indexPath"
+    }
+
+    $indexHtml = Get-Content -LiteralPath $indexPath -Raw
+    $entryPaths = @(
+        [regex]::Matches($indexHtml, '(?i)(?:src|href)\s*=\s*"(?<path>[^"]+)"') |
+            ForEach-Object {
+                $path = $_.Groups['path'].Value.Split('?', 2)[0].Split('#', 2)[0]
+                $path.Replace('\', '/').TrimStart([char[]]@('.', '/'))
+            } |
+            Where-Object { $_ -like 'assets/*' } |
+            Sort-Object -Unique
+    )
+    if ($entryPaths.Count -eq 0) {
+        throw "生产前端入口未引用任何 assets 资源：$indexPath"
+    }
+
+    $executableText = [Text.Encoding]::Latin1.GetString([IO.File]::ReadAllBytes($ExecutablePath))
+    $missingEntries = @(
+        $entryPaths | Where-Object {
+            $embeddedPath = '/' + $_
+            $executableText.IndexOf($embeddedPath, [StringComparison]::Ordinal) -lt 0 -and
+                $executableText.IndexOf($_, [StringComparison]::Ordinal) -lt 0
+        }
+    )
+    if ($missingEntries.Count -gt 0) {
+        throw "Tauri 应用程序未嵌入生产前端资源，疑似开发构建：$ExecutablePath；缺少：$($missingEntries -join ', ')"
+    }
+
+    return $entryPaths
+}
+
 function Resolve-PackageFamilyName([string]$Name, [string]$Publisher) {
     if (-not ('NomoMsix.PackageIdentityNative' -as [type])) {
         $nativeSource = @'
@@ -185,6 +224,15 @@ $appVersion = [string]$packageJson.version
 if ($appVersion -ne [string]$tauriConfig.version -or $appVersion -ne $cargoVersionMatch.Groups[1].Value) {
     throw "版本号不一致：package.json=$appVersion tauri.conf.json=$($tauriConfig.version) Cargo.toml=$($cargoVersionMatch.Groups[1].Value)"
 }
+if ($Mode -eq 'Store' -and $Configuration -ne 'Release') {
+    throw 'Store MSIX 只允许使用 Release 配置。'
+}
+$frontendDistValue = [string]$tauriConfig.build.frontendDist
+Assert-NonEmpty 'build.frontendDist' $frontendDistValue
+if ($frontendDistValue -match '^[a-z][a-z0-9+.-]*://') {
+    throw "MSIX 构建要求 build.frontendDist 为本地生产目录，当前为：$frontendDistValue"
+}
+$frontendDist = [IO.Path]::GetFullPath((Join-Path (Join-Path $repoRoot 'src-tauri') $frontendDistValue))
 if ($appVersion -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
     throw "MSIX 只接受稳定三段 SemVer，当前为：$appVersion"
 }
@@ -215,16 +263,15 @@ if (-not $SkipApplicationBuild) {
 
 & (Join-Path $PSScriptRoot 'Build-ShellExtension.ps1') -Configuration $Configuration -RunTests
 
-$targetCandidates = @(
-    (Join-Path $repoRoot 'src-tauri\target\x86_64-pc-windows-msvc\release'),
-    (Join-Path $repoRoot 'src-tauri\target\release')
-)
-$applicationTarget = $targetCandidates | Where-Object { Test-Path (Join-Path $_ 'nomo.exe') } | Select-Object -First 1
-if (-not $applicationTarget) {
-    throw '找不到 Tauri Release 输出 nomo.exe。'
+$applicationTarget = Join-Path $repoRoot 'src-tauri\target\x86_64-pc-windows-msvc\release'
+$applicationPath = Join-Path $applicationTarget 'nomo.exe'
+if (-not (Test-Path -LiteralPath $applicationPath -PathType Leaf)) {
+    throw "找不到本次 x64 Tauri Release 输出，拒绝回退到可能过期的其他目标目录：$applicationPath"
 }
+$embeddedFrontendEntries = @(Assert-ProductionFrontendEmbedded $applicationPath $frontendDist)
+$applicationSha256 = (Get-FileHash -LiteralPath $applicationPath -Algorithm SHA256).Hash.ToLowerInvariant()
 
-Copy-Item -LiteralPath (Join-Path $applicationTarget 'nomo.exe') -Destination (Join-Path $stagingRoot 'nomo.exe')
+Copy-Item -LiteralPath $applicationPath -Destination (Join-Path $stagingRoot 'nomo.exe')
 $resourcesPath = Join-Path $applicationTarget 'resources'
 if (Test-Path -LiteralPath $resourcesPath) {
     Copy-Item -LiteralPath $resourcesPath -Destination (Join-Path $stagingRoot 'resources') -Recurse
@@ -368,6 +415,15 @@ foreach ($requiredPackageFile in @('AppxManifest.xml', 'nomo.exe', 'NomoShellExt
         throw "MSIX 回读验证缺少必要文件：$requiredPackageFile"
     }
 }
+$packagedApplicationPath = Join-Path $packageValidationRoot 'nomo.exe'
+$packagedFrontendEntries = @(Assert-ProductionFrontendEmbedded $packagedApplicationPath $frontendDist)
+$packagedApplicationSha256 = (Get-FileHash -LiteralPath $packagedApplicationPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($packagedApplicationSha256 -ne $applicationSha256) {
+    throw "MSIX 回读后的 nomo.exe 与已验证的 Tauri Release 输出不一致：expected=$applicationSha256 actual=$packagedApplicationSha256"
+}
+if (Compare-Object -ReferenceObject $embeddedFrontendEntries -DifferenceObject $packagedFrontendEntries) {
+    throw 'MSIX 回读后的生产前端资源清单与已验证的 Tauri Release 输出不一致。'
+}
 $forbiddenPackageFiles = Get-ChildItem -LiteralPath $packageValidationRoot -Recurse -File |
     Where-Object {
         $_.Extension -in @('.pfx', '.p12', '.pem', '.key', '.cer') -or
@@ -439,6 +495,9 @@ $report = [ordered]@{
     minWindowsVersion = '10.0.19045.0'
     maxWindowsVersionTested = '10.0.26200.0'
     webView2 = 'Evergreen'
+    applicationSha256 = $applicationSha256
+    embeddedFrontendEntryCount = $embeddedFrontendEntries.Count
+    embeddedFrontendEntries = $embeddedFrontendEntries
     signedForSideload = $signed
     storeUploadAllowed = $Mode -eq 'Store'
     msix = $msixPath

@@ -18,13 +18,38 @@ $cerPath = Join-Path $OutputDirectory 'NomoDevelopment.cer'
 $passwordPath = Join-Path $OutputDirectory 'NomoDevelopment.password.txt'
 
 if (-not $Force -and (Test-Path $pfxPath) -and (Test-Path $cerPath) -and (Test-Path $passwordPath)) {
-    [pscustomobject]@{
-        PfxPath = $pfxPath
-        CerPath = $cerPath
-        PasswordPath = $passwordPath
-        Publisher = [string]$identity.publisher
-    } | ConvertTo-Json
-    return
+    $existingCertificate = $null
+    try {
+        $existingPassword = (Get-Content -LiteralPath $passwordPath -Raw).Trim()
+        $existingCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $pfxPath,
+            $existingPassword,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+        )
+        $utcNow = [DateTime]::UtcNow
+        if (
+            $existingCertificate.HasPrivateKey -and
+            $existingCertificate.Subject -eq [string]$identity.publisher -and
+            $existingCertificate.NotBefore.ToUniversalTime() -le $utcNow -and
+            $existingCertificate.NotAfter.ToUniversalTime() -gt $utcNow
+        ) {
+            [pscustomobject]@{
+                PfxPath = $pfxPath
+                CerPath = $cerPath
+                PasswordPath = $passwordPath
+                Publisher = [string]$identity.publisher
+            } | ConvertTo-Json
+            return
+        }
+    }
+    catch {
+        Write-Warning '现有开发证书无法读取，将按当前 MSIX Publisher 重新生成。'
+    }
+    finally {
+        if ($existingCertificate) {
+            $existingCertificate.Dispose()
+        }
+    }
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
