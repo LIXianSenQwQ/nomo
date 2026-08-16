@@ -216,6 +216,7 @@
 | 更新提醒界面 | `src/app/components/SoftwareUpdateNotice.svelte`, `src/app/components/SoftwareUpdateDialog.svelte` | `src/app/App.svelte`, `src/app/components/AppTitleBar.svelte` | 启动通知、更新日志弹窗、下载状态展示变更 |
 | 更新前端 IPC 适配 | `src/lib/desktop/tauriUpdater.ts` | `src/app/services/softwareUpdate.ts` | 检查/下载/安装/共享快照 IPC 契约变更 |
 | 更新后端 | `src-tauri/src/software_update.rs` | `src-tauri/src/window/tray.rs` | GitHub Release、安装形态、共享状态、下载/校验/安装器 |
+| 版本发布与 Pages 同步 | `.github/workflows/release.yml` | `.github/workflows/sync-pages-notes.yml`, `.github/release-notes/` | 安装包发布、MD5 生成、发布说明维护、Cloudflare Pages 重建与线上校验 |
 
 ### 原生系统集成
 

@@ -167,3 +167,63 @@ jobs:
           done
 
           gh release upload '${{ github.ref_name }}' checksums.md5 --clobber
+
+  sync-pages:
+    name: Sync release to Cloudflare Pages
+    runs-on: ubuntu-latest
+    needs: [build, checksums]
+    if: >-
+      ${{
+        always() &&
+        needs.build.result == 'success' &&
+        (contains(github.ref_name, '-') || needs.checksums.result == 'success')
+      }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Trigger Pages deployment
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOOK_URL" || {
+            echo 'Missing CLOUDFLARE_PAGES_DEPLOY_HOOK repository secret.' >&2
+            exit 1
+          }
+          curl --fail --show-error --silent --request POST "$DEPLOY_HOOK_URL" >/dev/null
+
+      - name: Verify latest stable download mirror
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          EXPECTED_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url='https://nomo-md.pages.dev'
+          manifest=''
+
+          for attempt in $(seq 1 150); do
+            if manifest="$(curl --fail --silent --show-error \
+              "$base_url/downloads/latest.json?expected=$EXPECTED_TAG&attempt=$attempt")"; then
+              actual_tag="$(jq -r '.tag // empty' <<<"$manifest")"
+              asset_count="$(jq -r '.assets | length' <<<"$manifest")"
+              if [[ "$actual_tag" == "$EXPECTED_TAG" && "$asset_count" == '4' ]]; then
+                break
+              fi
+            fi
+
+            manifest=''
+            sleep 10
+          done
+
+          test -n "$manifest" || {
+            echo "Pages did not publish $EXPECTED_TAG within 25 minutes." >&2
+            exit 1
+          }
+
+          mapfile -t asset_urls < <(jq -r '.assets[].url' <<<"$manifest")
+          [[ "${#asset_urls[@]}" == '4' ]]
+          for asset_url in "${asset_urls[@]}"; do
+            curl --fail --silent --show-error --location --head "$base_url$asset_url" >/dev/null
+          done

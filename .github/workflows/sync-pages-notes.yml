@@ -1,0 +1,31 @@
+name: Sync release notes to Pages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/release-notes/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Trigger Cloudflare Pages deployment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Pages deployment
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOOK_URL" || {
+            echo 'Missing CLOUDFLARE_PAGES_DEPLOY_HOOK repository secret.' >&2
+            exit 1
+          }
+          curl --fail --show-error --silent --request POST "$DEPLOY_HOOK_URL" >/dev/null
+
