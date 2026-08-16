@@ -231,6 +231,12 @@
 | 配置命令 IPC | `src-tauri/src/config/commands.rs` | `src-tauri/src/config/mod.rs` | 设置读写/最近文件/快照/应用设置 IPC |
 | 窗口命令 IPC | `src-tauri/src/window/commands.rs` | `src-tauri/src/window/menu.rs`, `src-tauri/src/window/tray.rs` | 窗口状态保存/设置窗口/菜单安装/强制关闭 IPC |
 
+### 发布与打包
+
+| Responsibility | Primary code | Related code | Change when |
+|---|---|---|---|
+| Windows Store MSIX 构建与校验 | `scripts/msix/Build-Msix.ps1` | `.github/workflows/msix.yml`, `src-tauri/msix/`, `src-tauri/tauri.conf.json` | 修改 Store 包身份、版本映射、生产前端嵌入校验、Shell 扩展封装或上传产物 |
+
 ### UI 通用组件
 
 | Responsibility | Primary code | Related code | Change when |

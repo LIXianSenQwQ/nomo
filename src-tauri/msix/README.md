@@ -26,3 +26,9 @@ then creates an unsigned `.msix`, `.appxsym` and `.msixupload` for manual upload
 signs the certified package. PFX files, passwords, and generated artifacts must remain under
 `.artifacts` and are ignored by Git. The Package SID is derived by Windows and is not written into
 `AppxManifest.xml`.
+
+The build accepts only the explicit `x86_64-pc-windows-msvc/release` Tauri output. Before packaging
+and again after unpacking the MSIX, it verifies that `nomo.exe` embeds every production entry referenced
+by `dist/index.html` and that the executable SHA-256 remains unchanged. This prevents a stale or
+development executable that still loads `devUrl` from being published as a Store package. The verified
+application hash and frontend entry list are recorded in `msix-validation-report.json`.
