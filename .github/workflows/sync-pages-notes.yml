@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Trigger Cloudflare Pages deployment
+    name: Trigger download site deployments
     runs-on: ubuntu-latest
 
     steps:
@@ -29,3 +29,17 @@ jobs:
           }
           curl --fail --show-error --silent --request POST "$DEPLOY_HOOK_URL" >/dev/null
 
+      - name: Trigger GitHub Pages deployment
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_ACTIONS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN" || {
+            echo 'Missing WEBSITE_ACTIONS_TOKEN repository secret.' >&2
+            exit 1
+          }
+          gh api \
+            --method POST \
+            repos/nomo-md/nomo-md.github.io/actions/workflows/deploy-github-pages.yml/dispatches \
+            --field ref=master
