@@ -765,6 +765,196 @@ export function serializeMarkdown(doc: ProseMirrorNode): string {
   return tableMarkdownSerializer.serialize(doc);
 }
 
+interface MarkdownSelectionExtraction {
+  nodes: ProseMirrorNode[];
+  fallbackToPlainText: boolean;
+}
+
+/**
+ * 将语义编辑器选区转换为可独立粘贴的 Markdown。
+ *
+ * 完整覆盖块的可见内容时保留块结构；只覆盖块的一部分时去掉未完整选择的外层语法，
+ * 但继续保留选中文字上的行内 marks。局部表格无法稳定合成合法表头，交由调用方降级为纯文本。
+ */
+export function serializeMarkdownSelection(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): string | null {
+  if (from < 0 || to > doc.content.size || from >= to) {
+    return null;
+  }
+
+  const extraction: MarkdownSelectionExtraction = {
+    nodes: [],
+    fallbackToPlainText: false,
+  };
+  doc.forEach((node, offset) => {
+    appendSelectedMarkdownNodes(extraction, node, offset, from, to);
+  });
+
+  if (extraction.fallbackToPlainText || extraction.nodes.length === 0) {
+    return null;
+  }
+
+  return serializeMarkdown(schema.nodes.doc.create(null, extraction.nodes));
+}
+
+function appendSelectedMarkdownNodes(
+  extraction: MarkdownSelectionExtraction,
+  node: ProseMirrorNode,
+  pos: number,
+  from: number,
+  to: number,
+) {
+  if (!selectionIntersectsNode(node, pos, from, to)) {
+    return;
+  }
+
+  const fullySelected = selectionCoversVisibleNodeContent(node, pos, from, to);
+  if (node.type === schema.nodes.table) {
+    if (fullySelected) {
+      extraction.nodes.push(node);
+    } else {
+      extraction.fallbackToPlainText = true;
+    }
+    return;
+  }
+
+  if (fullySelected) {
+    extraction.nodes.push(node);
+    return;
+  }
+
+  if (node.isTextblock) {
+    appendPartialTextblock(extraction, node, pos, from, to);
+    return;
+  }
+
+  if (node.type === schema.nodes.bullet_list || node.type === schema.nodes.ordered_list) {
+    appendPartialList(extraction, node, pos, from, to);
+    return;
+  }
+
+  node.forEach((child, offset) => {
+    appendSelectedMarkdownNodes(extraction, child, pos + 1 + offset, from, to);
+  });
+}
+
+function appendPartialTextblock(
+  extraction: MarkdownSelectionExtraction,
+  node: ProseMirrorNode,
+  pos: number,
+  from: number,
+  to: number,
+) {
+  const contentFrom = pos + 1;
+  const localFrom = Math.max(0, from - contentFrom);
+  const localTo = Math.min(node.content.size, to - contentFrom);
+  if (localFrom >= localTo) {
+    return;
+  }
+
+  extraction.nodes.push(
+    schema.nodes.paragraph.create(null, node.content.cut(localFrom, localTo)),
+  );
+}
+
+function appendPartialList(
+  extraction: MarkdownSelectionExtraction,
+  list: ProseMirrorNode,
+  pos: number,
+  from: number,
+  to: number,
+) {
+  let selectedItems: ProseMirrorNode[] = [];
+  let selectedItemsStartIndex = 0;
+
+  const flushSelectedItems = () => {
+    if (selectedItems.length === 0) {
+      return;
+    }
+
+    const attrs =
+      list.type === schema.nodes.ordered_list
+        ? {
+            ...list.attrs,
+            order: Number(list.attrs.order ?? 1) + selectedItemsStartIndex,
+          }
+        : list.attrs;
+    extraction.nodes.push(list.type.create(attrs, selectedItems));
+    selectedItems = [];
+  };
+
+  list.forEach((item, offset, index) => {
+    const itemPos = pos + 1 + offset;
+    if (!selectionIntersectsNode(item, itemPos, from, to)) {
+      return;
+    }
+
+    if (selectionCoversVisibleNodeContent(item, itemPos, from, to)) {
+      if (selectedItems.length === 0) {
+        selectedItemsStartIndex = index;
+      }
+      selectedItems.push(item);
+      return;
+    }
+
+    flushSelectedItems();
+    appendSelectedMarkdownNodes(extraction, item, itemPos, from, to);
+  });
+
+  flushSelectedItems();
+}
+
+function selectionIntersectsNode(
+  node: ProseMirrorNode,
+  pos: number,
+  from: number,
+  to: number,
+) {
+  return from < pos + node.nodeSize && to > pos;
+}
+
+function selectionCoversVisibleNodeContent(
+  node: ProseMirrorNode,
+  pos: number,
+  from: number,
+  to: number,
+) {
+  const bounds = getVisibleNodeContentBounds(node, pos);
+  return from <= bounds.from && to >= bounds.to;
+}
+
+function getVisibleNodeContentBounds(
+  node: ProseMirrorNode,
+  pos: number,
+): { from: number; to: number } {
+  if (node.isTextblock) {
+    return {
+      from: pos + 1,
+      to: pos + 1 + node.content.size,
+    };
+  }
+
+  if (node.isLeaf || node.childCount === 0) {
+    return {
+      from: pos,
+      to: pos + node.nodeSize,
+    };
+  }
+
+  const firstChild = node.child(0);
+  const lastChild = node.child(node.childCount - 1);
+  const firstBounds = getVisibleNodeContentBounds(firstChild, pos + 1);
+  const lastChildPos = pos + 1 + node.content.size - lastChild.nodeSize;
+  const lastBounds = getVisibleNodeContentBounds(lastChild, lastChildPos);
+  return {
+    from: firstBounds.from,
+    to: lastBounds.to,
+  };
+}
+
 export function splitFrontMatter(markdown: string): { frontMatter: string; body: string } {
   return splitFrontMatterBlock(markdown);
 }

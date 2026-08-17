@@ -96,6 +96,7 @@ export interface AppPreferences {
   codeBlockLineNumbersVisible: boolean;
   codeBlockIndent: CodeBlockIndentPreference;
   inlineCodeRenderingEnabled: boolean;
+  copyMarkdownSyntaxEnabled: boolean;
   markdownLintEnabled: boolean;
   markdownLintRuleSet: MarkdownLintRuleSet;
   renderMode: RenderModePreference;
@@ -162,6 +163,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   codeBlockLineNumbersVisible: true,
   codeBlockIndent: 'spaces-2',
   inlineCodeRenderingEnabled: true,
+  copyMarkdownSyntaxEnabled: true,
   markdownLintEnabled: false,
   markdownLintRuleSet: 'relaxed',
   renderMode: 'hardware',
@@ -273,6 +275,7 @@ export async function loadAppPreferences(
     codeBlockLineNumbersVisible: parseSetting<unknown>(settings, 'codeBlockLineNumbersVisible'),
     codeBlockIndent: parseSetting<unknown>(settings, 'codeBlockIndent'),
     inlineCodeRenderingEnabled: parseSetting<unknown>(settings, 'inlineCodeRenderingEnabled'),
+    copyMarkdownSyntaxEnabled: parseSetting<unknown>(settings, 'copyMarkdownSyntaxEnabled'),
     markdownLintEnabled: parseSetting<unknown>(settings, 'markdownLintEnabled'),
     markdownLintRuleSet: parseSetting<unknown>(settings, 'markdownLintRuleSet'),
     renderMode: parseSetting<unknown>(settings, 'renderMode'),
@@ -437,6 +440,10 @@ export function normalizeAppPreferences(
       typeof value.inlineCodeRenderingEnabled === 'boolean'
         ? value.inlineCodeRenderingEnabled
         : DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled,
+    copyMarkdownSyntaxEnabled:
+      typeof value.copyMarkdownSyntaxEnabled === 'boolean'
+        ? value.copyMarkdownSyntaxEnabled
+        : DEFAULT_APP_PREFERENCES.copyMarkdownSyntaxEnabled,
     markdownLintEnabled:
       typeof value.markdownLintEnabled === 'boolean'
         ? value.markdownLintEnabled
@@ -568,6 +575,7 @@ function toPersistedPreferenceEntries(preferences: AppPreferences) {
     codeBlockLineNumbersVisible: preferences.codeBlockLineNumbersVisible,
     codeBlockIndent: preferences.codeBlockIndent,
     inlineCodeRenderingEnabled: preferences.inlineCodeRenderingEnabled,
+    copyMarkdownSyntaxEnabled: preferences.copyMarkdownSyntaxEnabled,
     markdownLintEnabled: preferences.markdownLintEnabled,
     markdownLintRuleSet: preferences.markdownLintRuleSet,
     renderMode: preferences.renderMode,

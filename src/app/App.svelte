@@ -320,6 +320,7 @@
   let codeBlockLineNumbersVisible = DEFAULT_APP_PREFERENCES.codeBlockLineNumbersVisible;
   let codeBlockIndent: CodeBlockIndentPreference = DEFAULT_APP_PREFERENCES.codeBlockIndent;
   let inlineCodeRenderingEnabled = DEFAULT_APP_PREFERENCES.inlineCodeRenderingEnabled;
+  let copyMarkdownSyntaxEnabled = DEFAULT_APP_PREFERENCES.copyMarkdownSyntaxEnabled;
   let shortcutPreferences: ShortcutPreferences = { ...DEFAULT_APP_PREFERENCES.shortcutPreferences };
   let imageSettings: ImageHandlingSettings = { ...DEFAULT_IMAGE_HANDLING_SETTINGS };
   let folderOpenDefaultBehavior: 'current-window' | 'new-window' | 'ask-every-time' =
@@ -2846,6 +2847,7 @@
     markdown,
     mode,
     inlineCodeRenderingEnabled,
+    copyMarkdownSyntaxEnabled,
     theme: initialResolvedTheme.editorTheme,
     onChange: syncFromEditor,
     onLinkShortcut: () => openLinkPicker(),
@@ -4555,6 +4557,7 @@
     codeBlockLineNumbersVisible = preferences.codeBlockLineNumbersVisible;
     codeBlockIndent = preferences.codeBlockIndent;
     inlineCodeRenderingEnabled = preferences.inlineCodeRenderingEnabled;
+    copyMarkdownSyntaxEnabled = preferences.copyMarkdownSyntaxEnabled;
     shortcutPreferences = preferences.shortcutPreferences;
     developerMode = preferences.developerMode;
     softwareUpdateAutoCheckEnabled = preferences.softwareUpdateAutoCheckEnabled;
@@ -4573,7 +4576,7 @@
     applyZoomSetting(zoomPercent, { onFrame: refreshEditorViewportLayout });
     applyCodeBlockLineNumberSetting(codeBlockLineNumbersVisible);
     document.documentElement.dataset.codeBlockIndent = codeBlockIndent;
-    editor.updateOptions({ inlineCodeRenderingEnabled });
+    editor.updateOptions({ inlineCodeRenderingEnabled, copyMarkdownSyntaxEnabled });
     applyOutlineDefaultExpansion();
 
     const shouldBeLargeDocument = markdown.length > largeDocumentLimit;
@@ -4637,6 +4640,7 @@
       codeBlockLineNumbersVisible,
       codeBlockIndent,
       inlineCodeRenderingEnabled,
+      copyMarkdownSyntaxEnabled,
       shortcutPreferences,
       imageHandlingSettings: imageSettings,
       developerMode,

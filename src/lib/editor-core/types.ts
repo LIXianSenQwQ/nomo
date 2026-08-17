@@ -19,6 +19,7 @@ export interface EditorRuntimeOptions {
   readonly: boolean;
   mode: EditorMode;
   inlineCodeRenderingEnabled?: boolean;
+  copyMarkdownSyntaxEnabled: boolean;
 }
 
 export interface SetMarkdownOptions {
@@ -184,6 +185,7 @@ export interface EditorCoreOptions {
   readonly?: boolean;
   mode?: EditorMode;
   inlineCodeRenderingEnabled?: boolean;
+  copyMarkdownSyntaxEnabled?: boolean;
   theme?: EditorThemeOptions;
   onChange?: (event: EditorChangeEvent) => void;
   onSelectionChange?: (event: EditorSelectionEvent) => void;

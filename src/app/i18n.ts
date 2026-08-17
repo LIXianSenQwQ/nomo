@@ -107,6 +107,9 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     codeBlockLineNumbersDescription: '控制语义编辑区代码块是否显示行号。',
     inlineCodeRendering: '渲染行内代码',
     inlineCodeRenderingDescription: '开启后显示行内代码样式；关闭后显示原始 Markdown 反引号文本。',
+    copyMarkdownSyntax: '复制时保留 Markdown 语法',
+    copyMarkdownSyntaxDescription:
+      '开启后，在语义编辑模式中复制或剪切选区时，纯文本剪贴板使用语义等价的 Markdown；富文本格式保持不变。',
     markdownLint: 'Markdown 格式检查',
     markdownLintEnabled: '检查 Markdown 格式',
     markdownLintEnabledDescription: '仅报告格式问题，不会修改文档内容。',
@@ -726,6 +729,9 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     inlineCodeRendering: '渲染行內程式碼',
     inlineCodeRenderingDescription:
       '開啟後顯示行內程式碼樣式；關閉後顯示原始 Markdown 反引號文字。',
+    copyMarkdownSyntax: '複製時保留 Markdown 語法',
+    copyMarkdownSyntaxDescription:
+      '開啟後，在語意編輯模式中複製或剪下選取內容時，純文字剪貼簿使用語意等價的 Markdown；富文字格式維持不變。',
     markdownLint: 'Markdown 格式檢查',
     markdownLintEnabled: '檢查 Markdown 格式',
     markdownLintEnabledDescription: '只回報格式問題，不會修改文件內容。',
@@ -1347,6 +1353,9 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     inlineCodeRendering: 'Render inline code',
     inlineCodeRenderingDescription:
       'When enabled, inline code is styled; when disabled, raw Markdown backticks remain visible.',
+    copyMarkdownSyntax: 'Preserve Markdown syntax when copying',
+    copyMarkdownSyntaxDescription:
+      'When enabled, copying or cutting a selection in semantic mode writes semantically equivalent Markdown as plain text. Rich text remains unchanged.',
     markdownLint: 'Markdown format check',
     markdownLintEnabled: 'Check Markdown formatting',
     markdownLintEnabledDescription: 'Reports formatting issues without changing document content.',

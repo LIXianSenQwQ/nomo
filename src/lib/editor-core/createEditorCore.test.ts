@@ -89,6 +89,172 @@ describe('createEditorCore', () => {
     editor.destroy();
   });
 
+  it('copies Markdown by default while retaining rich HTML', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# 标题\n\n这是 **重点**', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+
+    const payload = editor.getClipboardPayload();
+
+    expect(payload?.text).toBe('# 标题\n\n这是 **重点**');
+    expect(payload?.html).toContain('<h1');
+    expect(payload?.html).toContain('<strong>重点</strong>');
+    editor.destroy();
+  });
+
+  it('restores plain-text copying when Markdown clipboard syntax is disabled', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '# 标题\n\n这是 **重点**',
+      target,
+      copyMarkdownSyntaxEnabled: false,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+
+    expect(editor.getClipboardPayload()?.text).toBe('标题\n\n这是 重点');
+    editor.destroy();
+  });
+
+  it('applies Markdown clipboard option updates immediately', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '**重点**', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findNodeByText(view.state.doc, 'paragraph', '重点');
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(
+          view.state.doc,
+          paragraph.pos + 1,
+          paragraph.pos + 1 + paragraph.node.content.size,
+        ),
+      ),
+    );
+
+    expect(editor.getClipboardPayload()?.text).toBe('**重点**');
+    editor.updateOptions({ copyMarkdownSyntaxEnabled: false });
+    expect(editor.getClipboardPayload()?.text).toBe('重点');
+    editor.updateOptions({ copyMarkdownSyntaxEnabled: true });
+    expect(editor.getClipboardPayload()?.text).toBe('**重点**');
+    editor.destroy();
+  });
+
+  it('keeps block syntax only when the full visible block content is selected', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '# **标题文字**', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const heading = findNodeByText(view.state.doc, 'heading', '标题文字');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(
+          view.state.doc,
+          heading.pos + 1,
+          heading.pos + 1 + heading.node.content.size,
+        ),
+      ),
+    );
+    expect(editor.getClipboardPayload()?.text).toBe('# **标题文字**');
+
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(view.state.doc, heading.pos + 2, heading.pos + 4),
+      ),
+    );
+    expect(editor.getClipboardPayload()?.text).toBe('**题文**');
+    editor.destroy();
+  });
+
+  it('keeps complete list items and code blocks as Markdown structures', () => {
+    const listTarget = document.createElement('div');
+    const listEditor = createEditorCore({ markdown: '- 第一项\n- 第二项', target: listTarget });
+    const listView = (listEditor as unknown as { view: EditorView }).view;
+    const firstItemParagraph = findNodeByText(listView.state.doc, 'paragraph', '第一项');
+    listView.dispatch(
+      listView.state.tr.setSelection(
+        TextSelection.create(
+          listView.state.doc,
+          firstItemParagraph.pos + 1,
+          firstItemParagraph.pos + 1 + firstItemParagraph.node.content.size,
+        ),
+      ),
+    );
+    expect(listEditor.getClipboardPayload()?.text).toBe('- 第一项');
+    listEditor.destroy();
+
+    const codeTarget = document.createElement('div');
+    const codeEditor = createEditorCore({
+      markdown: '```ts\nconst value = 1;\n```',
+      target: codeTarget,
+    });
+    const codeView = (codeEditor as unknown as { view: EditorView }).view;
+    const codeBlock = findFirstNode(codeView.state.doc, 'code_block');
+    codeView.dispatch(
+      codeView.state.tr.setSelection(
+        TextSelection.create(
+          codeView.state.doc,
+          codeBlock.pos + 1,
+          codeBlock.pos + 1 + codeBlock.node.content.size,
+        ),
+      ),
+    );
+    expect(codeEditor.getClipboardPayload()?.text).toBe('```ts\nconst value = 1;\n```');
+
+    codeView.dispatch(
+      codeView.state.tr.setSelection(
+        TextSelection.create(codeView.state.doc, codeBlock.pos + 1, codeBlock.pos + 6),
+      ),
+    );
+    expect(codeEditor.getClipboardPayload()?.text).toBe('const');
+    codeEditor.destroy();
+  });
+
+  it('does not copy the synthetic empty paragraph after a terminal special block', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '```ts\nconst value = 1;\n```', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+
+    expect(editor.getClipboardPayload()?.text).toBe('```ts\nconst value = 1;\n```');
+    editor.destroy();
+  });
+
+  it('serializes complete tables and falls back to plain text for partial tables', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({
+      markdown: '| A | B |\n| :--- | :--- |\n| \\[raw\\] | value |',
+      target,
+    });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const firstCell = findNodeByText(view.state.doc, 'paragraph', 'A');
+    const lastCell = findNodeByText(view.state.doc, 'paragraph', 'value');
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(
+          view.state.doc,
+          firstCell.pos + 1,
+          lastCell.pos + 1 + lastCell.node.content.size,
+        ),
+      ),
+    );
+    expect(editor.getClipboardPayload()?.text).toContain('| A | B |');
+    expect(editor.getClipboardPayload()?.text).toContain('| [raw] | value |');
+
+    const rawCell = findNodeByText(view.state.doc, 'paragraph', '[raw]');
+    view.dispatch(
+      view.state.tr.setSelection(
+        TextSelection.create(
+          view.state.doc,
+          rawCell.pos + 1,
+          rawCell.pos + 1 + rawCell.node.content.size,
+        ),
+      ),
+    );
+    expect(editor.getClipboardPayload()?.text).toBe('[raw]');
+    editor.destroy();
+  });
+
   it('opens a code-only document with a safe trailing paragraph selection', () => {
     const markdown = '```java\n1`111\n```';
     const target = document.createElement('div');

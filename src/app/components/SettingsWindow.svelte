@@ -1706,6 +1706,20 @@
                 <span class="toggle-switch" aria-hidden="true"></span>
               </label>
 
+              <label class="toggle-row" for="copyMarkdownSyntaxEnabled">
+                <span>
+                  <span class="toggle-title">{t.copyMarkdownSyntax()}</span>
+                  <span class="toggle-desc">{t.copyMarkdownSyntaxDescription()}</span>
+                </span>
+                <input
+                  id="copyMarkdownSyntaxEnabled"
+                  type="checkbox"
+                  checked={draftSettings.copyMarkdownSyntaxEnabled}
+                  on:change={(event) => toggleSetting('copyMarkdownSyntaxEnabled', event)}
+                />
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+
               <h2 class="settings-heading-with-badge">
                 <span>{t.markdownLint()}</span>
                 <span class="beta-badge">Beta</span>

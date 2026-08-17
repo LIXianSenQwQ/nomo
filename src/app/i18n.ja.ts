@@ -70,6 +70,9 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   inlineCodeRendering: 'インラインコードをレンダリングする',
   inlineCodeRenderingDescription:
     '有効にすると、インライン コードにスタイルが設定されます。無効にすると、生の Markdown バッククォートは表示されたままになります。',
+  copyMarkdownSyntax: 'コピー時に Markdown 構文を保持',
+  copyMarkdownSyntaxDescription:
+    '有効にすると、セマンティック編集モードで選択範囲をコピーまたは切り取る際、プレーンテキストには意味的に同等な Markdown を使用します。リッチテキスト形式は変更しません。',
   markdownLint: 'Markdown 書式チェック',
   markdownLintEnabled: 'Markdown の書式をチェック',
   markdownLintEnabledDescription: '書式の問題だけを報告し、文書の内容は変更しません。',

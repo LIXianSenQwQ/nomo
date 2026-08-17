@@ -19,6 +19,7 @@ import {
   loadPersistedImageSettings,
   normalizeAppPreferences,
   normalizeImageSettings,
+  saveAppPreferences,
 } from './settings';
 
 beforeEach(() => {
@@ -338,6 +339,40 @@ describe('settings', () => {
     });
 
     expect(normalized.inlineCodeRenderingEnabled).toBe(true);
+  });
+
+  it('defaults Markdown clipboard syntax to enabled and preserves explicit choices', () => {
+    expect(DEFAULT_APP_PREFERENCES.copyMarkdownSyntaxEnabled).toBe(true);
+    expect(normalizeAppPreferences({}).copyMarkdownSyntaxEnabled).toBe(true);
+    expect(
+      normalizeAppPreferences({ copyMarkdownSyntaxEnabled: 'false' as never })
+        .copyMarkdownSyntaxEnabled,
+    ).toBe(true);
+    expect(
+      normalizeAppPreferences({ copyMarkdownSyntaxEnabled: false }).copyMarkdownSyntaxEnabled,
+    ).toBe(false);
+    expect(
+      normalizeAppPreferences({ copyMarkdownSyntaxEnabled: true }).copyMarkdownSyntaxEnabled,
+    ).toBe(true);
+  });
+
+  it('loads and saves the Markdown clipboard syntax preference', async () => {
+    await expect(
+      loadAppPreferences(true, [
+        createSetting('appearanceThemeModelV1', true),
+        createSetting('copyMarkdownSyntaxEnabled', false),
+      ]),
+    ).resolves.toMatchObject({ copyMarkdownSyntaxEnabled: false });
+
+    await saveAppPreferences(
+      true,
+      { ...DEFAULT_APP_PREFERENCES, copyMarkdownSyntaxEnabled: false },
+      ['copyMarkdownSyntaxEnabled'],
+    );
+
+    expect(storageMock.updateAppSettings).toHaveBeenCalledWith({
+      copyMarkdownSyntaxEnabled: false,
+    });
   });
 
   it('normalizes close window behavior settings', () => {

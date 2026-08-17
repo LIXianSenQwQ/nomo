@@ -76,6 +76,7 @@ import {
   getMarkdownBlockLineMap,
   parseMarkdown,
   serializeMarkdown,
+  serializeMarkdownSelection,
   splitFrontMatter,
 } from './markdown';
 import { schema } from './schema';
@@ -213,6 +214,7 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.runtime = {
       readonly: options.readonly ?? false,
       mode: options.mode ?? 'semantic',
+      copyMarkdownSyntaxEnabled: options.copyMarkdownSyntaxEnabled ?? true,
     };
 
     if (this.target) {
@@ -228,7 +230,7 @@ export class ProseMirrorEditorCore implements EditorCore {
       state: this.createState(this.markdown),
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
       editable: () => this.isEditable(),
-      clipboardTextSerializer: (slice) => serializeClipboardText(slice),
+      clipboardTextSerializer: (slice) => this.serializeClipboardText(slice),
       clipboardTextParser: (text, $context) => parseClipboardText(text, $context),
       nodeViews: {
         code_block: (node, view, getPos) =>
@@ -465,6 +467,22 @@ export class ProseMirrorEditorCore implements EditorCore {
       text: serialized.text,
       html: serialized.dom.innerHTML,
     };
+  }
+
+  private serializeClipboardText(slice: Slice): string {
+    const plainText = serializeClipboardText(slice);
+    if (!this.runtime.copyMarkdownSyntaxEnabled || !this.view) {
+      return plainText;
+    }
+
+    try {
+      const { doc, selection } = this.view.state;
+      const clipboardDoc = removeEmptyTrailingParagraph(doc);
+      const selectionTo = Math.min(selection.to, clipboardDoc.content.size);
+      return serializeMarkdownSelection(clipboardDoc, selection.from, selectionTo) ?? plainText;
+    } catch {
+      return plainText;
+    }
   }
 
   pasteClipboardText(text: string): boolean {
