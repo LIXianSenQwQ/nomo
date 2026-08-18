@@ -4,6 +4,7 @@ use std::{
     collections::HashSet,
     env,
     path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
 };
 #[cfg(any(target_os = "macos", test))]
 use tauri::Url;
@@ -13,6 +14,8 @@ const OPEN_DOCUMENT_EVENT: &str = "nomo://open-document";
 const OPEN_FOLDER_EVENT: &str = "nomo://open-folder";
 const PENDING_EXTERNAL_OPEN_PREFIX: &str = "pendingExternalOpen:";
 const PENDING_EXTERNAL_FOLDER_PREFIX: &str = "pendingFolder:";
+
+static EARLY_EXTERNAL_OPEN_PATHS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 #[derive(Clone, Debug, Serialize)]
 struct ExternalOpenPayload {
@@ -113,6 +116,27 @@ pub(crate) fn collect_markdown_paths_from_urls(urls: Vec<Url>) -> Vec<String> {
     }
 
     paths
+}
+
+pub(crate) fn queue_early_external_open(paths: Vec<String>) -> Result<(), String> {
+    let mut pending = EARLY_EXTERNAL_OPEN_PATHS
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .map_err(|_| "锁定 setup 前外部打开队列失败".to_string())?;
+    for path in paths {
+        if !pending.contains(&path) {
+            pending.push(path);
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn take_early_external_open_paths() -> Result<Vec<String>, String> {
+    let mut pending = EARLY_EXTERNAL_OPEN_PATHS
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .map_err(|_| "锁定 setup 前外部打开队列失败".to_string())?;
+    Ok(std::mem::take(&mut *pending))
 }
 
 pub(crate) fn route_external_open(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
@@ -349,6 +373,22 @@ fn normalize_path(path: &Path) -> String {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn queues_setup_time_external_open_paths_without_duplicates() {
+        queue_early_external_open(vec![
+            "/tmp/first.md".to_string(),
+            "/tmp/first.md".to_string(),
+        ])
+        .unwrap();
+        queue_early_external_open(vec!["/tmp/second.md".to_string()]).unwrap();
+
+        assert_eq!(
+            take_early_external_open_paths().unwrap(),
+            vec!["/tmp/first.md".to_string(), "/tmp/second.md".to_string()]
+        );
+        assert!(take_early_external_open_paths().unwrap().is_empty());
+    }
 
     #[test]
     fn collects_existing_markdown_paths_from_args() {

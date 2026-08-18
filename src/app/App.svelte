@@ -4842,9 +4842,9 @@
           try {
             const paths = JSON.parse(pendingExternalOpenSetting.valueJson);
             if (Array.isArray(paths)) {
-              pendingExternalOpenPaths = paths.filter(
-                (path): path is string => typeof path === 'string',
-              );
+              const validPaths = paths.filter((path): path is string => typeof path === 'string');
+              logInfo('ExternalOpen', '读取冷启动待打开文件', { paths: validPaths });
+              queuePendingExternalOpenPaths(validPaths);
             }
             await updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
           } catch {
@@ -4915,7 +4915,10 @@
       }
       await setupDesktopEvents();
       await refreshRecentFiles();
-      if (pendingExternalOpenPaths.length === 0) {
+      const startupExternalOpenPaths = pendingExternalOpenPaths;
+      pendingExternalOpenPaths = [];
+      logInfo('ExternalOpen', '处理冷启动文件队列', { paths: startupExternalOpenPaths });
+      if (startupExternalOpenPaths.length === 0) {
         await maybeOpenFirstRunSample({
           settings,
           recentFilesCount: recentFiles.length,
@@ -4923,13 +4926,12 @@
           hasPendingFolder,
         });
       }
-      if (pendingExternalOpenPaths.length > 0) {
+      if (startupExternalOpenPaths.length > 0) {
         appBootState = 'opening-file';
-        await openStartupExternalMarkdownPaths(pendingExternalOpenPaths);
+        await openStartupExternalMarkdownPaths(startupExternalOpenPaths);
       } else {
         scheduleStartupFolderLoad();
       }
-      pendingExternalOpenPaths = [];
       window.addEventListener('keydown', handleGlobalShortcut);
       fileCheckTimer = window.setInterval(() => {
         void checkExternalFileChange();
@@ -4938,6 +4940,13 @@
       await tick();
       syncSourceTextareaHeight();
       await updateWindowTitle().catch(() => undefined);
+
+      while (pendingExternalOpenPaths.length > 0) {
+        const deferredExternalOpenPaths = pendingExternalOpenPaths;
+        pendingExternalOpenPaths = [];
+        await openExternalMarkdownPaths(deferredExternalOpenPaths);
+      }
+      appBootState = 'ready';
     } finally {
       if (appearanceRuntimeActive && !systemThemeListenerReady) {
         setupSystemThemeListener();
@@ -5458,24 +5467,46 @@
     }
 
     const { listen } = await import('@tauri-apps/api/event');
-    const [exitRequestUnlisten, closeRequestUnlisten, markdownMiniReturnUnlisten] =
-      await Promise.all([
-        listen('nomo://request-exit-app', () => {
-          requestExitApp().catch(() => undefined);
-        }).catch(() => null),
-        listen<{ windowLabel?: string; window_label?: string }>(
-          'nomo://request-close-window',
-          (event) => {
-            // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
-            const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
-            if (requestedWindowLabel !== windowLabel) return;
-            closeCurrentWindow().catch(() => undefined);
-          },
-        ).catch(() => null),
-        listen('nomo://markdown-mini-request-return', () => {
-          void requestMarkdownMiniReturn();
-        }).catch(() => null),
-      ]);
+    const [
+      exitRequestUnlisten,
+      closeRequestUnlisten,
+      markdownMiniReturnUnlisten,
+      openDocumentUnlisten,
+    ] = await Promise.all([
+      listen('nomo://request-exit-app', () => {
+        requestExitApp().catch(() => undefined);
+      }).catch(() => null),
+      listen<{ windowLabel?: string; window_label?: string }>(
+        'nomo://request-close-window',
+        (event) => {
+          // 多窗口场景下过滤只响应当前窗口的关闭请求，避免所有窗口同时弹出确认
+          const requestedWindowLabel = event.payload?.windowLabel ?? event.payload?.window_label;
+          if (requestedWindowLabel !== windowLabel) return;
+          closeCurrentWindow().catch(() => undefined);
+        },
+      ).catch(() => null),
+      listen('nomo://markdown-mini-request-return', () => {
+        void requestMarkdownMiniReturn();
+      }).catch(() => null),
+      listenDesktopOpenDocuments((paths, targetWindowLabel) => {
+        logInfo('ExternalOpen', '收到原生文件打开事件', {
+          paths,
+          targetWindowLabel,
+          appBootState,
+        });
+        if (targetWindowLabel && targetWindowLabel !== windowLabel) {
+          return;
+        }
+        if (windowLabel) {
+          updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
+        }
+        if (appBootState !== 'ready') {
+          queuePendingExternalOpenPaths(paths);
+          return;
+        }
+        openExternalMarkdownPaths(paths).catch(() => undefined);
+      }).catch(() => null),
+    ]);
 
     criticalDesktopEventsReady = true;
     desktopUnlisteners = [
@@ -5483,6 +5514,7 @@
       exitRequestUnlisten,
       closeRequestUnlisten,
       markdownMiniReturnUnlisten,
+      openDocumentUnlisten,
     ].filter((value): value is () => void => Boolean(value));
   }
 
@@ -5497,7 +5529,6 @@
       dropUnlisten,
       settingsUnlisten,
       updateInstallRequestUnlisten,
-      openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
@@ -5516,15 +5547,6 @@
         if (typeof requestId === 'string' && requestId.length > 0) {
           approveSoftwareUpdateInstall(requestId).catch(() => undefined);
         }
-      }).catch(() => null),
-      listenDesktopOpenDocuments((paths, targetWindowLabel) => {
-        if (targetWindowLabel && targetWindowLabel !== windowLabel) {
-          return;
-        }
-        if (windowLabel) {
-          updateAppSetting(`pendingExternalOpen:${windowLabel}`, '').catch(() => undefined);
-        }
-        openExternalMarkdownPaths(paths).catch(() => undefined);
       }).catch(() => null),
       listenDesktopOpenFolder((folderPath, targetWindowLabel) => {
         if (targetWindowLabel && targetWindowLabel !== windowLabel) {
@@ -5549,11 +5571,14 @@
       dropUnlisten,
       settingsUnlisten,
       updateInstallRequestUnlisten,
-      openDocumentUnlisten,
       openFolderUnlisten,
       folderIndexBatchUnlisten,
       folderIndexFinishedUnlisten,
     ].filter((value): value is () => void => Boolean(value));
+  }
+
+  function queuePendingExternalOpenPaths(paths: string[]) {
+    pendingExternalOpenPaths = [...new Set([...pendingExternalOpenPaths, ...paths])];
   }
 
   async function openExternalMarkdownPaths(paths: string[]) {
@@ -5569,6 +5594,7 @@
 
   // 双击 md 文件启动：不恢复上次工作区，只打开文件所在目录并打开该文件
   async function openStartupExternalMarkdownPaths(paths: string[]) {
+    logInfo('ExternalOpen', '开始处理冷启动文件', { paths });
     if (!desktopEnabled || paths.length === 0) {
       return;
     }

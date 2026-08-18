@@ -239,8 +239,16 @@ pub fn run() {
                     .set_focus()
                     .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
             }
-            let startup_targets =
+            let mut startup_targets =
                 crate::window::external_open::collect_external_open_targets_from_startup_args();
+            let early_open_paths =
+                crate::window::external_open::take_early_external_open_paths()
+                    .map_err(|error| std::io::Error::new(std::io::ErrorKind::Other, error))?;
+            for path in early_open_paths {
+                if !startup_targets.markdown_paths.contains(&path) {
+                    startup_targets.markdown_paths.push(path);
+                }
+            }
             crate::app_logger::info(
                 "App",
                 &format!(
@@ -360,7 +368,23 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = _event {
                 let paths = crate::window::external_open::collect_markdown_paths_from_urls(urls);
-                let _ = crate::window::external_open::route_external_open(_app, paths);
+                crate::app_logger::info(
+                    "ExternalOpen",
+                    &format!("收到 macOS Opened 事件：files={}", paths.len()),
+                );
+                if _app.try_state::<crate::config::ConfigManager>().is_none() {
+                    if let Err(error) =
+                        crate::window::external_open::queue_early_external_open(paths)
+                    {
+                        crate::app_logger::error("ExternalOpen", &error);
+                    } else {
+                        crate::app_logger::info("ExternalOpen", "已暂存 setup 前文件打开请求");
+                    }
+                } else if let Err(error) =
+                    crate::window::external_open::route_external_open(_app, paths)
+                {
+                    crate::app_logger::error("ExternalOpen", &error);
+                }
             }
         });
 }

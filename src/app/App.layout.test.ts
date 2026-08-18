@@ -569,6 +569,9 @@ describe('App outline layout', () => {
     expect(tauriLibSource).toContain('collect_markdown_paths_from_urls');
     expect(tauriLibSource).toContain('persist_pending_external_open');
     expect(tauriLibSource).toContain('persist_pending_external_folder_open');
+    expect(tauriLibSource).toContain('try_state::<crate::config::ConfigManager>()');
+    expect(tauriLibSource).toContain('queue_early_external_open(paths)');
+    expect(tauriLibSource).toContain('take_early_external_open_paths()');
     expect(tauriExternalOpenSource).toContain(
       'const OPEN_DOCUMENT_EVENT: &str = "nomo://open-document"',
     );
@@ -595,9 +598,19 @@ describe('App outline layout', () => {
     expect(appSource).toContain('listenDesktopOpenDocuments((paths, targetWindowLabel) =>');
     expect(appSource).toContain('listenDesktopOpenFolder((folderPath, targetWindowLabel) =>');
     expect(appSource).toContain('if (targetWindowLabel && targetWindowLabel !== windowLabel)');
+    const criticalEventsSource = appSource.slice(
+      appSource.indexOf('async function setupCriticalDesktopEvents()'),
+      appSource.indexOf('async function setupDesktopEvents()'),
+    );
+    expect(criticalEventsSource).toContain('listenDesktopOpenDocuments');
+    expect(criticalEventsSource).toContain("if (appBootState !== 'ready')");
+    expect(criticalEventsSource).toContain('queuePendingExternalOpenPaths(paths)');
+    expect(appSource).toContain('const startupExternalOpenPaths = pendingExternalOpenPaths');
+    expect(appSource).toContain('while (pendingExternalOpenPaths.length > 0)');
+    expect(appSource).toContain('const deferredExternalOpenPaths = pendingExternalOpenPaths');
     expect(appSource).toContain('pendingExternalOpen:${windowLabel}');
     expect(appSource).toContain('pendingFolder:${windowLabel}');
-    expect(appSource).toContain('openStartupExternalMarkdownPaths(pendingExternalOpenPaths)');
+    expect(appSource).toContain('openStartupExternalMarkdownPaths(startupExternalOpenPaths)');
     expect(appSource).toContain('async function openStartupExternalMarkdownPaths(paths: string[])');
     expect(appSource).toContain('openExternalMarkdownPaths(paths)');
     expect(appSource).toContain('openFolderWithBehavior(folderPath)');
