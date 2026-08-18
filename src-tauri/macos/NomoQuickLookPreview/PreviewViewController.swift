@@ -1,7 +1,13 @@
 import Cocoa
 import Darwin
+import OSLog
 import QuickLookUI
 import WebKit
+
+private let appearanceLogger = Logger(
+    subsystem: "com.nomo.desktop.quicklook",
+    category: "appearance"
+)
 
 /// 使用内嵌 WebKit 渲染器展示 Markdown 文件的 Quick Look 预览控制器。
 ///
@@ -103,10 +109,17 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
         do {
             if let appearance = try readAppearancePreferences() {
                 payload["appearance"] = appearance
+                appearanceLogger.info(
+                    "Loaded preferences: themeMode=\(appearance["themeMode"] ?? "<missing>", privacy: .public) colorThemeId=\(appearance["colorThemeId"] ?? "<missing>", privacy: .public) documentStyleId=\(appearance["documentStyleId"] ?? "<missing>", privacy: .public)"
+                )
+            } else {
+                appearanceLogger.notice("Found no usable appearance preferences")
             }
         } catch {
             // 主题配置不可读不应阻断正文预览；保留系统明暗模式回退，并在统一日志中暴露原因。
-            NSLog("Nomo Quick Look could not read appearance preferences: %@", String(describing: error))
+            appearanceLogger.error(
+                "Could not read appearance preferences: \(String(describing: error), privacy: .public)"
+            )
         }
 
         return payload
@@ -127,12 +140,29 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
               throw new Error('Quick Look renderer bridge is unavailable');
             }
             window.__NOMO_RENDER_QUICKLOOK__(payload);
+            return {
+              receivedAppearance: payload.appearance ?? null,
+              appliedAppearance: {
+                themeMode: document.documentElement.dataset.themePreference ?? null,
+                colorThemeId: document.documentElement.dataset.colorTheme ?? null,
+                documentStyleId: document.documentElement.dataset.documentStyle ?? null,
+                effectiveScheme: document.documentElement.dataset.theme ?? null,
+              },
+            };
             """,
             arguments: ["payload": payload],
             in: nil,
             in: .page,
             completionHandler: { [weak self] result in
-                if case let .failure(error) = result {
+                switch result {
+                case let .success(diagnostics):
+                    appearanceLogger.info(
+                        "Bridge diagnostics: \(String(describing: diagnostics), privacy: .public)"
+                    )
+                case let .failure(error):
+                    appearanceLogger.error(
+                        "Bridge failed: \(String(describing: error), privacy: .public)"
+                    )
                     self?.loadErrorPreview(error)
                 }
             }
@@ -193,7 +223,10 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKN
                 let record = settings[key] as? [String: Any],
                 let encodedValue = record["value_json"] as? String,
                 let encodedData = encodedValue.data(using: .utf8),
-                let value = try JSONSerialization.jsonObject(with: encodedData) as? String
+                let value = try JSONSerialization.jsonObject(
+                    with: encodedData,
+                    options: .fragmentsAllowed
+                ) as? String
             else {
                 continue
             }
