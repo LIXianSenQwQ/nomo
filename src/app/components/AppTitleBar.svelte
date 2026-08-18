@@ -80,6 +80,7 @@
   export let openContextMenu: (request: ContextMenuRequest) => void = () => undefined;
 
   const WINDOW_STATE_SYNC_DELAY_MS = 80;
+  const MENU_VIEWPORT_MARGIN_PX = 8;
 
   let platformCapabilities = getPlatformCapabilities();
   let isFullscreen = false;
@@ -88,6 +89,81 @@
   let windowStateRequestId = 0;
   let canSyncWindowState = false;
   let windowStateListenerReady = false;
+
+  // Windows 高 DPI 会压缩 WebView 的逻辑视口；菜单打开或尺寸变化时始终贴合当前视口。
+  function keepDropdownInViewport(node: HTMLElement) {
+    let frameId: number | null = null;
+    const nestedTrigger = node.closest<HTMLElement>('.nested-trigger');
+
+    function fitDropdown() {
+      frameId = null;
+      node.classList.remove('opens-left', 'viewport-scroll');
+      node.style.setProperty('--dropdown-shift-x', '0px');
+      node.style.setProperty('--dropdown-shift-y', '0px');
+      node.style.removeProperty('--dropdown-max-height');
+
+      let rect = node.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const availableHeight = Math.max(0, viewportHeight - MENU_VIEWPORT_MARGIN_PX * 2);
+
+      if (rect.height > availableHeight) {
+        node.classList.add('viewport-scroll');
+        node.style.setProperty('--dropdown-max-height', `${availableHeight}px`);
+        rect = node.getBoundingClientRect();
+      }
+
+      if (node.classList.contains('nested') && nestedTrigger) {
+        const triggerRect = nestedTrigger.getBoundingClientRect();
+        const rightSpace = viewportWidth - MENU_VIEWPORT_MARGIN_PX - triggerRect.right;
+        const leftSpace = triggerRect.left - MENU_VIEWPORT_MARGIN_PX;
+        node.classList.toggle('opens-left', rightSpace < rect.width + 2 && leftSpace > rightSpace);
+        rect = node.getBoundingClientRect();
+      }
+
+      let shiftX = 0;
+      if (rect.right > viewportWidth - MENU_VIEWPORT_MARGIN_PX) {
+        shiftX = viewportWidth - MENU_VIEWPORT_MARGIN_PX - rect.right;
+      }
+      if (rect.left + shiftX < MENU_VIEWPORT_MARGIN_PX) {
+        shiftX += MENU_VIEWPORT_MARGIN_PX - (rect.left + shiftX);
+      }
+
+      let shiftY = 0;
+      if (rect.bottom > viewportHeight - MENU_VIEWPORT_MARGIN_PX) {
+        shiftY = viewportHeight - MENU_VIEWPORT_MARGIN_PX - rect.bottom;
+      }
+      if (rect.top + shiftY < MENU_VIEWPORT_MARGIN_PX) {
+        shiftY += MENU_VIEWPORT_MARGIN_PX - (rect.top + shiftY);
+      }
+
+      node.style.setProperty('--dropdown-shift-x', `${shiftX}px`);
+      node.style.setProperty('--dropdown-shift-y', `${shiftY}px`);
+    }
+
+    function scheduleFit() {
+      if (frameId !== null) window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(fitDropdown);
+    }
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleFit);
+    resizeObserver?.observe(node);
+    window.addEventListener('resize', scheduleFit);
+    nestedTrigger?.addEventListener('pointerenter', scheduleFit);
+    scheduleFit();
+
+    return {
+      destroy() {
+        if (frameId !== null) window.cancelAnimationFrame(frameId);
+        resizeObserver?.disconnect();
+        window.removeEventListener('resize', scheduleFit);
+        nestedTrigger?.removeEventListener('pointerenter', scheduleFit);
+      },
+    };
+  }
 
   $: shouldShowWindowMenu = platformCapabilities.showsInAppWindowMenu;
 
@@ -413,7 +489,7 @@
               >{t.file()}</button
             >
             {#if activeMenu === 'file'}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" use:keepDropdownInViewport>
                 <button on:click={() => finish(createNewFile, 'file')}
                   >{t.newMarkdown()} <span class="shortcut">Ctrl + N</span></button
                 >
@@ -438,7 +514,7 @@
                       stroke-linejoin="round"
                     /></svg
                   >
-                  <div class="dropdown-menu nested recent-submenu">
+                  <div class="dropdown-menu nested recent-submenu" use:keepDropdownInViewport>
                     {#each recentFiles.slice(0, 10) as recent}
                       {@const isMissing = missingRecentPaths.has(recent.path)}
                       <button
@@ -513,7 +589,7 @@
               >{t.editMenu()}</button
             >
             {#if activeMenu === 'edit'}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" use:keepDropdownInViewport>
                 <button on:click={() => finish(() => runCommand({ type: 'undo' }), 'edit')}
                   >{t.undo()} <span class="shortcut">Ctrl + Z</span></button
                 >
@@ -533,7 +609,7 @@
               >{t.paragraph()}</button
             >
             {#if activeMenu === 'paragraph'}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" use:keepDropdownInViewport>
                 <div class="nested-trigger">
                   <span>{t.heading()}</span>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
@@ -544,7 +620,7 @@
                       stroke-linejoin="round"
                     /></svg
                   >
-                  <div class="dropdown-menu nested">
+                  <div class="dropdown-menu nested" use:keepDropdownInViewport>
                     <button
                       on:mousedown|preventDefault
                       on:click={() =>
@@ -663,7 +739,7 @@
                       stroke-linejoin="round"
                     /></svg
                   >
-                  <div class="dropdown-menu nested">
+                  <div class="dropdown-menu nested" use:keepDropdownInViewport>
                     <button on:click={() => insertBlankDiagram('paragraph')}>
                       {t.blankDiagram()} <span class="shortcut">mermaid</span>
                     </button>
@@ -705,7 +781,7 @@
               >{t.format()}</button
             >
             {#if activeMenu === 'format'}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" use:keepDropdownInViewport>
                 <button on:click={() => finish(() => runCommand({ type: 'toggleBold' }), 'format')}
                   >{t.bold()} <span class="shortcut">Ctrl + B</span></button
                 >
@@ -762,7 +838,7 @@
               >{t.view()}</button
             >
             {#if activeMenu === 'view'}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" use:keepDropdownInViewport>
                 <button
                   on:click={() =>
                     finish(() => setMode(mode === 'source' ? 'semantic' : 'source'), 'view')}
