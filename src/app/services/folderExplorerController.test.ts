@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { checkPathsExist } from '../../lib/desktop/tauriStorage';
 import type { FileTreeNode } from '../types';
-import { loadFolderChildren } from './documentFiles';
+import { loadFolderChildren, loadFolderTree } from './documentFiles';
 import { createFolderExplorerController } from './folderExplorerController';
 
 vi.mock('../../lib/desktop/tauriStorage', () => ({
@@ -12,11 +12,64 @@ vi.mock('./documentFiles', () => ({
   loadFolderChildren: vi.fn(),
   loadFolderTree: vi.fn(),
   pickFolderPath: vi.fn(),
-  startFolderIndexing: vi.fn(),
 }));
 
 describe('folderExplorerController', () => {
-  it.skip('刷新已展开文件夹时只提交最终文件树，避免 UI 暴露中间空树', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('载入工作区时只读取根目录，不启动递归索引', async () => {
+    const state = createControllerState('D:\\Demo\\Workspace');
+    vi.mocked(loadFolderTree).mockResolvedValue([
+      file('readme.md', `${state.rootPath}\\readme.md`),
+    ]);
+
+    await state.controller.loadFolder(state.rootPath);
+
+    expect(loadFolderTree).toHaveBeenCalledOnce();
+    expect(loadFolderTree).toHaveBeenCalledWith(state.rootPath);
+    expect(loadFolderChildren).not.toHaveBeenCalled();
+    expect(state.folderTree).toHaveLength(1);
+    expect(state.statusMessage).not.toMatch(/索引|index/i);
+  });
+
+  it('合并仍在执行的目录刷新，完成后允许下一次刷新', async () => {
+    const state = createControllerState('D:\\Demo\\Workspace');
+    let resolveExists!: (value: boolean[]) => void;
+    vi.mocked(checkPathsExist).mockImplementationOnce(
+      () => new Promise((resolve) => (resolveExists = resolve)),
+    );
+    vi.mocked(loadFolderChildren).mockResolvedValue([]);
+
+    const first = state.controller.syncLoadedFolders();
+    const overlapping = state.controller.syncLoadedFolders();
+
+    expect(overlapping).toBe(first);
+    expect(checkPathsExist).toHaveBeenCalledOnce();
+    resolveExists([true]);
+    await first;
+
+    vi.mocked(checkPathsExist).mockResolvedValue([true]);
+    await state.controller.syncLoadedFolders();
+    expect(checkPathsExist).toHaveBeenCalledTimes(2);
+  });
+
+  it('刷新发现工作区根目录消失时清空工作区', async () => {
+    const state = createControllerState('D:\\Demo\\Workspace', [
+      file('readme.md', 'D:\\Demo\\Workspace\\readme.md'),
+    ]);
+    vi.mocked(checkPathsExist).mockResolvedValue([false, true]);
+
+    await state.controller.syncLoadedFolders();
+
+    expect(state.currentFolderPath).toBe('');
+    expect(state.folderTree).toEqual([]);
+    expect(state.expandedFolders.size).toBe(0);
+    expect(loadFolderChildren).not.toHaveBeenCalled();
+  });
+
+  it('刷新已展开文件夹时只提交最终文件树，避免 UI 暴露中间空树', async () => {
     const rootPath = 'D:\\Demo\\Workspace';
     const docsPath = `${rootPath}\\docs`;
     const notesPath = `${docsPath}\\notes`;
@@ -98,27 +151,68 @@ describe('folderExplorerController', () => {
     expect(loadFolderChildren).toHaveBeenCalledWith(rootPath, rootPath);
     expect(loadFolderChildren).toHaveBeenCalledWith(docsPath, rootPath);
     expect(loadFolderChildren).toHaveBeenCalledWith(notesPath, rootPath);
+    const normalizedRootPath = rootPath.replace(/\\/g, '/');
+    const normalizedDocsPath = docsPath.replace(/\\/g, '/');
+    const normalizedNotesPath = notesPath.replace(/\\/g, '/');
     expect(folderTree).toEqual([
       folder({
         name: 'docs',
-        path: docsPath,
+        path: normalizedDocsPath,
         has_children: true,
         children_loaded: true,
         children: [
           folder({
             name: 'notes',
-            path: notesPath,
+            path: normalizedNotesPath,
             has_children: true,
             children_loaded: true,
-            children: [file('nested.md', `${notesPath}\\nested.md`)],
+            children: [file('nested.md', `${normalizedNotesPath}/nested.md`)],
           }),
-          file('fresh.md', `${docsPath}\\fresh.md`),
+          file('fresh.md', `${normalizedDocsPath}/fresh.md`),
         ],
       }),
-      file('readme.md', `${rootPath}\\readme.md`),
+      file('readme.md', `${normalizedRootPath}/readme.md`),
     ]);
   });
 });
+
+function createControllerState(rootPath: string, initialTree: FileTreeNode[] = []) {
+  let folderTree = initialTree;
+  let expandedFolders = new Set<string>();
+  let currentFolderPath = rootPath;
+  let rootFolderExpanded = true;
+  let statusMessage = '';
+
+  const controller = createFolderExplorerController({
+    getDesktopEnabled: () => true,
+    getFolderTree: () => folderTree,
+    setFolderTree: (value) => (folderTree = value),
+    getExpandedFolders: () => expandedFolders,
+    setExpandedFolders: (value) => (expandedFolders = value),
+    getRootFolderExpanded: () => rootFolderExpanded,
+    setRootFolderExpanded: (value) => (rootFolderExpanded = value),
+    getCurrentFolderPath: () => currentFolderPath,
+    setCurrentFolderPath: (value) => (currentFolderPath = value),
+    setStatusMessage: (value) => (statusMessage = value),
+  });
+
+  return {
+    controller,
+    rootPath,
+    get folderTree() {
+      return folderTree;
+    },
+    get expandedFolders() {
+      return expandedFolders;
+    },
+    get currentFolderPath() {
+      return currentFolderPath;
+    },
+    get statusMessage() {
+      return statusMessage;
+    },
+  };
+}
 
 function folder(overrides: Partial<FileTreeNode>): FileTreeNode {
   return {

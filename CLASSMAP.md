@@ -100,11 +100,11 @@
 | 文件存储与文档仓库接口 | `src/lib/services/storage.ts` | `src/lib/desktop/tauriStorage.ts` | FileStorage、DocumentRepository、Markdown 源编码契约变更 |
 | 渲染服务类型接口 | `src/lib/services/render.ts` | `src/lib/services/shikiCodeTokenizer.ts`, `katexMathRenderer.ts`, `mermaidDiagramRenderer.ts` | ImageLoader、CodeTokenizer、MathRenderer、DiagramRenderer 接口变更 |
 | 文档文件 IO | `src/app/services/documentFiles.ts` | `src/lib/desktop/tauriStorage.ts` | 文件读取/保存/最近文件/目录树前端调用 |
-| 文件夹资源管理 | `src/app/services/folderExplorerController.ts` | `src/app/services/folderTree.ts`, `explorerRows.ts` | 目录树加载/展开/同步 |
+| 文件夹资源管理 | `src/app/services/folderExplorerController.ts` | `src/app/services/folderTree.ts`, `explorerRows.ts` | 目录树按需加载/展开/串行刷新已加载目录 |
 | 目录树纯函数 | `src/app/services/folderTree.ts` | — | 树的归一化/查找/更新 |
 | 资源管理器展示 | `src/app/services/explorerRows.ts` | — | 树形拍平为可渲染行 |
 | 资源管理器重命名规则 | `src/app/services/explorerRename.ts` | — | 行内重命名输入框选区范围 |
-| Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写、Markdown 编码转换/保持、目录扫描/索引 |
+| Rust 文件系统 | `src-tauri/src/file_system.rs` | `src-tauri/src/models.rs` | 后端文件读写、Markdown 编码转换/保持、短句柄目录快照与按需枚举 |
 | 图片资源后端 | `src-tauri/src/file_system/image_assets.rs` | — | 图片导入/解析/PicGo 上传/删除 |
 
 ### 大文件 TXT/JSON 分段编辑
@@ -815,8 +815,7 @@
 **Owns:**
 - 文件夹资源管理：加载文件夹、展开祖先目录
 - 懒加载子目录
-- 同步已加载目录
-- 处理后台索引批次
+- 合并并同步已加载目录的重叠刷新
 
 **Does not own：**
 - 不拥有目录树纯函数（在 folderTree.ts 中）
@@ -829,7 +828,7 @@
 **Change this when：**
 - 修改文件夹加载逻辑
 - 修改目录展开/折叠行为
-- 修改后台索引处理
+- 修改已加载目录的刷新协调
 
 **Do not change this when：**
 - 修改目录树纯数据结构操作
@@ -1740,7 +1739,7 @@
 **Owns：**
 - 后端文件系统：读写 Markdown、创建/重命名/删除文件夹和文件
 - Markdown 的 UTF-8/BOM、UTF-16 BOM、GBK 解码与按源编码安全写回
-- 扫描目录树、后台索引
+- 使用短生命周期目录快照按需枚举根目录与已加载子目录
 - 路径存在性检查
 - 示例文档安装
 - Markdown-like 文件过滤、忽略规则、`.gitignore`、目录优先排序
@@ -1760,7 +1759,7 @@
 **Do not change this when：**
 - 修改前端文件操作封装
 
-**Related tests:** —
+**Related tests:** `src-tauri/src/file_system.rs` 内联测试
 
 **Confidence:** high
 

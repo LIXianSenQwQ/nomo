@@ -208,21 +208,6 @@ pub(crate) struct FileTreeEntry {
     pub(crate) children: Vec<FileTreeEntry>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct FolderIndexBatch {
-    pub(crate) root_path: String,
-    pub(crate) directories: Vec<FileTreeEntry>,
-    pub(crate) scanned_dirs: usize,
-    pub(crate) scanned_files: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct FolderIndexFinished {
-    pub(crate) root_path: String,
-    pub(crate) scanned_dirs: usize,
-    pub(crate) scanned_files: usize,
-}
-
 #[derive(Debug, Deserialize)]
 pub(crate) struct ImageAssetInput {
     pub(crate) document_path: String,

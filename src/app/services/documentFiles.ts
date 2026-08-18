@@ -21,19 +21,6 @@ import {
 import { t } from '../i18n';
 import type { MarkdownEncoding } from '../../lib/services/storage';
 
-export interface FolderIndexBatch {
-  root_path: string;
-  directories: FileTreeNode[];
-  scanned_dirs: number;
-  scanned_files: number;
-}
-
-export interface FolderIndexFinished {
-  root_path: string;
-  scanned_dirs: number;
-  scanned_files: number;
-}
-
 export function findDroppedDocumentPath(paths: string[]) {
   return paths.find((path) => /\.(md|markdown|txt|json)$/i.test(path)) ?? null;
 }
@@ -220,23 +207,6 @@ export async function loadFolderChildren(path: string, rootPath: string) {
     error: error instanceof Error ? error.message : t.loadFolderTreeFailed(),
     tree: [],
   }));
-}
-
-export async function startFolderIndexing(path: string) {
-  const { invoke } = await import('@tauri-apps/api/core');
-  await invoke('start_folder_indexing', { path });
-}
-
-export async function listenFolderIndexBatches(handler: (payload: FolderIndexBatch) => void) {
-  const { listen } = await import('@tauri-apps/api/event');
-  return listen<FolderIndexBatch>('nomo://folder-index-batch', (event) => handler(event.payload));
-}
-
-export async function listenFolderIndexFinished(handler: (payload: FolderIndexFinished) => void) {
-  const { listen } = await import('@tauri-apps/api/event');
-  return listen<FolderIndexFinished>('nomo://folder-index-finished', (event) =>
-    handler(event.payload),
-  );
 }
 
 function normalizeDocumentResult(

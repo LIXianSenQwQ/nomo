@@ -1,22 +1,15 @@
 pub(crate) mod image_assets;
 
-use crate::models::{
-    DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo, FolderIndexBatch,
-    FolderIndexFinished, MarkdownEncoding,
-};
+use crate::models::{DocumentPayload, FileStatus, FileTreeEntry, FolderFileInfo, MarkdownEncoding};
 use encoding_rs::GBK;
 use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    process, thread,
+    process,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
-
-const FOLDER_INDEX_BATCH_EVENT: &str = "nomo://folder-index-batch";
-const FOLDER_INDEX_FINISHED_EVENT: &str = "nomo://folder-index-finished";
-const FOLDER_INDEX_BATCH_SIZE: usize = 64;
+use tauri::{path::BaseDirectory, AppHandle, Manager};
 const SAMPLE_DOCUMENT_RESOURCE_PATH: &str = "samples/sample.md";
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 const UTF16_LE_BOM: &[u8] = &[0xFF, 0xFE];
@@ -178,21 +171,6 @@ pub(crate) fn list_folder_children(
     let children = read_dir_children(dir, root, &ignore_rules)?;
     crate::app_logger::perf("FileSystem", "读取目录子项", timer.elapsed());
     Ok(children)
-}
-
-#[tauri::command]
-pub(crate) fn start_folder_indexing(app: AppHandle, path: String) -> Result<(), String> {
-    crate::app_logger::info("FileSystem", &format!("开始后台索引文件夹：{path}"));
-    let root = PathBuf::from(&path);
-    if !root.is_dir() {
-        return Err(format!("不是一个有效的目录：{path}"));
-    }
-
-    thread::spawn(move || {
-        index_folder_in_background(app, root);
-    });
-
-    Ok(())
 }
 
 pub(crate) fn file_modified_at(path: &str) -> i64 {
@@ -488,16 +466,12 @@ fn read_dir_children(
     ignore_rules: &IgnoreRules,
 ) -> Result<Vec<FileTreeEntry>, String> {
     let mut entries = Vec::new();
-    let read_dir = fs::read_dir(dir).map_err(|error| format!("读取目录失败：{error}"))?;
+    let snapshots = snapshot_directory_entries(dir)?;
 
-    for entry in read_dir {
-        let entry = entry.map_err(|error| format!("读取目录项失败：{error}"))?;
-        let path_buf = entry.path();
-        let name = path_buf
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
+    // 父目录的 ReadDir 已在快照函数返回前释放，后续元数据和子目录探测不会延长其句柄生命周期。
+    for snapshot in snapshots {
+        let path_buf = snapshot.path;
+        let name = snapshot.name;
         let is_dir = path_buf.is_dir();
 
         if ignore_rules.is_ignored(root, &path_buf, &name, is_dir) {
@@ -536,92 +510,26 @@ fn read_dir_children(
     Ok(entries)
 }
 
-fn index_folder_in_background(app: AppHandle, root: PathBuf) {
-    let timer = std::time::Instant::now();
-    let root_path = root.to_string_lossy().to_string();
-    let ignore_rules = IgnoreRules::load(&root, None);
-    let mut stack = vec![root.clone()];
-    let mut batch = Vec::new();
-    let mut scanned_dirs = 0;
-    let mut scanned_files = 0;
-
-    while let Some(dir) = stack.pop() {
-        scanned_dirs += 1;
-        let Ok(read_dir) = fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in read_dir.flatten() {
-            let path_buf = entry.path();
-            let name = path_buf
-                .file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or("")
-                .to_string();
-            let is_dir = path_buf.is_dir();
-
-            if ignore_rules.is_ignored(&root, &path_buf, &name, is_dir) {
-                continue;
-            }
-
-            if is_dir {
-                let has_children = has_visible_children(&path_buf, &root, &ignore_rules);
-                stack.push(path_buf.clone());
-                batch.push(FileTreeEntry {
-                    name,
-                    path: path_buf.to_string_lossy().to_string(),
-                    is_dir: true,
-                    has_children,
-                    children_loaded: false,
-                    children: Vec::new(),
-                });
-            } else if path_buf.is_file() && is_supported_document_file(&path_buf) {
-                scanned_files += 1;
-            }
-
-            if batch.len() >= FOLDER_INDEX_BATCH_SIZE {
-                emit_folder_index_batch(&app, &root_path, &mut batch, scanned_dirs, scanned_files);
-            }
-        }
-    }
-
-    emit_folder_index_batch(&app, &root_path, &mut batch, scanned_dirs, scanned_files);
-    let _ = app.emit(
-        FOLDER_INDEX_FINISHED_EVENT,
-        FolderIndexFinished {
-            root_path: root_path.clone(),
-            scanned_dirs,
-            scanned_files,
-        },
-    );
-    crate::app_logger::info(
-        "FileSystem",
-        &format!("文件夹索引完成：{root_path} dirs={scanned_dirs} files={scanned_files}"),
-    );
-    crate::app_logger::perf("FileSystem", "后台索引文件夹", timer.elapsed());
+#[derive(Debug)]
+struct DirectoryEntrySnapshot {
+    path: PathBuf,
+    name: String,
 }
 
-fn emit_folder_index_batch(
-    app: &AppHandle,
-    root_path: &str,
-    batch: &mut Vec<FileTreeEntry>,
-    scanned_dirs: usize,
-    scanned_files: usize,
-) {
-    if batch.is_empty() {
-        return;
+fn snapshot_directory_entries(dir: &Path) -> Result<Vec<DirectoryEntrySnapshot>, String> {
+    let read_dir = fs::read_dir(dir).map_err(|error| format!("读取目录失败：{error}"))?;
+    let mut snapshots = Vec::new();
+    for entry in read_dir {
+        let entry = entry.map_err(|error| format!("读取目录项失败：{error}"))?;
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("")
+            .to_string();
+        snapshots.push(DirectoryEntrySnapshot { path, name });
     }
-
-    let directories = std::mem::take(batch);
-    let _ = app.emit(
-        FOLDER_INDEX_BATCH_EVENT,
-        FolderIndexBatch {
-            root_path: root_path.to_string(),
-            directories,
-            scanned_dirs,
-            scanned_files,
-        },
-    );
+    Ok(snapshots)
 }
 
 fn has_visible_children(dir: &Path, root: &Path, ignore_rules: &IgnoreRules) -> bool {
@@ -801,7 +709,10 @@ fn wildcard_match(pattern: &str, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{list_folder_markdown_files, read_sample_document, write_markdown_file};
+    use super::{
+        list_folder_markdown_files, read_dir_children, read_sample_document,
+        snapshot_directory_entries, write_markdown_file, IgnoreRules,
+    };
     use std::{
         fs,
         path::PathBuf,
@@ -893,6 +804,57 @@ mod tests {
         let names = files.into_iter().map(|file| file.name).collect::<Vec<_>>();
 
         assert_eq!(names, vec!["data.json", "large.txt", "note.md"]);
+        cleanup(root);
+    }
+
+    #[test]
+    fn directory_snapshot_releases_parent_directory_handle() {
+        let root = unique_test_dir("directory-snapshot-handle");
+        let moved = root.with_extension("moved");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(root.join("note.md"), "# note").expect("write markdown");
+
+        let snapshots = snapshot_directory_entries(&root).expect("snapshot directory");
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].name, "note.md");
+
+        // Windows 只有在 ReadDir 已释放后才能稳定重命名目录；快照仍存活但只持有路径数据。
+        fs::rename(&root, &moved).expect("rename directory after snapshot");
+        assert!(snapshots[0].path.ends_with("note.md"));
+
+        cleanup(moved);
+    }
+
+    #[test]
+    fn directory_listing_is_shallow_and_preserves_filtering_sorting_and_chevrons() {
+        let root = unique_test_dir("directory-listing-shallow");
+        let empty_dir = root.join("a-empty");
+        let visible_dir = root.join("B-visible");
+        let deep_dir = visible_dir.join("deep");
+        let ignored_dir = root.join("node_modules");
+        fs::create_dir_all(&empty_dir).expect("create empty dir");
+        fs::create_dir_all(&deep_dir).expect("create deep dir");
+        fs::create_dir_all(&ignored_dir).expect("create ignored dir");
+        fs::write(deep_dir.join("nested.md"), "# nested").expect("write nested markdown");
+        fs::write(ignored_dir.join("ignored.md"), "# ignored").expect("write ignored markdown");
+        fs::write(root.join("z.md"), "# z").expect("write z markdown");
+        fs::write(root.join("A.txt"), "a").expect("write text");
+        fs::write(root.join("ignored.bin"), [0_u8]).expect("write binary");
+
+        let ignore_rules = IgnoreRules::load(&root, Some(&root));
+        let entries = read_dir_children(&root, &root, &ignore_rules).expect("read children");
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["a-empty", "B-visible", "A.txt", "z.md"]);
+        assert!(!entries[0].has_children);
+        assert!(entries[1].has_children);
+        assert!(entries[1].children.is_empty());
+        assert!(!names.contains(&"deep"));
+        assert!(!names.contains(&"node_modules"));
+
         cleanup(root);
     }
 

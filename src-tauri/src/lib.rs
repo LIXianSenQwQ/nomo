@@ -359,7 +359,6 @@ pub fn run() {
             crate::software_update::install_software_update,
             crate::file_system::get_folder_tree,
             crate::file_system::list_folder_children,
-            crate::file_system::start_folder_indexing,
             crate::file_system::check_paths_exist,
             crate::external_link::open_external_link,
             crate::external_link::open_local_attachment,

@@ -659,14 +659,10 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   openFolderFailed: 'フォルダを開けませんでした',
   loadFolderTreeFailed: 'フォルダー ファイル ツリーのロードに失敗しました',
   loadSubfolderFailed: 'サブフォルダーのロードに失敗しました: {error}',
-  workspaceLoadedIndexing:
-    'ロードされたワークスペース: {name}。バックグラウンドでのインデックス作成。',
+  workspaceLoaded: 'ワークスペースを読み込みました: {name}',
   syncedExternalDeletes: '同期された外部削除: {count} アイテム',
   missingPathRemoved: 'ファイルが存在せず、エクスプローラーから削除されました: {name}',
   workspaceMissing: 'ワークスペースが存在しないか、移動されました: {path}',
-  folderIndexingProgress: 'インデックス作成: {dirs} フォルダー、{files} ドキュメント',
-  folderIndexingComplete:
-    'フォルダーのインデックス作成が完了しました: {dirs} フォルダー、{files} ドキュメント',
   imageServiceNotReady: '画像サービスの準備ができていないため、画像を挿入できません',
   saveBeforeInsertLocalImage: 'ローカル画像を挿入する前にMarkdownファイルを保存してください',
   imageInsertCancelled: '画像挿入がキャンセルされました',

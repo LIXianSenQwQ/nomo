@@ -1,16 +1,8 @@
 import type { FileTreeNode } from '../types';
 import { checkPathsExist } from '../../lib/desktop/tauriStorage';
 import { getFolderName } from '../utils/pathLabels';
+import { loadFolderChildren, loadFolderTree, pickFolderPath } from './documentFiles';
 import {
-  loadFolderChildren,
-  loadFolderTree,
-  pickFolderPath,
-  startFolderIndexing,
-  type FolderIndexBatch,
-  type FolderIndexFinished,
-} from './documentFiles';
-import {
-  applyIndexedDirectories,
   collectTreePaths,
   expandAncestors as expandFolderAncestors,
   findTreeNode,
@@ -37,6 +29,8 @@ interface FolderExplorerControllerOptions {
 }
 
 export function createFolderExplorerController(options: FolderExplorerControllerOptions) {
+  let syncInFlight: Promise<void> | null = null;
+
   async function expandAncestors(filePath: string, rootPath: string) {
     options.setExpandedFolders(
       expandFolderAncestors(options.getExpandedFolders(), filePath, rootPath),
@@ -77,11 +71,27 @@ export function createFolderExplorerController(options: FolderExplorerController
     }
 
     options.setFolderTree(normalizeFolderEntries(result));
-    startFolderIndexing(folderPath).catch(() => undefined);
-    options.setStatusMessage(t.workspaceLoadedIndexing({ name: getFolderName(folderPath) }));
+    options.setStatusMessage(t.workspaceLoaded({ name: getFolderName(folderPath) }));
   }
 
-  async function syncLoadedFolders() {
+  function syncLoadedFolders(): Promise<void> {
+    if (syncInFlight) {
+      return syncInFlight;
+    }
+
+    const operation = syncLoadedFoldersOnce();
+    syncInFlight = operation;
+    operation.then(clearSyncInFlight, clearSyncInFlight);
+    return operation;
+
+    function clearSyncInFlight() {
+      if (syncInFlight === operation) {
+        syncInFlight = null;
+      }
+    }
+  }
+
+  async function syncLoadedFoldersOnce() {
     const rootPath = options.getCurrentFolderPath();
     if (!options.getDesktopEnabled() || !rootPath) {
       return;
@@ -190,31 +200,6 @@ export function createFolderExplorerController(options: FolderExplorerController
     }
   }
 
-  function applyIndexBatch(payload: FolderIndexBatch) {
-    if (!samePath(payload.root_path, options.getCurrentFolderPath())) {
-      return;
-    }
-    options.setFolderTree(applyIndexedDirectories(options.getFolderTree(), payload.directories));
-    options.setStatusMessage(
-      t.folderIndexingProgress({
-        dirs: payload.scanned_dirs,
-        files: payload.scanned_files,
-      }),
-    );
-  }
-
-  function finishIndexing(payload: FolderIndexFinished) {
-    if (!samePath(payload.root_path, options.getCurrentFolderPath())) {
-      return;
-    }
-    options.setStatusMessage(
-      t.folderIndexingComplete({
-        dirs: payload.scanned_dirs,
-        files: payload.scanned_files,
-      }),
-    );
-  }
-
   async function openFolderDialog() {
     if (!options.getDesktopEnabled()) {
       return;
@@ -231,8 +216,6 @@ export function createFolderExplorerController(options: FolderExplorerController
 
   return {
     expandAncestors,
-    applyIndexBatch,
-    finishIndexing,
     toggleFolderCollapse,
     toggleRootFolder,
     loadFolder,

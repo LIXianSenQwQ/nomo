@@ -112,8 +112,6 @@
     type WorkspaceDraftPersistenceCache,
   } from './services/workspacePersistence';
   import {
-    listenFolderIndexBatches,
-    listenFolderIndexFinished,
     findDroppedDocumentPath,
     readMarkdownFromPath,
     rememberNativeFolder,
@@ -2500,7 +2498,6 @@
     missingRecentPaths = new Set<string>();
   }
   let fileCheckTimer: number | null = null;
-  let explorerSyncInProgress = false;
   let stopSystemThemeSync: () => void = () => undefined;
   let systemThemeListenerReady = false;
   let appearanceRuntimeActive = false;
@@ -2529,19 +2526,6 @@
       message.includes('not found') ||
       message.includes('os error 2')
     );
-  }
-
-  async function syncExplorerWithFileSystem() {
-    if (explorerSyncInProgress) {
-      return;
-    }
-
-    explorerSyncInProgress = true;
-    try {
-      await syncLoadedExplorerFolders();
-    } finally {
-      explorerSyncInProgress = false;
-    }
   }
 
   function handleContextMenuOpen(event: ContextMenuOpenEvent) {
@@ -5015,7 +4999,7 @@
       window.addEventListener('keydown', handleGlobalShortcut);
       fileCheckTimer = window.setInterval(() => {
         void checkExternalFileChange();
-        void syncExplorerWithFileSystem();
+        void syncLoadedExplorerFolders();
       }, 5000);
       await tick();
       syncSourceTextareaHeight();
@@ -5610,8 +5594,6 @@
       settingsUnlisten,
       updateInstallRequestUnlisten,
       openFolderUnlisten,
-      folderIndexBatchUnlisten,
-      folderIndexFinishedUnlisten,
     ] = await Promise.all([
       listenDesktopMenuCommands((command) => {
         executeDesktopCommand(command);
@@ -5637,12 +5619,6 @@
         }
         openFolderWithBehavior(folderPath).catch(() => undefined);
       }).catch(() => null),
-      listenFolderIndexBatches((payload) => {
-        folderExplorer.applyIndexBatch(payload);
-      }).catch(() => null),
-      listenFolderIndexFinished((payload) => {
-        folderExplorer.finishIndexing(payload);
-      }).catch(() => null),
     ]);
 
     desktopUnlisteners = [
@@ -5652,8 +5628,6 @@
       settingsUnlisten,
       updateInstallRequestUnlisten,
       openFolderUnlisten,
-      folderIndexBatchUnlisten,
-      folderIndexFinishedUnlisten,
     ].filter((value): value is () => void => Boolean(value));
   }
 

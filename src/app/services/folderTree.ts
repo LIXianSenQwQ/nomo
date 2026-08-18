@@ -171,30 +171,6 @@ export function markFolderLoading(
   }));
 }
 
-export function applyIndexedDirectories(
-  nodes: FileTreeNode[],
-  directories: FileTreeNode[],
-): FileTreeNode[] {
-  // Mac 文件系统使用 NFD 存储文件名，统一规范化为 NFC 作为 Map key
-  const directoryMap = new Map(
-    directories.map((entry) => [normalizeComparablePath(entry.path), entry]),
-  );
-  if (directoryMap.size === 0) {
-    return nodes;
-  }
-
-  return updateTreeNodes(nodes, (node) => {
-    const indexed = directoryMap.get(normalizeComparablePath(node.path));
-    if (!indexed) {
-      return node;
-    }
-    return {
-      ...node,
-      has_children: indexed.has_children ?? node.has_children,
-    };
-  });
-}
-
 function updateTreeNode(
   nodes: FileTreeNode[],
   path: string,
