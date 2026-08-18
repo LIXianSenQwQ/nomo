@@ -15,7 +15,7 @@ import { history, redo, undo } from 'prosemirror-history';
 import { inputRules } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import { EditorState, NodeSelection, TextSelection, type Transaction } from 'prosemirror-state';
-import { Fragment, Slice, type Node as ProseMirrorNode, type ResolvedPos } from 'prosemirror-model';
+import { Slice, type Node as ProseMirrorNode, type ResolvedPos } from 'prosemirror-model';
 import { EditorView } from 'prosemirror-view';
 import { liftListItem, sinkListItem, splitListItem, wrapInList } from 'prosemirror-schema-list';
 import { goToNextCell, tableEditing } from 'prosemirror-tables';
@@ -79,6 +79,13 @@ import {
   serializeMarkdownSelection,
   splitFrontMatter,
 } from './markdown';
+import {
+  classifyClipboardMarkdown,
+  createMarkdownClipboardSlice,
+  createPlainTextSlice,
+  plainTextPasteMeta,
+  type ClipboardMarkdownClassification,
+} from './clipboardMarkdown';
 import { schema } from './schema';
 import { addTableRowAfter, addTableRowBefore, findTableContext } from './tableCommands';
 import { updateTocBlocks } from '../toc/tocService';
@@ -89,6 +96,9 @@ import type {
   EditorCommand,
   EditorCore,
   EditorCoreOptions,
+  EditorPasteInput,
+  EditorPasteMode,
+  EditorPasteResult,
   EditorLinkSnapshot,
   EditorListener,
   EditorSearchMatch,
@@ -156,64 +166,20 @@ function serializeClipboardText(slice: Slice): string {
   return text;
 }
 
-function parseClipboardText(text: string, $context: ResolvedPos): Slice {
-  const normalized = text.replace(/\r\n?/g, '\n');
-  const paragraphs: ProseMirrorNode[] = [];
-  let inlineContent: ProseMirrorNode[] = [];
-  let textStart = 0;
-
-  const appendText = (value: string) => {
-    if (value) {
-      inlineContent.push(schema.text(value, $context.marks()));
-    }
-  };
-  const closeParagraph = () => {
-    paragraphs.push(schema.nodes.paragraph.create(null, inlineContent));
-    inlineContent = [];
-  };
-
-  for (const match of normalized.matchAll(/\n+/g)) {
-    const lineBreaks = match[0].length;
-    appendText(normalized.slice(textStart, match.index));
-    textStart = match.index + lineBreaks;
-
-    if (lineBreaks === 1) {
-      inlineContent.push(schema.nodes.hard_break.create({ soft: true }));
-      continue;
-    }
-
-    closeParagraph();
-    for (let index = 2; index < lineBreaks; index += 1) {
-      paragraphs.push(schema.nodes.paragraph.create());
-    }
-  }
-
-  appendText(normalized.slice(textStart));
-  closeParagraph();
-  return Slice.maxOpen(Fragment.fromArray(paragraphs));
-}
-
-function getFrontMatterPrefix(markdown: string): string {
-  const { frontMatter, body } = splitFrontMatter(markdown);
-  const suffix = markdown.slice(frontMatter.length);
-  const bodyOffset = body ? suffix.indexOf(body) : suffix.length;
-  const separator = bodyOffset >= 0 ? suffix.slice(0, bodyOffset) : '';
-  return `${frontMatter}${separator}`;
-}
-
 export class ProseMirrorEditorCore implements EditorCore {
   private target: HTMLElement | null;
   private view: EditorView | null = null;
   private markdown: string;
   private originalMarkdown: string;
   private semanticViewDirty = false;
-  private frontMatterPrefix = '';
   private originalDoc: ProseMirrorNode;
   private pendingMarkdownDoc: ProseMirrorNode | null = null;
   private markdownSyncTimer: ReturnType<typeof setTimeout> | null = null;
   private version = 0;
   private dirty = false;
   private destroyed = false;
+  private plainTextPasteRequested = false;
+  private plainTextPasteResetTimer: ReturnType<typeof setTimeout> | null = null;
   private runtime: EditorRuntimeOptions;
   private listeners = new Set<EditorListener>();
 
@@ -230,7 +196,6 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.target = options.target ?? null;
     this.markdown = updateTocBlocks(options.markdown);
     this.originalMarkdown = this.markdown;
-    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.originalDoc = this.parseSemanticDocument(this.markdown).doc;
     this.runtime = {
       readonly: options.readonly ?? false,
@@ -252,7 +217,20 @@ export class ProseMirrorEditorCore implements EditorCore {
       dispatchTransaction: (transaction) => this.dispatchTransaction(transaction),
       editable: () => this.isEditable(),
       clipboardTextSerializer: (slice) => this.serializeClipboardText(slice),
-      clipboardTextParser: (text, $context) => parseClipboardText(text, $context),
+      clipboardTextParser: (text, $context) => createPlainTextSlice(text, $context),
+      handlePaste: (_view, event) => this.handleNativePaste(event),
+      handleDOMEvents: {
+        keydown: (_view, event) => {
+          if (
+            event.shiftKey &&
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === 'v'
+          ) {
+            this.requestPlainTextPaste();
+          }
+          return false;
+        },
+      },
       nodeViews: {
         code_block: (node, view, getPos) =>
           new CodeBlockNodeView(node, view, getPos as () => number),
@@ -283,6 +261,7 @@ export class ProseMirrorEditorCore implements EditorCore {
 
   destroy(): void {
     this.clearMarkdownSyncTimer();
+    this.clearPlainTextPasteRequest();
     this.listeners.clear();
     this.view?.destroy();
     this.view = null;
@@ -361,7 +340,6 @@ export class ProseMirrorEditorCore implements EditorCore {
       ? null
       : (this.view?.state.doc ?? this.parseSemanticDocument(this.markdown).doc);
     this.markdown = updateTocBlocks(markdown);
-    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.version += 1;
 
     const savedMarkdown =
@@ -507,15 +485,171 @@ export class ProseMirrorEditorCore implements EditorCore {
   }
 
   pasteClipboardText(text: string): boolean {
-    this.assertActive();
-    if (!this.view || !this.isEditable()) return false;
-    return this.view.pasteText(text);
+    return this.pasteClipboard({ text }).status === 'inserted';
   }
 
   pasteClipboardHtml(html: string): boolean {
+    return this.pasteClipboard({ html }).status === 'inserted';
+  }
+
+  pasteClipboard(
+    input: EditorPasteInput,
+    options: { mode?: EditorPasteMode } = {},
+  ): EditorPasteResult {
     this.assertActive();
-    if (!this.view || !this.isEditable()) return false;
-    return this.view.pasteHTML(html);
+    if (!this.view || !this.isEditable()) {
+      return { status: 'rejected', reason: 'readonly' };
+    }
+
+    const text = input.text ?? '';
+    if (options.mode === 'plain') {
+      return text
+        ? this.insertPlainClipboardText(text)
+        : { status: 'rejected', reason: 'no-text' };
+    }
+
+    const classification = text ? classifyClipboardMarkdown(text) : null;
+    if (classification?.kind === 'front-matter') {
+      if (this.isEmptySemanticDocument()) {
+        this.insertWholeMarkdownDocument(classification.doc);
+        return { status: 'inserted', format: 'markdown' };
+      }
+      return this.insertPlainClipboardText(text);
+    }
+
+    if (classification?.kind === 'markdown') {
+      if (this.insertMarkdownClipboard(classification)) {
+        return { status: 'inserted', format: 'markdown' };
+      }
+      return this.insertPlainClipboardText(text);
+    }
+
+    if (input.html) {
+      const event =
+        typeof ClipboardEvent === 'undefined'
+          ? (new Event('paste') as ClipboardEvent)
+          : new ClipboardEvent('paste');
+      return this.view.pasteHTML(input.html, event)
+        ? { status: 'inserted', format: 'html' }
+        : { status: 'rejected', reason: 'no-text' };
+    }
+
+    return text
+      ? this.insertPlainClipboardText(text)
+      : { status: 'rejected', reason: 'no-text' };
+  }
+
+  private handleNativePaste(event: ClipboardEvent): boolean {
+    const clipboard = event.clipboardData;
+    if (!clipboard) return false;
+
+    const plain = this.consumePlainTextPasteRequest();
+    if (!plain && clipboard.files.length > 0) {
+      return false;
+    }
+
+    const text = clipboard.getData('text/plain');
+    const html = clipboard.getData('text/html');
+    if (!plain) {
+      if (!text || classifyClipboardMarkdown(text).kind === 'plain') {
+        return false;
+      }
+    }
+
+    const result = this.pasteClipboard({ text, html }, { mode: plain ? 'plain' : 'auto' });
+    event.preventDefault();
+    return result.status === 'inserted' || result.reason === 'no-text';
+  }
+
+  private insertPlainClipboardText(text: string): EditorPasteResult {
+    if (!this.view) return { status: 'rejected', reason: 'readonly' };
+    const { state } = this.view;
+    const slice = createPlainTextSlice(text, state.selection.$from);
+    const transaction = state.tr
+      .replaceSelection(slice)
+      .setMeta(plainTextPasteMeta, true)
+      .scrollIntoView();
+    this.view.dispatch(transaction);
+    return { status: 'inserted', format: 'plain' };
+  }
+
+  private insertMarkdownClipboard(classification: ClipboardMarkdownClassification): boolean {
+    if (!this.view || classification.kind !== 'markdown') return false;
+    const { state } = this.view;
+    if (!this.canInsertMarkdownClipboard(classification.doc)) return false;
+
+    try {
+      const transaction = state.tr
+        .replaceSelection(createMarkdownClipboardSlice(classification.doc))
+        .scrollIntoView();
+      if (!transaction.docChanged) return false;
+      this.view.dispatch(transaction);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private canInsertMarkdownClipboard(doc: ProseMirrorNode): boolean {
+    if (!this.view) return false;
+    const { selection } = this.view.state;
+    if (
+      selection.$from.parent.type === schema.nodes.code_block ||
+      selection.$to.parent.type === schema.nodes.code_block
+    ) {
+      return false;
+    }
+
+    const insideTableCell =
+      isSelectionInsideNodeType(selection.$from, 'table_cell', 'table_header') ||
+      isSelectionInsideNodeType(selection.$to, 'table_cell', 'table_header');
+    if (insideTableCell) {
+      for (let index = 0; index < doc.childCount; index += 1) {
+        if (doc.child(index).type !== schema.nodes.paragraph) return false;
+      }
+    }
+    return true;
+  }
+
+  private insertWholeMarkdownDocument(doc: ProseMirrorNode): void {
+    if (!this.view) return;
+    const frontMatterPrefix = String(doc.attrs.frontMatterPrefix ?? '');
+    let transaction = this.view.state.tr
+      .replaceWith(0, this.view.state.doc.content.size, doc.content)
+      .setDocAttribute('frontMatterPrefix', frontMatterPrefix);
+    transaction = transaction.setSelection(TextSelection.atEnd(transaction.doc)).scrollIntoView();
+    this.view.dispatch(transaction);
+  }
+
+  private isEmptySemanticDocument(): boolean {
+    if (!this.view) return false;
+    const { doc } = this.view.state;
+    return (
+      !String(doc.attrs.frontMatterPrefix ?? '') &&
+      doc.childCount === 1 &&
+      doc.firstChild?.type === schema.nodes.paragraph &&
+      doc.firstChild.content.size === 0
+    );
+  }
+
+  private requestPlainTextPaste(): void {
+    this.clearPlainTextPasteRequest();
+    this.plainTextPasteRequested = true;
+    this.plainTextPasteResetTimer = setTimeout(() => this.clearPlainTextPasteRequest(), 0);
+  }
+
+  private consumePlainTextPasteRequest(): boolean {
+    const requested = this.plainTextPasteRequested;
+    this.clearPlainTextPasteRequest();
+    return requested;
+  }
+
+  private clearPlainTextPasteRequest(): void {
+    this.plainTextPasteRequested = false;
+    if (this.plainTextPasteResetTimer !== null) {
+      clearTimeout(this.plainTextPasteResetTimer);
+      this.plainTextPasteResetTimer = null;
+    }
   }
 
   deleteSelection(): boolean {
@@ -1075,26 +1209,17 @@ export class ProseMirrorEditorCore implements EditorCore {
     this.clearPendingMarkdownSync();
 
     const serializedMarkdown = pendingDoc.eq(this.originalDoc)
-      ? this.restoreOriginalBodyWithCurrentFrontMatter()
-      : `${this.frontMatterPrefix}${serializeMarkdown(removeEmptyTrailingParagraph(pendingDoc))}`;
+      ? this.originalMarkdown
+      : pendingDoc.content.eq(this.originalDoc.content)
+        ? `${String(pendingDoc.attrs.frontMatterPrefix ?? '')}${splitFrontMatter(this.originalMarkdown).body}`
+        : serializeMarkdown(removeEmptyTrailingParagraph(pendingDoc));
     // 保留 Markdown 字符串层的 TOC 规范化，但不再因此重建 EditorState。
     // 语义视图中的 toc_block 已由 tocSyncPlugin 原位同步，历史栈保持不变。
     this.markdown = updateTocBlocks(serializedMarkdown);
-    this.frontMatterPrefix = getFrontMatterPrefix(this.markdown);
     this.dirty = this.markdown !== this.originalMarkdown;
     this.semanticViewDirty = false;
     this.emit('content-sync');
     return true;
-  }
-
-  private restoreOriginalBodyWithCurrentFrontMatter(): string {
-    const original = splitFrontMatter(this.originalMarkdown);
-    const originalPrefix = getFrontMatterPrefix(this.originalMarkdown);
-    if (this.frontMatterPrefix === originalPrefix) {
-      return this.originalMarkdown;
-    }
-
-    return `${this.frontMatterPrefix}${original.body}`;
   }
 
   private replaceViewState(markdown: string, selection?: { anchor: number; head: number }): void {
@@ -1415,6 +1540,13 @@ function isSelectionInsideListItem($pos: ResolvedPos): boolean {
     if ($pos.node(depth).type === schema.nodes.list_item) {
       return true;
     }
+  }
+  return false;
+}
+
+function isSelectionInsideNodeType($pos: ResolvedPos, ...typeNames: string[]): boolean {
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if (typeNames.includes($pos.node(depth).type.name)) return true;
   }
   return false;
 }

@@ -5,6 +5,8 @@ export type ClipboardReadResult =
   | { kind: 'image'; files: File[] }
   | { kind: 'text'; text: string };
 
+export type ClipboardReadPreference = 'rich' | 'text';
+
 export async function writeEditorClipboard(
   payload: EditorClipboardPayload,
   desktopEnabled: boolean,
@@ -35,8 +37,11 @@ export async function writeEditorClipboard(
   await navigator.clipboard.writeText(payload.text);
 }
 
-export async function readEditorClipboard(desktopEnabled: boolean): Promise<ClipboardReadResult> {
-  const webResult = await tryReadWebClipboard();
+export async function readEditorClipboard(
+  desktopEnabled: boolean,
+  preference: ClipboardReadPreference = 'rich',
+): Promise<ClipboardReadResult> {
+  const webResult = await tryReadWebClipboard(preference);
   if (webResult) return webResult;
   if (!desktopEnabled) {
     const text = await navigator.clipboard.readText();
@@ -44,6 +49,9 @@ export async function readEditorClipboard(desktopEnabled: boolean): Promise<Clip
   }
 
   const { readImage, readText } = await import('@tauri-apps/plugin-clipboard-manager');
+  if (preference === 'text') {
+    return { kind: 'text', text: await readText().catch(() => '') };
+  }
   try {
     const image = await readImage();
     const size = await image.size();
@@ -56,7 +64,9 @@ export async function readEditorClipboard(desktopEnabled: boolean): Promise<Clip
   }
 }
 
-async function tryReadWebClipboard(): Promise<ClipboardReadResult | null> {
+async function tryReadWebClipboard(
+  preference: ClipboardReadPreference,
+): Promise<ClipboardReadResult | null> {
   if (!navigator.clipboard?.read) return null;
   try {
     const items = await navigator.clipboard.read();
@@ -76,6 +86,7 @@ async function tryReadWebClipboard(): Promise<ClipboardReadResult | null> {
         text = await (await item.getType('text/plain')).text();
       }
     }
+    if (preference === 'text') return { kind: 'text', text };
     if (imageFiles.length) return { kind: 'image', files: imageFiles };
     if (html) return { kind: 'html', html, text };
     if (text) return { kind: 'text', text };

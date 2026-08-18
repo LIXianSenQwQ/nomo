@@ -2,6 +2,7 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin } from 'prosemirror-state';
 import { schema } from '../schema';
 import { MathInlineNodeView } from '../nodeViews/MathInlineNodeView';
+import { isPlainTextPaste } from '../clipboardMarkdown';
 
 interface InlineMathMatch {
   from: number;
@@ -13,6 +14,7 @@ interface InlineMathMatch {
 export function mathInlineInputPlugin(): Plugin {
   return new Plugin({
     appendTransaction(transactions, _oldState, newState) {
+      if (isPlainTextPaste(transactions)) return null;
       if (!transactions.some((tr) => tr.docChanged)) {
         return null;
       }

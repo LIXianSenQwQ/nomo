@@ -619,8 +619,13 @@ const tableMarkdownSerializer = new MarkdownSerializer(
       state.renderInline(node);
       state.closeBlock(node);
     },
-    text(state, node) {
-      state.text(escapeMarkdownTextWithoutManualInlineMarkers(node.text ?? ''), false);
+    text(state, node, parent) {
+      let escaped = escapeMarkdownTextWithoutManualInlineMarkers(node.text ?? '');
+      if (containsLiteralDisplayMathSyntax(parent)) {
+        escaped = escaped.replace(/(?<!\\)\$/g, '\\$');
+      }
+      const atBlank = (state as unknown as { atBlank(): boolean }).atBlank();
+      state.text(atBlank ? escapeMarkdownBlockStart(escaped) : escaped, false);
     },
     math_block(state, node) {
       state.ensureNewLine();
@@ -725,13 +730,16 @@ function hasFollowingInlineContent(parent: ProseMirrorNode, index: number): bool
 
 export function parseMarkdown(markdown: string): ProseMirrorNode {
   resetHtmlInlineStack();
-  const rawBody = splitFrontMatter(markdown).body;
+  const { frontMatterPrefix, body: rawBody } = splitMarkdownDocument(markdown);
   const preprocessed = preprocessImageHtml(rawBody);
   try {
-    return tableMarkdownParser.parse(preprocessed);
+    const parsed = tableMarkdownParser.parse(preprocessed);
+    return parsed.type.create({ ...parsed.attrs, frontMatterPrefix }, parsed.content, parsed.marks);
   } catch {
     resetHtmlInlineStack();
-    return schema.node('doc', null, [schema.node('paragraph', null, [schema.text(rawBody)])]);
+    return schema.node('doc', { frontMatterPrefix }, [
+      schema.node('paragraph', null, rawBody ? [schema.text(rawBody)] : undefined),
+    ]);
   }
 }
 
@@ -762,7 +770,7 @@ export function getMarkdownBlockLineMap(markdown: string): MarkdownBlockLineMap[
 }
 
 export function serializeMarkdown(doc: ProseMirrorNode): string {
-  return tableMarkdownSerializer.serialize(doc);
+  return `${String(doc.attrs.frontMatterPrefix ?? '')}${tableMarkdownSerializer.serialize(doc)}`;
 }
 
 interface MarkdownSelectionExtraction {
@@ -957,6 +965,18 @@ function getVisibleNodeContentBounds(
 
 export function splitFrontMatter(markdown: string): { frontMatter: string; body: string } {
   return splitFrontMatterBlock(markdown);
+}
+
+function splitMarkdownDocument(markdown: string): { frontMatterPrefix: string; body: string } {
+  const { frontMatter, body } = splitFrontMatterBlock(markdown);
+  if (!frontMatter) {
+    return { frontMatterPrefix: '', body };
+  }
+
+  const suffix = markdown.slice(frontMatter.length);
+  const bodyOffset = body ? suffix.indexOf(body) : suffix.length;
+  const separator = bodyOffset >= 0 ? suffix.slice(0, bodyOffset) : '';
+  return { frontMatterPrefix: `${frontMatter}${separator}`, body };
 }
 
 function restoreBlankParagraphTokens(tokens: Token[]): Token[] {
@@ -1204,7 +1224,7 @@ function escapeTableText(text: string): string {
 }
 
 function escapeMarkdownTextWithoutManualInlineMarkers(text: string): string {
-  return text.replace(/[`\\[\]_]/g, (match, index) =>
+  let escaped = text.replace(/[`\\[\]|_]/g, (match, index) =>
     match === '_' &&
     index > 0 &&
     index + 1 < text.length &&
@@ -1213,6 +1233,34 @@ function escapeMarkdownTextWithoutManualInlineMarkers(text: string): string {
       ? match
       : `\\${match}`,
   );
+
+  if (/(?:\*{1,3})(?=\S)[\s\S]*?\S\*{1,3}/.test(escaped)) {
+    escaped = escaped.replace(/(?<!\\)\*/g, '\\*');
+  }
+  if (/~~(?=\S)[\s\S]*?\S~~/.test(escaped)) {
+    escaped = escaped.replace(/(?<!\\)~/g, '\\~');
+  }
+  if (/\$\$(?:[\s\S]*?\S)?\$\$|\$(?!\$)(?=\S)[^\n]*?\S\$(?!\$)/.test(escaped)) {
+    escaped = escaped.replace(/(?<!\\)\$/g, '\\$');
+  }
+  escaped = escaped.replace(/(?<!\\)<(?=\/?[A-Za-z][^>]*>)/g, '\\<');
+  return escaped;
+}
+
+function escapeMarkdownBlockStart(text: string): string {
+  return text.replace(
+    /^(\s{0,3})(#{1,6}(?:\s|$)|>(?:\s|$)|[-+*](?:\s|$)|\d+[.)](?:\s|$)|`{3,}|~{3,}|(?:[-*_]\s*){3,}$)/,
+    (_match, indentation: string, marker: string) =>
+      /^\d+[.)]/.test(marker)
+        ? `${indentation}${marker.replace(/[.)]/, '\\$&')}`
+        : `${indentation}\\${marker}`,
+  );
+}
+
+function containsLiteralDisplayMathSyntax(parent: ProseMirrorNode): boolean {
+  if (!parent.isTextblock || parent.type === schema.nodes.code_block) return false;
+  const text = parent.textBetween(0, parent.content.size, '\n', '\n').trim();
+  return /^\$\$[\s\S]*\$\$$/.test(text) && text.length > 2;
 }
 
 function readColumnAlignment(

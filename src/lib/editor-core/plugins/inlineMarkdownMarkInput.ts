@@ -2,6 +2,7 @@ import type { MarkType, Node as ProseMirrorNode } from 'prosemirror-model';
 import { Plugin, type EditorState } from 'prosemirror-state';
 import { schema } from '../schema';
 import { pendingInlineMarkKey } from './pendingInlineMark';
+import { isPlainTextPaste } from '../clipboardMarkdown';
 
 interface InlineMarkMatch {
   from: number;
@@ -43,6 +44,7 @@ export function inlineMarkdownMarkInputPlugin(): Plugin {
     },
 
     appendTransaction(transactions, _oldState, newState) {
+      if (isPlainTextPaste(transactions)) return null;
       if (!transactions.some((tr) => tr.docChanged)) return null;
 
       const matches = findInlineMarkTextMatchesNearSelection(newState);

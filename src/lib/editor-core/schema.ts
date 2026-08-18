@@ -9,6 +9,15 @@ export type TableColumnAlignment = 'left' | 'center' | 'right';
 
 const markdownImageNodeSpec = markdownSchema.spec.nodes.get('image')!;
 const markdownHardBreakNodeSpec = markdownSchema.spec.nodes.get('hard_break')!;
+const markdownDocNodeSpec = markdownSchema.spec.nodes.get('doc')!;
+const docNodeSpec = {
+  ...markdownDocNodeSpec,
+  attrs: {
+    ...(markdownDocNodeSpec.attrs ?? {}),
+    /** 文档开头的 Front Matter 及其与正文之间的原始分隔。 */
+    frontMatterPrefix: { default: '' },
+  },
+};
 const hardBreakNodeSpec = {
   ...markdownHardBreakNodeSpec,
   attrs: {
@@ -46,6 +55,7 @@ function readCellAlignment(dom: HTMLElement): TableColumnAlignment | null {
 
 export const schema = new Schema({
   nodes: markdownSchema.spec.nodes
+    .update('doc', docNodeSpec)
     .update('hard_break', hardBreakNodeSpec)
     .update('image', imageNodeSpec)
     .append(

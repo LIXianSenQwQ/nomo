@@ -36,7 +36,8 @@
 | Responsibility | Primary code | Related code | Change when |
 |---|---|---|---|
 | 编辑器工厂与 API | `src/lib/editor-core/createEditorCore.ts` | `src/lib/editor-core/index.ts` | EditorCore 创建参数或对外接口变更 |
-| ProseMirror 核心实现 | `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/lib/editor-core/markdown.ts`, `schema.ts`, plugins, nodeViews | EditorView 生命周期、事务、模式切换、命令执行、剪贴板负载与右键目标事务 |
+| ProseMirror 核心实现 | `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/lib/editor-core/clipboardMarkdown.ts`, `markdown.ts`, `schema.ts`, plugins, nodeViews | EditorView 生命周期、事务、模式切换、命令执行、剪贴板负载与右键目标事务 |
+| 剪贴板 Markdown 判定 | `src/lib/editor-core/clipboardMarkdown.ts` | `src/lib/editor-core/ProseMirrorEditorCore.ts`, `markdown.ts` | 修改纯文本/Markdown 等价判定、粘贴 Slice 或纯文本事务标记 |
 | Schema 定义 | `src/lib/editor-core/schema.ts` | `src/lib/editor-core/callout/calloutSchema.ts` | 新增/修改节点或 mark 类型 |
 | Markdown 解析与序列化 | `src/lib/editor-core/markdown.ts` | `src/lib/editor-core/callout/calloutParser.ts`, `calloutSerializer.ts`, `html/` | Markdown 与 ProseMirror doc 互转规则变更 |
 | Markdown 源码行到语义块导航 | `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/ProseMirrorEditorCore.ts` | `src/app/App.svelte` | 诊断、大纲等功能需要从源码行定位到最近的语义顶层块 |
@@ -1174,7 +1175,7 @@
 - 模式切换（语义/源码）
 - 命令执行
 - 插件和 NodeView 注册
-- 生成剪贴板文本/HTML、解析粘贴内容，并对右键命中的块级对象执行定位、编辑或删除事务
+- 生成剪贴板文本/HTML、协调 Markdown/HTML/纯文本粘贴事务，并对右键命中的块级对象执行定位、编辑或删除事务
 
 **Does not own：**
 - 不拥有 Markdown 解析/序列化具体规则（在 markdown.ts 中）
@@ -1183,7 +1184,7 @@
 
 **Called by:** `src/lib/editor-core/createEditorCore.ts`
 
-**Depends on:** `src/lib/editor-core/schema.ts`, `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/editorCommands.ts`, `src/lib/editor-core/renderers.ts`, `src/lib/editor-core/plugins/*`, `src/lib/editor-core/nodeViews/*`
+**Depends on:** `src/lib/editor-core/schema.ts`, `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/clipboardMarkdown.ts`, `src/lib/editor-core/editorCommands.ts`, `src/lib/editor-core/renderers.ts`, `src/lib/editor-core/plugins/*`, `src/lib/editor-core/nodeViews/*`
 
 **Change this when：**
 - 修改编辑器生命周期管理
@@ -1202,6 +1203,32 @@
 
 ---
 
+### `src/lib/editor-core/clipboardMarkdown.ts`
+
+**Kind:** service
+
+**Owns：**
+- 通过 Markdown 树与纯文本树的语义等价比较识别剪贴板内容
+- 构造结构化 Markdown Slice 和保留换行/活动 marks 的纯文本 Slice
+- 定义纯文本粘贴事务标记，供语法输入插件跳过自动转换
+
+**Does not own：**
+- 不派发 EditorView 事务（在 `ProseMirrorEditorCore.ts` 中）
+- 不定义 Markdown 语法（在 `markdown.ts` 中）
+
+**Called by:** `src/lib/editor-core/ProseMirrorEditorCore.ts`, Markdown 输入插件
+
+**Depends on:** `src/lib/editor-core/markdown.ts`, `src/lib/editor-core/schema.ts`
+
+**Change this when：**
+- 修改自动识别 Markdown、纯文本回退或粘贴 Slice 构造规则
+
+**Related tests:** `src/lib/editor-core/clipboardMarkdown.test.ts`, `src/lib/editor-core/createEditorCore.test.ts`
+
+**Confidence:** high
+
+---
+
 ### `src/lib/editor-core/markdown.ts`
 
 **Kind:** service
@@ -1209,6 +1236,7 @@
 **Owns：**
 - 基于 `markdown-it` 和 `prosemirror-markdown` 的 Markdown 解析
 - ProseMirror doc 序列化回 Markdown
+- 顶层 Front Matter 文档属性与正文的解析、序列化
 - 表格、图片扩展属性、公式、脚注、HTML、Callout、TOC、Mermaid、注释等语法处理
 
 **Does not own：**
@@ -2109,6 +2137,7 @@
 **Owns:**
 - 语义编辑器剪贴板文本、安全 HTML 与图片读写协调
 - 优先使用激活上下文中的 Web Clipboard API，并在桌面端降级到 Tauri 官方剪贴板插件
+- 为普通粘贴和纯文本粘贴提供富内容优先/文本优先读取策略
 - 将 Tauri RGBA 图片编码为 PNG `File`，交回既有图片导入流程
 
 **Does not own:**

@@ -111,6 +111,17 @@ export interface EditorClipboardPayload {
   html: string;
 }
 
+export type EditorPasteMode = 'auto' | 'plain';
+
+export interface EditorPasteInput {
+  text?: string;
+  html?: string;
+}
+
+export type EditorPasteResult =
+  | { status: 'inserted'; format: 'markdown' | 'html' | 'plain' }
+  | { status: 'rejected'; reason: 'readonly' | 'no-text' };
+
 export type EditorCommand =
   | { type: 'toggleBold' }
   | { type: 'toggleItalic' }
@@ -212,6 +223,7 @@ export interface EditorCore {
   getActiveLink(): EditorLinkSnapshot | null;
   getSelectionAnchorRect(): EditorAnchorRect | null;
   getClipboardPayload(): EditorClipboardPayload | null;
+  pasteClipboard(input: EditorPasteInput, options?: { mode?: EditorPasteMode }): EditorPasteResult;
   pasteClipboardText(text: string): boolean;
   pasteClipboardHtml(html: string): boolean;
   deleteSelection(): boolean;

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { Slice, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { AllSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { reorderOutlineSection } from '../outline/outlineReorder';
 import { extractOutline } from '../outline/outlineService';
 import { createEditorCore } from './createEditorCore';
+import { parseMarkdown } from './markdown';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -1350,5 +1351,209 @@ describe('createEditorCore', () => {
     view.dispatch(view.state.tr.delete(suffixFrom, suffixFrom + 1));
     expect(editor.getMarkdown()).toBe('已保存正文');
     expect(dirtyEvents.at(-1)).toBe(false);
+  });
+
+  it.each([
+    ['# 标题', 'heading'],
+    ['- 第一项\n- 第二项', 'bullet_list'],
+    ['> 引用', 'blockquote'],
+    ['---', 'horizontal_rule'],
+    ['```ts\nconst value = 1;\n```', 'code_block'],
+    ['| A | B |\n| --- | --- |\n| 1 | 2 |', 'table'],
+  ])('renders pasted Markdown immediately: %s', (clipboard, expectedNodeType) => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(editor.pasteClipboard({ text: clipboard })).toMatchObject({
+      status: 'inserted',
+      format: 'markdown',
+    });
+    expect(getTopLevelNodeNames(view.state.doc)).toContain(expectedNodeType);
+    expect(getTopLevelNodeNames(parseMarkdown(editor.flushMarkdown()))).toContain(expectedNodeType);
+    editor.destroy();
+  });
+
+  it('prefers detected Markdown text over HTML and otherwise keeps HTML priority', () => {
+    const markdownTarget = document.createElement('div');
+    const markdownEditor = createEditorCore({ markdown: '', target: markdownTarget });
+    const markdownView = (markdownEditor as unknown as { view: EditorView }).view;
+    expect(markdownEditor.pasteClipboard({ text: '# 文本', html: '<p>HTML</p>' })).toMatchObject({
+      format: 'markdown',
+    });
+    expect(markdownView.state.doc.firstChild?.type.name).toBe('heading');
+    markdownEditor.destroy();
+
+    const htmlTarget = document.createElement('div');
+    const htmlEditor = createEditorCore({ markdown: '', target: htmlTarget });
+    expect(htmlEditor.pasteClipboard({ text: '普通文本', html: '<strong>HTML</strong>' })).toMatchObject({
+      format: 'html',
+    });
+    expect(htmlEditor.flushMarkdown()).toContain('**HTML**');
+    htmlEditor.destroy();
+  });
+
+  it('splits a paragraph around structured Markdown pasted in the middle', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '前后', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 2)));
+
+    editor.pasteClipboard({ text: '- 第一项\n- 第二项' });
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph', 'bullet_list', 'paragraph']);
+    expect(view.state.doc.firstChild?.textContent).toBe('前');
+    expect(view.state.doc.lastChild?.textContent).toBe('后');
+    editor.destroy();
+  });
+
+  it('falls back to literal text when a table cell cannot contain pasted block structure', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '| A |\n| --- |\n| 单元格 |', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    const paragraph = findNodeByText(view.state.doc, 'paragraph', '单元格');
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, paragraph.pos + 1)));
+
+    expect(editor.pasteClipboard({ text: '# 标题' })).toMatchObject({ format: 'plain' });
+    expect(findFirstNode(view.state.doc, 'table').node.textContent).toContain('# 标题');
+    expect(parseMarkdown(editor.flushMarkdown()).textContent).toContain('# 标题单元格');
+    editor.destroy();
+  });
+
+  it('pastes syntax literally without triggering inline mark or math plugins', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    expect(
+      editor.pasteClipboard({ text: '**重点** $x$ ~~删除~~' }, { mode: 'plain' }),
+    ).toMatchObject({ format: 'plain' });
+    expect(view.state.doc.textContent).toBe('**重点** $x$ ~~删除~~');
+    expect(findFirstNode(view.state.doc, 'paragraph').node.firstChild?.marks).toHaveLength(0);
+    expect(editor.flushMarkdown()).toBe('\\*\\*重点\\*\\* \\$x\\$ \\~\\~删除\\~\\~');
+    expect(parseMarkdown(editor.getMarkdown()).textContent).toBe('**重点** $x$ ~~删除~~');
+    editor.destroy();
+  });
+
+  it('uses Ctrl/Cmd+Shift+V as a one-shot plain-text paste request', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dom.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'V',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        files: [],
+        getData: (type: string) => (type === 'text/plain' ? '# 字面标题' : ''),
+      },
+    });
+    const handled = view.someProp('handlePaste', (handler) =>
+      handler(view, pasteEvent as ClipboardEvent, Slice.empty),
+    );
+
+    expect(handled).toBe(true);
+    expect(pasteEvent.defaultPrevented).toBe(true);
+    expect(view.state.doc.firstChild?.type.name).toBe('paragraph');
+    expect(view.state.doc.textContent).toBe('# 字面标题');
+    expect(editor.flushMarkdown()).toBe('\\# 字面标题');
+    editor.destroy();
+  });
+
+  it('keeps pasted display-math delimiters literal after save and reopen', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    editor.pasteClipboard({ text: '$$\nE = mc^2\n$$' }, { mode: 'plain' });
+
+    const serialized = editor.flushMarkdown();
+    const reopened = parseMarkdown(serialized);
+    expect(serialized).toContain('\\$\\$');
+    expect(reopened.firstChild?.type.name).toBe('paragraph');
+    expect(reopened.textContent).toBe('$$E = mc^2$$');
+    editor.destroy();
+  });
+
+  it.each([
+    '# 标题',
+    '- 列表',
+    '1. 列表',
+    '> 引用',
+    '---',
+    '```ts\nconst value = 1;\n```',
+    '**重点** ~~删除~~',
+    '[链接](https://example.com)',
+    '![图片](./image.png)',
+    '$x^2$',
+    '$$\nE = mc^2\n$$',
+    '| A | B |\n| --- | --- |\n| 1 | 2 |',
+    '<u>下划线</u>',
+    '> [!NOTE]\n> 内容',
+  ])('preserves plain-pasted Markdown syntax across serialization: %s', (text) => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    editor.pasteClipboard({ text }, { mode: 'plain' });
+
+    const pastedText = view.state.doc.textContent;
+    const reopened = parseMarkdown(editor.flushMarkdown());
+    expect(reopened.firstChild?.type.name).toBe('paragraph');
+    expect(reopened.textContent).toBe(pastedText);
+    editor.destroy();
+  });
+
+  it('promotes front matter only in an empty document and keeps it in one history event', () => {
+    const clipboard = '---\ntitle: 测试\n---\n\n# 正文';
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+
+    editor.pasteClipboard({ text: clipboard });
+    expect(view.state.doc.attrs.frontMatterPrefix).toBe('---\ntitle: 测试\n---\n\n');
+    expect(view.state.doc.firstChild?.type.name).toBe('heading');
+    expect(editor.flushMarkdown()).toBe(clipboard);
+
+    expect(editor.execute({ type: 'undo' })).toBe(true);
+    expect(editor.flushMarkdown()).toBe('');
+    expect(view.state.doc.attrs.frontMatterPrefix).toBe('');
+    expect(editor.execute({ type: 'redo' })).toBe(true);
+    expect(editor.flushMarkdown()).toBe(clipboard);
+    editor.destroy();
+  });
+
+  it('keeps pasted front matter literal in a non-empty document', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '已有正文', target });
+    const view = (editor as unknown as { view: EditorView }).view;
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+
+    expect(editor.pasteClipboard({ text: '---\ntitle: 新标题\n---\n\n# 新正文' })).toMatchObject({
+      format: 'plain',
+    });
+    expect(view.state.doc.attrs.frontMatterPrefix).toBe('');
+    expect(view.state.doc.textContent).toContain('title: 新标题');
+    editor.destroy();
+  });
+
+  it('allows a paste larger than the semantic document limit', () => {
+    const target = document.createElement('div');
+    const editor = createEditorCore({ markdown: '', target });
+    const largeText = 'a'.repeat(300_001);
+
+    expect(editor.pasteClipboard({ text: largeText })).toMatchObject({
+      status: 'inserted',
+      format: 'plain',
+    });
+    expect(editor.flushMarkdown()).toBe(largeText);
+    expect(editor.execute({ type: 'undo' })).toBe(true);
+    expect(editor.flushMarkdown()).toBe('');
+    editor.destroy();
   });
 });

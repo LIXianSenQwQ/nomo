@@ -1,6 +1,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { schema } from '../schema';
+import { isPlainTextPaste } from '../clipboardMarkdown';
 
 /**
  * displayMathInput 插件 —— 语义模式下直接输入 $$...$$ 转换为 math_block 节点
@@ -15,6 +16,7 @@ export function displayMathInputPlugin(): Plugin {
   return new Plugin({
     key: displayMathInputKey,
     appendTransaction(transactions, _oldState, newState) {
+      if (isPlainTextPaste(transactions)) return null;
       // 只在文档变更时处理
       const docChanged = transactions.some((tr) => tr.docChanged);
       if (!docChanged) return null;

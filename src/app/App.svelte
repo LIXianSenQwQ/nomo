@@ -37,6 +37,7 @@
     type EditorImageDeletionEvent,
     type InlinePendingMarks,
     type EditorMode,
+    type EditorPasteMode,
     type EditorSearchMatch,
     type EditorThemeOptions,
   } from '../lib/editor-core';
@@ -2581,6 +2582,13 @@
       { label: t.cut(), icon: 'cut', disabled, shortcut: 'Ctrl+X', action: cutSelection },
       { label: t.copy(), icon: 'copy', shortcut: 'Ctrl+C', action: copySelection },
       { label: t.paste(), icon: 'paste', disabled, shortcut: 'Ctrl+V', action: pasteFromContextMenu },
+      {
+        label: t.pasteAsPlainText(),
+        icon: 'paste',
+        disabled,
+        shortcut: 'Ctrl+Shift+V',
+        action: () => pasteFromContextMenu('plain'),
+      },
       menuSeparator(),
       {
         label: t.format(),
@@ -2617,6 +2625,13 @@
       commandMenuItem(t.undo(), { type: 'undo' }, 'undo', 'Ctrl+Z'),
       commandMenuItem(t.redo(), { type: 'redo' }, 'redo', 'Ctrl+Y'),
       { label: t.paste(), icon: 'paste', disabled, shortcut: 'Ctrl+V', action: pasteFromContextMenu },
+      {
+        label: t.pasteAsPlainText(),
+        icon: 'paste',
+        disabled,
+        shortcut: 'Ctrl+Shift+V',
+        action: () => pasteFromContextMenu('plain'),
+      },
       menuSeparator(),
       { label: t.insert(), icon: 'insert', disabled, children: buildInsertContextMenuItems() },
       menuSeparator(),
@@ -2773,17 +2788,21 @@
     }
   }
 
-  async function pasteFromContextMenu() {
+  async function pasteFromContextMenu(mode: EditorPasteMode = 'auto') {
     if (readonlyDocumentMode) return;
     try {
-      const content = await readEditorClipboard(desktopEnabled);
+      const content = await readEditorClipboard(desktopEnabled, mode === 'plain' ? 'text' : 'rich');
       if (content.kind === 'image') {
         await imageInsertion.insertImageFiles(content.files);
-      } else if (content.kind === 'html') {
-        const pasted = editor.pasteClipboardHtml(content.html);
-        if (!pasted && content.text) editor.pasteClipboardText(content.text);
       } else {
-        editor.pasteClipboardText(content.text);
+        const input =
+          content.kind === 'html'
+            ? { html: content.html, text: content.text }
+            : { text: content.text };
+        const result = editor.pasteClipboard(input, { mode });
+        if (result.status === 'rejected' && result.reason === 'no-text') {
+          statusMessage = t.clipboardHasNoText();
+        }
       }
       editor.focus();
     } catch {
