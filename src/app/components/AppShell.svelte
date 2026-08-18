@@ -451,35 +451,33 @@
               </button>
             {/if}
 
-            <div data-search-panel>
-              <SearchReplacePanel
-                {interfaceLocale}
-                open={searchPanelOpen}
-                replaceVisible={searchReplaceVisible}
-                query={searchQuery}
-                replacement={searchReplacement}
-                caseSensitive={searchCaseSensitive}
-                wholeWord={searchWholeWord}
-                backwards={searchBackwards}
-                wrapAround={searchWrapAround}
-                activeIndex={searchActiveIndex}
-                matchCount={searchMatchCount}
-                readonly={readonlyDocumentMode}
-                updateQuery={updateSearchQuery}
-                updateReplacement={updateSearchReplacement}
-                toggleCaseSensitive={toggleSearchCaseSensitive}
-                toggleWholeWord={toggleSearchWholeWord}
-                toggleBackwards={toggleSearchBackwards}
-                toggleWrapAround={toggleSearchWrapAround}
-                toggleReplaceVisible={toggleSearchReplaceVisible}
-                findPrevious={findPreviousSearchMatch}
-                findNext={findNextSearchMatch}
-                countMatches={countSearchMatches}
-                replaceCurrent={replaceCurrentSearchMatch}
-                replaceAll={replaceAllSearchMatches}
-                close={closeSearchPanel}
-              />
-            </div>
+            <SearchReplacePanel
+              {interfaceLocale}
+              open={searchPanelOpen}
+              replaceVisible={searchReplaceVisible}
+              query={searchQuery}
+              replacement={searchReplacement}
+              caseSensitive={searchCaseSensitive}
+              wholeWord={searchWholeWord}
+              backwards={searchBackwards}
+              wrapAround={searchWrapAround}
+              activeIndex={searchActiveIndex}
+              matchCount={searchMatchCount}
+              readonly={readonlyDocumentMode}
+              updateQuery={updateSearchQuery}
+              updateReplacement={updateSearchReplacement}
+              toggleCaseSensitive={toggleSearchCaseSensitive}
+              toggleWholeWord={toggleSearchWholeWord}
+              toggleBackwards={toggleSearchBackwards}
+              toggleWrapAround={toggleSearchWrapAround}
+              toggleReplaceVisible={toggleSearchReplaceVisible}
+              findPrevious={findPreviousSearchMatch}
+              findNext={findNextSearchMatch}
+              countMatches={countSearchMatches}
+              replaceCurrent={replaceCurrentSearchMatch}
+              replaceAll={replaceAllSearchMatches}
+              close={closeSearchPanel}
+            />
 
             <EditorWorkspace
               {interfaceLocale}

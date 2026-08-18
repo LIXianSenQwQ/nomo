@@ -65,18 +65,6 @@
   flex: 1;
 }
 
-.segmented-search-layer {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  z-index: 60;
-  pointer-events: none;
-}
-
-.segmented-search-layer > * {
-  pointer-events: auto;
-}
-
 .readonly-notice {
   grid-row: 1;
   padding: 7px 12px;

@@ -57,8 +57,7 @@
 .markdown-mini-mode .editor-toolbar-region,
 .markdown-mini-mode .toolbar-reveal-button,
 .markdown-mini-mode .statusbar,
-.markdown-mini-mode .content-outline,
-.markdown-mini-mode [data-search-panel] {
+.markdown-mini-mode .content-outline {
   display: none;
 }
 

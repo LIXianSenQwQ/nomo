@@ -6,7 +6,7 @@
   const VIEWPORT_MARGIN = 8;
   const DEFAULT_TOP = 92;
   const DEFAULT_RIGHT = 14;
-  const PANEL_WIDTH = 500;
+  const FALLBACK_TITLEBAR_HEIGHT = 40;
 
   type PanelPosition = { left: number; top: number };
 
@@ -27,15 +27,9 @@
         return undefined;
       }
 
-      const renderedWidth = Math.min(PANEL_WIDTH, Math.max(0, window.innerWidth - 28));
-      const maxLeft = Math.max(
-        VIEWPORT_MARGIN,
-        window.innerWidth - renderedWidth - VIEWPORT_MARGIN,
-      );
-      const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - 48);
       return {
-        left: Math.min(Math.max(saved.left, VIEWPORT_MARGIN), maxLeft),
-        top: Math.min(Math.max(saved.top, VIEWPORT_MARGIN), maxTop),
+        left: saved.left,
+        top: saved.top,
       };
     } catch {
       return undefined;
@@ -70,9 +64,11 @@
   export let replaceAll: () => void;
   export let close: () => void;
 
-  let panel: HTMLDivElement;
+  let panel: HTMLDivElement | undefined;
   let searchInput: HTMLInputElement;
   let hasOpened = false;
+  let positionReady = false;
+  let positionConstraintFrame = 0;
   const initialPosition = loadSavedPosition();
   let panelLeft = initialPosition?.left;
   let panelTop = initialPosition?.top ?? DEFAULT_TOP;
@@ -80,6 +76,7 @@
     | {
         pointerX: number;
         pointerY: number;
+        pointerId: number;
         left: number;
         top: number;
       }
@@ -116,12 +113,15 @@
 
   function handleTitlePointerDown(event: PointerEvent) {
     if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+    if (!panel) return;
+    event.preventDefault();
     const rect = panel.getBoundingClientRect();
     panelLeft = rect.left;
     panelTop = rect.top;
     dragStart = {
       pointerX: event.clientX,
       pointerY: event.clientY,
+      pointerId: event.pointerId,
       left: rect.left,
       top: rect.top,
     };
@@ -129,30 +129,112 @@
   }
 
   function handleTitlePointerMove(event: PointerEvent) {
-    if (!dragStart || !panel) return;
+    if (!dragStart || dragStart.pointerId !== event.pointerId || !panel) return;
     const rect = panel.getBoundingClientRect();
     const nextLeft = dragStart.left + event.clientX - dragStart.pointerX;
     const nextTop = dragStart.top + event.clientY - dragStart.pointerY;
-    panelLeft = Math.min(
-      Math.max(nextLeft, VIEWPORT_MARGIN),
-      Math.max(VIEWPORT_MARGIN, window.innerWidth - rect.width - VIEWPORT_MARGIN),
-    );
-    panelTop = Math.min(
-      Math.max(nextTop, VIEWPORT_MARGIN),
-      Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN),
-    );
+    const constrained = constrainPanelPosition(nextLeft, nextTop, rect);
+    panelLeft = constrained.left;
+    panelTop = constrained.top;
   }
 
   function handleTitlePointerUp(event: PointerEvent) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    finishTitleDrag(event.currentTarget as HTMLElement, event.pointerId, true);
+  }
+
+  function handleTitleLostPointerCapture(event: PointerEvent) {
+    if (!dragStart || dragStart.pointerId !== event.pointerId) return;
+    finishTitleDrag(event.currentTarget as HTMLElement, event.pointerId, false);
+  }
+
+  function finishTitleDrag(target: HTMLElement, pointerId: number, releaseCapture: boolean) {
     const moved = Boolean(dragStart);
     dragStart = undefined;
-    const target = event.currentTarget as HTMLElement;
-    if (target.hasPointerCapture(event.pointerId)) {
-      target.releasePointerCapture(event.pointerId);
+    if (releaseCapture && target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
     }
     if (moved) {
+      constrainCurrentPanelPosition();
       queueMicrotask(saveCurrentPosition);
     }
+  }
+
+  function constrainPanelPosition(
+    left: number,
+    top: number,
+    rect: Pick<DOMRect, 'width' | 'height'>,
+  ): PanelPosition {
+    const availableWidth = Math.max(0, window.innerWidth - VIEWPORT_MARGIN * 2);
+    const visibleWidth = Math.min(rect.width, availableWidth);
+    const maxLeft = Math.max(
+      VIEWPORT_MARGIN,
+      window.innerWidth - visibleWidth - VIEWPORT_MARGIN,
+    );
+    const titlebarHeight =
+      panel?.querySelector<HTMLElement>('.search-dialog-titlebar')?.getBoundingClientRect().height ??
+      FALLBACK_TITLEBAR_HEIGHT;
+    const availableHeight = Math.max(0, window.innerHeight - VIEWPORT_MARGIN * 2);
+    const visibleHeight =
+      rect.height <= availableHeight ? rect.height : Math.min(titlebarHeight, availableHeight);
+    const maxTop = Math.max(
+      VIEWPORT_MARGIN,
+      window.innerHeight - visibleHeight - VIEWPORT_MARGIN,
+    );
+
+    return {
+      left: Math.min(Math.max(left, VIEWPORT_MARGIN), maxLeft),
+      top: Math.min(Math.max(top, VIEWPORT_MARGIN), maxTop),
+    };
+  }
+
+  function constrainCurrentPanelPosition() {
+    if (!panel || typeof window === 'undefined') return;
+    const rect = panel.getBoundingClientRect();
+    const constrained = constrainPanelPosition(rect.left, rect.top, rect);
+    panelLeft = constrained.left;
+    panelTop = constrained.top;
+    positionReady = true;
+  }
+
+  function schedulePanelPositionConstraint() {
+    if (positionConstraintFrame !== 0) {
+      window.cancelAnimationFrame(positionConstraintFrame);
+    }
+    positionConstraintFrame = window.requestAnimationFrame(() => {
+      positionConstraintFrame = 0;
+      constrainCurrentPanelPosition();
+    });
+  }
+
+  function floatingPanelPortal(node: HTMLDivElement) {
+    panel = node;
+    document.body.appendChild(node);
+    const handleViewportResize = () => schedulePanelPositionConstraint();
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(() => schedulePanelPositionConstraint());
+
+    window.addEventListener('resize', handleViewportResize);
+    resizeObserver?.observe(node);
+    schedulePanelPositionConstraint();
+
+    return {
+      destroy() {
+        window.removeEventListener('resize', handleViewportResize);
+        resizeObserver?.disconnect();
+        if (positionConstraintFrame !== 0) {
+          window.cancelAnimationFrame(positionConstraintFrame);
+          positionConstraintFrame = 0;
+        }
+        if (panel === node) {
+          panel = undefined;
+        }
+        dragStart = undefined;
+        positionReady = false;
+      },
+    };
   }
 
   function saveCurrentPosition() {
@@ -174,9 +256,10 @@
     <div
       class="search-replace-panel"
       class:dragging={dragStart}
+      class:position-ready={positionReady}
       role="search"
       aria-label={t.searchReplace()}
-      bind:this={panel}
+      use:floatingPanelPortal
       style={panelLeft === undefined
         ? `top:${panelTop}px;right:${DEFAULT_RIGHT}px`
         : `top:${panelTop}px;left:${panelLeft}px`}
@@ -189,6 +272,7 @@
         on:pointermove={handleTitlePointerMove}
         on:pointerup={handleTitlePointerUp}
         on:pointercancel={handleTitlePointerUp}
+        on:lostpointercapture={handleTitleLostPointerCapture}
       >
         <div class="search-dialog-title">
           <Search size={15} aria-hidden="true" />
@@ -327,8 +411,10 @@
 <style>
   .search-replace-panel {
     position: fixed;
-    z-index: 50;
-    width: min(520px, calc(100vw - 28px));
+    z-index: 70;
+    width: min(520px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
     overflow: hidden;
     border: 1px solid var(--md-editor-border);
     border-radius: var(--md-editor-radius-lg);
@@ -336,6 +422,13 @@
     box-shadow: var(--md-editor-shadow-dialog);
     color: var(--md-editor-fg);
     font-size: var(--md-editor-ui-font-size);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .search-replace-panel.position-ready {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .search-replace-panel.dragging {

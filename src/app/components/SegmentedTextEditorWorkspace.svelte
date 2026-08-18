@@ -1082,37 +1082,35 @@
   on:keydown|capture={handleWorkspaceKeydown}
 >
   {#if searchOpen}
-    <div class="segmented-search-layer">
-      <SearchReplacePanel
-        {interfaceLocale}
-        open={searchOpen}
-        {replaceVisible}
-        {query}
-        {replacement}
-        {caseSensitive}
-        {wholeWord}
-        {backwards}
-        {wrapAround}
-        activeIndex={activeNearbyIndex}
-        matchCount={searchMatchCount}
-        showActivePosition={false}
-        {readonly}
-        busy={searchBusy}
-        updateQuery={updateSearchQuery}
-        updateReplacement={updateSearchReplacement}
-        {toggleCaseSensitive}
-        {toggleWholeWord}
-        {toggleBackwards}
-        {toggleWrapAround}
-        {toggleReplaceVisible}
-        findPrevious={() => runFind(-1)}
-        findNext={() => runFind(1)}
-        countMatches={countSearchMatches}
-        replaceCurrent={replaceCurrentMatch}
-        replaceAll={() => startTask('replace-all')}
-        close={closeSearch}
-      />
-    </div>
+    <SearchReplacePanel
+      {interfaceLocale}
+      open={searchOpen}
+      {replaceVisible}
+      {query}
+      {replacement}
+      {caseSensitive}
+      {wholeWord}
+      {backwards}
+      {wrapAround}
+      activeIndex={activeNearbyIndex}
+      matchCount={searchMatchCount}
+      showActivePosition={false}
+      {readonly}
+      busy={searchBusy}
+      updateQuery={updateSearchQuery}
+      updateReplacement={updateSearchReplacement}
+      {toggleCaseSensitive}
+      {toggleWholeWord}
+      {toggleBackwards}
+      {toggleWrapAround}
+      {toggleReplaceVisible}
+      findPrevious={() => runFind(-1)}
+      findNext={() => runFind(1)}
+      countMatches={countSearchMatches}
+      replaceCurrent={replaceCurrentMatch}
+      replaceAll={() => startTask('replace-all')}
+      close={closeSearch}
+    />
   {/if}
 
   {#if unsupportedEncoding || filesystemReadonly}

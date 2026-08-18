@@ -373,7 +373,7 @@
 **Owns:**
 - 应用顶层布局：标题栏、侧边栏、标签栏、编辑区、状态栏、对话框
 - 通过 props 和回调将 App.svelte 的状态下发给子组件
-- Markdown 工具栏的收展区域、右侧展开柄及搜索面板位置联动
+- Markdown 工具栏的收展区域和右侧展开柄
 - 在 Markdown 小窗模式下隐藏常规 chrome，并在可编辑编辑器与大文档只读预览之间选择内容视图
 - 挂载全窗口右键菜单兜底策略，并把统一菜单入口下发给标题栏、文件树、标签栏和大纲
 
@@ -694,18 +694,21 @@
 **Owns:**
 - 搜索/替换面板 UI
 - 搜索输入、替换输入、选项控制
+- Markdown、TXT、JSON 共用浮窗向 `document.body` 的 Portal 挂载与销毁
+- 浮窗拖拽、位置持久化，以及按真实尺寸处理打开、缩放和内容变化时的视口约束
 
 **Does not own：**
 - 不拥有搜索替换算法（在 searchReplace.ts 中）
 - 不拥有编辑器内高亮逻辑（在 searchHighlight.ts 中）
 
-**Called by:** `src/app/components/AppShell.svelte`
+**Called by:** `src/app/components/AppShell.svelte`, `src/app/components/SegmentedTextEditorWorkspace.svelte`
 
-**Depends on:** `src/app/services/searchReplace.ts`
+**Depends on:** 浏览器 DOM、Pointer Events、ResizeObserver
 
 **Change this when：**
 - 修改搜索替换面板布局
 - 修改搜索选项交互
+- 修改浮窗层级、拖拽或位置恢复规则
 
 **Do not change this when：**
 - 修改搜索替换核心算法
@@ -3606,7 +3609,6 @@
 
 **Owns:**
 - 分段编辑器的固定像素视口、粘性定位和全文滚动跑道布局
-- 统一搜索替换浮窗在 TXT/JSON 工作区中的悬浮层定位
 - 隐藏 CodeMirror 内层滚动条，只保留外层全文滚动条
 - 窗口切换时的轻量加载遮罩
 
