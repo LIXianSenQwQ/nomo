@@ -1,14 +1,22 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setDesktopIconTheme } from './desktopWindow';
 import {
   LEGACY_THEME_BOOT_SNAPSHOT_KEY,
   THEME_BOOT_SNAPSHOT_KEY,
   applyResolvedTheme,
+  applyThemeRuntime,
   bootstrapThemeFromSnapshot,
+  cancelThemePaintFollowUp,
   readThemeBootSnapshot,
   resolveTheme,
   resolveThemeMode,
   writeThemeBootSnapshot,
 } from './themeManager';
+
+vi.mock('./desktopWindow', () => ({
+  getDesktopSystemTheme: vi.fn().mockResolvedValue('dark'),
+  setDesktopIconTheme: vi.fn().mockResolvedValue(undefined),
+}));
 
 beforeEach(() => {
   localStorage.clear();
@@ -19,6 +27,8 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme-style');
   document.documentElement.removeAttribute('data-document-style');
   document.documentElement.removeAttribute('data-block-style');
+  cancelThemePaintFollowUp();
+  vi.mocked(setDesktopIconTheme).mockClear();
 });
 
 describe('themeManager', () => {
@@ -124,6 +134,50 @@ describe('themeManager', () => {
     const restored = bootstrapThemeFromSnapshot();
     expect(restored.styleProfile).toBe('paper');
     expect(document.documentElement.dataset.themeStyle).toBe('paper');
+  });
+
+  it('applies visible theme atomically and defers editor highlight and icons', async () => {
+    const editor = { updateTheme: vi.fn() };
+    const withoutIcons = applyThemeRuntime(
+      {
+        themeMode: 'dark',
+        colorThemeId: 'nomo-github',
+        documentStyleId: 'nomo-modern',
+      },
+      { desktopEnabled: true, syncDesktopIcons: false, editor },
+    );
+
+    expect(withoutIcons.effectiveScheme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.colorTheme).toBe('nomo-github');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+    expect(document.documentElement.classList.contains('theme-transitioning')).toBe(false);
+    expect(editor.updateTheme).not.toHaveBeenCalled();
+    expect(setDesktopIconTheme).not.toHaveBeenCalled();
+
+    applyThemeRuntime(
+      {
+        themeMode: 'light',
+        colorThemeId: 'nomo-github',
+        documentStyleId: 'nomo-modern',
+      },
+      { desktopEnabled: true, editor, transition: true },
+    );
+
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.style.colorScheme).toBe('light');
+    expect(document.documentElement.classList.contains('theme-transitioning')).toBe(false);
+    expect(editor.updateTheme).not.toHaveBeenCalled();
+    expect(setDesktopIconTheme).not.toHaveBeenCalled();
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    expect(editor.updateTheme).toHaveBeenCalledTimes(1);
+    expect(setDesktopIconTheme).toHaveBeenCalledWith(true, 'light', expect.any(String));
   });
 
   it('falls back for invalid theme and document style identifiers', () => {

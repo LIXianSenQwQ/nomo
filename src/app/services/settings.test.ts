@@ -239,7 +239,7 @@ describe('settings', () => {
     expect(settingsWindowSource).toContain(
       'saveAppPreferences(desktopEnabled, settingsToSave, keysToSave)',
     );
-    expect(settingsWindowSource).toContain("{ source: 'settings-window', patch }");
+    expect(settingsWindowSource).toContain("{ source: 'settings-window' as const, patch, effectiveScheme }");
     expect(settingsWindowSource).toContain("'interfaceLanguage' in patch");
     expect(settingsServiceSource).toContain('updateAppSettings(persistedEntries)');
     expect(tauriStorageSource).toContain("invoke('update_app_settings'");

@@ -26,7 +26,7 @@ const WINDOW_LIGHT_ICON_BYTES: &[u8] =
 const WINDOW_DARK_ICON_BYTES: &[u8] =
     include_bytes!("../../icons/nomo/macos/nomo-app-dark-256.png");
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TrayTheme {
     Light,
     Dark,
@@ -36,6 +36,7 @@ enum TrayTheme {
 struct TrayVisualState {
     active: bool,
     theme: TrayTheme,
+    applied_icon_theme: Option<TrayTheme>,
 }
 
 struct DocumentTrayWindow<R: Runtime> {
@@ -49,6 +50,7 @@ impl Default for TrayVisualState {
         Self {
             active: true,
             theme: TrayTheme::Light,
+            applied_icon_theme: None,
         }
     }
 }
@@ -207,9 +209,19 @@ pub(crate) fn set_desktop_icon_theme<R: Runtime>(
         _ => return Err(format!("未知托盘主题：{theme}")),
     };
 
-    let state = update_tray_state(|state| state.theme = next_theme)?;
-    apply_window_icons(app, next_theme)?;
-    apply_tray_icon(app, state)
+    let (state, should_apply) = prepare_desktop_icon_theme(next_theme)?;
+    if !should_apply {
+        crate::app_logger::debug("Tray", "桌面图标主题未变化，跳过重复同步");
+        return Ok(());
+    }
+
+    if let Err(error) =
+        apply_window_icons(app, next_theme).and_then(|_| apply_tray_icon(app, state))
+    {
+        rollback_desktop_icon_theme(next_theme);
+        return Err(error);
+    }
+    Ok(())
 }
 
 pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
@@ -326,6 +338,31 @@ fn update_tray_state(update: impl FnOnce(&mut TrayVisualState)) -> Result<TrayVi
     Ok(*state)
 }
 
+fn prepare_desktop_icon_theme(next_theme: TrayTheme) -> Result<(TrayVisualState, bool), String> {
+    let mut state = tray_state()
+        .lock()
+        .map_err(|error| format!("读取 Nomo 托盘状态失败：{error}"))?;
+    let should_apply = stage_desktop_icon_theme(&mut state, next_theme);
+    Ok((*state, should_apply))
+}
+
+fn stage_desktop_icon_theme(state: &mut TrayVisualState, next_theme: TrayTheme) -> bool {
+    state.theme = next_theme;
+    let should_apply = state.applied_icon_theme != Some(next_theme);
+    if should_apply {
+        state.applied_icon_theme = Some(next_theme);
+    }
+    should_apply
+}
+
+fn rollback_desktop_icon_theme(failed_theme: TrayTheme) {
+    let _ = tray_state().lock().map(|mut state| {
+        if state.applied_icon_theme == Some(failed_theme) {
+            state.applied_icon_theme = None;
+        }
+    });
+}
+
 fn apply_tray_icon<R: Runtime>(app: &AppHandle<R>, state: TrayVisualState) -> Result<(), String> {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return Ok(());
@@ -407,5 +444,20 @@ fn window_theme_icon_bytes(theme: TrayTheme) -> &'static [u8] {
     match theme {
         TrayTheme::Light => WINDOW_LIGHT_ICON_BYTES,
         TrayTheme::Dark => WINDOW_DARK_ICON_BYTES,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{stage_desktop_icon_theme, TrayTheme, TrayVisualState};
+
+    #[test]
+    fn skips_reapplying_the_same_desktop_icon_theme() {
+        let mut state = TrayVisualState::default();
+
+        assert!(stage_desktop_icon_theme(&mut state, TrayTheme::Light));
+        assert!(!stage_desktop_icon_theme(&mut state, TrayTheme::Light));
+        assert!(stage_desktop_icon_theme(&mut state, TrayTheme::Dark));
+        assert!(!stage_desktop_icon_theme(&mut state, TrayTheme::Dark));
     }
 }

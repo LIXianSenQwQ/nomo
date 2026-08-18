@@ -65,6 +65,9 @@ pub fn run() {
             WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
                 crate::window::state::persist_window_state_after_geometry_change(window);
             }
+            WindowEvent::ThemeChanged(theme) => {
+                crate::window::commands::broadcast_system_theme_changed(window.app_handle(), *theme);
+            }
             WindowEvent::Focused(true) => {
                 let label = window.label();
                 if crate::window::external_open::is_document_window_label(label) {

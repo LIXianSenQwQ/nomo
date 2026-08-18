@@ -158,6 +158,8 @@
   } from './services/settings';
   import {
     applyThemeRuntime,
+    getBrowserSystemScheme,
+    isColorScheme,
     listenForSystemThemeChanges,
     readEffectiveSystemScheme,
     readThemeBootSnapshot,
@@ -3609,6 +3611,18 @@
     return { themeMode, colorThemeId, documentStyleId };
   }
 
+  /**
+   * 把当前外观偏好写进本窗 CSS / 编辑器。
+   *
+   * 不得在提交前等待桌面系统主题 IPC：设置窗广播和系统深浅色事件都会带上
+   * `systemScheme` 或使用本窗已有的 `theme`。跟随系统时若没有提示值，先用浏览器
+   * 媒体查询上色，避免主窗再卡 1～2 秒。
+   *
+   * @param options.transition 是否启用短颜色过渡。
+   * @param options.systemScheme 已确认的系统深浅色；跟随系统且缺省时用当前 `theme` 或浏览器方案。
+   * @param options.writeBootSnapshot 是否把本次结果写入启动快照。
+   * @returns 实际写入的已解析主题。
+   */
   async function applyCurrentAppearance(options?: {
     transition?: boolean;
     systemScheme?: 'light' | 'dark';
@@ -3618,9 +3632,7 @@
     const requestedPreferences = getCurrentAppearancePreferences();
     const systemScheme =
       options?.systemScheme ??
-      (requestedPreferences.themeMode === 'system'
-        ? await readEffectiveSystemScheme(desktopEnabled)
-        : undefined);
+      (requestedPreferences.themeMode === 'system' ? theme || getBrowserSystemScheme() : undefined);
 
     if (!appearanceRuntimeActive || requestId !== appearanceApplyRequestId) {
       return resolveTheme(requestedPreferences, systemScheme);
@@ -3643,8 +3655,31 @@
     return resolved;
   }
 
-  async function syncSystemThemeFromDesktop(options?: { transition?: boolean }) {
+  /**
+   * 在「跟随系统」时把本窗外观对齐到最新系统深浅色。
+   *
+   * 事件若已带上明确 scheme，立刻上色且不再打桌面 IPC。否则先用浏览器媒体查询
+   * 提交，再在后台用桌面查询校正一次，避免 `defaults` 子进程挡住第一帧。
+   *
+   * @param options.transition 是否启用短颜色过渡。
+   * @param options.systemScheme 原生事件带来的深浅色；缺省时走浏览器再校正。
+   */
+  async function syncSystemThemeFromDesktop(options?: {
+    transition?: boolean;
+    systemScheme?: 'light' | 'dark';
+  }) {
     if (!appearanceRuntimeActive || themeMode !== 'system') {
+      return;
+    }
+
+    const hintedScheme = options?.systemScheme ?? getBrowserSystemScheme();
+    if (hintedScheme !== theme) {
+      await applyCurrentAppearance({
+        systemScheme: hintedScheme,
+        transition: options?.transition,
+      });
+    }
+    if (options?.systemScheme) {
       return;
     }
 
@@ -4648,13 +4683,37 @@
     });
   }
 
-  async function applyAppPreferencesPatch(patch: AppPreferencesPatch) {
+  async function applyAppPreferencesPatch(
+    patch: AppPreferencesPatch,
+    options: { systemScheme?: 'light' | 'dark' } = {},
+  ) {
     const preferences = normalizeAppPreferences({
       ...getCurrentAppPreferences(),
       ...patch,
       imageHandlingSettings: patch.imageHandlingSettings ?? imageSettings,
       shortcutPreferences: patch.shortcutPreferences ?? shortcutPreferences,
     });
+    const patchKeys = Object.keys(patch);
+    const appearanceOnly =
+      patchKeys.length > 0 &&
+      patchKeys.every(
+        (key) =>
+          key === 'themeMode' || key === 'colorThemeId' || key === 'documentStyleId',
+      );
+
+    if (appearanceOnly) {
+      themeMode = preferences.themeMode;
+      colorThemeId = preferences.colorThemeId;
+      documentStyleId = preferences.documentStyleId;
+      await applyCurrentAppearance({
+        transition: true,
+        systemScheme:
+          options.systemScheme ??
+          (themeMode === 'system' && !('themeMode' in patch) ? theme : undefined),
+      });
+      return;
+    }
+
     await applyAppPreferences(preferences, {
       applyEditorMode: 'editorMode' in patch,
       refreshInterfaceChrome: false,
@@ -4696,7 +4755,9 @@
       return;
     }
 
-    await applyAppPreferencesPatch(payload.patch);
+    await applyAppPreferencesPatch(payload.patch, {
+      systemScheme: isColorScheme(payload.effectiveScheme) ? payload.effectiveScheme : undefined,
+    });
   }
 
   async function maybeOpenFirstRunSample(state: FirstRunSampleState) {
@@ -5705,11 +5766,11 @@
       return;
     }
     stopSystemThemeSync();
-    stopSystemThemeSync = listenForSystemThemeChanges(() => {
+    stopSystemThemeSync = listenForSystemThemeChanges((systemScheme) => {
       if (!appearanceRuntimeActive || themeMode !== 'system') {
         return;
       }
-      return syncSystemThemeFromDesktop({ transition: true });
+      return syncSystemThemeFromDesktop({ transition: true, systemScheme });
     });
     systemThemeListenerReady = true;
   }

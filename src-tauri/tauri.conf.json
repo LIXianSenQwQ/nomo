@@ -25,6 +25,7 @@
           "y": 24
         },
         "hiddenTitle": true,
+        "backgroundThrottling": "disabled",
         "visible": false,
         "skipTaskbar": false
       }

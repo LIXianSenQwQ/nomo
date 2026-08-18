@@ -106,6 +106,27 @@ import { isWholeWordRange } from '../search/textSearch';
 const LARGE_DOCUMENT_SEMANTIC_LIMIT = 300_000;
 const MARKDOWN_SYNC_DEBOUNCE_MS = 120;
 
+function editorThemesEqual(
+  current: EditorThemeOptions | undefined,
+  next: EditorThemeOptions,
+): boolean {
+  if (!current) {
+    return false;
+  }
+  const currentVariables = current.mermaid.themeVariables ?? {};
+  const nextVariables = next.mermaid.themeVariables ?? {};
+  const currentKeys = Object.keys(currentVariables);
+  const nextKeys = Object.keys(nextVariables);
+  return (
+    current.name === next.name &&
+    current.colorThemeId === next.colorThemeId &&
+    current.shikiTheme === next.shikiTheme &&
+    current.mermaid.theme === next.mermaid.theme &&
+    currentKeys.length === nextKeys.length &&
+    currentKeys.every((key) => currentVariables[key] === nextVariables[key])
+  );
+}
+
 function serializeClipboardText(slice: Slice): string {
   let text = '';
   let hasBlock = false;
@@ -697,8 +718,18 @@ export class ProseMirrorEditorCore implements EditorCore {
     return isPendingMarkActive(this.view.state, markType);
   }
 
+  /**
+   * 把语义编辑器的代码高亮和 Mermaid 主题切到新外观。
+   *
+   * 主题未变化时直接返回，避免设置窗连点配色时整页重跑 Shiki / Mermaid。
+   *
+   * @param theme 已解析的编辑器主题，包含 Shiki 主题名和 Mermaid 配置。
+   */
   updateTheme(theme: EditorThemeOptions): void {
     this.assertActive();
+    if (editorThemesEqual(this.options.theme, theme)) {
+      return;
+    }
     this.options.theme = theme;
     CodeBlockNodeView.updateTheme(theme);
     MermaidBlockNodeView.updateTheme(theme.mermaid);

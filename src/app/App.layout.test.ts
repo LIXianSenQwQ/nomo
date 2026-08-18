@@ -68,6 +68,10 @@ describe('App outline layout', () => {
     resolve(__dirname, 'services/desktopWindow.ts'),
     'utf-8',
   );
+  const themeManagerSource = readFileSync(
+    resolve(__dirname, 'services/themeManager.ts'),
+    'utf-8',
+  );
   const tauriMenuSource = readFileSync(
     resolve(__dirname, '../../src-tauri/src/window/menu.rs'),
     'utf-8',
@@ -1118,6 +1122,21 @@ describe('App outline layout', () => {
     expect(settingsWindowSource).toContain("on:click={() => setThemeMode('system')}");
     expect(settingsWindowSource).toContain('availableThemes');
     expect(settingsWindowSource).toContain('setColorTheme');
+    expect(settingsWindowSource).toContain('effectiveScheme');
+    expect(settingsWindowSource).toContain('syncDesktopIcons: appearanceChanged');
+    expect(appSource).toContain('payload.effectiveScheme');
+    expect(appSource).toContain('getBrowserSystemScheme');
+    expect(themeManagerSource).toContain('scheduleThemePaintFollowUp');
+    expect(themeManagerSource).toContain('nativeColorScheme');
+    expect(themeManagerSource).toContain('applyNativeColorScheme');
+    expect(appSource).not.toContain(
+      "requestedPreferences.themeMode === 'system'\n        ? await readEffectiveSystemScheme(desktopEnabled)",
+    );
+    expect(tauriLibSource).toContain('WindowEvent::ThemeChanged');
+    expect(tauriWindowCommandsSource).toContain('broadcast_system_theme_changed');
+    expect(tauriWindowCommandsSource).toContain('run_on_main_thread');
+    expect(tauriMacosSource).toContain('NSUserDefaults');
+    expect(tauriMacosSource).not.toContain('Command::new("defaults")');
     expect(settingsWindowSource).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(settingsWindowSource).toContain('@media (max-width: 520px)');
     expect(settingsWindowSource).toContain('styleTokens.radiusMd');
@@ -1188,8 +1207,9 @@ describe('App outline layout', () => {
     expect(tauriLibSource).toContain('crate::window::commands::set_desktop_icon_theme');
     expect(desktopWindowSource).toContain("invoke('set_desktop_icon_theme'");
     expect(desktopWindowSource).toContain("invoke<'light' | 'dark'>('get_desktop_system_theme'");
-    expect(appSource).toContain('getDesktopEffectiveSystemTheme');
-    expect(appSource).toContain('syncSystemThemeFromDesktop({ transition: true })');
+    expect(appSource).toContain('getBrowserSystemScheme');
+    expect(appSource).toContain('payload.effectiveScheme');
+    expect(appSource).toContain('syncSystemThemeFromDesktop({ transition: true, systemScheme })');
     expect(tauriTraySource).toContain('i18n::app_text(app, "tray_exit")');
     expect(tauriTraySource).toContain('emit_exit_request(app)');
     expect(tauriTraySource).toContain('TrayIconEvent::DoubleClick');

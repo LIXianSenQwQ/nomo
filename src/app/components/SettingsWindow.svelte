@@ -172,6 +172,9 @@
   let settingsCloseListenerCancelled = false;
   let systemThemeSyncActive = false;
   let closeInProgress = false;
+  let emitDesktopEvent:
+    | ((event: string, payload: unknown) => Promise<void>)
+    | null = null;
 
   // 响应式派生：强制 Svelte 追踪 updateState 的变化
   $: updateStatus = updateState.status;
@@ -214,6 +217,7 @@
     settingsCloseListenerCancelled = false;
     systemThemeSyncActive = true;
     if (desktopEnabled) {
+      void preloadDesktopEventEmit();
       void initializeDesktopSettingsWindow();
     } else {
       void loadPreferences();
@@ -252,6 +256,18 @@
     await installSettingsCloseListener();
     if (!settingsCloseListenerCancelled) {
       await loadPreferences();
+    }
+  }
+
+  async function preloadDesktopEventEmit() {
+    if (!desktopEnabled || emitDesktopEvent) {
+      return;
+    }
+    try {
+      const { emit } = await import('@tauri-apps/api/event');
+      emitDesktopEvent = emit;
+    } catch {
+      emitDesktopEvent = null;
     }
   }
 
@@ -471,16 +487,34 @@
     }
   }
 
-  async function emitSettingsUpdated(patch: AppPreferencesPatch) {
+  /**
+   * 把设置补丁广播给所有文档窗。
+   *
+   * 外观变更必须在 Dock 图标 IPC 之前发出，并带上已经解析好的 `effectiveScheme`，
+   * 让主窗立刻上色，不再等系统主题查询。
+   *
+   * @param patch 本次变更的偏好字段。
+   * @param effectiveScheme 设置窗已经落地的有效深浅色；非外观变更可缺省。
+   */
+  async function emitSettingsUpdated(
+    patch: AppPreferencesPatch,
+    effectiveScheme?: ColorScheme,
+  ) {
     if (!desktopEnabled) {
       return;
     }
-    const { emit } = await import('@tauri-apps/api/event');
     if ('interfaceLanguage' in patch) {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('refresh_interface_language_chrome').catch(() => undefined);
+      void invoke('refresh_interface_language_chrome').catch(() => undefined);
     }
-    await emit(SETTINGS_UPDATED_EVENT, { source: 'settings-window', patch }).catch(() => undefined);
+    const payload = { source: 'settings-window' as const, patch, effectiveScheme };
+    if (emitDesktopEvent) {
+      await emitDesktopEvent(SETTINGS_UPDATED_EVENT, payload).catch(() => undefined);
+      return;
+    }
+    const { emit } = await import('@tauri-apps/api/event');
+    emitDesktopEvent = emit;
+    await emit(SETTINGS_UPDATED_EVENT, payload).catch(() => undefined);
   }
 
   async function closeCurrentWindow() {
@@ -492,26 +526,41 @@
     await invoke('close_window');
   }
 
+  /**
+   * 把偏好应用到设置窗自身，不负责跨窗广播。
+   *
+   * @param settings 要落地的完整偏好。
+   * @param systemScheme 解析「跟随系统」时使用的深浅色。
+   * @param options.syncDesktopIcons 是否同步 Dock / 窗口图标；点击外观时应先广播再同步。
+   * @returns 本次写入设置窗的已解析主题。
+   */
   async function applySettingsToThisWindow(
     settings: AppPreferences,
     systemScheme: ColorScheme = effectiveSystemScheme,
+    options: { syncDesktopIcons?: boolean } = {},
   ) {
     interfaceLocale = applyInterfaceLanguagePreference(settings.interfaceLanguage);
     const resolved = applyThemeRuntime(settings, {
       systemScheme,
       desktopEnabled,
+      syncDesktopIcons: options.syncDesktopIcons,
     });
     applyTypographySettings(settings.fontSize, settings.lineHeight);
     applyEditorLayoutSettings(settings.contentWidthPercent);
     return resolved;
   }
 
-  async function syncSystemTheme() {
+  /**
+   * 跟随系统时同步设置窗外观。
+   *
+   * @param systemScheme 原生事件带来的深浅色；缺省时才去读桌面主题。
+   */
+  async function syncSystemTheme(systemScheme?: ColorScheme) {
     if (!systemThemeSyncActive || !loaded) {
       return;
     }
 
-    const nextSystemScheme = await readEffectiveSystemScheme(desktopEnabled);
+    const nextSystemScheme = systemScheme ?? (await readEffectiveSystemScheme(desktopEnabled));
     if (!systemThemeSyncActive || !loaded || nextSystemScheme === effectiveSystemScheme) {
       return;
     }
@@ -787,9 +836,20 @@
     const normalizedPatch = createNormalizedPatch(patch, nextSettings);
 
     draftSettings = nextSettings;
-    void applySettingsToThisWindow(nextSettings);
+    const appearanceChanged = changedKeys.some(isAppearancePreferenceKey);
+    const resolved = applyThemeRuntime(nextSettings, {
+      systemScheme: effectiveSystemScheme,
+      desktopEnabled,
+      syncDesktopIcons: appearanceChanged,
+    });
+    interfaceLocale = applyInterfaceLanguagePreference(nextSettings.interfaceLanguage);
+    applyTypographySettings(nextSettings.fontSize, nextSettings.lineHeight);
+    applyEditorLayoutSettings(nextSettings.contentWidthPercent);
     markDirtyPreferences(normalizedPatch);
-    void emitSettingsUpdated(normalizedPatch);
+    void emitSettingsUpdated(
+      normalizedPatch,
+      appearanceChanged ? resolved.effectiveScheme : undefined,
+    );
     scheduleAutoSave();
   }
 

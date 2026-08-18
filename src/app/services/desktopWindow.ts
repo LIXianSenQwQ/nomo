@@ -1,5 +1,8 @@
 import { LogicalPosition } from '@tauri-apps/api/dpi';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import {
+  getCurrentWindow,
+  type BackgroundThrottlingPolicy,
+} from '@tauri-apps/api/window';
 import { createPerfTimer, logError, logInfo } from '../../lib/services/logger';
 import { getPlatformCapabilities } from './platform';
 
@@ -12,6 +15,7 @@ function getNewWindowChromeOptions() {
       titleBarStyle: 'overlay' as const,
       trafficLightPosition: new LogicalPosition(16, 24),
       hiddenTitle: true,
+      backgroundThrottling: 'disabled' as BackgroundThrottlingPolicy,
     };
   }
 

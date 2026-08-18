@@ -2,13 +2,19 @@ pub(crate) fn window_decorations() -> bool {
     true
 }
 
+/// 读取当前 macOS 外观，不拉起 `defaults` 子进程。
+///
+/// 浅色模式下 `AppleInterfaceStyle` 不存在，按 AppKit 惯例视为 `light`。
+///
+/// # 返回值
+/// `"dark"` 或 `"light"`，供桌面主题查询在窗口 `theme()` 尚未就绪时回退。
 pub(crate) fn system_theme() -> &'static str {
-    let output = std::process::Command::new("defaults")
-        .args(["read", "-g", "AppleInterfaceStyle"])
-        .output();
+    use objc2_foundation::{NSString, NSUserDefaults};
 
-    match output {
-        Ok(output) if String::from_utf8_lossy(&output.stdout).trim() == "Dark" => "dark",
+    let defaults = NSUserDefaults::standardUserDefaults();
+    let key = NSString::from_str("AppleInterfaceStyle");
+    match defaults.stringForKey(&key) {
+        Some(style) if style.to_string().eq_ignore_ascii_case("Dark") => "dark",
         _ => "light",
     }
 }

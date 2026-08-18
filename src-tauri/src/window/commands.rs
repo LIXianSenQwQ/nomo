@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{
-    AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, Runtime, Theme, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 pub(crate) const SETTINGS_WINDOW_LABEL: &str = "window-settings";
@@ -17,6 +17,7 @@ static PENDING_SETTINGS_CLOSE_REQUEST: AtomicU64 = AtomicU64::new(0);
 static ACKNOWLEDGED_SETTINGS_CLOSE_REQUEST: AtomicU64 = AtomicU64::new(0);
 static SETTINGS_OWNER_LABEL: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 static DEFERRED_SETTINGS_ACTION: OnceLock<Mutex<Option<DeferredSettingsAction>>> = OnceLock::new();
+static LAST_BROADCAST_SYSTEM_THEME: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) enum DeferredSettingsAction {
     CloseOwner(String),
@@ -102,6 +103,18 @@ pub(crate) fn refresh_interface_language_chrome(app: AppHandle) -> Result<(), St
     Ok(())
 }
 
+/// 同步 Dock、托盘和窗口图标到指定深浅色。
+///
+/// 图标替换放到 AppKit 主线程异步执行，调用立即返回，避免挡住设置窗刚发出的
+/// 外观广播。主题未变化时 `tray::set_desktop_icon_theme` 会直接跳过。
+///
+/// # 参数
+/// - `app`: 当前应用句柄，用于遍历窗口并调度主线程。
+/// - `theme`: `"light"` 或 `"dark"`；其它值返回错误。
+/// - `caption_background`: 可选 CSS hex，仅 Windows 用来改原生标题栏/背景色。
+///
+/// # 返回值
+/// 参数合法且调度成功时为 `Ok(())`。非法主题或主线程调度失败时返回错误字符串。
 #[tauri::command]
 pub(crate) fn set_desktop_icon_theme(
     app: AppHandle,
@@ -141,7 +154,15 @@ pub(crate) fn set_desktop_icon_theme(
     #[cfg(not(windows))]
     let _ = caption_background_rgb;
 
-    crate::window::tray::set_desktop_icon_theme(&app, &theme)
+    // Dock / 窗口图标必须在 AppKit 主线程换，但不能堵住这次 invoke，否则会拖慢
+    // 设置窗刚发出的 `nomo://settings-updated`，让主窗再等一轮。
+    let app_for_icons = app.clone();
+    app.run_on_main_thread(move || {
+        if let Err(error) = crate::window::tray::set_desktop_icon_theme(&app_for_icons, &theme) {
+            crate::app_logger::error("Tray", &error);
+        }
+    })
+    .map_err(|error| format!("调度桌面图标主题失败：{error}"))
 }
 
 fn parse_css_hex_rgb(value: &str) -> Option<(u8, u8, u8)> {
@@ -164,11 +185,71 @@ fn parse_css_hex_rgb(value: &str) -> Option<(u8, u8, u8)> {
     }
 }
 
+/// 读取当前桌面系统深浅色。
+///
+/// 优先用窗口 `ThemeChanged` 缓存和 `window.theme()`，避免 macOS 上再拉起
+/// `defaults` 子进程。只应在 CSS 已经提交之后做校正，不能挡第一帧上色。
+///
+/// # 参数
+/// - `app`: 用于读取已有窗口主题和缓存的应用句柄。
+///
+/// # 返回值
+/// `"light"` 或 `"dark"`。
 #[tauri::command]
-pub(crate) fn get_desktop_system_theme() -> &'static str {
-    let theme = crate::window::os::system_theme();
+pub(crate) fn get_desktop_system_theme(app: AppHandle) -> &'static str {
+    let theme = read_desktop_system_theme(&app);
     crate::app_logger::debug("Window", &format!("读取系统主题：{theme}"));
     theme
+}
+
+/// 把系统深浅色广播给所有 WebView，并记住最近一次值以免每个窗口各发一遍。
+///
+/// # 参数
+/// - `app`: 用于 `emit` 的应用句柄。
+/// - `theme`: 原生窗口上报的系统主题。
+///
+/// # 返回值
+/// 无。主题未变化时直接返回。
+pub(crate) fn broadcast_system_theme_changed<R: Runtime>(app: &AppHandle<R>, theme: Theme) {
+    let next = theme_cache_value(theme);
+    if LAST_BROADCAST_SYSTEM_THEME.swap(next, Ordering::AcqRel) == next {
+        return;
+    }
+    let payload = theme_payload(theme);
+    if let Err(error) = app.emit("nomo://system-theme-changed", payload) {
+        crate::app_logger::warn("Window", &format!("广播系统主题失败：{error}"));
+    }
+}
+
+fn read_desktop_system_theme<R: Runtime>(app: &AppHandle<R>) -> &'static str {
+    match LAST_BROADCAST_SYSTEM_THEME.load(Ordering::Acquire) {
+        2 => return "dark",
+        1 => return "light",
+        _ => {}
+    }
+
+    for (_label, window) in app.webview_windows() {
+        if let Ok(theme) = window.theme() {
+            LAST_BROADCAST_SYSTEM_THEME.store(theme_cache_value(theme), Ordering::Release);
+            return theme_payload(theme);
+        }
+    }
+
+    crate::window::os::system_theme()
+}
+
+fn theme_cache_value(theme: Theme) -> u64 {
+    match theme {
+        Theme::Dark => 2,
+        _ => 1,
+    }
+}
+
+fn theme_payload(theme: Theme) -> &'static str {
+    match theme {
+        Theme::Dark => "dark",
+        _ => "light",
+    }
 }
 
 #[tauri::command]
@@ -237,6 +318,11 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
     .resizable(true)
     .skip_taskbar(true)
     .visible(false);
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    let builder = builder.background_throttling(
+        tauri::utils::config::BackgroundThrottlingPolicy::Disabled,
+    );
 
     #[cfg(windows)]
     let settings_owner = settings_owner_window(&app);

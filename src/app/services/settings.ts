@@ -110,8 +110,20 @@ export type AppPreferenceKey = keyof AppPreferences;
 export type AppPreferencesPatch = Partial<AppPreferences>;
 
 export interface SettingsUpdatedPayload {
+  /**
+   * 固定为设置窗，主窗只接受这个来源，避免把其它广播当成偏好补丁。
+   */
   source: 'settings-window';
+  /**
+   * 设置窗刚确认的偏好补丁。
+   * 缺省时主窗会整表重载；外观三项变更应带上 `effectiveScheme` 以免再查系统主题。
+   */
   patch?: AppPreferencesPatch;
+  /**
+   * 设置窗已经解析好的有效深浅色。
+   * 主窗应直接用来上色，不要再 `await` 桌面 IPC。
+   */
+  effectiveScheme?: 'light' | 'dark';
 }
 
 export const DEFAULT_SHORTCUT_PREFERENCES: ShortcutPreferences = {
