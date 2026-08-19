@@ -255,6 +255,12 @@
   type WritingStatsMetric = 'lines' | 'words' | 'chars';
   type CloseWindowAction = Exclude<CloseWindowBehavior, 'ask-every-time'>;
   type CloseWindowChoiceResult = { behavior: CloseWindowAction; remember: boolean } | null;
+  type ZoomScrollAnchor = {
+    pane: HTMLElement;
+    element: HTMLElement;
+    elementRatio: number;
+    clientY: number;
+  };
 
   function logCloseDiagnostics(message: string, data?: Record<string, unknown>) {
     logInfo('CloseGuard', message, data);
@@ -5701,11 +5707,12 @@
     if (nextZoom === zoomPercent) {
       return;
     }
+    const anchor = saveScrollAnchor(event.clientX, event.clientY);
     zoomPercent = nextZoom;
-    const anchor = saveScrollAnchor();
     applyZoomSetting(zoomPercent, {
       transition: true,
       onFrame: () => {
+        syncZoomFrameViewportLayout(anchor?.pane);
         refreshEditorViewportLayout();
         restoreScrollAnchor(anchor);
       },
@@ -5722,11 +5729,12 @@
     if (clamped === zoomPercent) {
       return;
     }
-    zoomPercent = clamped;
     const anchor = saveScrollAnchor();
+    zoomPercent = clamped;
     applyZoomSetting(zoomPercent, {
       transition: true,
       onFrame: () => {
+        syncZoomFrameViewportLayout(anchor?.pane);
         refreshEditorViewportLayout();
         restoreScrollAnchor(anchor);
       },
@@ -5735,23 +5743,54 @@
     statusMessage = t.zoomStatus({ percent: zoomPercent });
   }
 
-  // 记录当前可见面板中视口中心内容的相对位置（0~1），
-  // 缩放后按相同比例恢复 scrollTop，保持阅读位置不变。
-  function saveScrollAnchor(): { pane: HTMLElement; ratio: number } | null {
-    const pane = mode === 'source' ? sourcePane : semanticPane;
-    if (!pane) return null;
-    const maxScroll = pane.scrollHeight - pane.clientHeight;
-    if (maxScroll <= 0) return null;
-    const ratio = (pane.scrollTop + pane.clientHeight / 2) / pane.scrollHeight;
-    return { pane, ratio };
+  function syncZoomFrameViewportLayout(pane?: HTMLElement) {
+    const visiblePane = pane ?? (mode === 'source' ? sourcePane : semanticPane);
+    visiblePane?.dispatchEvent(new Event('nomo:editor-viewport-layout-refresh'));
   }
 
-  function restoreScrollAnchor(anchor: { pane: HTMLElement; ratio: number } | null) {
-    if (!anchor) return;
-    const { pane, ratio } = anchor;
-    const maxScroll = pane.scrollHeight - pane.clientHeight;
-    if (maxScroll <= 0) return;
-    setScrollTop(pane, ratio * pane.scrollHeight - pane.clientHeight / 2);
+  // Ctrl+滚轮使用鼠标位置，状态栏缩放使用视口中心。
+  // 记录指向元素内的相对位置，每帧用元素的新几何位置校正滚动，
+  // 避免按整页 scrollHeight 比例缩放时视角逐步向下漂移。
+  function saveScrollAnchor(clientX?: number, clientY?: number): ZoomScrollAnchor | null {
+    const pane = mode === 'source' ? sourcePane : semanticPane;
+    if (!pane) return null;
+
+    const paneRect = pane.getBoundingClientRect();
+    const anchorX = Math.min(
+      paneRect.right - 1,
+      Math.max(paneRect.left, clientX ?? paneRect.left + paneRect.width / 2),
+    );
+    const anchorY = Math.min(
+      paneRect.bottom - 1,
+      Math.max(paneRect.top, clientY ?? paneRect.top + paneRect.height / 2),
+    );
+    const pointedElement = document.elementFromPoint(anchorX, anchorY);
+    const editorSurface = pane.querySelector<HTMLElement>('.ProseMirror, .source-editor');
+    let anchorElement =
+      pointedElement instanceof HTMLElement && pane.contains(pointedElement)
+        ? pointedElement
+        : editorSurface;
+
+    if (!anchorElement) return null;
+    if (editorSurface && anchorElement !== editorSurface && editorSurface.contains(anchorElement)) {
+      while (anchorElement.parentElement && anchorElement.parentElement !== editorSurface) {
+        anchorElement = anchorElement.parentElement;
+      }
+    }
+
+    const elementRect = anchorElement.getBoundingClientRect();
+    const elementRatio =
+      elementRect.height > 0
+        ? Math.min(1, Math.max(0, (anchorY - elementRect.top) / elementRect.height))
+        : 0;
+    return { pane, element: anchorElement, elementRatio, clientY: anchorY };
+  }
+
+  function restoreScrollAnchor(anchor: ZoomScrollAnchor | null) {
+    if (!anchor || !anchor.element.isConnected || !anchor.pane.contains(anchor.element)) return;
+    const elementRect = anchor.element.getBoundingClientRect();
+    const currentClientY = elementRect.top + elementRect.height * anchor.elementRatio;
+    setScrollTop(anchor.pane, anchor.pane.scrollTop + currentClientY - anchor.clientY);
   }
 
   function setupSystemThemeListener() {

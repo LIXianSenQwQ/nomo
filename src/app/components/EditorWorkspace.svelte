@@ -96,7 +96,8 @@
 
   const sourceImeFallback = createSourceTextareaImePunctuationFallback();
 
-  // 末行最多上移四分之一视口；仅当真实内容进入视口底部四分之一区域时启用。
+  // 末行最多上移四分之一视口；只有真实内容已经溢出视口时才启用，
+  // 避免短文档在缩放过程中因辅助留白误出现滚动条。
   const SCROLL_PAST_END_VIEWPORT_RATIO = 0.25;
   const LAYOUT_ROUNDING_TOLERANCE_PX = 1;
 
@@ -195,14 +196,17 @@
         contentEnd instanceof HTMLTextAreaElement
           ? getSourceContentBottom(contentEnd)
           : getElementBottomInPane(contentEnd);
-      const activationLine = node.clientHeight * (1 - SCROLL_PAST_END_VIEWPORT_RATIO);
-      const totalTrailingSpace =
-        contentBottom > activationLine
-          ? Math.max(bottomPadding, node.clientHeight * SCROLL_PAST_END_VIEWPORT_RATIO)
-          : bottomPadding;
+      const hasNaturalOverflow =
+        contentBottom + bottomPadding > node.clientHeight + LAYOUT_ROUNDING_TOLERANCE_PX;
+      const totalTrailingSpace = hasNaturalOverflow
+        ? Math.max(bottomPadding, node.clientHeight * SCROLL_PAST_END_VIEWPORT_RATIO)
+        : bottomPadding;
       const spacerHeight = Math.max(0, Math.round(totalTrailingSpace - bottomPadding));
       node.style.setProperty('--md-editor-scroll-past-end-space', `${spacerHeight}px`);
     };
+
+    const handleViewportLayoutRefresh = () => update();
+    node.addEventListener('nomo:editor-viewport-layout-refresh', handleViewportLayoutRefresh);
 
     function scheduleUpdate() {
       if (animationFrame) return;
@@ -227,6 +231,10 @@
       destroy() {
         resizeObserver?.disconnect();
         mutationObserver?.disconnect();
+        node.removeEventListener(
+          'nomo:editor-viewport-layout-refresh',
+          handleViewportLayoutRefresh,
+        );
         window.removeEventListener('resize', scheduleUpdate);
         if (animationFrame) cancelAnimationFrame(animationFrame);
         node.style.removeProperty('--md-editor-content-min-height');
