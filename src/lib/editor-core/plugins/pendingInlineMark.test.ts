@@ -678,6 +678,61 @@ describe('pendingInlineMarkPlugin', () => {
     target.remove();
   });
 
+  it('does not snap to the opening delimiter after an interior click makes widgets appear', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const { target, view } = createMarkedTextView(1, [plugin]);
+    view.posAtCoords = () => ({ pos: 10, inside: 1 });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(plugin, view, createMouseDown(140, 10));
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 10)));
+
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 130, right: 150 });
+
+    const handled = plugin.props.handleDOMEvents?.click?.call(plugin, view, createClick(140, 10));
+
+    expect(handled).toBe(false);
+    expect(view.state.selection.from).toBe(10);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not snap to a highlight tag after clicking inside the highlighted text', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('外标记, '),
+        schema.text('高亮', [schema.marks.highlight.create()]),
+        schema.text(' 表'),
+      ]),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+        plugins: [plugin],
+      }),
+    });
+    view.posAtCoords = () => ({ pos: 7, inside: 1 });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(plugin, view, createMouseDown(220, 10));
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 7)));
+
+    const openWidget = getDelimiterWidget(target, 'open');
+    mockRangeRect(openWidget, { left: 180, right: 240 });
+
+    const handled = plugin.props.handleDOMEvents?.click?.call(plugin, view, createClick(220, 10));
+
+    expect(handled).toBe(false);
+    expect(view.state.selection.from).toBe(7);
+
+    view.destroy();
+    target.remove();
+  });
+
   it('keeps right-arrow navigation at the opening delimiter before entering the mark', () => {
     const { target, view } = createMarkedTextView(8);
     const plugin = pendingInlineMarkPlugin();

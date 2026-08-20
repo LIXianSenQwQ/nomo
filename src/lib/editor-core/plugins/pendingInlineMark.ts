@@ -112,6 +112,7 @@ export function isPendingMarkActive(state: EditorState, markType: MarkType): boo
 export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   let lastBoundaryTextInput: BoundaryTextInputRecord | null = null;
   let lastImePunctuationBoundaryTextInput: BoundaryTextInputRecord | null = null;
+  let lastInteriorPointerPos: number | null = null;
   let clearBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
   let clearImePunctuationBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -276,12 +277,22 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
       },
 
       handleDOMEvents: {
-        mousedown(_view, _event) {
+        mousedown(view, event) {
+          lastInteriorPointerPos = readInteriorPointerPos(view, event);
           // 边界单击定位放到 click 阶段处理，mousedown 必须留给浏览器启动拖选。
           return false;
         },
 
         click(view, event) {
+          const interiorPos = lastInteriorPointerPos;
+          lastInteriorPointerPos = null;
+          if (
+            interiorPos !== null &&
+            !findDelimiterWidgetFromTarget(event.target) &&
+            isStrictlyInsideSyntaxMark(view.state, interiorPos)
+          ) {
+            return false;
+          }
           return handleEditRangeBoundaryClick(view, event);
         },
 
@@ -1173,7 +1184,6 @@ function isSameDelimiterLine(clientY: number, openRect: DOMRect, closeRect: DOMR
   const bottom = Math.max(openRect.bottom, closeRect.bottom) + DELIMITER_CLICK_SLOP_PX;
   return clientY >= top && clientY <= bottom;
 }
-
 function findDelimiterWidgetFromTarget(target: EventTarget | null): HTMLElement | null {
   if (target instanceof Element) {
     return target.closest<HTMLElement>('.pm-mark-delimiter-widget');
@@ -1184,6 +1194,36 @@ function findDelimiterWidgetFromTarget(target: EventTarget | null): HTMLElement 
   }
 
   return null;
+}
+
+function readInteriorPointerPos(view: MarkBoundaryMouseView, event: MouseEvent): number | null {
+  if (findDelimiterWidgetFromTarget(event.target)) return null;
+
+  let coords: { pos: number; inside: number } | null = null;
+  try {
+    coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+  } catch {
+    return null;
+  }
+  if (!coords) return null;
+  return isStrictlyInsideSyntaxMark(view.state, coords.pos) ? coords.pos : null;
+}
+
+function isStrictlyInsideSyntaxMark(state: EditorState, pos: number): boolean {
+  if (pos <= 0 || pos >= state.doc.content.size) return false;
+  const $pos = state.doc.resolve(pos);
+  if (!$pos.parent.isTextblock) return false;
+
+  for (const markTypeName of Object.keys(MARK_SYNTAX)) {
+    const markType = state.schema.marks[markTypeName];
+    if (!markType) continue;
+    const range = findMarkRangeAtCursor($pos, markType);
+    if (range && pos > range.from && pos < range.to) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function findDelimiterWidgetNearPointer(
