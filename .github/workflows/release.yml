@@ -168,6 +168,46 @@ jobs:
 
           gh release upload '${{ github.ref_name }}' checksums.md5 --clobber
 
+  update-homebrew-cask:
+    name: Update Homebrew cask
+    runs-on: ubuntu-latest
+    needs: checksums
+    if: ${{ !contains(github.ref_name, '-') }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Bump Casks/nomo.rb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          asset="Nomo_${version}_aarch64.dmg"
+          gh release download "$TAG" --pattern "$asset" --dir /tmp
+          sha256="$(sha256sum "/tmp/$asset" | awk '{print $1}')"
+          sed -i -E \
+            -e "s/version \"[^\"]+\"/version \"${version}\"/" \
+            -e "s/sha256 \"[^\"]+\"/sha256 \"${sha256}\"/" \
+            Casks/nomo.rb
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Casks/nomo.rb
+          if git diff --staged --quiet; then
+            echo 'Homebrew cask already up to date.'
+            exit 0
+          fi
+          git commit -m "chore(homebrew): bump nomo cask to ${version}"
+          git push
+
   sync-pages:
     name: Sync release to download sites
     runs-on: ubuntu-latest

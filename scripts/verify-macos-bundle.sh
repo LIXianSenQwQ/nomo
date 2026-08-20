@@ -44,6 +44,16 @@ if [[ "$EXTENSION_BUNDLE_VERSION" != "$APP_BUNDLE_VERSION" ]]; then
   exit 1
 fi
 
+ICON_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP_INFO")"
+if [[ "$ICON_NAME" != "AppIcon" ]]; then
+  echo "Containing app is missing CFBundleIconName=AppIcon." >&2
+  exit 1
+fi
+if [[ ! -f "$APP_BUNDLE/Contents/Resources/Assets.car" ]]; then
+  echo "Appearance-aware AppIcon catalog is missing from $APP_BUNDLE." >&2
+  exit 1
+fi
+
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 
 echo "Verified embedded Quick Look extension: $EXTENSION_BUNDLE"

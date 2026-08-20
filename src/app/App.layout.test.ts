@@ -642,6 +642,18 @@ describe('App outline layout', () => {
       'installer/windows-open-with.nsh',
     );
     expect(tauriMacosConfig.bundle.targets).toEqual(['app', 'dmg']);
+    expect(tauriMacosConfig.bundle.macOS.files['Resources/Assets.car']).toBe(
+      'target/appicon/Assets.car',
+    );
+    expect(readFileSync(resolve(__dirname, '../../src-tauri/Info.plist'), 'utf-8')).toContain(
+      '<string>AppIcon</string>',
+    );
+    expect(
+      readFileSync(resolve(__dirname, '../../scripts/compile-macos-appicon.sh'), 'utf-8'),
+    ).toContain('sips", "-z", "1024", "1024"');
+    expect(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')).toContain(
+      'bash scripts/compile-macos-appicon.sh',
+    );
 
     expect(releaseWorkflowSource).toContain("args: '--bundles nsis'");
     expect(releaseWorkflowSource).toContain('tauri-apps/tauri-action@v0.6.2');
@@ -1132,11 +1144,22 @@ describe('App outline layout', () => {
     expect(appSource).not.toContain(
       "requestedPreferences.themeMode === 'system'\n        ? await readEffectiveSystemScheme(desktopEnabled)",
     );
+    expect(appSource).toContain('await syncSystemThemeFromDesktop({ writeBootSnapshot: true })');
     expect(tauriLibSource).toContain('WindowEvent::ThemeChanged');
     expect(tauriWindowCommandsSource).toContain('broadcast_system_theme_changed');
+    expect(tauriWindowCommandsSource).toContain('system_theme_event_payload');
+    expect(tauriWindowCommandsSource).toContain('crate::window::os::system_theme()');
     expect(tauriWindowCommandsSource).toContain('run_on_main_thread');
     expect(tauriMacosSource).toContain('NSUserDefaults');
     expect(tauriMacosSource).not.toContain('Command::new("defaults")');
+    expect(settingsWindowSource).toContain('softwareUpdateUnsupportedMacos');
+    expect(settingsWindowSource).toContain('HOMEBREW_SETUP_COMMAND');
+    expect(releaseWorkflowSource).toContain('update-homebrew-cask');
+    expect(releaseWorkflowSource).toContain('Casks/nomo.rb');
+    expect(existsSync(resolve(__dirname, '../../Casks/nomo.rb'))).toBe(true);
+    expect(
+      readFileSync(resolve(__dirname, 'components/ContextMenu.svelte'), 'utf-8'),
+    ).toContain('formatShortcutLabel');
     expect(settingsWindowSource).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(settingsWindowSource).toContain('@media (max-width: 520px)');
     expect(settingsWindowSource).toContain('styleTokens.radiusMd');

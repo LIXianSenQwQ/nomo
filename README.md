@@ -38,8 +38,17 @@ Nomo 是一款本地优先、Markdown-first 的桌面编辑器，支持 macOS �
 
 | 系统 | 最低版本 | 推荐下载 |
 | :--- | :--- | :--- |
-| macOS（Apple Silicon / arm64） | 12.0+ | `.dmg` |
+| macOS（Apple Silicon / arm64） | 12.0+ | `.dmg`，或通过 Homebrew 安装 |
 | Windows | 10/11 | `Nomo_<version>_x64-setup.exe` 安装版 / `Nomo_<version>_x64.zip` 免安装版 |
+
+macOS 也可用 Homebrew：
+
+```bash
+brew tap nomo-md/nomo https://github.com/nomo-md/nomo
+brew install --cask nomo
+```
+
+已安装时执行 `brew upgrade --cask nomo`。
 
 正式版本同时提供 `checksums.md5`，可用于核对下载文件完整性。
 
@@ -89,7 +98,7 @@ Windows NSIS 安装版与 macOS App 会向系统声明 `.md`、`.markdown`、`.t
 - **界面语言**：可跟随系统，或选择简体中文、繁体中文、English、日本語。
 - **专注与窗口**：资源管理器、工具栏、大纲和统计可独立显示；Markdown 可进入共享当前编辑状态的可置顶小窗；主窗口可选择关闭、每次询问或隐藏到系统托盘。
 - **导出与预览**：Markdown 可导出单文件 HTML，并尽量内嵌可访问的图片；Windows / macOS PDF 会尝试根据标题写入书签。macOS Quick Look 支持 UTF-8 Markdown 的主题、代码、公式和 Mermaid 预览。
-- **桌面集成与更新**：Windows 可管理 Markdown 默认打开候选，以及 `.md` / `.markdown` 文件、文件夹和文件夹空白处的经典右键菜单。启动更新检查默认开启且可关闭；NSIS 安装版可在应用内下载并校验更新，免安装版只打开 ZIP 下载链接。
+- **桌面集成与更新**：Windows 可管理 Markdown 默认打开候选，以及 `.md` / `.markdown` 文件、文件夹和文件夹空白处的经典右键菜单。启动更新检查默认开启且可关闭；NSIS 安装版可在应用内下载并校验更新，免安装版只打开 ZIP 下载链接；macOS 可通过 Homebrew 升级。
 
 ## 设置与个性化
 
@@ -112,7 +121,7 @@ Windows NSIS 安装版与 macOS App 会向系统声明 `.md`、`.markdown`、`.t
 - 本地链接不支持 UNC 路径、`file://`、查询参数和未列入白名单的附件类型；相对链接要求当前 Markdown 已保存。
 - 本地图片复制要求文档先保存；PicGo 上传依赖用户自行运行和配置的 PicGo 服务或命令。未引用本地图片自动清理默认关闭，启用后会删除文档目录内对应文件。
 - PDF 导出仅支持 Windows 与 macOS，当前固定为 A4 纵向、四边 20 mm；Quick Look 仅支持 macOS，当前只读取 UTF-8 Markdown。
-- Windows NSIS 安装版支持应用内检查、下载和安装更新；Windows 免安装版可检查更新并在系统浏览器打开 ZIP 下载链接，退出应用后需手动替换；macOS 需通过 Release 页面手动检查和更新。
+- Windows NSIS 安装版支持应用内检查、下载和安装更新；Windows 免安装版可检查更新并在系统浏览器打开 ZIP 下载链接，退出应用后需手动替换；macOS 可用 Homebrew 升级，或从 Release 页面下载 DMG。
 
 ## 默认快捷键
 

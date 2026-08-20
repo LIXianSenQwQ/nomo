@@ -5,9 +5,10 @@ pub(crate) fn window_decorations() -> bool {
 /// 读取当前 macOS 外观，不拉起 `defaults` 子进程。
 ///
 /// 浅色模式下 `AppleInterfaceStyle` 不存在，按 AppKit 惯例视为 `light`。
+/// 跟随系统时以该值为准，不采用窗口 `theme()` 或 WKWebView `matchMedia`。
 ///
 /// # 返回值
-/// `"dark"` 或 `"light"`，供桌面主题查询在窗口 `theme()` 尚未就绪时回退。
+/// `"dark"` 或 `"light"`。
 pub(crate) fn system_theme() -> &'static str {
     use objc2_foundation::{NSString, NSUserDefaults};
 

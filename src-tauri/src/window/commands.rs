@@ -187,8 +187,8 @@ fn parse_css_hex_rgb(value: &str) -> Option<(u8, u8, u8)> {
 
 /// 读取当前桌面系统深浅色。
 ///
-/// 优先用窗口 `ThemeChanged` 缓存和 `window.theme()`，避免 macOS 上再拉起
-/// `defaults` 子进程。只应在 CSS 已经提交之后做校正，不能挡第一帧上色。
+/// macOS / Windows 直接读操作系统外观（`AppleInterfaceStyle` / AppsUseLightTheme），
+/// 不采用窗口 `theme()`。只应在 CSS 已经提交之后做校正，不能挡第一帧上色。
 ///
 /// # 参数
 /// - `app`: 用于读取已有窗口主题和缓存的应用句柄。
@@ -204,40 +204,66 @@ pub(crate) fn get_desktop_system_theme(app: AppHandle) -> &'static str {
 
 /// 把系统深浅色广播给所有 WebView，并记住最近一次值以免每个窗口各发一遍。
 ///
+/// macOS / Windows 以操作系统外观为准，而不是窗口 `theme()`。WKWebView 的
+/// `color-scheme` 或窗口尚未跟上系统时，`window.theme()` 会把跟随系统误报成
+/// 浅色，启动后再把快照写成 light。
+///
 /// # 参数
 /// - `app`: 用于 `emit` 的应用句柄。
-/// - `theme`: 原生窗口上报的系统主题。
+/// - `theme`: 原生窗口上报的主题；在没有独立系统外观 API 的平台作为回退。
 ///
 /// # 返回值
 /// 无。主题未变化时直接返回。
 pub(crate) fn broadcast_system_theme_changed<R: Runtime>(app: &AppHandle<R>, theme: Theme) {
-    let next = theme_cache_value(theme);
+    let payload = system_theme_event_payload(theme);
+    let next = if payload == "dark" { 2 } else { 1 };
     if LAST_BROADCAST_SYSTEM_THEME.swap(next, Ordering::AcqRel) == next {
         return;
     }
-    let payload = theme_payload(theme);
     if let Err(error) = app.emit("nomo://system-theme-changed", payload) {
         crate::app_logger::warn("Window", &format!("广播系统主题失败：{error}"));
     }
 }
 
 fn read_desktop_system_theme<R: Runtime>(app: &AppHandle<R>) -> &'static str {
-    match LAST_BROADCAST_SYSTEM_THEME.load(Ordering::Acquire) {
-        2 => return "dark",
-        1 => return "light",
-        _ => {}
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        let _ = app;
+        crate::window::os::system_theme()
     }
-
-    for (_label, window) in app.webview_windows() {
-        if let Ok(theme) = window.theme() {
-            LAST_BROADCAST_SYSTEM_THEME.store(theme_cache_value(theme), Ordering::Release);
-            return theme_payload(theme);
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        match LAST_BROADCAST_SYSTEM_THEME.load(Ordering::Acquire) {
+            2 => return "dark",
+            1 => return "light",
+            _ => {}
         }
-    }
 
-    crate::window::os::system_theme()
+        for (_label, window) in app.webview_windows() {
+            if let Ok(window_theme) = window.theme() {
+                LAST_BROADCAST_SYSTEM_THEME
+                    .store(theme_cache_value(window_theme), Ordering::Release);
+                return theme_payload(window_theme);
+            }
+        }
+
+        crate::window::os::system_theme()
+    }
 }
 
+fn system_theme_event_payload(theme: Theme) -> &'static str {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        let _ = theme;
+        crate::window::os::system_theme()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        theme_payload(theme)
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn theme_cache_value(theme: Theme) -> u64 {
     match theme {
         Theme::Dark => 2,
@@ -245,6 +271,7 @@ fn theme_cache_value(theme: Theme) -> u64 {
     }
 }
 
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn theme_payload(theme: Theme) -> &'static str {
     match theme {
         Theme::Dark => "dark",
@@ -320,9 +347,8 @@ pub(crate) async fn open_settings_window_for_app<R: Runtime>(
     .visible(false);
 
     #[cfg(any(target_os = "macos", target_os = "ios"))]
-    let builder = builder.background_throttling(
-        tauri::utils::config::BackgroundThrottlingPolicy::Disabled,
-    );
+    let builder =
+        builder.background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
 
     #[cfg(windows)]
     let settings_owner = settings_owner_window(&app);

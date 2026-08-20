@@ -12,6 +12,12 @@
     <string>Contents/PlugIns/NomoQuickLookPreview.appex</string>
   </array>
   <!--
+    应用未运行时 Dock / 启动台读资源目录里的 Assets.car。
+    传统 icon.icns 没有深色变体；CFBundleIconName 指向 Icon Composer 编出来的 AppIcon。
+  -->
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
+  <!--
     Tauri v2 会把本文件合并进生成的 Info.plist。
     这里导出 net.daringfireball.markdown UTI，让系统知道 .md 文件的类型归属，
     Quick Look 扩展（NomoQuickLookPreview.appex）的 QLSupportedContentTypes 才能匹配上。

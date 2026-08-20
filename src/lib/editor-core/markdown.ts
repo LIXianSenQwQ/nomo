@@ -1310,10 +1310,13 @@ function createMathInlineInputRule(): InputRule {
 }
 
 /**
- * 输入 ---、___ 或 *** 后回车，自动转为水平分割线
+ * 输入 `---` 或 `___` 时转为水平分割线。
+ *
+ * 不用 `***`：它和加粗/斜体语法冲突，打 `****` 准备包一层加粗时，
+ * 第三个 `*` 就会被吃成分割线。分割线请用短横线，或从菜单插入。
  */
 function createHorizontalRuleInputRule(): InputRule {
-  return new InputRule(/^([-*_]{3})$/, (state, match, start, end) => {
+  return new InputRule(/^(-{3,}|_{3,})$/, (state, _match, start, end) => {
     const hrNode = schema.nodes.horizontal_rule.create();
     const emptyParagraph = schema.nodes.paragraph.create();
     return state.tr.replaceWith(start, end, [hrNode, emptyParagraph]);

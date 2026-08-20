@@ -20,6 +20,9 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  * - Decoration 负责判断当前哪些 mark 需要显示语法提示
  * - WidgetDecoration 渲染不可编辑的灰色占位标签
  *
+ * 空 pending 范围（还没打出字）不放 widget。光标两侧各一个
+ * `contenteditable=false` 的 `**` 会挡住中文输入法组字。
+ *
  * 用户继续输入时，新内容自动带对应 mark；退出条件：
  * - 再次点击相同按钮
  * - 按 Esc
@@ -725,52 +728,35 @@ function createInlineDecorations(
       .map((name) => MARK_SYNTAX[name]?.close ?? '')
       .join('');
 
-    if (from < to) {
-      decorations.push(
-        Decoration.inline(from, to, {
-          class: 'pm-mark-delimiter-range',
-          'data-mark': markTypeNames[0],
-          'data-marks': markTypeNames.join(' '),
-          'data-from': String(from),
-          'data-to': String(to),
-        }),
-        Decoration.widget(
-          from,
-          () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
-          {
-            side: getOpenDelimiterSide(state, from, markTypeNames),
-            marks: [],
-          },
-        ),
-        Decoration.widget(
-          to,
-          () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
-          {
-            side: getCloseDelimiterSide(state, to, markTypeNames),
-            marks: [],
-          },
-        ),
-      );
-    } else {
-      decorations.push(
-        Decoration.widget(
-          from,
-          () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
-          {
-            side: getOpenDelimiterSide(state, from, markTypeNames),
-            marks: [],
-          },
-        ),
-        Decoration.widget(
-          from,
-          () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
-          {
-            side: getCloseDelimiterSide(state, from, markTypeNames),
-            marks: [],
-          },
-        ),
-      );
+    if (from >= to) {
+      continue;
     }
+
+    decorations.push(
+      Decoration.inline(from, to, {
+        class: 'pm-mark-delimiter-range',
+        'data-mark': markTypeNames[0],
+        'data-marks': markTypeNames.join(' '),
+        'data-from': String(from),
+        'data-to': String(to),
+      }),
+      Decoration.widget(
+        from,
+        () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
+        {
+          side: getOpenDelimiterSide(state, from, markTypeNames),
+          marks: [],
+        },
+      ),
+      Decoration.widget(
+        to,
+        () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
+        {
+          side: getCloseDelimiterSide(state, to, markTypeNames),
+          marks: [],
+        },
+      ),
+    );
   }
 
   return decorations;

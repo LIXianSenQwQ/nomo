@@ -48,6 +48,7 @@
     ContextMenuIcon,
     ContextMenuItem,
   } from '../../lib/editor-core/plugins/contextMenu';
+  import { formatShortcutLabel } from '../services/platform';
 
   export let x: number;
   export let y: number;
@@ -326,7 +327,7 @@
             {/if}
           </span>
           <span class="context-menu-item-label">{item.label}</span>
-          {#if item.shortcut}<span class="context-menu-item-shortcut">{item.shortcut}</span>{/if}
+          {#if item.shortcut}<span class="context-menu-item-shortcut">{formatShortcutLabel(item.shortcut)}</span>{/if}
           {#if item.children?.length}<ChevronRight class="context-menu-chevron" size={14} />{/if}
         </button>
 
@@ -368,7 +369,7 @@
                     {/if}
                   </span>
                   <span class="context-menu-item-label">{child.label}</span>
-                  {#if child.shortcut}<span class="context-menu-item-shortcut">{child.shortcut}</span>{/if}
+                  {#if child.shortcut}<span class="context-menu-item-shortcut">{formatShortcutLabel(child.shortcut)}</span>{/if}
                 </button>
               {/if}
             {/each}
@@ -485,8 +486,12 @@
   }
 
   .context-menu-item-shortcut {
+    padding-left: 20px;
     color: var(--md-editor-muted-fg);
-    font-size: var(--md-editor-ui-font-size-xs);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    font-size: inherit;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
     flex-shrink: 0;
   }
 

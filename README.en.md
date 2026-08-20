@@ -38,8 +38,17 @@ Download the appropriate package from [GitHub Releases](https://github.com/LIXia
 
 | System | Minimum Version | Recommended Download |
 | :--- | :--- | :--- |
-| macOS (Apple Silicon / arm64) | 12.0+ | `.dmg` |
+| macOS (Apple Silicon / arm64) | 12.0+ | `.dmg`, or install with Homebrew |
 | Windows | 10/11 | `Nomo_<version>_x64-setup.exe` installer / `Nomo_<version>_x64.zip` portable package |
+
+macOS can also be installed with Homebrew:
+
+```bash
+brew tap nomo-md/nomo https://github.com/nomo-md/nomo
+brew install --cask nomo
+```
+
+If it is already installed, run `brew upgrade --cask nomo`.
 
 Stable releases also provide `checksums.md5` for download integrity checks.
 
@@ -89,7 +98,7 @@ The Windows NSIS installer and macOS app declare support for opening `.md`, `.ma
 - **Interface languages**: Follow the system or choose Simplified Chinese, Traditional Chinese, English, or Japanese.
 - **Focused windows**: The explorer, toolbar, outline, and statistics toggle independently. Markdown can enter a mini window that shares the current editing state and can be pinned on top. Closing the main window can close it, ask each time, or hide it to the system tray.
 - **Export and preview**: Export Markdown as a single HTML file with best-effort image embedding, or as PDF on Windows and macOS. PDF export attempts to add heading bookmarks. macOS Quick Look previews themes, code, math, and Mermaid.
-- **Desktop integration and updates**: Windows can manage the Markdown default-app candidate and classic context menus for `.md` / `.markdown` files, folders, and folder backgrounds. Startup update checks are enabled by default and can be disabled; NSIS builds download and verify updates in-app, while portable builds only open the ZIP download link.
+- **Desktop integration and updates**: Windows can manage the Markdown default-app candidate and classic context menus for `.md` / `.markdown` files, folders, and folder backgrounds. Startup update checks are enabled by default and can be disabled; NSIS builds download and verify updates in-app, while portable builds only open the ZIP download link. macOS can upgrade with Homebrew.
 
 ## Settings and Personalization
 
@@ -112,7 +121,7 @@ The Windows NSIS installer and macOS app declare support for opening `.md`, `.ma
 - Local links do not support UNC paths, `file://` URLs, query strings, or attachment types outside the allowlist. Relative links require the current Markdown document to be saved.
 - Local image-copy strategies require the document to be saved. PicGo upload depends on a user-managed PicGo service or command. Cleanup of unreferenced local images is off by default; when enabled, it deletes matching files inside the document directory.
 - PDF export is available on Windows and macOS and currently uses fixed A4 portrait pages with 20 mm margins. Quick Look is macOS-only and currently reads UTF-8 Markdown.
-- Windows NSIS builds can check, download, and install updates in-app. Portable Windows builds can check for updates and open the ZIP download in the system browser; exit Nomo and replace the files manually. On macOS, check and update manually through the Release page.
+- Windows NSIS builds can check, download, and install updates in-app. Portable Windows builds can check for updates and open the ZIP download in the system browser; exit Nomo and replace the files manually. On macOS, upgrade with Homebrew or download the DMG from the Release page.
 
 ## Default Shortcuts
 

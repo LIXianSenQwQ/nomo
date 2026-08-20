@@ -19,3 +19,4 @@ cp "$TMP/out/icon.icns" "$ICONS_DIR/icon.icns"
 
 echo "已更新 macOS 图标: $ICONS_DIR/icon.icns"
 echo "运行时 Dock 图标请编辑 $MACOS_DIR/*.png 后重新编译 Rust：pnpm run build:macos 或 pnpm tauri dev"
+bash "$ROOT/scripts/compile-macos-appicon.sh"

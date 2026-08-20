@@ -9,7 +9,7 @@
     "build": "pnpm exec paraglide-js compile && vite build",
     "build:quicklook-renderer": "vite build --config vite.quicklook.config.ts",
     "build:quicklook-extension": "bash scripts/build-macos-quicklook.sh",
-    "build:macos": "pnpm run build:quicklook-extension && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg && bash scripts/verify-macos-bundle.sh",
+    "build:macos": "pnpm run build:quicklook-extension && bash scripts/compile-macos-appicon.sh && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg && bash scripts/verify-macos-bundle.sh",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",

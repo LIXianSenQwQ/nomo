@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseMarkdown, serializeMarkdown } from './markdown';
+import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorView } from 'prosemirror-view';
+import { inputRules } from 'prosemirror-inputrules';
+import { createMarkdownInputRules, parseMarkdown, serializeMarkdown } from './markdown';
 import { schema } from './schema';
 
 describe('markdown serialization', () => {
@@ -416,3 +419,89 @@ describe('markdown serialization', () => {
     expect(img.attrs.width).toBeNull();
   });
 });
+
+describe('markdown input rules', () => {
+  it('converts --- into a horizontal rule while typing', () => {
+    const { target, view } = createInputRuleView();
+
+    typeText(view, '---');
+
+    expect(getTopLevelNodeNames(view.state.doc)).toContain('horizontal_rule');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('converts ___ into a horizontal rule while typing', () => {
+    const { target, view } = createInputRuleView();
+
+    typeText(view, '___');
+
+    expect(getTopLevelNodeNames(view.state.doc)).toContain('horizontal_rule');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not convert *** into a horizontal rule', () => {
+    const { target, view } = createInputRuleView();
+
+    typeText(view, '***');
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph']);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('***');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('keeps **** as text so it can wrap a bold span', () => {
+    const { target, view } = createInputRuleView();
+
+    typeText(view, '****');
+
+    expect(getTopLevelNodeNames(view.state.doc)).toEqual(['paragraph']);
+    expect(view.state.doc.textBetween(0, view.state.doc.content.size)).toBe('****');
+
+    view.destroy();
+    target.remove();
+  });
+});
+
+function createInputRuleView(): { target: HTMLElement; view: EditorView } {
+  const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+  const target = document.createElement('div');
+  document.body.appendChild(target);
+  const view = new EditorView(target, {
+    state: EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, 1),
+      plugins: [inputRules({ rules: createMarkdownInputRules() })],
+    }),
+  });
+  return { target, view };
+}
+
+function typeText(view: EditorView, text: string): void {
+  for (const char of text) {
+    const { from, to } = view.state.selection;
+    let handled = false;
+    view.someProp('handleTextInput', (handler) => {
+      handled = Boolean(
+        handler(view, from, to, char, () => view.state.tr.insertText(char, from, to)),
+      );
+      return handled;
+    });
+    if (!handled) {
+      view.dispatch(view.state.tr.insertText(char, from, to));
+    }
+  }
+}
+
+function getTopLevelNodeNames(doc: EditorState['doc']): string[] {
+  const names: string[] = [];
+  doc.forEach((node) => {
+    names.push(node.type.name);
+  });
+  return names;
+}

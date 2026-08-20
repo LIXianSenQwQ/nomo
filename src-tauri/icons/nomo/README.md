@@ -4,19 +4,21 @@
 
 ## macOS 两套图标（重要）
 
-macOS 上 Dock / Cmd+Tab 看到的图标，**不只看 `icon.icns`**：
+macOS 上 Dock / 启动台 / Cmd+Tab 看到的图标来自两处：
 
 | 资源 | 用途 |
 |------|------|
-| `../icon.icns` | `.app` 包内图标；应用**未运行**时 Finder / 启动台显示 |
+| `../icon.icns` | 无外观目录时的回退；旧系统或未编进 `Assets.car` 时使用 |
+| `Assets.car`（由 light/dark PNG 编译） | 应用**未运行**时 Finder / Dock / 启动台按系统浅色/深色选图 |
 | `macos/nomo-app-light-256.png` / `dark` | 应用**运行后**由 Rust 调用 `setApplicationIconImage` 设置 Dock / Cmd+Tab |
 
 因此只改 `icon.icns` 而应用已在运行，或只重打前端包、未重编译 Rust，Dock 图标**不会变化**。
+退出后要跟随系统，必须把 `Assets.car` 打进 `.app`（`pnpm run build:macos` 会调用 `scripts/compile-macos-appicon.sh`）。
 
 调整 Dock 边距请直接编辑 `macos/nomo-app-light-256.png` / `nomo-app-dark-256.png`，然后执行：
 
 ```bash
-bash scripts/regenerate-macos-icons.sh   # 仅根据 macos/*.png 更新 icon.icns
+bash scripts/regenerate-macos-icons.sh   # 更新 icon.icns，并编译 Assets.car
 pnpm run build:macos                     # 或 pnpm tauri dev，重新编译 Rust
 ```
 

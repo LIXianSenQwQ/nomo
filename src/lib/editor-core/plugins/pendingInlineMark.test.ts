@@ -86,7 +86,7 @@ describe('pendingInlineMarkPlugin', () => {
     expect(second?.marks.map((mark) => mark.type.name).sort()).toEqual(['strikethrough', 'strong']);
   });
 
-  it('shows delimiters for all empty pending inline marks', () => {
+  it('does not put delimiter widgets on an empty pending range so IME can compose', () => {
     const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
     const target = document.createElement('div');
     document.body.appendChild(target);
@@ -102,15 +102,16 @@ describe('pendingInlineMarkPlugin', () => {
     toggleMarkPending(schema.marks.strikethrough)(view.state, view.dispatch);
     toggleMarkPending(schema.marks.strong)(view.state, view.dispatch);
 
-    // 验证两种 mark 类型的语法提示都存在
-    expect(hasMarkDelimiter(target, 'strikethrough')).toBe(true);
-    expect(hasMarkDelimiter(target, 'strong')).toBe(true);
+    expect(isPendingMarkActive(view.state, schema.marks.strikethrough)).toBe(true);
+    expect(isPendingMarkActive(view.state, schema.marks.strong)).toBe(true);
+    expect(hasMarkDelimiter(target, 'strikethrough')).toBe(false);
+    expect(hasMarkDelimiter(target, 'strong')).toBe(false);
 
     view.destroy();
     target.remove();
   });
 
-  it('uses inline delimiters for empty pending edit state', () => {
+  it('shows delimiter widgets after the first pending character is typed', () => {
     const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
     const target = document.createElement('div');
     document.body.appendChild(target);
@@ -124,8 +125,11 @@ describe('pendingInlineMarkPlugin', () => {
     });
 
     toggleMarkPending(schema.marks.strong)(view.state, view.dispatch);
+    expect(hasMarkDelimiter(target, 'strong')).toBe(false);
 
-    // 验证加粗 mark 的语法提示存在
+    view.dispatch(view.state.tr.insertText('测'));
+
+    expect(isPendingMarkActive(view.state, schema.marks.strong)).toBe(true);
     expect(hasMarkDelimiter(target, 'strong')).toBe(true);
 
     view.destroy();

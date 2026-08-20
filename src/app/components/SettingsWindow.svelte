@@ -71,7 +71,7 @@
     ImageInsertStrategy,
     ImageUploadProvider,
   } from '../../lib/services/render';
-  import { getPlatformCapabilities } from '../services/platform';
+  import { getPlatformCapabilities, HOMEBREW_SETUP_COMMAND } from '../services/platform';
   import {
     disposeSoftwareUpdateCoordinator,
     initializeSoftwareUpdateCoordinator,
@@ -733,7 +733,9 @@
       case 'managed':
         return t.softwareUpdateStoreManaged();
       case 'unsupported':
-        return t.softwareUpdateUnsupported();
+        return platformCapabilities.isMac
+          ? t.softwareUpdateUnsupportedMacos()
+          : t.softwareUpdateUnsupported();
       case 'error':
         return t.softwareUpdateFailed();
       default:
@@ -757,7 +759,9 @@
               ? t.softwareUpdateRestartAndInstall()
               : updateStatus === 'installing'
                 ? t.softwareUpdateInstallingShort()
-                : t.softwareUpdateCheckNow();
+                : updateStatus === 'unsupported' && platformCapabilities.isMac
+                  ? t.softwareUpdateCopyHomebrewCommand()
+                  : t.softwareUpdateCheckNow();
 
   $: softwareUpdateDescription = updateState.error
     ? updateState.error
@@ -795,7 +799,7 @@
     updateStatus === 'checking' ||
     updateStatus === 'downloading' ||
     updateStatus === 'installing' ||
-    updateStatus === 'unsupported';
+    (updateStatus === 'unsupported' && !platformCapabilities.isMac);
 
   function handleSoftwareUpdateButton() {
     if (updateState.status === 'downloaded') {
@@ -810,7 +814,20 @@
       softwareUpdateDialogOpen = true;
       return;
     }
+    if (updateState.status === 'unsupported' && platformCapabilities.isMac) {
+      void copyHomebrewSetupCommand();
+      return;
+    }
     void checkForSoftwareUpdate();
+  }
+
+  async function copyHomebrewSetupCommand() {
+    try {
+      await navigator.clipboard.writeText(HOMEBREW_SETUP_COMMAND);
+      showStatus(t.softwareUpdateHomebrewCopied());
+    } catch {
+      showStatus(t.copyFailed());
+    }
   }
 
   async function openMicrosoftStoreProduct() {

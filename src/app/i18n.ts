@@ -288,6 +288,10 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateIntegrityFailed: '更新包校验失败，可能已被篡改或发布清单不一致。',
     softwareUpdateInstallFailed: '更新安装失败。',
     softwareUpdateUnsupported: '当前环境不支持自动更新；如使用免安装 zip 版，请手动下载新版。',
+    softwareUpdateUnsupportedMacos:
+      '当前 macOS 暂不支持应用内自动更新。推荐用 Homebrew 安装或升级，也可从 GitHub Release 下载 DMG。',
+    softwareUpdateCopyHomebrewCommand: '复制 Homebrew 命令',
+    softwareUpdateHomebrewCopied: 'Homebrew 命令已复制',
     softwareUpdateLatest: '已是最新',
     softwareUpdateReady: '可安装',
     softwareUpdateManual: '手动检查',
@@ -907,6 +911,10 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateIntegrityFailed: '更新包校驗失敗，可能已被竄改或發布清單不一致。',
     softwareUpdateInstallFailed: '更新安裝失敗。',
     softwareUpdateUnsupported: '目前環境不支援自動更新；如使用免安裝 zip 版，請手動下載新版。',
+    softwareUpdateUnsupportedMacos:
+      '目前 macOS 暫不支援應用內自動更新。建議用 Homebrew 安裝或升級，也可從 GitHub Release 下載 DMG。',
+    softwareUpdateCopyHomebrewCommand: '複製 Homebrew 命令',
+    softwareUpdateHomebrewCopied: 'Homebrew 命令已複製',
     softwareUpdateLatest: '已是最新',
     softwareUpdateReady: '可安裝',
     softwareUpdateManual: '手動檢查',
@@ -1551,6 +1559,10 @@ const EXTRA_TRANSLATIONS: Partial<Record<EffectiveInterfaceLocale, TranslationTa
     softwareUpdateInstallFailed: 'Update install failed.',
     softwareUpdateUnsupported:
       'Automatic updates are unavailable here. If you are using the portable zip build, download the new version manually.',
+    softwareUpdateUnsupportedMacos:
+      'In-app updates are not available on macOS yet. Install or upgrade with Homebrew, or download the DMG from GitHub Releases.',
+    softwareUpdateCopyHomebrewCommand: 'Copy Homebrew command',
+    softwareUpdateHomebrewCopied: 'Homebrew command copied',
     softwareUpdateLatest: 'Latest',
     softwareUpdateReady: 'Ready',
     softwareUpdateManual: 'Manual check',

@@ -288,6 +288,10 @@ export const JA_JP_EXTRA_TRANSLATIONS = {
   softwareUpdateInstallFailed: 'アップデートのインストールに失敗しました。',
   softwareUpdateUnsupported:
     'ここでは自動更新は利用できません。ポータブル zip ビルドを使用している場合は、新しいバージョンを手動でダウンロードします。',
+  softwareUpdateUnsupportedMacos:
+    'macOS ではアプリ内の自動更新はまだ利用できません。Homebrew でインストールまたはアップグレードするか、GitHub Release から DMG を入手してください。',
+  softwareUpdateCopyHomebrewCommand: 'Homebrew コマンドをコピー',
+  softwareUpdateHomebrewCopied: 'Homebrew コマンドをコピーしました',
   softwareUpdateLatest: '最新',
   softwareUpdateReady: '準備ができて',
   softwareUpdateManual: '手動チェック',

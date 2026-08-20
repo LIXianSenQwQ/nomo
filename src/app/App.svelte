@@ -165,6 +165,7 @@
     resolveTheme,
     writeThemeBootSnapshot,
   } from './services/themeManager';
+  import { getPlatformCapabilities } from './services/platform';
   import type { ThemeMode } from '../lib/theme/types';
   import { applyInterfaceLanguagePreference, t, type EffectiveInterfaceLocale } from './i18n';
   import { createFolderExplorerController } from './services/folderExplorerController';
@@ -2613,7 +2614,7 @@
     const disabled = readonlyDocumentMode;
     return [
       commandMenuItem(t.undo(), { type: 'undo' }, 'undo', 'Ctrl+Z'),
-      commandMenuItem(t.redo(), { type: 'redo' }, 'redo', 'Ctrl+Y'),
+      commandMenuItem(t.redo(), { type: 'redo' }, 'redo', getPlatformCapabilities().isMac ? 'Ctrl+Shift+Z' : 'Ctrl+Y'),
       { label: t.paste(), icon: 'paste', disabled, shortcut: 'Ctrl+V', action: pasteFromContextMenu },
       {
         label: t.pasteAsPlainText(),
@@ -3667,38 +3668,49 @@
   /**
    * 在「跟随系统」时把本窗外观对齐到最新系统深浅色。
    *
-   * 事件若已带上明确 scheme，立刻上色且不再打桌面 IPC。否则先用浏览器媒体查询
-   * 提交，再在后台用桌面查询校正一次，避免 `defaults` 子进程挡住第一帧。
+   * 原生事件若已带上明确 scheme，立刻上色且不再打桌面 IPC。否则直接读操作系统
+   * 外观校正，不再先用 WKWebView `matchMedia` 上色——窗口未跟上系统时它会报浅色。
    *
    * @param options.transition 是否启用短颜色过渡。
-   * @param options.systemScheme 原生事件带来的深浅色；缺省时走浏览器再校正。
+   * @param options.systemScheme 原生事件带来的深浅色；缺省时走桌面查询。
+   * @param options.writeBootSnapshot 校正后是否写启动快照。
    */
   async function syncSystemThemeFromDesktop(options?: {
     transition?: boolean;
     systemScheme?: 'light' | 'dark';
+    writeBootSnapshot?: boolean;
   }) {
     if (!appearanceRuntimeActive || themeMode !== 'system') {
       return;
     }
 
-    const hintedScheme = options?.systemScheme ?? getBrowserSystemScheme();
-    if (hintedScheme !== theme) {
-      await applyCurrentAppearance({
-        systemScheme: hintedScheme,
-        transition: options?.transition,
-      });
-    }
     if (options?.systemScheme) {
+      if (options.systemScheme !== theme) {
+        await applyCurrentAppearance({
+          systemScheme: options.systemScheme,
+          transition: options.transition,
+          writeBootSnapshot: options.writeBootSnapshot,
+        });
+      } else if (options.writeBootSnapshot) {
+        writeThemeBootSnapshot(resolveTheme(getCurrentAppearancePreferences(), options.systemScheme));
+      }
       return;
     }
 
     const systemScheme = await readEffectiveSystemScheme(desktopEnabled);
-    if (!appearanceRuntimeActive || themeMode !== 'system' || systemScheme === theme) {
+    if (!appearanceRuntimeActive || themeMode !== 'system') {
+      return;
+    }
+    if (systemScheme === theme) {
+      if (options?.writeBootSnapshot) {
+        writeThemeBootSnapshot(resolveTheme(getCurrentAppearancePreferences(), systemScheme));
+      }
       return;
     }
     await applyCurrentAppearance({
       systemScheme,
       transition: options?.transition,
+      writeBootSnapshot: options?.writeBootSnapshot,
     });
   }
 
@@ -4978,6 +4990,9 @@
       }
 
       setupSystemThemeListener();
+      if (themeMode === 'system') {
+        await syncSystemThemeFromDesktop({ writeBootSnapshot: true });
+      }
 
       if (persistedEditorMode && !largeDocumentMode) {
         mode = persistedEditorMode;
@@ -5020,6 +5035,9 @@
     } finally {
       if (appearanceRuntimeActive && !systemThemeListenerReady) {
         setupSystemThemeListener();
+        if (themeMode === 'system') {
+          void syncSystemThemeFromDesktop({ writeBootSnapshot: true });
+        }
       }
       appBootState = 'ready';
       scheduleStartupSoftwareUpdateCheck();
