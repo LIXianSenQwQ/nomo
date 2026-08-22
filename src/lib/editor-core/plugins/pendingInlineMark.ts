@@ -20,8 +20,9 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  * - Decoration 负责判断当前哪些 mark 需要显示语法提示
  * - WidgetDecoration 渲染不可编辑的灰色占位标签
  *
- * 空 pending 范围（还没打出字）不放 widget。光标两侧各一个
- * `contenteditable=false` 的 `**` 会挡住中文输入法组字。
+ * 空 pending 范围（还没打出字）不放 widget。光标所在的开/闭侧也不放 widget
+ * （pending 和已有 mark 边界都一样）。`contenteditable=false` 的 `**` 贴在光标旁
+ * 会挡住 macOS 中文 IME。组字过程中不更新 pending 装饰。
  *
  * 用户继续输入时，新内容自动带对应 mark；退出条件：
  * - 再次点击相同按钮
@@ -112,6 +113,7 @@ export function isPendingMarkActive(state: EditorState, markType: MarkType): boo
 export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
   let lastBoundaryTextInput: BoundaryTextInputRecord | null = null;
   let lastImePunctuationBoundaryTextInput: BoundaryTextInputRecord | null = null;
+  let composing = false;
   let lastInteriorPointerPos: number | null = null;
   let clearBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
   let clearImePunctuationBoundaryTextInputTimer: ReturnType<typeof setTimeout> | null = null;
@@ -263,6 +265,10 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
     props: {
       decorations(state) {
         const pending = getPendingState(state);
+        if (pending.active && composing) {
+          return DecorationSet.empty;
+        }
+
         const ranges = pending.active
           ? pending.markTypeNames.map((markTypeName) => ({
             markTypeName,
@@ -297,6 +303,7 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
         },
 
         compositionstart(view, event) {
+          composing = true;
           debugPendingInlineMark('compositionstart', {
             data: event.data,
             selection: getSelectionDebug(view.state),
@@ -315,6 +322,7 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
         },
 
         compositionend(view, event) {
+          composing = false;
           debugPendingInlineMark('compositionend', {
             data: event.data,
             selection: getSelectionDebug(view.state),
@@ -357,7 +365,12 @@ export function pendingInlineMarkPlugin(): Plugin<PendingMarkState> {
             return true;
           }
 
-          if ((event.isComposing || view.composing) && !isPunctuationLikeText(text)) {
+          if (
+            (event.inputType === 'insertCompositionText' ||
+              event.isComposing ||
+              view.composing) &&
+            !isPunctuationLikeText(text)
+          ) {
             debugPendingInlineMark('pass-composing-text-beforeinput', { input });
             return false;
           }
@@ -720,19 +733,16 @@ function uniqueMarkTypeNames(markTypeNames: string[]): string[] {
  * 标签使用 WidgetDecoration 渲染成真实占位节点，但节点本身不可编辑。
  * 这样 `**` / `~~` / `<u>` 作为一个整体参与排版，不会被光标插入到内部。
  */
-function createInlineDecorations(
-  state: EditorState,
-  ranges: readonly MarkEditRange[],
-): Decoration[] {
+function createInlineDecorations(state: EditorState, ranges: readonly MarkEditRange[]): Decoration[] {
   const docSize = state.doc.content.size;
   const decorations: Decoration[] = [];
+  const cursorPos = state.selection.empty ? state.selection.from : null;
 
   for (const range of groupMarkEditRanges(ranges)) {
     const from = clampDocPos(range.from, docSize);
     const to = clampDocPos(range.to, docSize);
     const markTypeNames = range.markTypeNames;
 
-    // 计算开闭语法文本（按 markTypeNames 顺序拼接 open，逆序拼接 close）
     const openText = markTypeNames.map((name) => MARK_SYNTAX[name]?.open ?? '').join('');
     const closeText = [...markTypeNames]
       .reverse()
@@ -743,31 +753,47 @@ function createInlineDecorations(
       continue;
     }
 
-    decorations.push(
-      Decoration.inline(from, to, {
-        class: 'pm-mark-delimiter-range',
-        'data-mark': markTypeNames[0],
-        'data-marks': markTypeNames.join(' '),
-        'data-from': String(from),
-        'data-to': String(to),
-      }),
-      Decoration.widget(
-        from,
-        () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
-        {
-          side: getOpenDelimiterSide(state, from, markTypeNames),
-          marks: [],
-        },
-      ),
-      Decoration.widget(
-        to,
-        () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
-        {
-          side: getCloseDelimiterSide(state, to, markTypeNames),
-          marks: [],
-        },
-      ),
-    );
+    const omitOpen = cursorPos === from;
+    const omitClose = cursorPos === to;
+    const inlineAttrs: Record<string, string> = {
+      class: 'pm-mark-delimiter-range',
+      'data-mark': markTypeNames[0],
+      'data-from': String(from),
+      'data-to': String(to),
+      'data-marks': markTypeNames.join(' '),
+      'data-open': openText,
+      'data-close': closeText,
+    };
+    if (omitOpen) inlineAttrs['data-caret-open'] = 'true';
+    if (omitClose) inlineAttrs['data-caret-close'] = 'true';
+
+    decorations.push(Decoration.inline(from, to, inlineAttrs));
+
+    if (!omitOpen) {
+      decorations.push(
+        Decoration.widget(
+          from,
+          () => createDelimiterWidget(openText, 'open', markTypeNames, from, to),
+          {
+            side: getOpenDelimiterSide(state, from, markTypeNames),
+            marks: [],
+          },
+        ),
+      );
+    }
+
+    if (!omitClose) {
+      decorations.push(
+        Decoration.widget(
+          to,
+          () => createDelimiterWidget(closeText, 'close', markTypeNames, from, to),
+          {
+            side: getCloseDelimiterSide(state, to, markTypeNames),
+            marks: [],
+          },
+        ),
+      );
+    }
   }
 
   return decorations;

@@ -104,14 +104,13 @@ describe('pendingInlineMarkPlugin', () => {
 
     expect(isPendingMarkActive(view.state, schema.marks.strikethrough)).toBe(true);
     expect(isPendingMarkActive(view.state, schema.marks.strong)).toBe(true);
-    expect(hasMarkDelimiter(target, 'strikethrough')).toBe(false);
-    expect(hasMarkDelimiter(target, 'strong')).toBe(false);
+    expect(target.querySelectorAll('.pm-mark-delimiter-widget')).toHaveLength(0);
 
     view.destroy();
     target.remove();
   });
 
-  it('shows delimiter widgets after the first pending character is typed', () => {
+  it('keeps the closing delimiter off the caret after the first pending character', () => {
     const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
     const target = document.createElement('div');
     document.body.appendChild(target);
@@ -125,12 +124,52 @@ describe('pendingInlineMarkPlugin', () => {
     });
 
     toggleMarkPending(schema.marks.strong)(view.state, view.dispatch);
-    expect(hasMarkDelimiter(target, 'strong')).toBe(false);
+    expect(target.querySelectorAll('.pm-mark-delimiter-widget')).toHaveLength(0);
 
     view.dispatch(view.state.tr.insertText('测'));
 
     expect(isPendingMarkActive(view.state, schema.marks.strong)).toBe(true);
-    expect(hasMarkDelimiter(target, 'strong')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'open')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'close')).toBe(false);
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not insert delimiter widgets while IME is composing a pending mark', () => {
+    const plugin = pendingInlineMarkPlugin();
+    const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 1),
+        plugins: [plugin],
+      }),
+    });
+
+    toggleMarkPending(schema.marks.strong)(view.state, view.dispatch);
+    plugin.props.handleDOMEvents?.compositionstart?.call(
+      plugin,
+      view,
+      new CompositionEvent('compositionstart'),
+    );
+    view.dispatch(view.state.tr.insertText('ni'));
+
+    expect(isPendingMarkActive(view.state, schema.marks.strong)).toBe(true);
+    expect(target.querySelectorAll('.pm-mark-delimiter-widget')).toHaveLength(0);
+
+    plugin.props.handleDOMEvents?.compositionend?.call(
+      plugin,
+      view,
+      new CompositionEvent('compositionend', { data: '你' }),
+    );
+    view.dispatch(view.state.tr.setMeta('nomoPendingMarkDecorationsRefresh', true));
+
+    expect(hasDelimiterWidget(target, 'strong', 'open')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'close')).toBe(false);
 
     view.destroy();
     target.remove();
@@ -268,7 +307,8 @@ describe('pendingInlineMarkPlugin', () => {
 
     expect(isPendingMarkActive(view.state, schema.marks.highlight)).toBe(true);
     expect(hasTextMarkForText(view.state, 'A', 'highlight')).toBe(true);
-    expect(hasMarkDelimiter(target, 'highlight')).toBe(true);
+    expect(hasDelimiterWidget(target, 'highlight', 'open')).toBe(true);
+    expect(hasDelimiterWidget(target, 'highlight', 'close')).toBe(false);
 
     view.destroy();
     target.remove();
@@ -318,13 +358,49 @@ describe('pendingInlineMarkPlugin', () => {
       }),
     });
 
-    // 验证在 mark 范围开头时语法提示存在
-    expect(hasMarkDelimiter(target, 'strong')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'open')).toBe(false);
+    expect(hasDelimiterWidget(target, 'strong', 'close')).toBe(true);
+    expect(
+      target.querySelector('.pm-mark-delimiter-range')?.getAttribute('data-caret-open'),
+    ).toBe('true');
 
-    // 移动光标到 mark 范围结尾
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 12)));
-    // 验证在 mark 范围结尾时语法提示仍然存在
-    expect(hasMarkDelimiter(target, 'strong')).toBe(true);
+
+    expect(hasDelimiterWidget(target, 'strong', 'open')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'close')).toBe(false);
+    expect(
+      target.querySelector('.pm-mark-delimiter-range')?.getAttribute('data-caret-close'),
+    ).toBe('true');
+
+    view.destroy();
+    target.remove();
+  });
+
+  it('does not put a closing delimiter widget at the caret after bold text', () => {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('ds', [schema.marks.strong.create()]),
+        schema.text('的'),
+      ]),
+    ]);
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+
+    const view = new EditorView(target, {
+      state: EditorState.create({
+        doc,
+        selection: TextSelection.create(doc, 3),
+        plugins: [pendingInlineMarkPlugin()],
+      }),
+    });
+
+    expect(view.state.selection.from).toBe(3);
+    expect(hasDelimiterWidget(target, 'strong', 'open')).toBe(true);
+    expect(hasDelimiterWidget(target, 'strong', 'close')).toBe(false);
+    expect(target.querySelectorAll('.pm-mark-delimiter-widget[data-edge="close"]')).toHaveLength(0);
+    expect(
+      target.querySelector('.pm-mark-delimiter-range')?.getAttribute('data-caret-close'),
+    ).toBe('true');
 
     view.destroy();
     target.remove();
@@ -419,7 +495,7 @@ describe('pendingInlineMarkPlugin', () => {
   });
 
   it('keeps the cursor outside a code mark when clicking just after the closing backtick', () => {
-    const { target, view } = createCodeTextView(4);
+    const { target, view } = createCodeTextView(2);
     view.dispatch(view.state.tr.setStoredMarks([schema.marks.code.create()]));
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
@@ -437,15 +513,10 @@ describe('pendingInlineMarkPlugin', () => {
 
   it('locks the cursor outside a code mark when already at the closing boundary', () => {
     const { target, view } = createCodeTextView(4);
-    const closeWidget = getDelimiterWidget(target, 'close');
-    mockRangeRect(closeWidget, { left: 130, right: 138 });
 
     expect(view.state.storedMarks).toBeNull();
-
-    closeWidget.dispatchEvent(createClick(138, 10));
-
-    expect(view.state.selection.from).toBe(4);
-    expect(view.state.storedMarks).toEqual([]);
+    expect(hasDelimiterWidget(target, 'code', 'close')).toBe(false);
+    expect(hasDelimiterWidget(target, 'code', 'open')).toBe(true);
 
     view.destroy();
     target.remove();
@@ -571,7 +642,7 @@ describe('pendingInlineMarkPlugin', () => {
   });
 
   it('keeps the cursor inside a code mark when clicking just before the closing backtick', () => {
-    const { target, view } = createCodeTextView(4);
+    const { target, view } = createCodeTextView(2);
     view.dispatch(view.state.tr.setStoredMarks([]));
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
@@ -588,7 +659,7 @@ describe('pendingInlineMarkPlugin', () => {
   });
 
   it('moves inside the code mark when clicking the last character from the closing outside boundary', () => {
-    const { target, view } = createCodeTextView(4);
+    const { target, view } = createCodeTextView(2);
     view.dispatch(view.state.tr.setStoredMarks([]));
     const closeWidget = getDelimiterWidget(target, 'close');
     const openWidget = getDelimiterWidget(target, 'open');
@@ -608,7 +679,7 @@ describe('pendingInlineMarkPlugin', () => {
   });
 
   it('moves inside the code mark when clicking the first character from the opening outside boundary', () => {
-    const { target, view } = createCodeTextView(1);
+    const { target, view } = createCodeTextView(2);
     view.dispatch(view.state.tr.setStoredMarks([]));
     const closeWidget = getDelimiterWidget(target, 'close');
     const openWidget = getDelimiterWidget(target, 'open');
@@ -629,7 +700,7 @@ describe('pendingInlineMarkPlugin', () => {
 
   it('does not intercept mousedown near a code delimiter so drag selection can start', () => {
     const plugin = pendingInlineMarkPlugin();
-    const { target, view } = createCodeTextView(4, [plugin]);
+    const { target, view } = createCodeTextView(2, [plugin]);
     const closeWidget = getDelimiterWidget(target, 'close');
     mockRangeRect(closeWidget, { left: 130, right: 138 });
 
@@ -638,7 +709,7 @@ describe('pendingInlineMarkPlugin', () => {
 
     expect(handled).toBe(false);
     expect(event.defaultPrevented).toBe(false);
-    expect(view.state.selection.from).toBe(4);
+    expect(view.state.selection.from).toBe(2);
 
     view.destroy();
     target.remove();
@@ -987,8 +1058,7 @@ describe('pendingInlineMarkPlugin', () => {
     // 场景：光标已在 mark 内侧（storedMarks 带 strong），点击 close widget 右半（目标=外）。
     // 旧逻辑硬塞 strong，导致光标看起来没动/反向跳；新逻辑应清空 storedMarks 正常出到外侧。
     it('clears storedMarks when clicking the outer half of the close delimiter while inside the mark', () => {
-      const { target, view } = createMarkedTextView(12);
-      // 让光标处于闭边界内侧（to=12，带 strong）
+      const { target, view } = createMarkedTextView(9);
       view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
       const closeWidget = getDelimiterWidget(target, 'close');
       mockRangeRect(closeWidget, { left: 164, right: 180 });
@@ -1004,8 +1074,6 @@ describe('pendingInlineMarkPlugin', () => {
       target.remove();
     });
 
-    // 场景：光标已在 mark 内侧，点 open widget 右半（目标=内）。
-    // 当前侧 == 目标侧，不应反向跳；selection 挪到 from=8，storedMarks 仍带 strong。
     it('keeps storedMarks when clicking the inner half of the open delimiter while inside the mark', () => {
       const { target, view } = createMarkedTextView(12);
       view.dispatch(view.state.tr.setStoredMarks([schema.marks.strong.create()]));
@@ -1021,11 +1089,8 @@ describe('pendingInlineMarkPlugin', () => {
       target.remove();
     });
 
-    // 场景：光标在闭边界外侧（to=12，storedMarks 空），点 close widget 左半（目标=内）。
-    // 当前侧(外) != 目标侧(内)，正常进入，storedMarks 切到 strong。
     it('enters the mark when clicking the inner half of the close delimiter while outside', () => {
-      const { target, view } = createMarkedTextView(12);
-      // 显式清空 storedMarks，确保当前在闭边界外侧
+      const { target, view } = createMarkedTextView(9);
       view.dispatch(view.state.tr.setStoredMarks([]));
       const closeWidget = getDelimiterWidget(target, 'close');
       mockRangeRect(closeWidget, { left: 164, right: 180 });
@@ -1039,10 +1104,8 @@ describe('pendingInlineMarkPlugin', () => {
       target.remove();
     });
 
-    // 场景：光标在开边界外侧（from=8，storedMarks 空），点 open widget 左半（目标=外）。
-    // 当前侧 == 目标侧，不反向跳；selection 保持在 from=8，storedMarks 仍空。
     it('stays outside when clicking the outer half of the open delimiter while outside', () => {
-      const { target, view } = createMarkedTextView(8);
+      const { target, view } = createMarkedTextView(9);
       view.dispatch(view.state.tr.setStoredMarks([]));
       const openWidget = getDelimiterWidget(target, 'open');
       mockRangeRect(openWidget, { left: 100, right: 116 });
@@ -1086,24 +1149,27 @@ describe('pendingInlineMarkPlugin', () => {
  *
  * 使用 *= (contains) 选择器，因为多 mark 叠加时 data-open 会拼接（如 "**~~"）。
  */
-function hasMarkDelimiter(target: HTMLElement, markTypeName: string): boolean {
+function hasDelimiterWidget(
+  target: HTMLElement,
+  markTypeName: string,
+  edge: 'open' | 'close',
+): boolean {
   const syntax = MARK_SYNTAX_MAP[markTypeName];
   if (!syntax) return false;
+  const expected = edge === 'open' ? syntax.open : syntax.close;
 
-  const widgets = Array.from(target.querySelectorAll<HTMLElement>('.pm-mark-delimiter-widget'));
+  return Array.from(target.querySelectorAll<HTMLElement>('.pm-mark-delimiter-widget')).some(
+    (widget) =>
+      (widget.textContent ?? '').includes(expected) &&
+      widget.dataset.edge === edge &&
+      widget.contentEditable === 'false',
+  );
+}
+
+function hasMarkDelimiter(target: HTMLElement, markTypeName: string): boolean {
   return (
-    widgets.some(
-      (widget) =>
-        (widget.textContent ?? '').includes(syntax.open) &&
-        widget.dataset.edge === 'open' &&
-        widget.contentEditable === 'false',
-    ) &&
-    widgets.some(
-      (widget) =>
-        (widget.textContent ?? '').includes(syntax.close) &&
-        widget.dataset.edge === 'close' &&
-        widget.contentEditable === 'false',
-    )
+    hasDelimiterWidget(target, markTypeName, 'open') &&
+    hasDelimiterWidget(target, markTypeName, 'close')
   );
 }
 

@@ -2532,6 +2532,7 @@
  * 架构：Mark 负责语义 → Decoration 判断哪些需要提示 → WidgetDecoration 渲染。
  *
  * 标签是不可编辑的真实占位节点，`**` / `~~` / `<u>` 作为一个整体参与排版。
+ * 光标所在的开/闭侧改用 ::before/::after，避免 contenteditable=false 挡住 IME。
  */
 
 .pm-mark-delimiter-widget {
@@ -2549,6 +2550,28 @@
 }
 
 .pm-mark-delimiter-widget[data-edge='close'] {
+  margin-left: 0.08em;
+}
+
+.pm-mark-delimiter-range[data-caret-open]::before,
+.pm-mark-delimiter-range[data-caret-close]::after {
+  display: inline-block;
+  color: color-mix(in srgb, var(--md-editor-muted-fg) 55%, transparent);
+  font-family: var(--md-editor-font-mono);
+  font-size: 0.88em;
+  line-height: 1;
+  user-select: none;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.pm-mark-delimiter-range[data-caret-open]::before {
+  content: attr(data-open);
+  margin-right: 0.08em;
+}
+
+.pm-mark-delimiter-range[data-caret-close]::after {
+  content: attr(data-close);
   margin-left: 0.08em;
 }
 
